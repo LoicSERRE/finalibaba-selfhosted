@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  INVESTMENT
+  REAL_ESTATE
+  MEAL_VOUCHER
+  CRYPTO
+  AUTOMOBILE
+  LOAN
+}
+
+model Institution {
+  id                      String    @id @default(cuid())
+  name                    String    @unique
+  logoUrl                 String?
+  accounts                Account[]
+  createdAt               DateTime  @default(now())
+  gocardlessInstitutionId String?   // e.g. LCL_CRLYFRPP
+  gocardlessRequisitionId String?   // set after OAuth completion
+  woobModule              String?   // Woob backend module name, e.g. "bnporc", "caissedepargne"
+  woobLogin               String?
+  woobPassword            String?
+}
+
+model Account {
+  id                  String              @id @default(cuid())
+  name                String
+  type                AccountType
+  institutionId       String?             // nullable — cars and loans may have no associated bank
+  institution         Institution?        @relation(fields: [institutionId], references: [id])
+  manualValueCents    BigInt?
+  liabilityCents      BigInt?
+  purchasePriceCents  BigInt?             // AUTOMOBILE: original purchase price
+  insuranceMonthlyCents BigInt?           // AUTOMOBILE + LOAN: assurance mensuelle
+  investmentSubtype   String?             // "PEA" | "CTO" — only for INVESTMENT type
+  investmentStartDate DateTime?           // Investment start date (manual entry)
+  loanAmountCents     BigInt?             // LOAN: initial borrowed amount
+  loanTaeg            Float?              // LOAN: annual interest rate in % (e.g. 5.47)
+  loanDurationMonths  Int?                // LOAN: total duration in months
+  loanDeferralMonths  Int?                // LOAN: deferral period in months (0 = none)
+  loanStartDate       DateTime?           // LOAN: date de début du remboursement
+  holdings            Holding[]
+  history             HistoricalBalance[]
+  transactions        Transaction[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  gocardlessAccountId String?             @unique
+  syncId              String?             @unique // e.g. "lcl:FR76XXXX" or "tr:ISIN"
+}
+
+model Holding {
+  id             String   @id @default(cuid())
+  accountId      String
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ticker         String
+  name           String?
+  quantity       Decimal  @db.Decimal(24, 10)
+  lastPriceCents BigInt   @default(0)
+  costBasisCents BigInt?  // total acquisition cost in cents (null = unknown)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([accountId, ticker])
+}
+
+model SyncLog {
+  id        String   @id @default(cuid())
+  source    String   // "lcl" | "trade_republic"
+  status    String   // "success" | "error" | "auth_required"
+  message   String?
+  createdAt DateTime @default(now())
+}
+
+model HistoricalBalance {
+  id           String   @id @default(cuid())
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  balanceCents BigInt
+  recordedAt   DateTime @default(now())
+
+  @@index([accountId, recordedAt])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  syncId      String   @unique // woob transaction id — used for deduplication
+  date        DateTime
+  label       String
+  amountCents BigInt   // positive = credit, negative = debit
+  createdAt   DateTime @default(now())
+
+  @@index([accountId, date])
+}
+
+model UserSettings {
+  id                   String   @id @default("singleton")
+  salaryNetCents       BigInt   @default(0)   // monthly net salary
+  monthlyExpensesCents BigInt   @default(0)   // monthly essential expenses (for runway)
+  savingsGoalCents     BigInt   @default(5000000) // target net worth (default 50 000 €)
+  monthlySavedCents    BigInt   @default(0)       // declared monthly savings (livrets + investments, excl. transfers & market perf)
+  updatedAt            DateTime @updatedAt
+}

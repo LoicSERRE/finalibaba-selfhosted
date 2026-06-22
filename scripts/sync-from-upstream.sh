@@ -25,6 +25,7 @@ rsync -av --delete \
   --exclude='.git/' \
   --exclude='.github/' \
   --exclude='docker-compose.server.yml' \
+  --exclude='docker-compose.prod.yml' \
   --exclude='docker-compose.yml' \
   --exclude='docker-compose.dev.yml' \
   --exclude='env.server.example' \
@@ -37,12 +38,16 @@ rsync -av --delete \
   --exclude='LICENSE' \
   --exclude='CONTRIBUTING.md' \
   --exclude='scripts/' \
+  --exclude='.claude/' \
   --exclude='components/sidebar-wrapper.tsx' \
   --exclude='components/sidebar-dynamic.tsx' \
   --exclude='messages/' \
   --exclude='node_modules/' \
   --exclude='.next/' \
   --exclude='*.log' \
+  --exclude='*.pyc' \
+  --exclude='__pycache__/' \
+  --exclude='*.tsbuildinfo' \
   "$UPSTREAM/" "$SELFHOSTED/"
 
 echo ""

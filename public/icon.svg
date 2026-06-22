@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
+  <!-- F — vertical bar -->
+  <rect x="22" y="19" width="13" height="62" rx="3.5" fill="white"/>
+  <!-- F — top horizontal -->
+  <rect x="22" y="19" width="52" height="13" rx="3.5" fill="white"/>
+  <!-- F — middle horizontal -->
+  <rect x="22" y="45" width="38" height="11" rx="3.5" fill="white"/>
+  <!-- Trend bars (green, bottom-right) -->
+  <rect x="44" y="74" width="8" height="8"  rx="2" fill="#22c55e"/>
+  <rect x="56" y="67" width="8" height="15" rx="2" fill="#22c55e"/>
+  <rect x="68" y="59" width="8" height="23" rx="2" fill="#22c55e"/>
+</svg>

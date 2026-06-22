@@ -1,0 +1,1 @@
+ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "purchasePriceCents" BIGINT;

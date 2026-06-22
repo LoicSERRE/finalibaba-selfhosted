@@ -62,9 +62,10 @@ NODE_ENV=production npm run build    # Prod build + type-check (NODE_ENV=product
 npm run lint     # ESLint
 ```
 
-Docker (local dev — DB only):
+Docker (local dev — DB only, credentials fixed in `docker-compose.dev.yml`):
 ```bash
 docker compose -f docker-compose.dev.yml up -d
+# DATABASE_URL=postgresql://appuser:devpassword@localhost:5432/finalibaba
 ```
 
 Production (one-shot setup):
@@ -84,7 +85,32 @@ No test suite (no jest/vitest/playwright).
 
 ## Architecture
 
-Same file layout as upstream — see `Finalibaba/CLAUDE.md` for the full architecture. Selfhosted-specific points below.
+### File layout
+
+```
+app/                  Next.js App Router pages and Server Actions
+  generated/prisma/   Prisma client (generated — do not edit)
+  globals.css         Design tokens + Tailwind base
+components/           React components (shared UI)
+lib/
+  actions/            Server Actions (all DB mutations go here)
+  auth.ts             NextAuth config
+  loan.ts             calcCurrentCapital() helper
+prisma/
+  schema.prisma       Data model
+  migrations/         Applied migrations
+  seed.ts             Institution seed data
+sync/                 Python FastAPI service (optional bank sync)
+  main.py             APScheduler entry point + credential guards
+  db.py               Shared PostgreSQL helpers
+  sync_lcl.py         LCL (FR) via Woob
+  sync_tr.py          Trade Republic via pytr
+  sync_swile.py       Swile meal vouchers
+public/               Static assets
+proxy.ts              Next.js middleware (root) — auth bypass logic
+```
+
+Selfhosted-specific points below.
 
 ### Authentication
 
@@ -92,7 +118,7 @@ Same file layout as upstream — see `Finalibaba/CLAUDE.md` for the full archite
 
 Enabled via `AUTH_ENABLED=true` + `AUTH_PASSWORD` (plaintext) or `AUTH_PASSWORD_HASH` (bcrypt). When enabled: NextAuth Credentials provider, JWT session 30d, rate-limit 5 attempts/15min/IP. Display name via `AUTH_USER_NAME` (defaults to `"owner"`).
 
-`proxy.ts` reads `process.env.AUTH_ENABLED` in the `authorized` callback and bypasses NextAuth when it isn't `"true"`. If the upstream `proxy.ts` ever diverges, do **not** blindly overwrite this file.
+`proxy.ts` is the Next.js middleware (at the repo root). It reads `process.env.AUTH_ENABLED` in the `authorized` callback and bypasses NextAuth when it isn't `"true"`. If the upstream `proxy.ts` ever diverges, do **not** blindly overwrite this file.
 
 `sidebar-wrapper.tsx` is a **server component** (no `"use client"`) — reads `AUTH_ENABLED`, passes `showLogout` prop to `sidebar-dynamic.tsx`.
 `sidebar-dynamic.tsx` is a **client component** (`"use client"`) — handles `dynamic({ ssr: false })` (required to be in a client component in Next.js 16). This file does not exist in the upstream repo.
@@ -105,6 +131,18 @@ For users who want security without built-in auth: document Nginx Proxy Manager,
 **Not implemented in v1 — UI is in French.** i18n is a planned post-v1 milestone, bundled with configurable tax rates. See ROADMAP.md.
 
 When implemented: `next-intl`, `messages/en.json` (default), `messages/fr.json`. No URL prefix per locale.
+
+### GoCardless (Open Banking PSD2)
+
+Optional. EU + UK bank connections via the official PSD2 API (free tier: 50 connections, 90-day history).
+
+Credentials: `GOCARDLESS_SECRET_ID` + `GOCARDLESS_SECRET_KEY`. Set `APP_URL` to the app's public URL when behind a reverse proxy — it's used as the OAuth callback after bank authentication. Leave `APP_URL` blank for localhost use.
+
+GoCardless logic lives in the Next.js app (not the `sync/` service).
+
+### App ↔ Sync service communication
+
+The Next.js app calls the Python sync service via HTTP using `SYNC_SERVICE_URL=http://sync:8000` (set automatically in `docker-compose.yml`). In development, the sync service is not started — only the DB runs via `docker-compose.dev.yml`.
 
 ### Sync service — optional modules
 

@@ -19,7 +19,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finalibaba}
       NODE_ENV: production
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required — run: openssl rand -base64 32}
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required — run: openssl rand -base64 32}"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
@@ -44,8 +44,6 @@ services:
       LCL_PASSWORD: ${LCL_PASSWORD:-}
       TR_PHONE: ${TR_PHONE:-}
       TR_PIN: ${TR_PIN:-}
-      SWILE_LOGIN: ${SWILE_LOGIN:-}
-      SWILE_PASSWORD: ${SWILE_PASSWORD:-}
     volumes:
       - woob_session:/root/.config/woob
       - pytr_session:/root/.pytr
