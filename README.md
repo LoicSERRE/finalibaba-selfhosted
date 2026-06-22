@@ -139,8 +139,11 @@ Use **Tailscale**, WireGuard, or OpenVPN — no auth config needed.
 ## Updating
 
 ```bash
-git pull
-docker compose up -d --build
+# Pull pre-built images (recommended)
+docker compose pull && docker compose up -d
+
+# Or rebuild from source
+git pull && docker compose up -d --build
 ```
 
 Migrations are applied automatically on startup.
