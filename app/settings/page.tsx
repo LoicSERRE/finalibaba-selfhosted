@@ -98,8 +98,13 @@ export default async function SettingsPage() {
                         : <ConnectOpenBankingButton institutionId={inst.id} />
                       : <ConnectOpenBankingDialog institutionId={inst.id} institutionName={inst.name} />
                   )}
-                  {/* Woob sync */}
+                  {/* Woob sync — masqué pour les institutions gérées par des scripts dédiés */}
                   {(() => {
+                    const isManagedByDedicatedScript =
+                      (lclConfigured && inst.name.toLowerCase() === "lcl") ||
+                      (trConfigured && inst.name.toLowerCase() === "trade republic");
+                    if (isManagedByDedicatedScript) return null;
+
                     const woobLog = syncStatus[`woob:${inst.id}`] ?? null;
                     return (
                       <>
