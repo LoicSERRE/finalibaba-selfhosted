@@ -36,6 +36,8 @@ Files that must **never** be overwritten by the sync script:
 | File | Reason |
 |---|---|
 | `proxy.ts` | Selfhosted version has conditional auth — may diverge from upstream |
+| `components/sidebar-wrapper.tsx` | Server component reading `AUTH_ENABLED` — selfhosted-specific |
+| `components/sidebar-dynamic.tsx` | Selfhosted-only file, does not exist in upstream |
 | `docker-compose.yml` / `docker-compose.dev.yml` | Different from upstream (build from source, generic credentials) |
 | `.env.example` | Written from scratch for the selfhosted audience |
 
@@ -46,7 +48,6 @@ Same as upstream.
 - **Framework:** Next.js 16+ (App Router, Server Actions for mutations), React 19+
 - **Styling & UI:** Tailwind CSS v4 with CSS custom properties (no config file — tokens in `globals.css`)
 - **Database:** PostgreSQL via Prisma ORM — client generated to `app/generated/prisma`
-- **i18n:** `next-intl` — `messages/en.json` (default) + `messages/fr.json`
 - **Charts:** Recharts
 - **Icons:** `lucide-react`
 - **Sync service:** Python FastAPI + APScheduler (optional — runs without bank credentials)
@@ -93,15 +94,17 @@ Enabled via `AUTH_ENABLED=true` + `AUTH_PASSWORD` (plaintext) or `AUTH_PASSWORD_
 
 `proxy.ts` reads `process.env.AUTH_ENABLED` in the `authorized` callback and bypasses NextAuth when it isn't `"true"`. If the upstream `proxy.ts` ever diverges, do **not** blindly overwrite this file.
 
-`sidebar-wrapper.tsx` is a **server component** (no `"use client"`) — it reads `AUTH_ENABLED` and passes `showLogout` prop to the client `Sidebar`. This is why it must not have `"use client"`.
+`sidebar-wrapper.tsx` is a **server component** (no `"use client"`) — reads `AUTH_ENABLED`, passes `showLogout` prop to `sidebar-dynamic.tsx`.
+`sidebar-dynamic.tsx` is a **client component** (`"use client"`) — handles `dynamic({ ssr: false })` (required to be in a client component in Next.js 16). This file does not exist in the upstream repo.
+Both files are selfhosted-specific and must never be overwritten by the sync script.
 
 For users who want security without built-in auth: document Nginx Proxy Manager, Caddy basicauth, Traefik + Authelia, Cloudflare Access, or VPN (Tailscale).
 
 ### i18n
 
-`next-intl` with `messages/en.json` as the default locale. French is available at `messages/fr.json`. No URL prefix per locale (no `/en/dashboard` — locale is inferred from user preference or browser `Accept-Language`).
+**Not implemented in v1 — UI is in French.** i18n is a planned post-v1 milestone, bundled with configurable tax rates. See ROADMAP.md.
 
-All UI strings must go through `next-intl` — never hardcode English or French text directly in components.
+When implemented: `next-intl`, `messages/en.json` (default), `messages/fr.json`. No URL prefix per locale.
 
 ### Sync service — optional modules
 

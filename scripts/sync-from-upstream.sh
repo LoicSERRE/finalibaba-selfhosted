@@ -37,6 +37,8 @@ rsync -av --delete \
   --exclude='LICENSE' \
   --exclude='CONTRIBUTING.md' \
   --exclude='scripts/' \
+  --exclude='components/sidebar-wrapper.tsx' \
+  --exclude='components/sidebar-dynamic.tsx' \
   --exclude='messages/' \
   --exclude='node_modules/' \
   --exclude='.next/' \
