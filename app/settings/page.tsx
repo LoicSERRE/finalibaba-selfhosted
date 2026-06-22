@@ -18,10 +18,11 @@ import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings
 import { SaveSettingsButton } from "@/components/save-settings-button";
 import { CheckCircle, AlertTriangle, Clock } from "lucide-react";
 
+// Institutions managed by dedicated sync scripts — Woob config button hidden for these
+const DEDICATED_SYNC_INSTITUTIONS = ["lcl", "trade republic"];
+
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
-  const lclConfigured = !!process.env.LCL_LOGIN;
-  const trConfigured = !!process.env.TR_PHONE;
 
   const [institutions, syncStatus, userSettings] = await Promise.all([
     prisma.institution.findMany({
@@ -100,10 +101,7 @@ export default async function SettingsPage() {
                   )}
                   {/* Woob sync — masqué pour les institutions gérées par des scripts dédiés */}
                   {(() => {
-                    const isManagedByDedicatedScript =
-                      (lclConfigured && inst.name.toLowerCase() === "lcl") ||
-                      (trConfigured && inst.name.toLowerCase() === "trade republic");
-                    if (isManagedByDedicatedScript) return null;
+                    if (DEDICATED_SYNC_INSTITUTIONS.includes(inst.name.toLowerCase())) return null;
 
                     const woobLog = syncStatus[`woob:${inst.id}`] ?? null;
                     return (
@@ -248,39 +246,30 @@ export default async function SettingsPage() {
         </form>
       </section>
 
-      {/* Sync automatique — only shown when at least one module is configured */}
-      {(lclConfigured || trConfigured) && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-base font-semibold text-[var(--foreground)]">Synchronisation automatique</h2>
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              Sync toutes les 4h
-              {trConfigured && " · TR keepalive toutes les 2h"}
-            </p>
-          </div>
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-5 divide-y divide-[var(--border)]">
-            {lclConfigured && (
-              <SyncStatus
-                source="lcl"
-                label="LCL"
-                log={syncStatus["lcl"] ?? null}
-              />
-            )}
-            {trConfigured && (
-              <SyncStatus
-                source="trade-republic"
-                label="Trade Republic"
-                log={syncStatus["trade_republic"] ?? null}
-              />
-            )}
-          </div>
-          {lclConfigured && (
-            <p className="text-xs text-[var(--muted)]">
-              LCL → première connexion : <code className="text-[var(--foreground)]">docker exec -it finalibaba-sync-1 python setup_lcl.py</code>
-            </p>
-          )}
-        </section>
-      )}
+      {/* Sync automatique */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">Synchronisation automatique</h2>
+          <p className="text-xs text-[var(--muted)] mt-0.5">
+            Sync toutes les 4h · TR keepalive toutes les 2h
+          </p>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-5 divide-y divide-[var(--border)]">
+          <SyncStatus
+            source="lcl"
+            label="LCL"
+            log={syncStatus["lcl"] ?? null}
+          />
+          <SyncStatus
+            source="trade-republic"
+            label="Trade Republic"
+            log={syncStatus["trade_republic"] ?? null}
+          />
+        </div>
+        <p className="text-xs text-[var(--muted)]">
+          LCL → première connexion : <code className="text-[var(--foreground)]">docker exec -it finalibaba-sync-1 python setup_lcl.py</code>
+        </p>
+      </section>
 
     </div>
   );
