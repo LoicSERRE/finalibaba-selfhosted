@@ -30,7 +30,7 @@ export function Dialog({
               aria-label="Fermer"
               className="min-h-[44px] min-w-[44px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             >
-              <X size={16} />
+              <X size={16} aria-hidden="true" />
             </RadixDialog.Close>
           </div>
           {children}

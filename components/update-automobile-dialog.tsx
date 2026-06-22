@@ -39,7 +39,7 @@ export function UpdateAutomobileDialog({
       title={`Mettre à jour — ${name}`}
       trigger={
         <Button variant="outline" size="sm">
-          <Pencil size={12} />
+          <Pencil size={12} aria-hidden="true" />
           Mettre à jour
         </Button>
       }

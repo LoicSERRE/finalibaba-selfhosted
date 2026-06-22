@@ -75,8 +75,8 @@ export function ConnectOpenBankingDialog({ institutionId, institutionName }: Pro
       onOpenChange={(v) => { setOpen(v); if (!v) { setSearch(""); setResults([]); } }}
       title={`Connecter ${institutionName} via Open Banking`}
       trigger={
-        <button className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-[44px] rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity">
-          <Link size={12} />
+        <button className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-[44px] rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity cursor-pointer">
+          <Link size={12} aria-hidden="true" />
           Connecter
         </button>
       }
@@ -93,7 +93,7 @@ export function ConnectOpenBankingDialog({ institutionId, institutionName }: Pro
             ))}
           </select>
           <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" aria-hidden="true" />
             <input
               type="text"
               value={search}
@@ -107,8 +107,8 @@ export function ConnectOpenBankingDialog({ institutionId, institutionName }: Pro
 
         <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--border)] divide-y divide-[var(--border)]">
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-[var(--muted)]">
-              <Loader2 size={18} className="animate-spin" />
+            <div className="flex items-center justify-center py-10 text-[var(--muted)]" role="status" aria-label="Chargement en cours">
+              <Loader2 size={18} className="animate-spin" aria-hidden="true" />
             </div>
           ) : results.length === 0 ? (
             <p className="py-10 text-center text-sm text-[var(--muted)]">

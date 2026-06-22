@@ -29,7 +29,7 @@ export function AddAutomobileDialog({ institutions }: { institutions: Institutio
       title="Ajouter un véhicule"
       trigger={
         <Button>
-          <Car size={14} />
+          <Car size={14} aria-hidden="true" />
           Ajouter un véhicule
         </Button>
       }

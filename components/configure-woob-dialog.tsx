@@ -72,8 +72,8 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
       onOpenChange={(v) => { setOpen(v); setError(null); }}
       title={`Sync automatique — ${institutionName}`}
       trigger={
-        <button className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
-          <Settings2 size={12} />
+        <button className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+          <Settings2 size={12} aria-hidden="true" />
           {isConfigured ? "Woob configuré" : "Configurer Woob"}
         </button>
       }
@@ -154,7 +154,7 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
               disabled={pending}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[var(--negative)]/40 text-[var(--negative)] hover:bg-[var(--negative)]/10 transition-colors disabled:opacity-50"
             >
-              <Trash2 size={12} />
+              <Trash2 size={12} aria-hidden="true" />
               Supprimer la config
             </button>
           )}
@@ -171,7 +171,7 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
               disabled={pending || !module || module === "__custom__"}
               className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--accent)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {pending && <RefreshCw size={12} className="animate-spin" />}
+              {pending && <RefreshCw size={12} className="animate-spin" aria-hidden="true" />}
               {isConfigured ? "Mettre à jour" : "Enregistrer"}
             </button>
           </div>

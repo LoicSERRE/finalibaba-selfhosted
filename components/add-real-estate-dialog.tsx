@@ -29,7 +29,7 @@ export function AddRealEstateDialog({ institutions }: { institutions: Institutio
       title="Ajouter un bien immobilier"
       trigger={
         <Button>
-          <Home size={14} />
+          <Home size={14} aria-hidden="true" />
           Ajouter un bien
         </Button>
       }

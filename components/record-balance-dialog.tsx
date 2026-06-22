@@ -37,7 +37,7 @@ export function RecordBalanceDialog({
       title={`Mettre à jour — ${accountName}`}
       trigger={
         <Button variant="outline" size="sm">
-          <Pencil size={12} />
+          <Pencil size={12} aria-hidden="true" />
           Mettre à jour
         </Button>
       }

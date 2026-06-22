@@ -18,9 +18,9 @@ interface Props {
 }
 
 function StatusIcon({ status }: { status: string }) {
-  if (status === "success") return <CheckCircle size={14} className="text-[var(--positive)]" />;
-  if (status === "auth_required") return <AlertTriangle size={14} className="text-amber-400" />;
-  return <AlertTriangle size={14} className="text-[var(--negative)]" />;
+  if (status === "success") return <CheckCircle size={14} className="text-[var(--positive)]" aria-hidden="true" />;
+  if (status === "auth_required") return <AlertTriangle size={14} className="text-amber-400" aria-hidden="true" />;
+  return <AlertTriangle size={14} className="text-[var(--negative)]" aria-hidden="true" />;
 }
 
 function timeAgo(date: Date): string {
@@ -125,7 +125,7 @@ export function SyncStatus({ source, label, log }: Props) {
       {/* Main row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {log ? <StatusIcon status={log.status} /> : <Clock size={14} className="text-[var(--muted)]" />}
+          {log ? <StatusIcon status={log.status} /> : <Clock size={14} className="text-[var(--muted)]" aria-hidden="true" />}
           <div>
             <p className="text-sm font-medium text-[var(--foreground)]">{label}</p>
             {log ? (
@@ -150,13 +150,13 @@ export function SyncStatus({ source, label, log }: Props) {
               onClick={source === "trade-republic" ? handleStartTRSetup : handleStartLCLSetup}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-400/40 text-amber-400 hover:bg-amber-400/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             >
-              <LogIn size={12} />
+              <LogIn size={12} aria-hidden="true" />
               Connecter
             </button>
           )}
           {setupStep === "starting" && (
             <span className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              <RefreshCw size={12} className="animate-spin" />
+              <RefreshCw size={12} className="animate-spin" aria-hidden="true" />
               Connexion… (10-30s)
             </span>
           )}
@@ -166,7 +166,7 @@ export function SyncStatus({ source, label, log }: Props) {
               disabled={pending}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             >
-              <RefreshCw size={12} className={pending ? "animate-spin" : ""} />
+              <RefreshCw size={12} className={pending ? "animate-spin" : ""} aria-hidden="true" />
               {pending ? "Sync en cours…" : "Synchroniser"}
             </button>
           )}
@@ -198,12 +198,12 @@ export function SyncStatus({ source, label, log }: Props) {
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-elevated)]"
             >
               {setupStep === "submitting" ? (
-                <><RefreshCw size={12} className="animate-spin" /> Validation…</>
+                <><RefreshCw size={12} className="animate-spin" aria-hidden="true" /> Validation…</>
               ) : (
                 "Confirmer"
               )}
             </button>
-            <button onClick={reset} className="min-h-[44px] px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors focus-visible:outline-none focus-visible:underline">
+            <button onClick={reset} className="min-h-[44px] px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:underline">
               Annuler
             </button>
           </div>
@@ -224,12 +224,12 @@ export function SyncStatus({ source, label, log }: Props) {
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-elevated)]"
             >
               {setupStep === "completing" ? (
-                <><RefreshCw size={12} className="animate-spin" /> Validation…</>
+                <><RefreshCw size={12} className="animate-spin" aria-hidden="true" /> Validation…</>
               ) : (
                 "J'ai approuvé dans l'app LCL"
               )}
             </button>
-            <button onClick={reset} className="min-h-[44px] px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors focus-visible:outline-none focus-visible:underline">
+            <button onClick={reset} className="min-h-[44px] px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:underline">
               Annuler
             </button>
           </div>

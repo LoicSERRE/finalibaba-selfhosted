@@ -52,7 +52,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
                     : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
                 }`}
               >
-                <Icon size={16} />
+                <Icon size={16} aria-hidden="true" />
                 {label}
               </Link>
             );
@@ -68,7 +68,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
             }}
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--muted)] hover:text-[var(--negative)] hover:bg-[var(--surface-elevated)] transition-colors w-full mt-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
           >
-            <LogOut size={16} />
+            <LogOut size={16} aria-hidden="true" />
             Déconnexion
           </button>
         )}
@@ -88,7 +88,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
                   : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
               }`}
             >
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+              <Icon size={20} strokeWidth={active ? 2.5 : 1.8} aria-hidden="true" />
               <span className="text-[12px] font-medium tracking-tight">{label}</span>
             </Link>
           );

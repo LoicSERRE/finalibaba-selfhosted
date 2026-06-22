@@ -7,7 +7,18 @@ export async function createInstitution(formData: FormData) {
   const name = (formData.get("name") as string).trim();
   if (!name) throw new Error("Name required");
 
-  await prisma.institution.create({ data: { name } });
+  const woobModule = (formData.get("woobModule") as string | null)?.trim() || null;
+  const woobLogin = (formData.get("woobLogin") as string | null)?.trim() || null;
+  const woobPassword = (formData.get("woobPassword") as string | null)?.trim() || null;
+
+  await prisma.institution.create({
+    data: {
+      name,
+      ...(woobModule && woobLogin && woobPassword
+        ? { woobModule, woobLogin, woobPassword }
+        : {}),
+    },
+  });
   revalidatePath("/settings");
 }
 

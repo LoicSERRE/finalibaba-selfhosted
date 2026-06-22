@@ -31,14 +31,14 @@ export function DeleteButton({
       title="Confirmer la suppression"
       trigger={
         <Button variant="destructive" size="sm">
-          <Trash2 size={12} />
+          <Trash2 size={12} aria-hidden="true" />
           {label}
         </Button>
       }
     >
       <div className="space-y-4">
         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--negative)]/10 border border-[var(--negative)]/20">
-          <AlertTriangle size={16} className="text-[var(--negative)] shrink-0 mt-0.5" />
+          <AlertTriangle size={16} className="text-[var(--negative)] shrink-0 mt-0.5" aria-hidden="true" />
           <p className="text-sm text-[var(--foreground)]">
             {description ?? "Cette action est irréversible."}
           </p>
@@ -48,7 +48,7 @@ export function DeleteButton({
             Annuler
           </Button>
           <Button variant="destructive" onClick={handleDelete} disabled={pending}>
-            <Trash2 size={12} />
+            <Trash2 size={12} aria-hidden="true" />
             {pending ? "Suppression…" : "Supprimer"}
           </Button>
         </div>

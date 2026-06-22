@@ -29,7 +29,7 @@ export function AddLoanDialog({ institutions }: { institutions: Institution[] })
       title="Ajouter un crédit"
       trigger={
         <Button>
-          <CreditCard size={14} />
+          <CreditCard size={14} aria-hidden="true" />
           Ajouter un crédit
         </Button>
       }

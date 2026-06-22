@@ -46,11 +46,11 @@ export function AddHoldingDialog({
       trigger={
         isEdit ? (
           <Button variant="ghost" size="sm" aria-label="Modifier">
-            <Pencil size={12} />
+            <Pencil size={12} aria-hidden="true" />
           </Button>
         ) : (
           <Button size="sm">
-            <Plus size={14} />
+            <Plus size={14} aria-hidden="true" />
             Position
           </Button>
         )

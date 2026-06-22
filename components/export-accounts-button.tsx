@@ -337,7 +337,7 @@ export function ExportAccountsButton({
         onClick={() => setOpen(true)}
         className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors"
       >
-        <Download size={14} />
+        <Download size={14} aria-hidden="true" />
         Exporter
       </button>
 
@@ -363,7 +363,7 @@ export function ExportAccountsButton({
                 aria-label="Fermer"
                 className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] p-1 rounded-lg hover:bg-[var(--surface-elevated)] transition-colors"
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
@@ -434,7 +434,7 @@ export function ExportAccountsButton({
                   disabled={selectedCount === 0}
                   className="flex cursor-pointer items-center gap-1.5 min-h-[44px] px-4 py-2 text-sm font-medium bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Download size={14} />
+                  <Download size={14} aria-hidden="true" />
                   Exporter (.md)
                 </button>
               </div>

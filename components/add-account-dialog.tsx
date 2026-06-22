@@ -52,7 +52,7 @@ export function AddAccountDialog({
       title="Ajouter un compte"
       trigger={
         <Button>
-          <Plus size={14} />
+          <Plus size={14} aria-hidden="true" />
           Nouveau compte
         </Button>
       }

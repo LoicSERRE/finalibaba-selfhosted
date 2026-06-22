@@ -35,14 +35,14 @@ export function DeleteAccountButton({
       title="Supprimer ce compte ?"
       trigger={
         <Button variant="destructive" size="sm">
-          <Trash2 size={12} />
+          <Trash2 size={12} aria-hidden="true" />
           Supprimer
         </Button>
       }
     >
       <div className="space-y-4">
         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--negative)]/10 border border-[var(--negative)]/20">
-          <AlertTriangle size={16} className="text-[var(--negative)] shrink-0 mt-0.5" />
+          <AlertTriangle size={16} className="text-[var(--negative)] shrink-0 mt-0.5" aria-hidden="true" />
           <p className="text-sm text-[var(--foreground)]">
             Le compte <strong>&laquo;{name}&raquo;</strong> et tout son historique (soldes, transactions) seront définitivement supprimés.
           </p>
@@ -52,7 +52,7 @@ export function DeleteAccountButton({
             Annuler
           </Button>
           <Button variant="destructive" onClick={handleDelete} disabled={pending}>
-            <Trash2 size={12} />
+            <Trash2 size={12} aria-hidden="true" />
             {pending ? "Suppression…" : "Supprimer définitivement"}
           </Button>
         </div>
