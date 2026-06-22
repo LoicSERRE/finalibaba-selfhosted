@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — see .env.example}
+      POSTGRES_DB: ${POSTGRES_DB:-finalibaba}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-finalibaba}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finalibaba}
+      NODE_ENV: production
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required — run: openssl rand -base64 32}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
+      AUTH_USER_NAME: ${AUTH_USER_NAME:-}
+      APP_URL: ${APP_URL:-}
+      GOCARDLESS_SECRET_ID: ${GOCARDLESS_SECRET_ID:-}
+      GOCARDLESS_SECRET_KEY: ${GOCARDLESS_SECRET_KEY:-}
+      SYNC_SERVICE_URL: http://sync:8000
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sync:
+    build: ./sync
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finalibaba}
+      LCL_LOGIN: ${LCL_LOGIN:-}
+      LCL_PASSWORD: ${LCL_PASSWORD:-}
+      TR_PHONE: ${TR_PHONE:-}
+      TR_PIN: ${TR_PIN:-}
+      SWILE_LOGIN: ${SWILE_LOGIN:-}
+      SWILE_PASSWORD: ${SWILE_PASSWORD:-}
+    volumes:
+      - woob_session:/root/.config/woob
+      - pytr_session:/root/.pytr
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  woob_session:
+  pytr_session:
