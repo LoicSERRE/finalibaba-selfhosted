@@ -29,7 +29,7 @@ async function main() {
 
   // ── Institutions ─────────────────────────────────────────────────────────
   console.log("Creating institutions…");
-  const bank = await prisma.institution.create({ data: { name: "Crédit Français" } });
+  const bank = await prisma.institution.create({ data: { name: "LCL" } });
   const tr   = await prisma.institution.create({ data: { name: "Trade Republic" } });
   const cb   = await prisma.institution.create({ data: { name: "Coinbase" } });
 
