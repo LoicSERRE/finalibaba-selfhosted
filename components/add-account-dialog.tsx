@@ -54,9 +54,9 @@ export function AddAccountDialog({
       onOpenChange={setOpen}
       title={t("title")}
       trigger={
-        <Button>
+        <Button aria-label={t("trigger")}>
           <Plus size={14} aria-hidden="true" />
-          {t("trigger")}
+          <span className="sr-only sm:not-sr-only" aria-hidden="true">{t("trigger")}</span>
         </Button>
       }
     >

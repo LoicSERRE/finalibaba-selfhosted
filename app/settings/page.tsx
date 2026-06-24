@@ -18,6 +18,7 @@ import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings
 import { SaveSettingsButton } from "@/components/save-settings-button";
 import { CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 // Institutions gérées par des scripts dédiés (pas Woob) — identifiées par nom
 const DEDICATED_SYNC_INSTITUTIONS = ["lcl", "trade republic"];
@@ -322,6 +323,16 @@ export default async function SettingsPage() {
         </form>
       </section>
 
+      {/* Language */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.language.title")}</h2>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <LanguageSwitcher />
+        </div>
+      </section>
+
       {/* Auto-sync */}
       <section className="space-y-4">
         <div>
@@ -340,11 +351,6 @@ export default async function SettingsPage() {
             log={syncStatus["trade_republic"] ?? null}
           />
         </div>
-        <p className="text-xs text-[var(--muted)]">
-          {t.rich("settings.sync.lclHint", {
-            code: (chunks) => <code className="text-[var(--foreground)]">{chunks}</code>,
-          })}
-        </p>
       </section>
 
     </div>

@@ -346,10 +346,12 @@
       "ctoHint": "Défaut FR : 31,4 % (PFU)",
       "cryptoHint": "Défaut FR : 31,4 % (PFU)"
     },
+    "language": {
+      "title": "Langue"
+    },
     "sync": {
       "title": "Synchronisation automatique",
-      "subtitle": "Sync toutes les 4h · TR keepalive toutes les 2h",
-      "lclHint": "LCL → première connexion : <code>docker exec -it finalibaba-sync-1 python setup_lcl.py</code>"
+      "subtitle": "Sync toutes les 4h · TR keepalive toutes les 2h"
     }
   },
   "deleteAccount": {
