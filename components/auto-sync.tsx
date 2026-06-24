@@ -18,6 +18,8 @@ export function AutoSync() {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return;
+
     mountedAt.current = Date.now();
     autoTriggerSync().then(({ triggered }) => {
       if (triggered) setSyncing(true);
