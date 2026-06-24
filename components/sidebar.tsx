@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Wallet, BarChart3, Settings, LogOut } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useTransition } from "react";
+import { setLocale } from "@/lib/actions/locale";
 
 type SidebarProps = { showLogout?: boolean };
 
@@ -11,6 +13,16 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
   const rawPathname = usePathname();
   const pathname = rawPathname ?? "/";
   const t = useTranslations("nav");
+  const locale = useLocale();
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
+  function switchLocale(next: string) {
+    startTransition(async () => {
+      await setLocale(next);
+      router.refresh();
+    });
+  }
 
   const navItems = [
     { href: "/", label: t("dashboard"), icon: LayoutDashboard, exact: true },
@@ -61,6 +73,27 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
             );
           })}
         </nav>
+
+        {/* Language switcher */}
+        <div className="flex items-center gap-0.5 px-3 mt-2 mb-1">
+          <span className="text-xs text-[var(--muted)] mr-1.5">{t("language")}</span>
+          {(["fr", "en"] as const).map((l, i) => (
+            <span key={l} className="flex items-center gap-0.5">
+              {i > 0 && <span className="text-[var(--border)] text-xs select-none mx-0.5">·</span>}
+              <button
+                onClick={() => switchLocale(l)}
+                aria-pressed={locale === l}
+                className={`text-xs font-medium px-1.5 py-0.5 rounded min-h-[28px] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                  locale === l
+                    ? "text-[var(--accent)] bg-[var(--accent)]/10"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
+                }`}
+              >
+                {l.toUpperCase()}
+              </button>
+            </span>
+          ))}
+        </div>
 
         {/* Logout — only shown when AUTH_ENABLED=true */}
         {showLogout && (
