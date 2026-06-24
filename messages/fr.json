@@ -381,6 +381,11 @@
     "lclConfirm": "J'ai approuvé dans l'app LCL",
     "unknownError": "Erreur inconnue"
   },
+  "netWorthChart": {
+    "noHistory": "Aucun historique",
+    "ariaLabel": "Évolution du patrimoine net",
+    "seriesLabel": "Patrimoine Net"
+  },
   "openBanking": {
     "connect": "Connecter",
     "sync": "Sync OB",

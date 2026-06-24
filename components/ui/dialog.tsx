@@ -2,6 +2,7 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export function Dialog({
   open,
@@ -16,6 +17,7 @@ export function Dialog({
   title: string;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("common");
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Trigger asChild>{trigger}</RadixDialog.Trigger>
@@ -27,7 +29,7 @@ export function Dialog({
               {title}
             </RadixDialog.Title>
             <RadixDialog.Close
-              aria-label="Fermer"
+              aria-label={t("close")}
               className="min-h-[44px] min-w-[44px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             >
               <X size={16} aria-hidden="true" />

@@ -1,17 +1,17 @@
 # Roadmap — Finalibaba Self-Hosted
 
-Current stable release: **v1.0.0**
+Current stable release: **v1.1.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
 ---
 
-## v1.1 — Internationalisation + configurable tax rates
+## v1.1.0 — Released ✓
 
-*Community-triggered — will be prioritised when there is clear demand from non-French users.*
-
-- [ ] **English UI** — `next-intl` integration (`en` default, `fr` translation). No URL prefix per locale.
-- [x] **User-configurable tax rates** — PEA, CTO, and Crypto rates editable in Settings instead of hardcoded French defaults. Common presets: Germany (25%), UK (ISA 0%), Belgium (30%).
+- [x] **English & French UI** — `next-intl` integration, language auto-detected from browser (`Accept-Language`), manual switcher in Settings. No URL prefix per locale.
+- [x] **User-configurable tax rates** — PEA, CTO, and Crypto rates editable in Settings.
+- [x] **Mobile UX improvements** — WCAG-compliant touch targets (44×44px), responsive header layouts, icon-only buttons on narrow viewports.
+- [x] **Auto-sync on app open** — sync triggered automatically when opening the app (all sources: LCL, Trade Republic, Woob institutions). Badge shown during sync.
 
 ---
 

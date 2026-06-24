@@ -9,6 +9,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
+import { useTranslations } from "next-intl";
 
 type DataPoint = {
   date: string;
@@ -24,16 +25,18 @@ function formatCurrency(cents: number) {
 }
 
 export function NetWorthChart({ data }: { data: DataPoint[] }) {
+  const t = useTranslations("netWorthChart");
+
   if (!data.length) {
     return (
       <div className="h-64 flex items-center justify-center text-[var(--muted)] text-sm">
-        Aucun historique
+        {t("noHistory")}
       </div>
     );
   }
 
   return (
-    <div role="img" aria-label="Évolution du patrimoine net">
+    <div role="img" aria-label={t("ariaLabel")}>
     <ResponsiveContainer width="100%" height={260}>
       <AreaChart data={data} margin={{ top: 4, right: 0, left: 8, bottom: 0 }}>
         <defs>
@@ -70,8 +73,8 @@ export function NetWorthChart({ data }: { data: DataPoint[] }) {
           }}
           formatter={(value) =>
             value != null
-              ? [formatCurrency(Number(value)), "Patrimoine net"]
-              : ["-", "Patrimoine net"]
+              ? [formatCurrency(Number(value)), t("seriesLabel")]
+              : ["-", t("seriesLabel")]
           }
         />
         <Area

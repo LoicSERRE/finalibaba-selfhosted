@@ -7,17 +7,16 @@
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 
-> **Note:** v1 UI is in French. English UI and configurable tax rates are on the [roadmap](ROADMAP.md).
-
 ---
 
 ## Features
 
 - **Net worth dashboard** — gross and net of latent taxes, monthly trend, allocation breakdown
 - **All asset types** — bank accounts, investments (PEA / CTO / Crypto), real estate, automobiles, loans
-- **French tax calculations** — latent taxes: PEA 17.2%, CTO 31.4%, Crypto 31.4%
+- **French tax calculations** — latent taxes: PEA 17.2%, CTO 31.4%, Crypto 31.4% (user-configurable)
 - **Analytics** — savings rate, survival runway, sector exposure, passive income, CAGR per account
-- **Automatic sync** (optional) — Trade Republic (18 EU countries) · French banks via Woob
+- **Automatic sync** (optional) — Trade Republic (18 EU countries) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
+- **English & French UI** — language auto-detected from browser, switchable in Settings
 - **100% self-hosted** — your data stays on your server
 
 ## Tech stack
