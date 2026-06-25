@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/format";
+import { AnalyticsEmptyState } from "@/components/analytics-empty-state";
 import { NetWorthChart } from "@/components/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/asset-allocation-chart";
 import Link from "next/link";
@@ -1449,19 +1450,7 @@ export default async function AnalyticsPage() {
         </>
       )}
 
-      {!hasData && (
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-10 text-center">
-          <p className="text-sm text-[var(--muted)]">
-            {t.rich("noData", {
-              link: (chunks) => (
-                <Link href="/accounts" className="text-[var(--accent)] underline underline-offset-2">
-                  {chunks}
-                </Link>
-              ),
-            })}
-          </p>
-        </div>
-      )}
+      {!hasData && <AnalyticsEmptyState />}
     </div>
   );
 }

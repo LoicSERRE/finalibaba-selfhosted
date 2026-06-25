@@ -70,7 +70,10 @@
     "netWorthChart": "Évolution du patrimoine",
     "allocationChart": "Répartition des actifs",
     "myAccounts": "Mes comptes",
-    "emptyState": "Commencez par ajouter vos institutions dans {settings}, puis vos comptes dans {accounts}."
+    "emptyStateIntro": "Commencez par ajouter vos institutions dans",
+    "emptyStateSettings": "Paramètres",
+    "emptyStateMiddle": "puis vos comptes dans",
+    "emptyStateAccounts": "Comptes"
   },
   "accounts": {
     "title": "Comptes",
@@ -313,7 +316,8 @@
       "colEquity": "Fonds propres",
       "colLtv": "LTV"
     },
-    "noData": "Aucune donnée — ajoutez des comptes dans {link}."
+    "noDataIntro": "Aucune donnée — ajoutez des comptes dans",
+    "noDataLink": "Comptes"
   },
   "settings": {
     "title": "Paramètres",

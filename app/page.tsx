@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/format";
 import { NetWorthChart } from "@/components/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/asset-allocation-chart";
+import { DashboardEmptyState } from "@/components/dashboard-empty-state";
 import { InstitutionLogo } from "@/components/institution-logo";
 import Link from "next/link";
 import Decimal from "decimal.js";
@@ -341,18 +342,7 @@ export default async function DashboardPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-10 text-center">
-          <p className="text-sm text-[var(--muted)]">
-            {t.rich("dashboard.emptyState", {
-              settings: (chunks) => (
-                <Link href="/settings" className="text-[var(--accent)] underline underline-offset-2">{chunks}</Link>
-              ),
-              accounts: (chunks) => (
-                <Link href="/accounts" className="text-[var(--accent)] underline underline-offset-2">{chunks}</Link>
-              ),
-            })}
-          </p>
-        </div>
+        <DashboardEmptyState />
       )}
     </div>
   );
