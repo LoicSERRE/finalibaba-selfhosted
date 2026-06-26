@@ -132,10 +132,7 @@ export default async function SettingsPage() {
                   <DeleteButton
                     label={t("common.delete")}
                     description={t("deleteInstitution.description", { name: inst.name })}
-                    onDelete={async () => {
-                      "use server";
-                      await deleteInstitution(inst.id);
-                    }}
+                    onDelete={deleteInstitution.bind(null, inst.id)}
                   />
                 </div>
               </div>

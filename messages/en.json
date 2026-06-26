@@ -70,7 +70,10 @@
     "netWorthChart": "Net worth history",
     "allocationChart": "Asset allocation",
     "myAccounts": "My accounts",
-    "emptyState": "Start by adding your institutions in {settings}, then your accounts in {accounts}."
+    "emptyStateIntro": "Start by adding your institutions in",
+    "emptyStateSettings": "Settings",
+    "emptyStateConnector": ", then your accounts in",
+    "emptyStateAccounts": "Accounts."
   },
   "accounts": {
     "title": "Accounts",
@@ -313,7 +316,8 @@
       "colEquity": "Equity",
       "colLtv": "LTV"
     },
-    "noData": "No data — add accounts in {link}."
+    "noDataIntro": "No data — add accounts in",
+    "noDataLink": "Accounts."
   },
   "settings": {
     "title": "Settings",
