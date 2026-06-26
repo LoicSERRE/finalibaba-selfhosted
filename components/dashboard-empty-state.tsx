@@ -13,11 +13,10 @@ export async function DashboardEmptyState() {
         <Link href="/settings" className={linkClass}>
           {t("emptyStateSettings")}
         </Link>
-        , {t("emptyStateMiddle")}{" "}
+        {t("emptyStateConnector")}{" "}
         <Link href="/accounts" className={linkClass}>
           {t("emptyStateAccounts")}
         </Link>
-        .
       </p>
     </div>
   );

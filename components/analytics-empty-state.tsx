@@ -13,7 +13,6 @@ export async function AnalyticsEmptyState() {
         <Link href="/accounts" className={linkClass}>
           {t("noDataLink")}
         </Link>
-        .
       </p>
     </div>
   );

@@ -72,8 +72,8 @@
     "myAccounts": "Mes comptes",
     "emptyStateIntro": "Commencez par ajouter vos institutions dans",
     "emptyStateSettings": "Paramètres",
-    "emptyStateMiddle": "puis vos comptes dans",
-    "emptyStateAccounts": "Comptes"
+    "emptyStateConnector": ", puis vos comptes dans",
+    "emptyStateAccounts": "Comptes."
   },
   "accounts": {
     "title": "Comptes",
@@ -317,7 +317,7 @@
       "colLtv": "LTV"
     },
     "noDataIntro": "Aucune donnée — ajoutez des comptes dans",
-    "noDataLink": "Comptes"
+    "noDataLink": "Comptes."
   },
   "settings": {
     "title": "Paramètres",

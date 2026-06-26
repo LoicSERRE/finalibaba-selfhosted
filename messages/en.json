@@ -72,8 +72,8 @@
     "myAccounts": "My accounts",
     "emptyStateIntro": "Start by adding your institutions in",
     "emptyStateSettings": "Settings",
-    "emptyStateMiddle": "then your accounts in",
-    "emptyStateAccounts": "Accounts"
+    "emptyStateConnector": ", then your accounts in",
+    "emptyStateAccounts": "Accounts."
   },
   "accounts": {
     "title": "Accounts",
@@ -317,7 +317,7 @@
       "colLtv": "LTV"
     },
     "noDataIntro": "No data — add accounts in",
-    "noDataLink": "Accounts"
+    "noDataLink": "Accounts."
   },
   "settings": {
     "title": "Settings",
