@@ -50,7 +50,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      - run: pip install ruff==0.16.0
       - run: ruff check sync/
 
   security:
@@ -65,7 +65,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm audit --audit-level=high
+      - run: npm audit --omit=dev --audit-level=high
 
   dependency-review:
     name: Dependency review

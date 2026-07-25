@@ -1,6 +1,7 @@
 """PostgreSQL helpers shared across sync scripts."""
 import os
 import uuid
+
 import psycopg2
 import psycopg2.extras
 

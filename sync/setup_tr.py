@@ -47,7 +47,6 @@ def start_setup() -> dict:
 
 
 def complete_setup(code: str) -> None:
-    global _pending
     if _pending is None:
         raise RuntimeError("Aucun login en attente — relance /setup/start d'abord")
 

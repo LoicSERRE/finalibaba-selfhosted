@@ -36,8 +36,8 @@
     "decimal.js": "^10.6.0",
     "dotenv": "^17.4.0",
     "lucide-react": "^1.7.0",
-    "next": "^16.2.9",
-    "next-auth": "^4.24.13",
+    "next": "^16.2.11",
+    "next-auth": "^4.24.15",
     "next-intl": "^4.13.0",
     "papaparse": "^5.5.4",
     "pg": "^8.20.0",
@@ -48,8 +48,21 @@
   },
   "overrides": {
     "uuid": ">=11.1.1",
-    "postcss": ">=8.5.10",
-    "@hono/node-server": ">=1.19.13"
+    "postcss": ">=8.5.23",
+    "@hono/node-server": ">=1.19.13",
+    "sharp": ">=0.35.0",
+    "js-yaml": ">=4.3.0",
+    "eslint-plugin-react-hooks": "7.0.1",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": {
+        "brace-expansion": ">=5.0.8"
+      }
+    },
+    "eslint": {
+      "minimatch": {
+        "brace-expansion": ">=1.1.16"
+      }
+    }
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

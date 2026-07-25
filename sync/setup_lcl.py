@@ -41,7 +41,7 @@ def _iter_accounts(w):
     accounts = []
     try:
         for result in w.do("iter_accounts", backends="lcl"):
-            accounts.append(result)
+            accounts.append(result)  # noqa: PERF402 — must keep partial results gathered before a mid-iteration CallErrors
     except CallErrors as e:
         for backend, exc, tb in e.errors:
             msg = (str(exc) + tb).lower()
@@ -58,7 +58,12 @@ def start_setup() -> dict:
     _configure_woob()
 
     from woob.core import Woob
-    from woob.exceptions import AppValidation, AppValidationExpired, NeedInteractiveFor2FA, NeedInteractive
+    from woob.exceptions import (
+        AppValidation,
+        AppValidationExpired,
+        NeedInteractive,
+        NeedInteractiveFor2FA,
+    )
 
     w = Woob()
     w.load_backends(modules=["lcl"])
@@ -69,15 +74,15 @@ def start_setup() -> dict:
         log.info("LCL setup: session déjà valide (%d comptes)", len(accounts))
         try:
             w.deinit()
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("woob deinit failed (ignored): %s", e)
         return {"status": "already_connected", "accounts": len(accounts)}
 
     except AppValidationExpired:
         try:
             w.deinit()
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("woob deinit failed (ignored): %s", e)
         raise RuntimeError("Validation Certicode Plus expirée avant d'être approuvée — réessaie")
 
     except (AppValidation, NeedInteractiveFor2FA, NeedInteractive):
@@ -88,12 +93,16 @@ def start_setup() -> dict:
 
 
 def complete_setup() -> dict:
-    global _pending
     if _pending is None:
         raise RuntimeError("Aucun setup LCL en cours — relance start d'abord")
 
     w = _pending["w"]
-    from woob.exceptions import AppValidationExpired, AppValidation, NeedInteractiveFor2FA, NeedInteractive
+    from woob.exceptions import (
+        AppValidation,
+        AppValidationExpired,
+        NeedInteractive,
+        NeedInteractiveFor2FA,
+    )
 
     try:
         accounts = _iter_accounts(w)
@@ -116,6 +125,6 @@ def _cleanup():
         return
     try:
         _pending["w"].deinit()
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("woob deinit failed (ignored): %s", e)
     _pending = None

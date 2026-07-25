@@ -14,7 +14,13 @@ from pathlib import Path
 
 import psycopg2.extras
 
-from db import get_conn, upsert_account, record_balance, upsert_transaction, write_sync_log
+from db import (
+    get_conn,
+    record_balance,
+    upsert_account,
+    upsert_transaction,
+    write_sync_log,
+)
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +81,7 @@ def _configure_woob(backend_name: str, module: str, login: str, password: str):
     backends_file.write_text("".join(new_lines))
     backends_file.chmod(0o600)
 
-    result = subprocess.run(["woob", "config", "update"], capture_output=True, text=True, timeout=60)
+    result = subprocess.run(["woob", "config", "update"], capture_output=True, text=True, timeout=60, check=False)
     if result.returncode != 0:
         log.warning("woob config update failed (non-fatal): %s", result.stderr[:200])
 
@@ -99,14 +105,19 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
 
     synced = []
 
-    from woob.exceptions import AppValidation, AppValidationExpired, NeedInteractiveFor2FA, NeedInteractive
+    from woob.exceptions import (
+        AppValidation,
+        AppValidationExpired,
+        NeedInteractive,
+        NeedInteractiveFor2FA,
+    )
 
     def _iter_accounts():
         from woob.core.bcall import CallErrors
         accounts = []
         try:
             for result in w.do("iter_accounts", backends=backend_name):
-                accounts.append(result)
+                accounts.append(result)  # noqa: PERF402 — must keep partial results gathered before a mid-iteration CallErrors
         except CallErrors as e:
             for _backend, exc, tb in e.errors:
                 msg = (str(exc) + tb).lower()
@@ -207,11 +218,12 @@ class AuthRequiredError(Exception):
 
 if __name__ == "__main__":
     import sys
+
     import psycopg2
     logging.basicConfig(level=logging.INFO)
 
     if "--list" in sys.argv:
-        result = subprocess.run(["woob", "config", "-l"], capture_output=False, text=True)
+        result = subprocess.run(["woob", "config", "-l"], capture_output=False, text=True, check=False)
         sys.exit(result.returncode)
 
     # Usage: python sync_woob.py <institution_id>

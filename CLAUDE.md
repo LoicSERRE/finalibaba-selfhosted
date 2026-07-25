@@ -90,11 +90,17 @@ No test suite (no jest/vitest/playwright).
 
 `package.json` contains an `overrides` block that forces patched versions of transitive dependencies that can't be resolved by Dependabot alone (upstream packages pin older ranges). Do not remove these entries — they are security fixes:
 
+CI's `npm audit` step runs as `npm audit --omit=dev --audit-level=high` — deliberately excluding devDependencies (ESLint, TypeScript, etc.). Those never ship: the Docker `runner` stage installs with `npm ci --omit=dev`, so a devDependency-only advisory (e.g. through `eslint`'s vendored `minimatch`) can't reach production and isn't worth chasing at the cost of breaking the lint toolchain. `prisma` is a runtime `dependencies` entry (not dev) precisely because the `Dockerfile`'s `CMD` runs `npx prisma migrate deploy` inside the `runner` stage at container start — so `prisma`/`@prisma/dev`-rooted advisories (hono, `@hono/node-server`, valibot) are real and stay in scope.
+
 | Package | Reason |
 |---|---|
 | `uuid >=11.1.1` | CVE-2026-41907 — buffer bounds check; pinned to `^8.3.2` by `next-auth` |
-| `postcss >=8.5.10` | CVE-2026-41305 — XSS via `</style>`; vendored at `8.4.31` by `next` |
+| `postcss >=8.5.23` | GHSA-r28c-9q8g-f849 — path traversal via `sourceMappingURL`; vendored by `next` |
 | `@hono/node-server >=1.19.13` | CVE-2026-39406 — middleware bypass; pulled in via `@prisma/dev` |
+| `sharp >=0.35.0` | GHSA-f88m-g3jw-g9cj — libvips CVEs; vendored by `next`'s image optimizer |
+| `js-yaml >=4.3.0` | GHSA-52cp-r559-cp3m — quadratic-CPU DoS via merge-key chains; pulled in by `eslint`'s `@eslint/eslintrc` |
+| `eslint-plugin-react-hooks` pinned to `7.0.1` | Not a CVE fix — its `^7.0.0` range floats onto `7.1.1`, which enables new `react-hooks/purity`/`react-hooks/immutability` rules that fail on pre-existing code unrelated to any dependency bump. Pinned to avoid that scope creep; revisit separately if those rules are worth fixing for real. |
+| Nested `@typescript-eslint/typescript-estree` → `minimatch` → `brace-expansion >=5.0.8` and `eslint` → `minimatch` → `brace-expansion >=1.1.16` | GHSA-mh99-v99m-4gvg. A flat top-level `brace-expansion` override breaks `eslint`'s own vendored `minimatch@3.1.5`, which expects the old `brace-expansion` 1.x API (`expand is not a function` otherwise) — hence two scoped overrides instead of one, each keeping the major version its parent expects. |
 
 ## Architecture
 
