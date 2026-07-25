@@ -1,0 +1,8 @@
+[lint]
+# BLE001 (blind `except Exception`) is the deliberate resilience pattern for this
+# service: every sync/setup routine talks to a third-party library (woob, pytr)
+# whose exception types aren't part of a stable public API, and a crashed
+# APScheduler job must never take down the rest of the scheduler. Narrowing
+# these to specific exception classes would be guesswork that breaks silently
+# the next time a dependency changes its internals.
+ignore = ["BLE001"]

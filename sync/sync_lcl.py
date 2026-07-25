@@ -13,7 +13,14 @@ from pathlib import Path
 
 import psycopg2.extras
 
-from db import get_conn, get_institution_id, upsert_account, record_balance, upsert_transaction, write_sync_log
+from db import (
+    get_conn,
+    get_institution_id,
+    record_balance,
+    upsert_account,
+    upsert_transaction,
+    write_sync_log,
+)
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +56,7 @@ def _configure_woob():
     backends_file.chmod(0o600)
 
     import subprocess
-    result = subprocess.run(["woob", "config", "update"], capture_output=True, text=True, timeout=60)
+    result = subprocess.run(["woob", "config", "update"], capture_output=True, text=True, timeout=60, check=False)
     if result.returncode != 0:
         log.warning("woob config update a échoué (non-fatal) : %s", result.stderr[:200])
 
@@ -73,14 +80,14 @@ def run(interactive: bool = False) -> dict:
         raise RuntimeError("Institution 'LCL' introuvable en base. Lance npm run db:seed.")
 
     synced = []
-    from woob.exceptions import AppValidation, NeedInteractiveFor2FA, NeedInteractive
+    from woob.exceptions import AppValidation, NeedInteractive, NeedInteractiveFor2FA
 
     def _iter_accounts():
         from woob.core.bcall import CallErrors
         accounts = []
         try:
             for result in w.do("iter_accounts", backends="lcl"):
-                accounts.append(result)
+                accounts.append(result)  # noqa: PERF402 — must keep partial results gathered before a mid-iteration CallErrors
         except CallErrors as e:
             for backend, exc, tb in e.errors:
                 msg = (str(exc) + tb).lower()

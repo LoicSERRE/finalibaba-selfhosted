@@ -19,7 +19,14 @@ from decimal import Decimal
 
 import psycopg2.extras
 
-from db import get_conn, get_institution_id, upsert_account, upsert_holding, record_balance, write_sync_log
+from db import (
+    get_conn,
+    get_institution_id,
+    record_balance,
+    upsert_account,
+    upsert_holding,
+    write_sync_log,
+)
 
 log = logging.getLogger(__name__)
 

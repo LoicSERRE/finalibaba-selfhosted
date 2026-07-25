@@ -12,8 +12,8 @@ Cron: every 4 hours
 import logging
 import os
 import threading
-from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 
 import psycopg2
 import psycopg2.extras
@@ -91,8 +91,9 @@ def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str,
         log.error("Woob sync failed for %s: %s", inst_name, e)
         # Write to SyncLog so the UI shows the error (sync_woob.run() may not have caught it)
         try:
-            from db import get_conn, write_sync_log
             import psycopg2.extras
+
+            from db import get_conn, write_sync_log
             conn = get_conn()
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             write_sync_log(cur, f"woob:{inst_id}", "error", str(e)[:300])
@@ -105,6 +106,7 @@ def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str,
 
 def _run_all_woob():
     import psycopg2.extras
+
     from db import get_conn, get_woob_institutions
     try:
         conn = get_conn()
@@ -218,8 +220,9 @@ async def get_status():
 
 @app.post("/sync/lcl/setup/start")
 async def lcl_setup_start():
-    import setup_lcl
     import asyncio
+
+    import setup_lcl
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(executor, setup_lcl.start_setup)
@@ -231,8 +234,9 @@ async def lcl_setup_start():
 
 @app.post("/sync/lcl/setup/complete")
 async def lcl_setup_complete():
-    import setup_lcl
     import asyncio
+
+    import setup_lcl
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(executor, setup_lcl.complete_setup)
@@ -244,8 +248,9 @@ async def lcl_setup_complete():
 
 @app.post("/sync/trade-republic/setup/start")
 async def tr_setup_start():
-    import setup_tr
     import asyncio
+
+    import setup_tr
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(executor, setup_tr.start_setup)
@@ -261,8 +266,9 @@ async def tr_setup_complete(request: Request):
     code = (body.get("code") or "").strip()
     if not code:
         return JSONResponse({"error": "missing code"}, status_code=400)
-    import setup_tr
     import asyncio
+
+    import setup_tr
     loop = asyncio.get_event_loop()
     try:
         await loop.run_in_executor(executor, setup_tr.complete_setup, code)
@@ -275,9 +281,11 @@ async def tr_setup_complete(request: Request):
 @app.post("/sync/institution/{institution_id}")
 async def trigger_institution_sync(institution_id: str):
     """Trigger Woob sync for a specific institution (identified by DB id)."""
-    import psycopg2.extras
-    from db import get_conn
     import asyncio
+
+    import psycopg2.extras
+
+    from db import get_conn
 
     try:
         conn = get_conn()
