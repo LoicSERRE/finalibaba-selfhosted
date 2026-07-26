@@ -1,6 +1,6 @@
 # Roadmap — Finalibaba Self-Hosted
 
-Current stable release: **v1.1.0**
+Current stable release: **v1.2.1**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -29,8 +29,8 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 *The main gap vs Firefly III: spending visibility and forward projection.*
 
-- [ ] **Transaction categories & budgets** — categorize transactions (food, transport, housing…), set monthly budget envelopes per category, track spending vs budget
-- [ ] **Recurring transactions** — flag subscriptions and regular income; project future cash flow and detect missed payments
+- [x] **Transaction categories & budgets** — categorize transactions (food, transport, housing…), set monthly budget envelopes per category, track spending vs budget
+- [x] **Recurring transactions** — flag subscriptions and regular income; project future cash flow and detect missed payments
 
 ---
 
