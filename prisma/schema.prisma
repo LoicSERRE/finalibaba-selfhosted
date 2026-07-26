@@ -91,16 +91,28 @@ model HistoricalBalance {
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   accountId   String
-  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  syncId      String   @unique // woob transaction id — used for deduplication
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  syncId      String    @unique // woob transaction id — used for deduplication
   date        DateTime
   label       String
-  amountCents BigInt   // positive = credit, negative = debit
-  createdAt   DateTime @default(now())
+  amountCents BigInt    // positive = credit, negative = debit
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
 
   @@index([accountId, date])
+  @@index([categoryId])
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  color        String        // hex, e.g. "#6366f1"
+  budgetCents  BigInt?       // monthly envelope — null means no budget set
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
 }
 
 model UserSettings {
