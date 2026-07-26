@@ -14,6 +14,7 @@ import { AddHoldingDialog } from "@/components/add-holding-dialog";
 import { DeleteAccountButton } from "@/components/delete-account-button";
 import { ImportTransactionsDialog } from "@/components/import-transactions-dialog";
 import { ImportBalanceHistoryDialog } from "@/components/import-balance-history-dialog";
+import { TransactionCategorySelect } from "@/components/transaction-category-select";
 import { EmptyState } from "@/components/empty-state";
 import { updateInvestmentStartDate } from "@/lib/actions/accounts";
 import Decimal from "decimal.js";
@@ -50,7 +51,7 @@ export default async function AccountDetailPage({
     getTranslations("accounts"),
   ]);
 
-  const [account, userSettings] = await Promise.all([
+  const [account, userSettings, categories] = await Promise.all([
     prisma.account.findUnique({
       where: { id },
       include: {
@@ -61,6 +62,7 @@ export default async function AccountDetailPage({
       },
     }),
     prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
+    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
   ]);
 
   if (!account) notFound();
@@ -507,7 +509,7 @@ export default async function AccountDetailPage({
                 </div>
                 <div className="sm:border-l sm:border-[var(--border)] sm:pl-6">
                   <p className="text-xs text-[var(--muted)] mb-0.5">{td("fiscalSummary.netAfterTax")}</p>
-                  <p className="tabular-nums font-semibold text-[var(--accent)]">
+                  <p className="tabular-nums font-semibold text-[var(--accent-text)]">
                     {formatCurrency(netAfterTax)}
                   </p>
                 </div>
@@ -541,7 +543,7 @@ export default async function AccountDetailPage({
               />
               <button
                 type="submit"
-                className="text-xs px-3 py-2 rounded-lg bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 active:scale-[0.97] transition cursor-pointer font-medium min-h-[44px]"
+                className="text-xs px-3 py-2 rounded-lg bg-[var(--accent)]/15 text-[var(--accent-text)] hover:bg-[var(--accent)]/25 active:scale-[0.97] transition cursor-pointer font-medium min-h-[44px]"
               >
                 {td("fiscalSummary.save")}
               </button>
@@ -597,7 +599,7 @@ export default async function AccountDetailPage({
                     ltv > 80
                       ? "bg-[var(--negative)]"
                       : ltv > 60
-                      ? "bg-[var(--accent)]"
+                      ? "bg-[var(--warning)]"
                       : "bg-[var(--positive)]"
                   }`}
                   style={{ width: `${Math.min(ltv, 100)}%` }}
@@ -673,7 +675,7 @@ export default async function AccountDetailPage({
                     ltv > 80
                       ? "bg-[var(--negative)]"
                       : ltv > 50
-                      ? "bg-[var(--accent)]"
+                      ? "bg-[var(--warning)]"
                       : "bg-[var(--positive)]"
                   }`}
                   style={{ width: `${Math.min(ltv, 100)}%` }}
@@ -745,7 +747,7 @@ export default async function AccountDetailPage({
             </div>
             <div>
               <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.currentMonthly")}</p>
-              <p className="tabular-nums font-semibold text-[var(--accent)]">
+              <p className="tabular-nums font-semibold text-[var(--accent-text)]">
                 {formatCurrency(loanStats.currentMonthlyTotalCents)}
                 <span className="text-xs text-[var(--muted)] font-normal ml-1">{td("loanDetail.perMonth")}</span>
               </p>
@@ -830,7 +832,7 @@ export default async function AccountDetailPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                {[td("tableHeaders.date"), td("tableHeaders.label"), td("tableHeaders.amount")].map((h) => (
+                {[td("tableHeaders.date"), td("tableHeaders.label"), td("tableHeaders.category"), td("tableHeaders.amount")].map((h) => (
                   <th
                     key={h}
                     className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider"
@@ -857,6 +859,9 @@ export default async function AccountDetailPage({
                   </td>
                   <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] max-w-[140px] sm:max-w-xs truncate" title={tx.label ?? undefined}>
                     {tx.label}
+                  </td>
+                  <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
+                    <TransactionCategorySelect transactionId={tx.id} categoryId={tx.categoryId} categories={categories} />
                   </td>
                   <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
                     <span
