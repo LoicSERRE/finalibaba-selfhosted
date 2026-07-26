@@ -210,14 +210,32 @@ async function getDashboardData() {
     auto: Number(allocation["auto"]),
   };
 
-  return { netWorth, grossAssets, totalPassif, totalLiabilities, totalLatentTax, history, allocationRaw, institutions, delta30 };
+  return {
+    netWorth,
+    grossAssets,
+    totalPassif,
+    totalLiabilities,
+    totalLatentTax,
+    history,
+    allocationRaw,
+    institutions,
+    delta30,
+    hasAccounts: accounts.length > 0,
+  };
 }
 
 export default async function DashboardPage() {
-  const [{ netWorth, grossAssets, totalPassif, totalLiabilities, totalLatentTax, history, allocationRaw, institutions, delta30 }, t] =
-    await Promise.all([getDashboardData(), getTranslations()]);
+  const [
+    { netWorth, grossAssets, totalPassif, totalLiabilities, totalLatentTax, history, allocationRaw, institutions, delta30, hasAccounts },
+    t,
+  ] = await Promise.all([getDashboardData(), getTranslations()]);
 
-  const hasData = grossAssets > BigInt(0);
+  // Not grossAssets > 0 — a LOAN-only portfolio has real data (a mortgage,
+  // real payments) but zero gross assets by design (pure liability, no
+  // asset counterpart, see getDashboardData above). Gating on grossAssets
+  // showed the "add your first account" empty state to a user who'd
+  // already added one.
+  const hasData = hasAccounts;
 
   const allocationSlices: AllocationSlice[] = [
     { name: t("allocation.cash"), value: allocationRaw.cash, color: "#6366f1" },

@@ -1,16 +1,12 @@
 "use client";
 
 import { useState } from "react";
-
-const COLORS = [
-  "#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4",
-  "#22c55e", "#f59e0b", "#ec4899", "#ef4444",
-];
+import { AVATAR_COLORS } from "@/lib/palette";
 
 function pickColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return COLORS[Math.abs(hash) % COLORS.length];
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 type Props = {
@@ -23,12 +19,16 @@ export function InstitutionLogo({ name, logoUrl, size = 28 }: Props) {
   const [failed, setFailed] = useState(false);
   const letter = name.trim()[0]?.toUpperCase() ?? "?";
 
+  // Every call site renders the institution's name as visible text right
+  // next to this logo — decorative here, not a second source of the name,
+  // otherwise a screen reader announces the name twice per row.
   if (logoUrl && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={logoUrl}
-        alt={name}
+        alt=""
+        aria-hidden="true"
         width={size}
         height={size}
         onError={() => setFailed(true)}
@@ -40,6 +40,7 @@ export function InstitutionLogo({ name, logoUrl, size = 28 }: Props) {
 
   return (
     <span
+      aria-hidden="true"
       className="flex-shrink-0 rounded-md flex items-center justify-center text-white font-semibold select-none"
       style={{
         width: size,

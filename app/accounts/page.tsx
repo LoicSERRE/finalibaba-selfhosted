@@ -145,16 +145,11 @@ export default async function AccountsPage({
     credits: loanTotal,
   };
 
-  const defaultType =
-    tab === "investissements"
-      ? "INVESTMENT"
-      : tab === "immobilier"
-      ? "REAL_ESTATE"
-      : tab === "automobiles"
-      ? "AUTOMOBILE"
-      : tab === "credits"
-      ? "LOAN"
-      : "CHECKING";
+  // Only liquidités/investissements ever render the generic AddAccountDialog
+  // below (see the header) — immobilier/automobiles/credits each have their
+  // own dedicated add dialog instead, so INVESTMENT/CHECKING are the only
+  // reachable values here.
+  const defaultType = tab === "investissements" ? "INVESTMENT" : "CHECKING";
 
   // ── Serialized data for export (BigInt → number) ──────────────────────────
   const fiatExport: FiatAccountExport[] = fiatAccounts.map((a) => ({
@@ -275,7 +270,14 @@ export default async function AccountsPage({
             realEstateAccounts={realEstateExport}
             automobileAccounts={automobileExport}
           />
-          <AddAccountDialog institutions={institutions} defaultType={defaultType} />
+          {/* immobilier/automobiles/credits have their own dedicated add
+              dialog further down (with type-specific fields this generic
+              one doesn't cover, or doesn't cover at all for LOAN) — showing
+              this one too would be a second, partially-broken way to create
+              the same account type. */}
+          {(tab === "liquidites" || tab === "investissements") && (
+            <AddAccountDialog institutions={institutions} defaultType={defaultType} />
+          )}
         </div>
       </div>
 
@@ -287,7 +289,7 @@ export default async function AccountsPage({
             href={`/accounts?tab=${id}`}
             className={`flex flex-col items-center py-2.5 px-1 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
               tab === id
-                ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                ? "bg-[var(--accent)]/15 text-[var(--accent-text)]"
                 : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
             }`}
           >
@@ -619,7 +621,7 @@ export default async function AccountsPage({
                             ltv > 80
                               ? "bg-[var(--negative)]"
                               : ltv > 60
-                              ? "bg-[var(--accent)]"
+                              ? "bg-[var(--warning)]"
                               : "bg-[var(--positive)]"
                           }`}
                           style={{ width: `${Math.min(ltv, 100)}%` }}
@@ -869,7 +871,7 @@ export default async function AccountsPage({
                             financement > 80
                               ? "bg-[var(--negative)]"
                               : financement > 50
-                              ? "bg-[var(--accent)]"
+                              ? "bg-[var(--warning)]"
                               : "bg-[var(--positive)]"
                           }`}
                           style={{ width: `${Math.min(financement, 100)}%` }}

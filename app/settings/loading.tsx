@@ -45,6 +45,45 @@ export default function SettingsLoading() {
           </div>
         </div>
       </div>
+
+      {/* Fiscalité */}
+      <div className="space-y-4">
+        <div className="h-5 w-24 bg-[var(--surface)] rounded" />
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="h-3 w-24 bg-[var(--surface-elevated)] rounded" />
+                <div className="h-9 w-full bg-[var(--surface-elevated)] rounded-lg" />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <div className="h-9 w-24 bg-[var(--surface-elevated)] rounded-lg" />
+          </div>
+        </div>
+      </div>
+
+      {/* Langue */}
+      <div className="space-y-4">
+        <div className="h-5 w-20 bg-[var(--surface)] rounded" />
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <div className="h-9 w-40 bg-[var(--surface-elevated)] rounded-lg" />
+        </div>
+      </div>
+
+      {/* Sync */}
+      <div className="space-y-4">
+        <div className="h-5 w-28 bg-[var(--surface)] rounded" />
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-5 divide-y divide-[var(--border)]">
+          {[0, 1].map((i) => (
+            <div key={i} className="py-4 flex items-center justify-between">
+              <div className="h-4 w-24 bg-[var(--surface-elevated)] rounded" />
+              <div className="h-8 w-20 bg-[var(--surface-elevated)] rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

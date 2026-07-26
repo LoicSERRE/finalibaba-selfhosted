@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/input";
 import { createInstitution } from "@/lib/actions/institutions";
 import { useTranslations } from "next-intl";
 
@@ -27,9 +28,6 @@ const WOOB_MODULES = [
   { module: "degiro", label: "DEGIRO" },
 ] as const;
 
-const inputClass =
-  "w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30";
-
 export function AddInstitutionDialog() {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -41,6 +39,11 @@ export function AddInstitutionDialog() {
   const knownBank = WOOB_MODULES.find((m) => m.module === selectedModule);
   const isCustom = selectedModule === "__other__";
   const woobEnabled = !!knownBank;
+  const bankOptions = [
+    { value: "", label: t("select") },
+    ...WOOB_MODULES.map((m) => ({ value: m.module, label: m.label })),
+    { value: "__other__", label: t("other") },
+  ];
 
   const reset = () => {
     setSelectedModule("");
@@ -72,45 +75,30 @@ export function AddInstitutionDialog() {
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1.5">
-          <label htmlFor="inst-bank" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-            {t("bank")}
-          </label>
-          <select
-            id="inst-bank"
-            value={selectedModule}
-            onChange={(e) => { setSelectedModule(e.target.value); setCustomName(""); }}
-            className={`${inputClass} cursor-pointer`}
-            required
-          >
-            <option value="">{t("select")}</option>
-            {WOOB_MODULES.map((m) => (
-              <option key={m.module} value={m.module}>{m.label}</option>
-            ))}
-            <option value="__other__">{t("other")}</option>
-          </select>
-        </div>
+        <Select
+          id="inst-bank"
+          label={t("bank")}
+          value={selectedModule}
+          onChange={(e) => { setSelectedModule(e.target.value); setCustomName(""); }}
+          options={bankOptions}
+          required
+        />
 
         {knownBank && (
           <input type="hidden" name="name" value={knownBank.label} />
         )}
 
         {isCustom && (
-          <div className="space-y-1.5">
-            <label htmlFor="inst-name" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-              {t("name")}
-            </label>
-            <input
-              id="inst-name"
-              type="text"
-              name="name"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              placeholder="Revolut, Trade Republic…"
-              required
-              className={inputClass}
-            />
-          </div>
+          <Input
+            id="inst-name"
+            label={t("name")}
+            type="text"
+            name="name"
+            value={customName}
+            onChange={(e) => setCustomName(e.target.value)}
+            placeholder="Revolut, Trade Republic…"
+            required
+          />
         )}
 
         {woobEnabled && (
@@ -118,32 +106,8 @@ export function AddInstitutionDialog() {
             <input type="hidden" name="woobModule" value={selectedModule} />
             <div className="space-y-3 pt-1 border-t border-[var(--border)]">
               <p className="text-xs text-[var(--muted)] pt-1">{t("woobHint")}</p>
-              <div className="space-y-1.5">
-                <label htmlFor="inst-woob-login" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                  {t("login")}
-                </label>
-                <input
-                  id="inst-woob-login"
-                  type="text"
-                  name="woobLogin"
-                  autoComplete="username"
-                  required
-                  className={inputClass}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="inst-woob-password" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                  {t("password")}
-                </label>
-                <input
-                  id="inst-woob-password"
-                  type="password"
-                  name="woobPassword"
-                  autoComplete="current-password"
-                  required
-                  className={inputClass}
-                />
-              </div>
+              <Input id="inst-woob-login" label={t("login")} type="text" name="woobLogin" autoComplete="username" required />
+              <Input id="inst-woob-password" label={t("password")} type="password" name="woobPassword" autoComplete="current-password" required />
             </div>
           </>
         )}

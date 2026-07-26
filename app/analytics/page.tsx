@@ -562,7 +562,11 @@ export default async function AnalyticsPage() {
       liability: a.liabilityCents ?? BigInt(0),
     }));
 
-  const hasData = grossAssets > BigInt(0);
+  // Not grossAssets > 0 — a LOAN-only portfolio has real data (a mortgage,
+  // real payments) but zero gross assets by design (pure liability, no
+  // asset counterpart). Gating on grossAssets showed the empty state to a
+  // user who'd already added an account.
+  const hasData = accounts.length > 0;
 
   // ── Serialized data for export (BigInt → number) ──────────────────────────
   const analyticsExport: AnalyticsExportData = {
@@ -638,7 +642,7 @@ export default async function AnalyticsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
           <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-2">{t("kpis.netWorth")}</p>
-          <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--accent)]">
+          <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--accent-text)]">
             {formatCurrency(hasTaxData ? netWorthAfterTax : netWorth, 0)}
           </p>
           {momDelta !== null && (
@@ -700,7 +704,7 @@ export default async function AnalyticsPage() {
               {!hasSalary ? (
                 <div>
                   <p className="text-2xl font-semibold text-[var(--muted)]">—</p>
-                  <Link href="/settings" className="text-xs text-[var(--accent)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
+                  <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
                     {t("savingsRate.configureSalary")}
                   </Link>
                 </div>
@@ -728,7 +732,7 @@ export default async function AnalyticsPage() {
                       </span>
                     )}
                     {savingsRate >= 20 && savingsRate < 40 && (
-                      <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)]">
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent-text)]">
                         {t("savingsRate.good")}
                       </span>
                     )}
@@ -755,7 +759,7 @@ export default async function AnalyticsPage() {
               {!hasExpenses ? (
                 <div>
                   <p className="text-2xl font-semibold text-[var(--muted)]">—</p>
-                  <Link href="/settings" className="text-xs text-[var(--accent)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
+                  <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
                     {t("runway.configureExpenses")}
                   </Link>
                 </div>
@@ -800,7 +804,7 @@ export default async function AnalyticsPage() {
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-sm font-semibold tabular-nums ${
-                      goalPct >= 100 ? "text-[var(--positive)]" : "text-[var(--accent)]"
+                      goalPct >= 100 ? "text-[var(--positive)]" : "text-[var(--accent-text)]"
                     }`}
                   >
                     {goalPct}%
@@ -948,7 +952,7 @@ export default async function AnalyticsPage() {
                         </p>
                         {row.exDividendDate ? (
                           <p className={`text-xs tabular-nums mt-0.5 ${
-                            isPast ? "text-[var(--muted)]" : isSoon ? "text-amber-400" : "text-[var(--foreground)]"
+                            isPast ? "text-[var(--muted)]" : isSoon ? "text-[var(--warning)]" : "text-[var(--foreground)]"
                           }`}>
                             {isPast
                               ? t("dividends.exDivPast", { date: row.exDividendDate.toLocaleDateString("fr-FR") })
@@ -1144,7 +1148,7 @@ export default async function AnalyticsPage() {
                     </span>
                   )}
                   {techPct > 40 && techPct <= 60 && (
-                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)]">
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--warning)]/15 text-[var(--warning)]">
                       {t("radar.monitor")}
                     </span>
                   )}
@@ -1164,7 +1168,7 @@ export default async function AnalyticsPage() {
                     techPct > 60
                       ? "bg-[var(--negative)]"
                       : techPct > 40
-                      ? "bg-[var(--accent)]"
+                      ? "bg-[var(--warning)]"
                       : "bg-[var(--positive)]"
                   }`}
                   style={{ width: `${techPct}%` }}
@@ -1428,7 +1432,7 @@ export default async function AnalyticsPage() {
                                   ltv > 80
                                     ? "bg-[var(--negative)]"
                                     : ltv > 60
-                                    ? "bg-[var(--accent)]"
+                                    ? "bg-[var(--warning)]"
                                     : "bg-[var(--positive)]"
                                 }`}
                                 style={{ width: `${Math.min(ltv, 100)}%` }}

@@ -2,6 +2,7 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useTranslations } from "next-intl";
+import { CHART_COLORS } from "@/lib/palette";
 
 export type AllocationSlice = {
   name: string;
@@ -9,7 +10,6 @@ export type AllocationSlice = {
   color: string;
 };
 
-const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#3b82f6", "#ec4899", "#14b8a6"];
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("fr-FR", {
@@ -50,7 +50,7 @@ export function AssetAllocationChart({ data }: { data: AllocationSlice[] }) {
             {nonEmpty.map((entry, index) => (
               <Cell
                 key={entry.name}
-                fill={entry.color ?? COLORS[index % COLORS.length]}
+                fill={entry.color ?? CHART_COLORS[index % CHART_COLORS.length]}
               />
             ))}
           </Pie>
@@ -79,7 +79,7 @@ export function AssetAllocationChart({ data }: { data: AllocationSlice[] }) {
           <div key={entry.name} className="flex items-center gap-1.5 min-w-0">
             <span
               className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: entry.color ?? COLORS[index % COLORS.length] }}
+              style={{ background: entry.color ?? CHART_COLORS[index % CHART_COLORS.length] }}
             />
             <span className="text-xs text-[var(--muted)] truncate">{entry.name}</span>
           </div>

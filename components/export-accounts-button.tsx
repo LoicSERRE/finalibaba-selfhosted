@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Download, X } from "lucide-react";
+import { useState } from "react";
+import { Download } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { fmt, sign, downloadFile } from "@/lib/markdown-export";
 import { useTranslations } from "next-intl";
 
 // ── Serialized types (no BigInt) ──────────────────────────────────────────────
@@ -92,33 +95,6 @@ type ExportStrings = {
   colGain: string;
   typeLabels: Record<string, string>;
 };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(cents: number, decimals = 0): string {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: decimals,
-    minimumFractionDigits: decimals,
-  }).format(cents / 100);
-}
-
-function sign(n: number): string {
-  return n >= 0 ? "+" : "";
-}
-
-function downloadFile(content: string, suffix: string) {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `finalibaba-${suffix}-${new Date().toISOString().slice(0, 10)}.md`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
 // ── Markdown generation ───────────────────────────────────────────────────────
 
@@ -281,47 +257,6 @@ export function ExportAccountsButton({
 
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set(allIds));
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const titleId = "export-accounts-title";
-
-  // Accessibility: focus trap + Escape + body scroll lock
-  useEffect(() => {
-    if (!open) return;
-
-    document.body.style.overflow = "hidden";
-
-    const modal = dialogRef.current;
-    if (!modal) return;
-
-    // Move focus to first focusable element
-    const focusable = modal.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    focusable[0]?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        return;
-      }
-      if (e.key !== "Tab" || focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [open]);
 
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
   const selectedCount = allIds.filter((id) => selected.has(id)).length;
@@ -396,117 +331,85 @@ export function ExportAccountsButton({
   }
 
   return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors"
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title={t("title")}
+        trigger={
+          <button className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+            <Download size={14} aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">{t("button")}</span>
+          </button>
+        }
       >
-        <Download size={14} aria-hidden="true" />
-        <span className="sr-only sm:not-sr-only">{t("button")}</span>
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            className="relative z-10 bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-              <h2 id={titleId} className="font-semibold text-[var(--foreground)]">{t("title")}</h2>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label={t("close")}
-                className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-[var(--surface-elevated)] transition-colors"
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </div>
-
-            {/* Account list */}
-            <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="w-4 h-4 rounded accent-[var(--accent)]"
-                />
-                <span className="text-sm font-medium text-[var(--foreground)]">
-                  {t("selectAll")}
-                </span>
-              </label>
-
-              <div className="border-t border-[var(--border)]" />
-
-              {groups.map((g) => {
-                const allOn = g.accounts.every((a) => selected.has(a.id));
-                return (
-                  <div key={g.label} className="space-y-2">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={allOn}
-                        onChange={() => toggleGroup(g)}
-                        className="w-4 h-4 rounded accent-[var(--accent)]"
-                      />
-                      <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                        {g.label}
-                      </span>
-                    </label>
-                    <div className="ml-7 space-y-1.5">
-                      {g.accounts.map((a) => (
-                        <label key={a.id} className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(a.id)}
-                            onChange={() => toggle(a.id)}
-                            className="w-4 h-4 rounded accent-[var(--accent)]"
-                          />
-                          <span className="text-sm text-[var(--foreground)]">{a.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)]">
-              <span className="text-xs text-[var(--muted)]">
-                {selectedCount === 1
-                  ? t("selectedOne", { count: selectedCount })
-                  : t("selectedMany", { count: selectedCount })}
+        <div className="space-y-4">
+          {/* Account list */}
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="w-4 h-4 rounded accent-[var(--accent)]"
+              />
+              <span className="text-sm font-medium text-[var(--foreground)]">
+                {t("selectAll")}
               </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setOpen(false)}
-                  className="cursor-pointer min-h-[44px] px-4 py-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  onClick={handleExport}
-                  disabled={selectedCount === 0}
-                  className="flex cursor-pointer items-center gap-1.5 min-h-[44px] px-4 py-2 text-sm font-medium bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Download size={14} aria-hidden="true" />
-                  {t("export")}
-                </button>
-              </div>
+            </label>
+
+            <div className="border-t border-[var(--border)]" />
+
+            {groups.map((g) => {
+              const allOn = g.accounts.every((a) => selected.has(a.id));
+              return (
+                <div key={g.label} className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allOn}
+                      onChange={() => toggleGroup(g)}
+                      className="w-4 h-4 rounded accent-[var(--accent)]"
+                    />
+                    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                      {g.label}
+                    </span>
+                  </label>
+                  <div className="ml-7 space-y-1.5">
+                    {g.accounts.map((a) => (
+                      <label key={a.id} className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(a.id)}
+                          onChange={() => toggle(a.id)}
+                          className="w-4 h-4 rounded accent-[var(--accent)]"
+                        />
+                        <span className="text-sm text-[var(--foreground)]">{a.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+            <span className="text-xs text-[var(--muted)]">
+              {selectedCount === 1
+                ? t("selectedOne", { count: selectedCount })
+                : t("selectedMany", { count: selectedCount })}
+            </span>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="button" onClick={handleExport} disabled={selectedCount === 0}>
+                <Download size={14} aria-hidden="true" />
+                {t("export")}
+              </Button>
             </div>
           </div>
         </div>
-      )}
-    </>
+      </Dialog>
   );
 }

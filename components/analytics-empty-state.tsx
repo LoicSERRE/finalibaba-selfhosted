@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-const linkClass = "text-[var(--accent)] underline underline-offset-2";
+const linkClass = "text-[var(--accent-text)] underline underline-offset-2";
 
 export async function AnalyticsEmptyState() {
   const t = await getTranslations("analytics");

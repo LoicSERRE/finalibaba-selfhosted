@@ -86,7 +86,7 @@ export default async function SettingsPage() {
                         ? t("settings.institutions.accounts", { count: inst._count.accounts })
                         : t("settings.institutions.accountsPlural", { count: inst._count.accounts })}
                       {inst.gocardlessInstitutionId && (
-                        <span className="ml-2 text-[var(--accent)]">· {t("settings.institutions.openBanking")}</span>
+                        <span className="ml-2 text-[var(--accent-text)]">· {t("settings.institutions.openBanking")}</span>
                       )}
                     </p>
                   </div>
@@ -108,18 +108,28 @@ export default async function SettingsPage() {
                     return (
                       <>
                         {inst.woobModule && woobLog && (
-                          <span className={`flex items-center gap-1 text-xs ${
-                            woobLog.status === "success" ? "text-[var(--positive)]" :
-                            woobLog.status === "auth_required" ? "text-amber-400" :
-                            "text-[var(--negative)]"
-                          }`}>
+                          <span
+                            className={`flex items-center gap-1 text-xs ${
+                              woobLog.status === "success" ? "text-[var(--positive)]" :
+                              woobLog.status === "auth_required" ? "text-[var(--warning)]" :
+                              "text-[var(--negative)]"
+                            }`}
+                            role="status"
+                            aria-label={
+                              woobLog.status === "success"
+                                ? t("syncStatus.success")
+                                : woobLog.status === "auth_required"
+                                ? t("syncStatus.authRequired")
+                                : t("syncStatus.error")
+                            }
+                          >
                             {woobLog.status === "success"
-                              ? <CheckCircle size={12} />
-                              : <AlertTriangle size={12} />}
+                              ? <CheckCircle size={12} aria-hidden="true" />
+                              : <AlertTriangle size={12} aria-hidden="true" />}
                           </span>
                         )}
                         {inst.woobModule && !woobLog && (
-                          <Clock size={12} className="text-[var(--muted)]" />
+                          <Clock size={12} className="text-[var(--muted)]" role="status" aria-label={t("syncStatus.neverSynced")} />
                         )}
                         {inst.woobModule && <InstitutionSyncButton institutionId={inst.id} />}
                         <ConfigureWoobDialog

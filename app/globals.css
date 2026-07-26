@@ -8,8 +8,27 @@
   --border: #2a2a38;
   --muted: #a1a1aa;
   --accent: #6366f1;
+  /* --accent (#6366f1) is 4.14:1 on --surface — fails WCAG AA (4.5:1) for
+     normal-size text. Use --accent-text for small accent-colored text on a
+     dark surface (active nav links, links); keep --accent itself for
+     backgrounds/borders/tinted-bg+text combos where the tint already gives
+     enough contrast headroom, and for large text (≥24px or ≥18.66px bold). */
+  --accent-text: #818cf8;
+  /* White text on --accent is 4.47:1 — fails AA by a hair. Buttons with
+     white-on-accent labels use this darker shade instead (6.29:1). */
+  --accent-strong: #4f46e5;
   --positive: #22c55e;
   --negative: #ef4444;
+  /* Third semantic status color — "getting close to a limit, not yet over."
+     Was previously reinvented ad hoc as raw `amber-400` in several files
+     with no shared token; also fixes budget/LTV/loan progress bars that had
+     been reusing --accent (brand/active-nav color) for this same meaning,
+     a collision between "highlighted" and "close to your limit." */
+  --warning: #f59e0b;
+  /* App is dark-only — without this, native controls (select dropdown
+     popups, scrollbars, checkboxes) render with the browser's light-theme
+     defaults, so option text in --foreground barely contrasts against them. */
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -20,8 +39,11 @@
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-strong: var(--accent-strong);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
+  --color-warning: var(--warning);
   --font-sans: var(--font-ibm-plex-sans);
   --font-mono: var(--font-ibm-plex-mono);
 }
@@ -32,6 +54,13 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
+}
+
+/* Belt-and-suspenders on top of :root's color-scheme: some browsers still
+   render <option> background/text using their own defaults regardless. */
+select option {
+  background-color: var(--surface-elevated);
+  color: var(--foreground);
 }
 
 /* Safe area padding — handles Android gesture bar & iPhone notch */
@@ -46,3 +75,30 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Dialog enter/exit — Radix sets [data-state] on Overlay/Content. The
+   `translate(-50%, -50%)` baked into every step matches Content's own
+   `fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2` positioning
+   classes so the animation doesn't fight the base centering transform.
+   Neutralized by the prefers-reduced-motion rule above (it overrides
+   animation-duration on every element). */
+@keyframes dialog-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialog-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes dialog-content-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96) translateY(0.75rem); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1) translateY(0); }
+}
+@keyframes dialog-content-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1) translateY(0); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.98) translateY(0.5rem); }
+}
+.dialog-overlay[data-state="open"] { animation: dialog-overlay-in 150ms ease-out; }
+.dialog-overlay[data-state="closed"] { animation: dialog-overlay-out 150ms ease-in; }
+.dialog-content[data-state="open"] { animation: dialog-content-in 180ms ease-out; }
+.dialog-content[data-state="closed"] { animation: dialog-content-out 150ms ease-in; }

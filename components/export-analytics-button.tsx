@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Download, X } from "lucide-react";
+import { useState } from "react";
+import { Download } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { fmt, sign, downloadFile } from "@/lib/markdown-export";
 import { useTranslations } from "next-intl";
 
 // ── Serialized types (no BigInt) ──────────────────────────────────────────────
@@ -130,33 +133,6 @@ interface AnalyticsExportStrings {
     dividends: string;
     interest: string;
   }) => string;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(cents: number, decimals = 0): string {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: decimals,
-    minimumFractionDigits: decimals,
-  }).format(cents / 100);
-}
-
-function sign(n: number): string {
-  return n >= 0 ? "+" : "";
-}
-
-function downloadFile(content: string, suffix: string) {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `finalibaba-${suffix}-${new Date().toISOString().slice(0, 10)}.md`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 // ── Markdown generation ───────────────────────────────────────────────────────
@@ -312,46 +288,6 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
   const [selected, setSelected] = useState<Set<Section>>(
     new Set(sections.map((s) => s.id))
   );
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const titleId = "export-analytics-title";
-
-  // Accessibility: focus trap + Escape + body scroll lock
-  useEffect(() => {
-    if (!open) return;
-
-    document.body.style.overflow = "hidden";
-
-    const modal = dialogRef.current;
-    if (!modal) return;
-
-    const focusable = modal.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    focusable[0]?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        return;
-      }
-      if (e.key !== "Tab" || focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [open]);
 
   const allSelected = sections.every((s) => selected.has(s.id));
 
@@ -419,90 +355,56 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
   }
 
   return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors"
-      >
-        <Download size={14} aria-hidden="true" />
-        {t("button")}
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            className="relative z-10 bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-sm shadow-2xl"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-              <h2 id={titleId} className="font-semibold text-[var(--foreground)]">
-                {t("title")}
-              </h2>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label={t("close")}
-                className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-[var(--surface-elevated)] transition-colors"
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </div>
-
-            {/* Section list */}
-            <div className="px-6 py-4 space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="w-4 h-4 rounded accent-[var(--accent)]"
-                />
-                <span className="text-sm font-medium text-[var(--foreground)]">
-                  {t("selectAll")}
-                </span>
-              </label>
-              <div className="border-t border-[var(--border)]" />
-              {sections.map((s) => (
-                <label key={s.id} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(s.id)}
-                    onChange={() => toggle(s.id)}
-                    className="w-4 h-4 rounded accent-[var(--accent)]"
-                  />
-                  <span className="text-sm text-[var(--foreground)]">{s.label}</span>
-                </label>
-              ))}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[var(--border)]">
-              <button
-                onClick={() => setOpen(false)}
-                className="cursor-pointer min-h-[44px] px-4 py-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-              >
-                {t("cancel")}
-              </button>
-              <button
-                onClick={handleExport}
-                disabled={selected.size === 0}
-                className="flex cursor-pointer items-center gap-1.5 min-h-[44px] px-4 py-2 text-sm font-medium bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <Download size={14} aria-hidden="true" />
-                {t("export")}
-              </button>
-            </div>
-          </div>
+    <Dialog
+      open={open}
+      onOpenChange={setOpen}
+      title={t("title")}
+      trigger={
+        <button className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+          <Download size={14} aria-hidden="true" />
+          {t("button")}
+        </button>
+      }
+    >
+      <div className="space-y-4">
+        {/* Section list */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              className="w-4 h-4 rounded accent-[var(--accent)]"
+            />
+            <span className="text-sm font-medium text-[var(--foreground)]">
+              {t("selectAll")}
+            </span>
+          </label>
+          <div className="border-t border-[var(--border)]" />
+          {sections.map((s) => (
+            <label key={s.id} className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selected.has(s.id)}
+                onChange={() => toggle(s.id)}
+                className="w-4 h-4 rounded accent-[var(--accent)]"
+              />
+              <span className="text-sm text-[var(--foreground)]">{s.label}</span>
+            </label>
+          ))}
         </div>
-      )}
-    </>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            {t("cancel")}
+          </Button>
+          <Button type="button" onClick={handleExport} disabled={selected.size === 0}>
+            <Download size={14} aria-hidden="true" />
+            {t("export")}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

@@ -5,8 +5,8 @@ export default function AccountsLoading() {
         <div className="h-8 w-24 bg-[var(--surface)] rounded-lg" />
         <div className="h-9 w-32 bg-[var(--surface)] rounded-lg" />
       </div>
-      <div className="grid grid-cols-4 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-1 gap-1">
-        {[0, 1, 2, 3].map((i) => (
+      <div className="grid grid-cols-5 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-1 gap-1">
+        {[0, 1, 2, 3, 4].map((i) => (
           <div key={i} className="h-12 bg-[var(--surface-elevated)] rounded-lg" />
         ))}
       </div>

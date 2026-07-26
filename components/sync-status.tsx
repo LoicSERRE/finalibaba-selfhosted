@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { RefreshCw, CheckCircle, AlertTriangle, Clock, LogIn } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { triggerSync, startTRSetup, completeTRSetup, startLCLSetup, completeLCLSetup } from "@/lib/actions/sync";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -20,7 +21,7 @@ interface Props {
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "success") return <CheckCircle size={14} className="text-[var(--positive)]" aria-hidden="true" />;
-  if (status === "auth_required") return <AlertTriangle size={14} className="text-amber-400" aria-hidden="true" />;
+  if (status === "auth_required") return <AlertTriangle size={14} className="text-[var(--warning)]" aria-hidden="true" />;
   return <AlertTriangle size={14} className="text-[var(--negative)]" aria-hidden="true" />;
 }
 
@@ -133,31 +134,35 @@ export function SyncStatus({ source, label, log }: Props) {
           {log ? <StatusIcon status={log.status} /> : <Clock size={14} className="text-[var(--muted)]" aria-hidden="true" />}
           <div>
             <p className="text-sm font-medium text-[var(--foreground)]">{label}</p>
-            {log ? (
-              <p className="text-xs text-[var(--muted)]">
-                {log.status === "auth_required" ? (
-                  <span className="text-amber-400">{t("reAuthRequired")}</span>
-                ) : log.status === "success" ? (
-                  <span>{timeAgo(log.createdAt, locale)}</span>
-                ) : (
-                  <span className="text-[var(--negative)]">{log.message ?? t("error")}</span>
-                )}
-              </p>
-            ) : (
-              <p className="text-xs text-[var(--muted)]">{t("neverSynced")}</p>
-            )}
+            <div aria-live="polite">
+              {log ? (
+                <p className="text-xs text-[var(--muted)]">
+                  {log.status === "auth_required" ? (
+                    <span className="text-[var(--warning)]">{t("reAuthRequired")}</span>
+                  ) : log.status === "success" ? (
+                    <span>{timeAgo(log.createdAt, locale)}</span>
+                  ) : (
+                    <span className="text-[var(--negative)]">{log.message ?? t("error")}</span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-xs text-[var(--muted)]">{t("neverSynced")}</p>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {isAuthRequired && setupStep === "idle" && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={source === "trade-republic" ? handleStartTRSetup : handleStartLCLSetup}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-[44px] rounded-lg border border-amber-400/40 text-amber-400 hover:bg-amber-400/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
+              className="border-[var(--warning)]/40 text-[var(--warning)] hover:bg-[var(--warning)]/10"
             >
               <LogIn size={12} aria-hidden="true" />
               {t("connect")}
-            </button>
+            </Button>
           )}
           {setupStep === "starting" && (
             <span className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
@@ -166,21 +171,17 @@ export function SyncStatus({ source, label, log }: Props) {
             </span>
           )}
           {!inSetupFlow && (
-            <button
-              onClick={handleSync}
-              disabled={pending}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-[44px] rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
-            >
+            <Button variant="outline" size="sm" onClick={handleSync} disabled={pending}>
               <RefreshCw size={12} className={pending ? "animate-spin" : ""} aria-hidden="true" />
               {pending ? t("syncing") : t("synchronize")}
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {/* TR — code input */}
       {(setupStep === "awaiting_code" || setupStep === "submitting") && (
-        <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-amber-400/20">
+        <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
           <p className="text-xs text-[var(--muted)] mb-2">{t("trCodeHint")}</p>
           <div className="flex items-center gap-2">
             <input
@@ -195,20 +196,16 @@ export function SyncStatus({ source, label, log }: Props) {
               aria-label={t("trCodeAriaLabel")}
               className="w-20 text-center text-lg font-mono tracking-[0.4em] px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
             />
-            <button
-              onClick={handleCompleteTRSetup}
-              disabled={code.length !== 4 || setupStep === "submitting"}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-[44px] rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-elevated)]"
-            >
+            <Button size="sm" onClick={handleCompleteTRSetup} disabled={code.length !== 4 || setupStep === "submitting"}>
               {setupStep === "submitting" ? (
                 <><RefreshCw size={12} className="animate-spin" aria-hidden="true" /> {t("validating")}</>
               ) : (
                 t("confirm")
               )}
-            </button>
-            <button onClick={reset} className="min-h-[44px] px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:underline">
+            </Button>
+            <Button variant="ghost" size="sm" onClick={reset}>
               {tc("cancel")}
-            </button>
+            </Button>
           </div>
           {setupError && <p role="alert" className="mt-2 text-xs text-[var(--negative)]">{setupError}</p>}
         </div>
@@ -216,27 +213,23 @@ export function SyncStatus({ source, label, log }: Props) {
 
       {/* LCL — Certicode Plus approval */}
       {(setupStep === "awaiting_approval" || setupStep === "completing") && (
-        <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-amber-400/20">
+        <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
           <p className="text-xs text-[var(--muted)] mb-3">
             {t.rich("lclApprovalHint", {
               strong: (chunks) => <strong className="text-[var(--foreground)]">{chunks}</strong>,
             })}
           </p>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleCompleteLCLSetup}
-              disabled={setupStep === "completing"}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-[44px] rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-elevated)]"
-            >
+            <Button size="sm" onClick={handleCompleteLCLSetup} disabled={setupStep === "completing"}>
               {setupStep === "completing" ? (
                 <><RefreshCw size={12} className="animate-spin" aria-hidden="true" /> {t("validating")}</>
               ) : (
                 t("lclConfirm")
               )}
-            </button>
-            <button onClick={reset} className="min-h-[44px] px-2 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:underline">
+            </Button>
+            <Button variant="ghost" size="sm" onClick={reset}>
               {tc("cancel")}
-            </button>
+            </Button>
           </div>
           {setupError && <p role="alert" className="mt-2 text-xs text-[var(--negative)]">{setupError}</p>}
         </div>

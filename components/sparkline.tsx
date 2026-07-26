@@ -30,7 +30,7 @@ export function Sparkline({ values }: SparklineProps) {
       : "var(--muted)";
 
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible shrink-0">
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible shrink-0" aria-hidden="true">
       <polyline
         points={points}
         fill="none"

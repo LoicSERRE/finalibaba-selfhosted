@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Wallet, PiggyBank, Repeat, BarChart3, Settings, LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 type SidebarProps = { showLogout?: boolean };
@@ -15,6 +15,8 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
   const navItems = [
     { href: "/", label: t("dashboard"), icon: LayoutDashboard, exact: true },
     { href: "/accounts", label: t("accounts"), icon: Wallet, exact: false },
+    { href: "/budgets", label: t("budgets"), icon: PiggyBank, exact: false },
+    { href: "/recurring", label: t("recurring"), icon: Repeat, exact: false },
     { href: "/analytics", label: t("analytics"), icon: BarChart3, exact: false },
     { href: "/settings", label: t("settings"), icon: Settings, exact: false },
   ];
@@ -27,13 +29,13 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
         <div className="px-3 mb-8 flex items-center gap-2.5">
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 relative overflow-hidden"
-            style={{ background: "linear-gradient(135deg, #6366f1, #4338ca)" }}
+            style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-strong))" }}
           >
             <span className="text-white font-extrabold text-sm select-none">F</span>
             <div className="absolute bottom-0.5 right-0.5 flex items-end gap-px">
-              <div className="w-0.5 h-1 rounded-sm bg-green-400 opacity-90" />
-              <div className="w-0.5 h-1.5 rounded-sm bg-green-400 opacity-90" />
-              <div className="w-0.5 h-2 rounded-sm bg-green-400 opacity-90" />
+              <div className="w-0.5 h-1 rounded-sm bg-[var(--positive)] opacity-90" />
+              <div className="w-0.5 h-1.5 rounded-sm bg-[var(--positive)] opacity-90" />
+              <div className="w-0.5 h-2 rounded-sm bg-[var(--positive)] opacity-90" />
             </div>
           </div>
           <span className="text-base font-semibold tracking-tight text-[var(--foreground)]">
@@ -51,7 +53,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
                 aria-current={active ? "page" : undefined}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition active:scale-[0.97] active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] ${
                   active
-                    ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                    ? "bg-[var(--accent)]/15 text-[var(--accent-text)]"
                     : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
                 }`}
               >
@@ -88,7 +90,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
               aria-current={active ? "page" : undefined}
               className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 mx-1 rounded-xl transition active:scale-[0.93] active:opacity-80 focus-visible:outline-none focus-visible:bg-[var(--surface-elevated)] ${
                 active
-                  ? "text-[var(--accent)] bg-[var(--accent)]/10"
+                  ? "text-[var(--accent-text)] bg-[var(--accent)]/10"
                   : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
               }`}
             >
