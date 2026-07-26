@@ -20,12 +20,14 @@ function at(monthsBack: number, day = 1): Date {
 async function main() {
   console.log("Clearing existing data…");
   await prisma.syncLog.deleteMany();
+  await prisma.recurringTransaction.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.historicalBalance.deleteMany();
   await prisma.holding.deleteMany();
   await prisma.userSettings.deleteMany();
   await prisma.account.deleteMany();
   await prisma.institution.deleteMany();
+  await prisma.category.deleteMany();
 
   // ── Institutions ─────────────────────────────────────────────────────────
   console.log("Creating institutions…");
@@ -97,6 +99,16 @@ async function main() {
     loanStartDate:      new Date("2024-01-01"),
     insuranceMonthlyCents: EUR(15),
   }});
+
+  // ── Categories & budgets ──────────────────────────────────────────────────
+  // Budgets deliberately span all three progress-bar tiers plus the
+  // "no budget set" state — see the spend math in the transactions section
+  // below (courses + edf/assurance/resto amounts are chosen to land there).
+  console.log("Creating categories…");
+  const catAlimentation = await prisma.category.create({ data: { name: "Alimentation", color: "#22c55e", budgetCents: EUR(220) } });
+  const catLogement      = await prisma.category.create({ data: { name: "Logement",      color: "#3b82f6", budgetCents: EUR(200) } });
+  const catAbonnements   = await prisma.category.create({ data: { name: "Abonnements",   color: "#a855f7" } }); // no budget set on purpose
+  const catLoisirs       = await prisma.category.create({ data: { name: "Loisirs",       color: "#ec4899", budgetCents: EUR(150) } });
 
   // ── Holdings ──────────────────────────────────────────────────────────────
   // lastPriceCents = prix de seed réaliste (mis à jour ensuite par Yahoo Finance)
@@ -212,19 +224,22 @@ async function main() {
     txRows.push(
       // Compte courant — revenus
       { accountId: checking.id, syncId: `demo:salary:${m}`,    date: at(m, 28), label: "VIR SALAIRE — EMPRESA SAS",          amountCents: EUR(3_800)       },
-      // Compte courant — dépenses fixes
+      // Compte courant — dépenses fixes (transferts/prêts laissés sans catégorie
+      // exprès — voir la section "bulk categorization" mise en valeur ci-dessous)
       { accountId: checking.id, syncId: `demo:ldds:${m}`,      date: at(m,  1), label: "VIR LDDS",                           amountCents: EUR(-500)        },
       { accountId: checking.id, syncId: `demo:pea:${m}`,       date: at(m,  3), label: "VIR PEA TRADE REPUBLIC",             amountCents: EUR(-200)        },
       { accountId: checking.id, syncId: `demo:mortgage:${m}`,  date: at(m,  5), label: "PRELEVEMENT CREDIT HABITAT",         amountCents: EUR(-820)        },
       { accountId: checking.id, syncId: `demo:carloan:${m}`,   date: at(m,  8), label: "PRELEVEMENT CREDIT AUTO",            amountCents: EUR(-280)        },
-      { accountId: checking.id, syncId: `demo:edf:${m}`,       date: at(m, 10), label: "PRELEVEMENT EDF",                    amountCents: EUR(-mv.edf)     },
-      { accountId: checking.id, syncId: `demo:sfr:${m}`,       date: at(m, 12), label: "PRELEVEMENT SFR MOBILE",             amountCents: EUR(-35)         },
-      { accountId: checking.id, syncId: `demo:internet:${m}`,  date: at(m, 13), label: "PRELEVEMENT FREE INTERNET",          amountCents: EUR(-30)         },
-      { accountId: checking.id, syncId: `demo:assurance:${m}`, date: at(m, 15), label: "PRELEVEMENT MAIF ASSURANCES",        amountCents: EUR(-85)         },
-      { accountId: checking.id, syncId: `demo:courses1:${m}`,  date: at(m,  9), label: "CARREFOUR MARKET",                   amountCents: EUR(-mv.g1)      },
-      { accountId: checking.id, syncId: `demo:courses2:${m}`,  date: at(m, 20), label: "LIDL",                               amountCents: EUR(-mv.g2)      },
-      { accountId: checking.id, syncId: `demo:netflix:${m}`,   date: at(m, 16), label: "NETFLIX.COM",                        amountCents: EUR(-16)         },
-      { accountId: checking.id, syncId: `demo:resto:${m}`,     date: at(m, 22), label: "RESTAURANT LE PETIT BISTROT",        amountCents: EUR(-mv.resto)   },
+      { accountId: checking.id, syncId: `demo:edf:${m}`,       date: at(m, 10), label: "PRELEVEMENT EDF",                    amountCents: EUR(-mv.edf),    categoryId: catLogement.id      },
+      { accountId: checking.id, syncId: `demo:sfr:${m}`,       date: at(m, 12), label: "PRELEVEMENT SFR MOBILE",             amountCents: EUR(-35),        categoryId: catAbonnements.id   },
+      // "Internet" manque volontairement les 2 derniers mois — voir la section
+      // recurring ci-dessous, ça alimente la démo du badge "paiement manqué".
+      ...(m >= 2 ? [{ accountId: checking.id, syncId: `demo:internet:${m}`, date: at(m, 13), label: "PRELEVEMENT FREE INTERNET", amountCents: EUR(-30), categoryId: catAbonnements.id }] : []),
+      { accountId: checking.id, syncId: `demo:assurance:${m}`, date: at(m, 15), label: "PRELEVEMENT MAIF ASSURANCES",        amountCents: EUR(-85),        categoryId: catLogement.id       },
+      { accountId: checking.id, syncId: `demo:courses1:${m}`,  date: at(m,  9), label: "CARREFOUR MARKET",                   amountCents: EUR(-mv.g1),     categoryId: catAlimentation.id   },
+      { accountId: checking.id, syncId: `demo:courses2:${m}`,  date: at(m, 20), label: "LIDL",                               amountCents: EUR(-mv.g2),     categoryId: catAlimentation.id   },
+      { accountId: checking.id, syncId: `demo:netflix:${m}`,   date: at(m, 16), label: "NETFLIX.COM",                        amountCents: EUR(-16),        categoryId: catAbonnements.id    },
+      { accountId: checking.id, syncId: `demo:resto:${m}`,     date: at(m, 22), label: "RESTAURANT LE PETIT BISTROT",        amountCents: EUR(-mv.resto),  categoryId: catLoisirs.id        },
       // LDDS — virement mensuel reçu
       { accountId: ldds.id,     syncId: `demo:ldds:recv:${m}`, date: at(m,  2), label: "VIR RECU COMPTE COURANT",            amountCents: EUR(500)         },
     );
@@ -234,6 +249,45 @@ async function main() {
     { accountId: checking.id, syncId: "demo:impots:remb", date: at(3, 15), label: "REMBOURSEMENT IMPOTS DGFiP", amountCents: EUR(820) },
   );
   await prisma.transaction.createMany({ data: txRows });
+
+  // ── Recurring transactions ───────────────────────────────────────────────
+  // A mix of states to showcase the /recurring page fully:
+  //  - confirmed & active (Netflix, salary, home insurance)
+  //  - paused — user switched mobile carrier, kept the row for history (SFR)
+  //  - missed — Internet has no transaction the last 2 months (see the
+  //    conditional push above), so isMissed() flags it regardless of today's
+  //    actual date.
+  // Everything else left un-confirmed (Carrefour, Lidl, EDF, restaurant, the
+  // savings/PEA transfers, both loan payments) still surfaces live as
+  // detectCandidates() suggestions — no seeding needed for those.
+  console.log("Creating recurring transactions…");
+  await prisma.recurringTransaction.createMany({ data: [
+    {
+      accountId: checking.id, label: "NETFLIX.COM", amountCents: EUR(-16),
+      categoryId: catAbonnements.id, frequency: "MONTHLY", anchorDate: at(1, 16),
+      active: true, autoDetected: true,
+    },
+    {
+      accountId: checking.id, label: "VIR SALAIRE — EMPRESA SAS", amountCents: EUR(3_800),
+      frequency: "MONTHLY", anchorDate: at(1, 28),
+      active: true, autoDetected: true,
+    },
+    {
+      accountId: checking.id, label: "PRELEVEMENT MAIF ASSURANCES", amountCents: EUR(-85),
+      categoryId: catLogement.id, frequency: "MONTHLY", anchorDate: at(1, 15),
+      active: true, autoDetected: true,
+    },
+    {
+      accountId: checking.id, label: "PRELEVEMENT SFR MOBILE", amountCents: EUR(-35),
+      categoryId: catAbonnements.id, frequency: "MONTHLY", anchorDate: at(1, 12),
+      active: false, autoDetected: true,
+    },
+    {
+      accountId: checking.id, label: "PRELEVEMENT FREE INTERNET", amountCents: EUR(-30),
+      categoryId: catAbonnements.id, frequency: "MONTHLY", anchorDate: at(2, 13),
+      active: true, autoDetected: true,
+    },
+  ]});
 
   // ── User settings ─────────────────────────────────────────────────────────
   console.log("Creating user settings…");
@@ -255,6 +309,8 @@ async function main() {
   });
 
   console.log("Done — demo data seeded.");
+  console.log("  4 categories (Alimentation over budget, Logement near limit, Loisirs ok, Abonnements no budget set)");
+  console.log("  5 recurring transactions (4 active incl. 1 missed payment, 1 paused) + several detectable suggestions");
   const peaVal    = 45 * 113 + 20 * 618;
   const ctoVal    = 15 * 184 + 10 * 432;
   const cryptoVal = 0.17 * 92_000 + 1.5 * 3_400;
