@@ -15,7 +15,7 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
     accountId,
     syncId: `csv_${randomUUID()}`,
     // Noon UTC keeps the date stable across timezones instead of risking a
-    // midnight-UTC day shift — same convention as importBalanceHistory.
+    // midnight-UTC day shift - same convention as importBalanceHistory.
     date: new Date(`${r.date}T12:00:00.000Z`),
     label: r.label.slice(0, 500),
     amountCents: BigInt(Math.round(r.amountCents)),
@@ -41,7 +41,7 @@ export async function setTransactionCategory(transactionId: string, categoryId: 
   revalidatePath("/budgets");
 }
 
-// Assigns one category to a batch of transactions at once — the ids come
+// Assigns one category to a batch of transactions at once - the ids come
 // from a server-computed label group (see app/budgets/page.tsx), not from
 // client input, so no re-validation of "do these ids actually share a
 // label" is needed here.

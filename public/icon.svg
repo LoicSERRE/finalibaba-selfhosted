@@ -7,11 +7,11 @@
   </defs>
   <!-- Background rounded square -->
   <rect width="100" height="100" rx="22" fill="url(#bg)"/>
-  <!-- F — vertical bar -->
+  <!-- F - vertical bar -->
   <rect x="22" y="19" width="13" height="62" rx="3.5" fill="white"/>
-  <!-- F — top horizontal -->
+  <!-- F - top horizontal -->
   <rect x="22" y="19" width="52" height="13" rx="3.5" fill="white"/>
-  <!-- F — middle horizontal -->
+  <!-- F - middle horizontal -->
   <rect x="22" y="45" width="38" height="11" rx="3.5" fill="white"/>
   <!-- Trend bars (green, bottom-right) -->
   <rect x="44" y="74" width="8" height="8"  rx="2" fill="#22c55e"/>

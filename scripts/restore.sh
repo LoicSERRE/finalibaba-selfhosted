@@ -1,6 +1,6 @@
 #!/bin/bash
 # Restore the PostgreSQL database used by docker-compose.yml from a backup
-# created by backup.sh. DESTRUCTIVE — replaces all current data.
+# created by backup.sh. DESTRUCTIVE - replaces all current data.
 #
 # Usage: ./scripts/restore.sh backups/finalibaba_20260713_120000.sql.gz
 
@@ -50,7 +50,7 @@ gunzip -c "$FILE" | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POST
 
 echo "✓ Restore complete."
 
-# The DB restore above already committed — a failure here is a separate Docker
+# The DB restore above already committed - a failure here is a separate Docker
 # issue and must not read back as "the restore failed".
 if [ -n "$RUNNING_SERVICES" ]; then
   echo "→ Restarting: $RUNNING_SERVICES"

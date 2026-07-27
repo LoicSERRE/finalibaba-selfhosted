@@ -1,5 +1,5 @@
 """
-LCL web login setup — Certicode Plus flow via woob.
+LCL web login setup - Certicode Plus flow via woob.
 
 Flow :
   1. POST /sync/lcl/setup/start
@@ -41,7 +41,7 @@ def _iter_accounts(w):
     accounts = []
     try:
         for result in w.do("iter_accounts", backends="lcl"):
-            accounts.append(result)  # noqa: PERF402 — must keep partial results gathered before a mid-iteration CallErrors
+            accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
     except CallErrors as e:
         for backend, exc, tb in e.errors:
             msg = (str(exc) + tb).lower()
@@ -70,7 +70,7 @@ def start_setup() -> dict:
 
     try:
         accounts = _iter_accounts(w)
-        # Session encore valide — pas besoin de Certicode Plus
+        # Session encore valide - pas besoin de Certicode Plus
         log.info("LCL setup: session déjà valide (%d comptes)", len(accounts))
         try:
             w.deinit()
@@ -83,18 +83,18 @@ def start_setup() -> dict:
             w.deinit()
         except Exception as e:
             log.debug("woob deinit failed (ignored): %s", e)
-        raise RuntimeError("Validation Certicode Plus expirée avant d'être approuvée — réessaie")
+        raise RuntimeError("Validation Certicode Plus expirée avant d'être approuvée - réessaie")
 
     except (AppValidation, NeedInteractiveFor2FA, NeedInteractive):
-        # Certicode Plus envoyé — conserver l'instance woob pour complete_setup
+        # Certicode Plus envoyé - conserver l'instance woob pour complete_setup
         _pending = {"w": w}
-        log.info("LCL setup: Certicode Plus envoyé — en attente d'approbation utilisateur")
+        log.info("LCL setup: Certicode Plus envoyé - en attente d'approbation utilisateur")
         return {"status": "pending_approval"}
 
 
 def complete_setup() -> dict:
     if _pending is None:
-        raise RuntimeError("Aucun setup LCL en cours — relance start d'abord")
+        raise RuntimeError("Aucun setup LCL en cours - relance start d'abord")
 
     w = _pending["w"]
     from woob.exceptions import (
@@ -108,14 +108,14 @@ def complete_setup() -> dict:
         accounts = _iter_accounts(w)
     except AppValidationExpired:
         _cleanup()
-        raise RuntimeError("Validation Certicode Plus expirée — relance la connexion")
+        raise RuntimeError("Validation Certicode Plus expirée - relance la connexion")
     except (AppValidation, NeedInteractiveFor2FA, NeedInteractive):
         # Pas encore approuvé dans l'app LCL
-        raise RuntimeError("Connexion non encore approuvée dans l'app LCL — réessaie dans quelques secondes")
+        raise RuntimeError("Connexion non encore approuvée dans l'app LCL - réessaie dans quelques secondes")
 
     count = len(accounts)
     _cleanup()
-    log.info("LCL setup: session établie — %d compte(s)", count)
+    log.info("LCL setup: session établie - %d compte(s)", count)
     return {"accounts": count}
 
 

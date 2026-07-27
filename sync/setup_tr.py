@@ -1,5 +1,5 @@
 """
-Trade Republic web login setup — délègue à pytr (PR #327 mergé dans master).
+Trade Republic web login setup - délègue à pytr (PR #327 mergé dans master).
 
 Depuis pytr master, initiate_weblogin() obtient le token AWS WAF via Playwright
 en interne. Plus besoin de gérer le contexte Playwright manuellement.
@@ -41,14 +41,14 @@ def start_setup() -> dict:
     countdown = api.initiate_weblogin()
     countdown = int(countdown) + 1 if countdown else 181
 
-    log.info("TR setup: login initié — code valide %ds", countdown)
+    log.info("TR setup: login initié - code valide %ds", countdown)
     _pending = {"api": api}
     return {"countdown": countdown}
 
 
 def complete_setup(code: str) -> None:
     if _pending is None:
-        raise RuntimeError("Aucun login en attente — relance /setup/start d'abord")
+        raise RuntimeError("Aucun login en attente - relance /setup/start d'abord")
 
     api = _pending["api"]
     log.info("TR setup: completion du login avec le code…")

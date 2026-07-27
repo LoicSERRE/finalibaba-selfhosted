@@ -1,4 +1,4 @@
-# Demo instance — isolated from the main instance
+# Demo instance - isolated from the main instance
 #
 # Usage:
 #   cp .env.demo.example .env.demo
@@ -7,8 +7,10 @@
 #   # Start (uses pre-built GHCR images, or builds from source on first run):
 #   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d
 #
-#   # Seed demo data (run once after first boot):
-#   docker compose -f docker-compose.demo.yml --env-file .env.demo exec app-demo tsx prisma/seed-demo.ts
+#   # Seed demo data (run once after first boot, or any time to refresh it):
+#   # npx, not a bare `tsx` - tsx is a devDependency, so it isn't installed in
+#   # the production runner image (`npm ci --omit=dev`); npx fetches it on demand.
+#   docker compose -f docker-compose.demo.yml --env-file .env.demo exec app-demo npx tsx prisma/seed-demo.ts
 #
 #   # Force rebuild from source:
 #   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build
@@ -55,7 +57,7 @@ services:
     build: ./sync
     environment:
       DATABASE_URL: postgresql://demo:${DEMO_POSTGRES_PASSWORD}@db-demo:5432/finalibaba_demo
-      # No sync credentials — demo data is seeded only, no live sync
+      # No sync credentials - demo data is seeded only, no live sync
     volumes:
       - demo_woob:/root/.config/woob
       - demo_pytr:/root/.pytr

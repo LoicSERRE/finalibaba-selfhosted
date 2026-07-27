@@ -4,8 +4,8 @@ export const dynamic = "force-dynamic";
 
 // This replaces the ENTIRE root layout (Next.js only reaches for
 // global-error.tsx when the error happened inside app/layout.tsx itself),
-// so nothing from layout.tsx — the font loader, the NextIntlClientProvider,
-// the sidebar — is available here. Re-importing the stylesheet directly is
+// so nothing from layout.tsx - the font loader, the NextIntlClientProvider,
+// the sidebar - is available here. Re-importing the stylesheet directly is
 // the supported pattern for this specific boundary; Tailwind's classes below
 // still resolve because its content scan covers the whole project, not just
 // files that import globals.css.

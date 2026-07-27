@@ -75,7 +75,7 @@ async function main() {
   }});
 
   // Immobilier & auto (IDs capturés pour l'historique)
-  const appart  = await prisma.account.create({ data: { name: "Appartement — Paris 11e", type: "REAL_ESTATE", manualValueCents: EUR(295_000) } });
+  const appart  = await prisma.account.create({ data: { name: "Appartement - Paris 11e", type: "REAL_ESTATE", manualValueCents: EUR(295_000) } });
   const voiture = await prisma.account.create({ data: { name: "Hyundai i30N", type: "AUTOMOBILE", manualValueCents: EUR(24_000), purchasePriceCents: EUR(31_500) } });
 
   // Prêts (IDs capturés pour l'historique)
@@ -102,7 +102,7 @@ async function main() {
 
   // ── Categories & budgets ──────────────────────────────────────────────────
   // Budgets deliberately span all three progress-bar tiers plus the
-  // "no budget set" state — see the spend math in the transactions section
+  // "no budget set" state - see the spend math in the transactions section
   // below (courses + edf/assurance/resto amounts are chosen to land there).
   console.log("Creating categories…");
   const catAlimentation = await prisma.category.create({ data: { name: "Alimentation", color: "#22c55e", budgetCents: EUR(220) } });
@@ -115,22 +115,22 @@ async function main() {
   // Tous les prix en €-cents (mid-2026)
   console.log("Creating holdings…");
   await prisma.holding.createMany({ data: [
-    // PEA — trackers monde
+    // PEA - trackers monde
     // IWDA.L (iShares MSCI World, LSE) ≈ 113 € · CSPX.L (S&P 500, LSE) ≈ 618 €
     { accountId: pea.id, ticker: "IWDA.L", name: "iShares Core MSCI World ETF",  quantity: "45",   lastPriceCents: EUR(113),    costBasisCents: EUR(3_798) },
     { accountId: pea.id, ticker: "CSPX.L", name: "iShares Core S&P 500 ETF",     quantity: "20",   lastPriceCents: EUR(618),    costBasisCents: EUR(10_240) },
-    // CTO — actions US (prix en EUR après change USD/EUR ≈ 0.92)
+    // CTO - actions US (prix en EUR après change USD/EUR ≈ 0.92)
     // AAPL ≈ 200 $ → 184 € · MSFT ≈ 470 $ → 432 €
     { accountId: cto.id, ticker: "AAPL",   name: "Apple Inc.",                    quantity: "15",   lastPriceCents: EUR(184),    costBasisCents: EUR(2_370) },
     { accountId: cto.id, ticker: "MSFT",   name: "Microsoft Corp.",               quantity: "10",   lastPriceCents: EUR(432),    costBasisCents: EUR(3_480) },
-    // Crypto — BTC ≈ 92 000 € · ETH ≈ 3 400 €
+    // Crypto - BTC ≈ 92 000 € · ETH ≈ 3 400 €
     { accountId: cryptoTR.id, ticker: "BTC-EUR", name: "Bitcoin",   quantity: "0.12", lastPriceCents: EUR(92_000), costBasisCents: EUR(5_400) },
     { accountId: cryptoTR.id, ticker: "ETH-EUR", name: "Ethereum",  quantity: "1.5",  lastPriceCents: EUR(3_400),  costBasisCents: EUR(4_200) },
     { accountId: btcCB.id,    ticker: "BTC-EUR", name: "Bitcoin",   quantity: "0.05", lastPriceCents: EUR(92_000), costBasisCents: EUR(1_500) },
   ]});
 
-  // ── Historical balances — 24 months ───────────────────────────────────────
-  // [checking, ldds, livretA, tickets] — index 0 = oldest (23 months back)
+  // ── Historical balances - 24 months ───────────────────────────────────────
+  // [checking, ldds, livretA, tickets] - index 0 = oldest (23 months back)
   console.log("Creating historical balances (24 months)…");
   const history: [number, number, number, number][] = [
     [2_500, 5_800,  8_200, 420],
@@ -160,11 +160,11 @@ async function main() {
   ];
 
   // Prêt immo : capital restant approx à chaque mois (négatif = passif dans le graphique)
-  // Démarré juin 2022 — au mois 23 (juillet 2024) ≈ 170k restant → aujourd'hui ≈ 158k
+  // Démarré juin 2022 - au mois 23 (juillet 2024) ≈ 170k restant → aujourd'hui ≈ 158k
   const mortgageAtOldest = 170_000;
   const mortgageAtNow    = 158_000;
 
-  // Prêt auto : démarré jan 2024 — au mois 23 (juillet 2024, 6 mois) ≈ 10 500 → aujourd'hui ≈ 7 500
+  // Prêt auto : démarré jan 2024 - au mois 23 (juillet 2024, 6 mois) ≈ 10 500 → aujourd'hui ≈ 7 500
   const carLoanAtOldest = 10_500;
   const carLoanAtNow    = 7_500;
 
@@ -200,10 +200,10 @@ async function main() {
     ]});
   }
 
-  // ── Transactions — 9 months ───────────────────────────────────────────────
+  // ── Transactions - 9 months ───────────────────────────────────────────────
   console.log("Creating transactions (9 months)…");
 
-  // Per-month amounts — deterministic values to avoid floating point issues
+  // Per-month amounts - deterministic values to avoid floating point issues
   const monthly = [
     // [groceries1, groceries2, edf, resto]
     { g1: 145, g2: 112, edf: 78,  resto: 48  },
@@ -222,17 +222,17 @@ async function main() {
     const idx = 8 - m;
     const mv = monthly[idx];
     txRows.push(
-      // Compte courant — revenus
-      { accountId: checking.id, syncId: `demo:salary:${m}`,    date: at(m, 28), label: "VIR SALAIRE — EMPRESA SAS",          amountCents: EUR(3_800)       },
-      // Compte courant — dépenses fixes (transferts/prêts laissés sans catégorie
-      // exprès — voir la section "bulk categorization" mise en valeur ci-dessous)
+      // Compte courant - revenus
+      { accountId: checking.id, syncId: `demo:salary:${m}`,    date: at(m, 28), label: "VIR SALAIRE - EMPRESA SAS",          amountCents: EUR(3_800)       },
+      // Compte courant - dépenses fixes (transferts/prêts laissés sans catégorie
+      // exprès - voir la section "bulk categorization" mise en valeur ci-dessous)
       { accountId: checking.id, syncId: `demo:ldds:${m}`,      date: at(m,  1), label: "VIR LDDS",                           amountCents: EUR(-500)        },
       { accountId: checking.id, syncId: `demo:pea:${m}`,       date: at(m,  3), label: "VIR PEA TRADE REPUBLIC",             amountCents: EUR(-200)        },
       { accountId: checking.id, syncId: `demo:mortgage:${m}`,  date: at(m,  5), label: "PRELEVEMENT CREDIT HABITAT",         amountCents: EUR(-820)        },
       { accountId: checking.id, syncId: `demo:carloan:${m}`,   date: at(m,  8), label: "PRELEVEMENT CREDIT AUTO",            amountCents: EUR(-280)        },
       { accountId: checking.id, syncId: `demo:edf:${m}`,       date: at(m, 10), label: "PRELEVEMENT EDF",                    amountCents: EUR(-mv.edf),    categoryId: catLogement.id      },
       { accountId: checking.id, syncId: `demo:sfr:${m}`,       date: at(m, 12), label: "PRELEVEMENT SFR MOBILE",             amountCents: EUR(-35),        categoryId: catAbonnements.id   },
-      // "Internet" manque volontairement les 2 derniers mois — voir la section
+      // "Internet" manque volontairement les 2 derniers mois - voir la section
       // recurring ci-dessous, ça alimente la démo du badge "paiement manqué".
       ...(m >= 2 ? [{ accountId: checking.id, syncId: `demo:internet:${m}`, date: at(m, 13), label: "PRELEVEMENT FREE INTERNET", amountCents: EUR(-30), categoryId: catAbonnements.id }] : []),
       { accountId: checking.id, syncId: `demo:assurance:${m}`, date: at(m, 15), label: "PRELEVEMENT MAIF ASSURANCES",        amountCents: EUR(-85),        categoryId: catLogement.id       },
@@ -240,11 +240,11 @@ async function main() {
       { accountId: checking.id, syncId: `demo:courses2:${m}`,  date: at(m, 20), label: "LIDL",                               amountCents: EUR(-mv.g2),     categoryId: catAlimentation.id   },
       { accountId: checking.id, syncId: `demo:netflix:${m}`,   date: at(m, 16), label: "NETFLIX.COM",                        amountCents: EUR(-16),        categoryId: catAbonnements.id    },
       { accountId: checking.id, syncId: `demo:resto:${m}`,     date: at(m, 22), label: "RESTAURANT LE PETIT BISTROT",        amountCents: EUR(-mv.resto),  categoryId: catLoisirs.id        },
-      // LDDS — virement mensuel reçu
+      // LDDS - virement mensuel reçu
       { accountId: ldds.id,     syncId: `demo:ldds:recv:${m}`, date: at(m,  2), label: "VIR RECU COMPTE COURANT",            amountCents: EUR(500)         },
     );
   }
-  // Remboursement impôts — ponctuel
+  // Remboursement impôts - ponctuel
   txRows.push(
     { accountId: checking.id, syncId: "demo:impots:remb", date: at(3, 15), label: "REMBOURSEMENT IMPOTS DGFiP", amountCents: EUR(820) },
   );
@@ -253,13 +253,13 @@ async function main() {
   // ── Recurring transactions ───────────────────────────────────────────────
   // A mix of states to showcase the /recurring page fully:
   //  - confirmed & active (Netflix, salary, home insurance)
-  //  - paused — user switched mobile carrier, kept the row for history (SFR)
-  //  - missed — Internet has no transaction the last 2 months (see the
+  //  - paused - user switched mobile carrier, kept the row for history (SFR)
+  //  - missed - Internet has no transaction the last 2 months (see the
   //    conditional push above), so isMissed() flags it regardless of today's
   //    actual date.
   // Everything else left un-confirmed (Carrefour, Lidl, EDF, restaurant, the
   // savings/PEA transfers, both loan payments) still surfaces live as
-  // detectCandidates() suggestions — no seeding needed for those.
+  // detectCandidates() suggestions - no seeding needed for those.
   console.log("Creating recurring transactions…");
   await prisma.recurringTransaction.createMany({ data: [
     {
@@ -268,7 +268,7 @@ async function main() {
       active: true, autoDetected: true,
     },
     {
-      accountId: checking.id, label: "VIR SALAIRE — EMPRESA SAS", amountCents: EUR(3_800),
+      accountId: checking.id, label: "VIR SALAIRE - EMPRESA SAS", amountCents: EUR(3_800),
       frequency: "MONTHLY", anchorDate: at(1, 28),
       active: true, autoDetected: true,
     },
@@ -308,7 +308,7 @@ async function main() {
     },
   });
 
-  console.log("Done — demo data seeded.");
+  console.log("Done - demo data seeded.");
   console.log("  4 categories (Alimentation over budget, Logement near limit, Loisirs ok, Abonnements no budget set)");
   console.log("  5 recurring transactions (4 active incl. 1 missed payment, 1 paused) + several detectable suggestions");
   const peaVal    = 45 * 113 + 20 * 618;
@@ -316,7 +316,7 @@ async function main() {
   const cryptoVal = 0.17 * 92_000 + 1.5 * 3_400;
   const gross     = Math.round(24_100 + peaVal + ctoVal + cryptoVal + 295_000 + 24_000);
   const net       = Math.round(gross - 158_000 - 7_500);
-  console.log("Portfolio overview (prix seedés — mis à jour par Yahoo Finance ensuite) :");
+  console.log("Portfolio overview (prix seedés - mis à jour par Yahoo Finance ensuite) :");
   console.log(`  Fiat    :  ~24 100 €`);
   console.log(`  PEA     :  ~${peaVal.toLocaleString("fr-FR")} €  (45×IWDA.L + 20×CSPX.L)`);
   console.log(`  CTO     :  ~${ctoVal.toLocaleString("fr-FR")} €   (15×AAPL + 10×MSFT)`);

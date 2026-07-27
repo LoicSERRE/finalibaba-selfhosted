@@ -21,7 +21,7 @@ import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { BackupRestoreSection } from "@/components/backup-restore-section";
 
-// Institutions gérées par des scripts dédiés (pas Woob) — identifiées par nom
+// Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
 const DEDICATED_SYNC_INSTITUTIONS = ["lcl", "trade republic"];
 
 export default async function SettingsPage() {
@@ -341,7 +341,7 @@ export default async function SettingsPage() {
         </div>
       </section>
 
-      {/* Auto-sync — hidden in demo mode (no real credentials, mutations blocked) */}
+      {/* Auto-sync - hidden in demo mode (no real credentials, mutations blocked) */}
       {process.env.DEMO_MODE !== "true" && (
         <section className="space-y-4">
           <div>
@@ -363,7 +363,7 @@ export default async function SettingsPage() {
         </section>
       )}
 
-      {/* Backup & restore — hidden in demo mode (restore mutations are blocked anyway) */}
+      {/* Backup & restore - hidden in demo mode (restore mutations are blocked anyway) */}
       {process.env.DEMO_MODE !== "true" && <BackupRestoreSection />}
 
     </div>

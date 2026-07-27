@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions are welcome — bug reports, documentation improvements, and code PRs.
+Contributions are welcome - bug reports, documentation improvements, and code PRs.
 
 ## Reporting a bug
 
@@ -12,7 +12,7 @@ Open an issue using the [bug report template](.github/ISSUE_TEMPLATE/bug_report.
 ## Submitting a pull request
 
 1. Fork the repo and create a branch from `main`
-2. Keep changes focused — one feature or fix per PR
+2. Keep changes focused - one feature or fix per PR
 3. Commit messages in English, imperative mood (`add X`, `fix Y`, not `added X`)
 4. Test with `docker compose up -d --build` before submitting
 

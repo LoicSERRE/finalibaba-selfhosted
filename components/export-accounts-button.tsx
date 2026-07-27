@@ -110,13 +110,13 @@ function buildMarkdown(
     month: "long",
     year: "numeric",
   });
-  const lines: string[] = [`# ${s.title} — ${date}`, ""];
+  const lines: string[] = [`# ${s.title} - ${date}`, ""];
 
   if (fiat.length > 0) {
     lines.push(`## ${s.cash}`, "");
     for (const a of fiat) {
       lines.push(
-        `### ${a.institutionName} · ${s.typeLabels[a.type] ?? a.type} — ${a.name}`
+        `### ${a.institutionName} · ${s.typeLabels[a.type] ?? a.type} - ${a.name}`
       );
       lines.push(`- **${s.balance}** : ${fmt(a.balanceCents)}`);
       if (a.deltaCents !== 0) {
@@ -133,7 +133,7 @@ function buildMarkdown(
         a.type === "CRYPTO"
           ? s.typeLabels["CRYPTO"] ?? a.type
           : `${s.typeLabels[a.type] ?? a.type}${a.investmentSubtype ? ` · ${a.investmentSubtype}` : ""}`;
-      lines.push(`### ${a.institutionName} · ${typeLabel} — ${a.name}`);
+      lines.push(`### ${a.institutionName} · ${typeLabel} - ${a.name}`);
 
       const parts: string[] = [`**${s.total}** : ${fmt(a.totalCents)}`];
       if (a.gainCents !== null) {
@@ -153,7 +153,7 @@ function buildMarkdown(
           const gainStr =
             h.gainCents !== null
               ? `${sign(h.gainCents)}${fmt(h.gainCents)}${h.gainPct !== null ? ` (${sign(h.gainPct)}${h.gainPct.toFixed(1)}%)` : ""}`
-              : "—";
+              : "-";
           lines.push(
             `| ${h.name ?? h.ticker} | ${h.ticker} | ${h.quantity} | ${fmt(h.lastPriceCents, 2)} | ${fmt(h.valueCents)} | ${h.pct}% | ${gainStr} |`
           );
@@ -227,28 +227,28 @@ export function ExportAccountsButton({
       label: t("groupCash"),
       accounts: fiatAccounts.map((a) => ({
         id: a.id,
-        label: `${a.institutionName} — ${a.name}`,
+        label: `${a.institutionName} - ${a.name}`,
       })),
     },
     {
       label: t("groupInvestments"),
       accounts: investAccounts.map((a) => ({
         id: a.id,
-        label: `${a.institutionName} — ${a.name}`,
+        label: `${a.institutionName} - ${a.name}`,
       })),
     },
     {
       label: t("groupRealEstate"),
       accounts: realEstateAccounts.map((a) => ({
         id: a.id,
-        label: `${a.institutionName} — ${a.name}`,
+        label: `${a.institutionName} - ${a.name}`,
       })),
     },
     {
       label: t("groupAutos"),
       accounts: automobileAccounts.map((a) => ({
         id: a.id,
-        label: `${a.institutionName} — ${a.name}`,
+        label: `${a.institutionName} - ${a.name}`,
       })),
     },
   ].filter((g) => g.accounts.length > 0);

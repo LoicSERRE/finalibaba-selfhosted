@@ -1,4 +1,4 @@
-# Local development — starts PostgreSQL only.
+# Local development - starts PostgreSQL only.
 # The Next.js app runs with `npm run dev` directly on your machine.
 #
 # Usage:

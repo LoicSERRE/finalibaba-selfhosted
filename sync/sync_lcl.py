@@ -1,7 +1,7 @@
 """
 LCL balance sync via woob.
 
-First run: interactive — woob will prompt for Certicode Plus validation
+First run: interactive - woob will prompt for Certicode Plus validation
            Run manually: docker exec -it finalibaba-sync-1 python sync_lcl.py --setup
 Subsequent runs: uses cached session (valid several weeks).
 """
@@ -87,7 +87,7 @@ def run(interactive: bool = False) -> dict:
         accounts = []
         try:
             for result in w.do("iter_accounts", backends="lcl"):
-                accounts.append(result)  # noqa: PERF402 — must keep partial results gathered before a mid-iteration CallErrors
+                accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
         except CallErrors as e:
             for backend, exc, tb in e.errors:
                 msg = (str(exc) + tb).lower()
@@ -106,7 +106,7 @@ def run(interactive: bool = False) -> dict:
     except (AppValidation, NeedInteractiveFor2FA, NeedInteractive) as e:
         if not interactive:
             conn.rollback()
-            write_sync_log(cur, "lcl", "auth_required", "Certicode Plus requis — lance --setup")
+            write_sync_log(cur, "lcl", "auth_required", "Certicode Plus requis - lance --setup")
             conn.commit()
             raise AuthRequiredError("LCL Certicode Plus requis")
         # Interactive mode: wait for user to validate in LCL app
@@ -119,7 +119,7 @@ def run(interactive: bool = False) -> dict:
         # Woob returned no accounts without raising an explicit auth error.
         # Possible causes: session expired silently, or the PATCH_410 in entrypoint.sh
         # didn't apply (woob module format changed). Check container logs for details.
-        msg = "Aucun compte retourné — vérifier les logs (patch entrypoint.sh appliqué ?)"
+        msg = "Aucun compte retourné - vérifier les logs (patch entrypoint.sh appliqué ?)"
         log.error("LCL: %s", msg)
         if interactive:
             print(f"\n⚠ LCL: {msg}")
@@ -146,7 +146,7 @@ def run(interactive: bool = False) -> dict:
         )
         record_balance(cur, account_db_id, balance_cents)
         synced.append({"label": account.label, "balance_cents": balance_cents})
-        log.info("LCL — %s : %d cts", account.label, balance_cents)
+        log.info("LCL - %s : %d cts", account.label, balance_cents)
 
         # Fetch transactions (last ~90 days)
         try:
@@ -169,7 +169,7 @@ def run(interactive: bool = False) -> dict:
                     tx_count += 1
             except CallErrors as e:
                 log.warning("LCL iter_history CallErrors (ignoré) : %s", str(e)[:120])
-            log.info("LCL — %s : %d transaction(s) importée(s)", account.label, tx_count)
+            log.info("LCL - %s : %d transaction(s) importée(s)", account.label, tx_count)
         except Exception as e:
             log.warning("LCL transactions ignorées pour %s : %s", account.label, e)
 
@@ -189,7 +189,7 @@ if __name__ == "__main__":
     interactive = "--setup" in sys.argv
     try:
         result = run(interactive=interactive)
-        print(f"✓ LCL sync OK — {len(result['synced'])} compte(s)")
+        print(f"✓ LCL sync OK - {len(result['synced'])} compte(s)")
     except AuthRequiredError as e:
         print(f"⚠ {e}")
         print("→ Relance avec: docker exec -it finalibaba-sync-1 python sync_lcl.py --setup")

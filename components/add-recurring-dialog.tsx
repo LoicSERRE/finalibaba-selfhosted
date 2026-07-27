@@ -10,7 +10,7 @@ import { useTranslations } from "next-intl";
 
 type Frequency = "WEEKLY" | "MONTHLY" | "YEARLY";
 
-// Plain serializable initial values only — no BigInt across the RSC boundary.
+// Plain serializable initial values only - no BigInt across the RSC boundary.
 // `id` present = editing an existing row; absent = creating (possibly
 // pre-filled from a detected suggestion, in which case `autoDetected` is set).
 export type RecurringInitial = {
@@ -161,7 +161,7 @@ export function AddRecurringDialog({
           label={tc("optional")}
           name="categoryId"
           defaultValue={initial?.categoryId ?? ""}
-          options={[{ value: "", label: "—" }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+          options={[{ value: "", label: "-" }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
         />
 
         <div className="flex justify-end gap-2 pt-2">

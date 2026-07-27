@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    // Pass the IP via a hidden field isn't reliable client-side — the server
+    // Pass the IP via a hidden field isn't reliable client-side - the server
     // middleware will enforce rate limiting. We pass a placeholder.
     const { signIn } = await import("next-auth/react");
     const result = await signIn("credentials", {

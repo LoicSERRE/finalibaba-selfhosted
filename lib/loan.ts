@@ -5,7 +5,7 @@
  *  - P   : capital emprunté initial (en €)
  *  - r   : taux mensuel = TAEG / 100 / 12
  *  - N   : durée totale (mois)
- *  - D   : différé total (mois) — pendant lesquels on paie uniquement les intérêts
+ *  - D   : différé total (mois) - pendant lesquels on paie uniquement les intérêts
  *  - n   : durée d'amortissement = N - D
  */
 

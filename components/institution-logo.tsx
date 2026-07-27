@@ -20,7 +20,7 @@ export function InstitutionLogo({ name, logoUrl, size = 28 }: Props) {
   const letter = name.trim()[0]?.toUpperCase() ?? "?";
 
   // Every call site renders the institution's name as visible text right
-  // next to this logo — decorative here, not a second source of the name,
+  // next to this logo - decorative here, not a second source of the name,
   // otherwise a screen reader announces the name twice per row.
   if (logoUrl && !failed) {
     return (

@@ -155,7 +155,7 @@ export function ImportBalanceHistoryDialog({
                       <td className="px-2 py-1.5">
                         <input type="checkbox" checked={selected.has(i)} disabled={!!r.error} onChange={() => toggle(i)} />
                       </td>
-                      <td className="px-2 py-1.5 whitespace-nowrap text-[var(--muted)]">{r.date || "—"}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-[var(--muted)]">{r.date || "-"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-[var(--foreground)]">
                         {formatCurrency(r.balanceCents)}
                       </td>

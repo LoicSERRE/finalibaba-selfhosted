@@ -99,7 +99,7 @@ async function getDashboardData() {
       allocation[account.type === "CRYPTO" ? "crypto" : "investments"] += value;
       grossAssets += value;
     } else if (account.type === "LOAN") {
-      // Loan: pure liability — no asset counterpart
+      // Loan: pure liability - no asset counterpart
       const loanBalance = hasLoanParams(account)
         ? calcCurrentCapital(
             {
@@ -230,7 +230,7 @@ export default async function DashboardPage() {
     t,
   ] = await Promise.all([getDashboardData(), getTranslations()]);
 
-  // Not grossAssets > 0 — a LOAN-only portfolio has real data (a mortgage,
+  // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
   // real payments) but zero gross assets by design (pure liability, no
   // asset counterpart, see getDashboardData above). Gating on grossAssets
   // showed the "add your first account" empty state to a user who'd

@@ -1,5 +1,5 @@
 """
-Sync service — FastAPI + APScheduler
+Sync service - FastAPI + APScheduler
 
 Endpoints (internal Docker network only, not exposed externally):
   POST /sync/lcl            → trigger LCL sync
@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 log = logging.getLogger(__name__)
 
@@ -38,10 +38,10 @@ _tr_lock = threading.Lock()
 
 def _run_lcl():
     if not os.environ.get("LCL_LOGIN"):
-        log.info("LCL_LOGIN not set — LCL sync disabled")
+        log.info("LCL_LOGIN not set - LCL sync disabled")
         return
     if not _lcl_lock.acquire(blocking=False):
-        log.info("LCL sync already in progress — skipped")
+        log.info("LCL sync already in progress - skipped")
         return
     try:
         import sync_lcl
@@ -55,10 +55,10 @@ def _run_lcl():
 
 def _run_tr():
     if not os.environ.get("TR_PHONE"):
-        log.info("TR_PHONE not set — Trade Republic sync disabled")
+        log.info("TR_PHONE not set - Trade Republic sync disabled")
         return
     if not _tr_lock.acquire(blocking=False):
-        log.info("TR sync already in progress — skipped")
+        log.info("TR sync already in progress - skipped")
         return
     try:
         import sync_tr
@@ -135,10 +135,10 @@ def _run_all():
 async def lifespan(app: FastAPI):
     # Full sync every 4 hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00
     scheduler.add_job(_run_all, "cron", hour="*/4", minute=0, id="auto_sync")
-    # TR session keepalive every 90 min — observed TTL is ~2h, so 90min gives a 30min buffer.
+    # TR session keepalive every 90 min - observed TTL is ~2h, so 90min gives a 30min buffer.
     scheduler.add_job(_keepalive_tr, "interval", minutes=90, id="tr_keepalive")
     scheduler.start()
-    log.info("Scheduler started — auto sync every 4h, TR keepalive every 90min")
+    log.info("Scheduler started - auto sync every 4h, TR keepalive every 90min")
 
     # Immediate keepalive on startup: if the container restarts when the session
     # was close to expiry (3h TTL), the next scheduled keepalive (≤2h away) would
@@ -172,7 +172,7 @@ async def trigger_tr():
 
 @app.post("/sync/trade-republic/async")
 async def trigger_tr_async():
-    """Fire-and-forget — returns immediately, sync runs in the background."""
+    """Fire-and-forget - returns immediately, sync runs in the background."""
     import asyncio
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _run_tr)
@@ -181,7 +181,7 @@ async def trigger_tr_async():
 
 @app.post("/sync/lcl/async")
 async def trigger_lcl_async():
-    """Fire-and-forget — returns immediately, sync runs in the background."""
+    """Fire-and-forget - returns immediately, sync runs in the background."""
     import asyncio
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _run_lcl)
@@ -190,7 +190,7 @@ async def trigger_lcl_async():
 
 @app.post("/sync/all/async")
 async def trigger_all_async():
-    """Fire-and-forget — triggers LCL, TR, and all Woob institutions in the background."""
+    """Fire-and-forget - triggers LCL, TR, and all Woob institutions in the background."""
     import asyncio
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _run_all)
@@ -215,7 +215,7 @@ async def get_status():
         return {row["source"]: {"status": row["status"], "message": row["message"], "at": row["createdAt"].isoformat()} for row in rows}
     except Exception as e:
         log.error("Failed to fetch sync status: %s", e)
-        return JSONResponse({"error": "Database error — check service logs"}, status_code=500)
+        return JSONResponse({"error": "Database error - check service logs"}, status_code=500)
 
 
 @app.post("/sync/lcl/setup/start")
@@ -229,7 +229,7 @@ async def lcl_setup_start():
         return result
     except Exception as e:
         log.error("LCL setup/start failed: %s", e)
-        return JSONResponse({"error": "LCL setup failed — check service logs"}, status_code=500)
+        return JSONResponse({"error": "LCL setup failed - check service logs"}, status_code=500)
 
 
 @app.post("/sync/lcl/setup/complete")
@@ -243,7 +243,7 @@ async def lcl_setup_complete():
         return result
     except Exception as e:
         log.error("LCL setup/complete failed: %s", e)
-        return JSONResponse({"error": "LCL setup failed — check service logs"}, status_code=500)
+        return JSONResponse({"error": "LCL setup failed - check service logs"}, status_code=500)
 
 
 @app.post("/sync/trade-republic/setup/start")
@@ -257,7 +257,7 @@ async def tr_setup_start():
         return result
     except Exception as e:
         log.error("TR setup/start failed: %s", e)
-        return JSONResponse({"error": "TR setup failed — check service logs"}, status_code=500)
+        return JSONResponse({"error": "TR setup failed - check service logs"}, status_code=500)
 
 
 @app.post("/sync/trade-republic/setup/complete")
@@ -275,7 +275,7 @@ async def tr_setup_complete(request: Request):
         return {"status": "ok"}
     except Exception as e:
         log.error("TR setup/complete failed: %s", e)
-        return JSONResponse({"error": "TR setup failed — check service logs"}, status_code=500)
+        return JSONResponse({"error": "TR setup failed - check service logs"}, status_code=500)
 
 
 @app.post("/sync/institution/{institution_id}")
@@ -299,7 +299,7 @@ async def trigger_institution_sync(institution_id: str):
         conn.close()
     except Exception as e:
         log.error("Failed to fetch institution %s: %s", institution_id, e)
-        return JSONResponse({"error": "Database error — check service logs"}, status_code=500)
+        return JSONResponse({"error": "Database error - check service logs"}, status_code=500)
 
     if not inst:
         return JSONResponse({"error": "Institution not found"}, status_code=404)

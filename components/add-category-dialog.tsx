@@ -9,7 +9,7 @@ import { createCategory, updateCategory } from "@/lib/actions/categories";
 import { CATEGORY_SWATCHES } from "@/lib/palette";
 import { useTranslations } from "next-intl";
 
-// Existing category to edit, passed down as plain serializable fields only —
+// Existing category to edit, passed down as plain serializable fields only -
 // budgetEuro is pre-formatted server-side (e.g. "300.00"), never a BigInt.
 type EditableCategory = { id: string; name: string; color: string; budgetEuro: string | null };
 

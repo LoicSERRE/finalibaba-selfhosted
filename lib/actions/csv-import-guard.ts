@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 const FIAT_TYPES = new Set(["CHECKING", "SAVINGS", "MEAL_VOUCHER"]);
 
 // Mirrors the `canImportCsv` UI gate in app/accounts/[id]/page.tsx. That gate
-// only controls whether the import buttons render — Server Actions are
+// only controls whether the import buttons render - Server Actions are
 // reachable directly regardless of what's on screen, so the same rule must
 // be enforced here too before writing anything.
 export async function assertCsvImportEligible(accountId: string): Promise<void> {

@@ -21,7 +21,7 @@ import { getTranslations } from "next-intl/server";
 
 const FIAT_TYPES = ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] as const;
 const HORIZON_DAYS = 90;
-// Yearly patterns need ~2 years of history before 3 occurrences exist —
+// Yearly patterns need ~2 years of history before 3 occurrences exist -
 // widen the fetch window well past 12 months so yearly detection can fire.
 const DETECTION_WINDOW_MONTHS = 25;
 
@@ -124,8 +124,8 @@ export default async function RecurringPage() {
               <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("activeTitle")}</h2>
               {[...active, ...inactive].map((r) => (
                 <div key={r.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
                       {r.category && (
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ background: r.category.color }} aria-hidden="true" />
                       )}

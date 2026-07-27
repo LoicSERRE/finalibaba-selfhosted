@@ -1,6 +1,6 @@
 const BASE = "https://bankaccountdata.gocardless.com/api/v2";
 
-// In-memory token cache — survives between requests in the same process
+// In-memory token cache - survives between requests in the same process
 let tokenCache: { access: string; expiresAt: number } | null = null;
 
 async function getAccessToken(): Promise<string> {

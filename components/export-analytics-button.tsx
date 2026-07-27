@@ -147,7 +147,7 @@ function buildMarkdown(
     month: "long",
     year: "numeric",
   });
-  const lines: string[] = [`# ${s.title} — ${date}`, ""];
+  const lines: string[] = [`# ${s.title} - ${date}`, ""];
 
   // ── Global summary ──
   if (sections.has("resume")) {
@@ -245,7 +245,7 @@ function buildMarkdown(
               month: "short",
               year: "numeric",
             })
-          : "—";
+          : "-";
         lines.push(
           `| ${r.name} | ${envelope} | ${yieldStr} | ${fmt(r.annualEstCents)} | ${fmt(r.annualNetCents)} | ${exDiv} |`
         );
@@ -260,9 +260,9 @@ function buildMarkdown(
     lines.push(`| ${s.colMonth} | ${s.colNetWorth} | ${s.colChange} | ${s.pct} |`);
     lines.push("|---|---|---|---|");
     for (const r of data.performanceRows) {
-      const delta = r.delta !== null ? `${sign(r.delta)}${fmt(r.delta)}` : "—";
+      const delta = r.delta !== null ? `${sign(r.delta)}${fmt(r.delta)}` : "-";
       const deltaPct =
-        r.deltaPct !== null ? `${sign(r.deltaPct)}${r.deltaPct.toFixed(1)}%` : "—";
+        r.deltaPct !== null ? `${sign(r.deltaPct)}${r.deltaPct.toFixed(1)}%` : "-";
       lines.push(`| ${r.date} | ${fmt(r.netWorth)} | ${delta} | ${deltaPct} |`);
     }
     lines.push("");

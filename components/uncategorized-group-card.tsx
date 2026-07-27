@@ -37,15 +37,15 @@ export function UncategorizedGroupCard({
   if (applied) return null;
 
   return (
-    <div className="flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
       <div className="min-w-0">
         <p className="text-sm font-medium text-[var(--foreground)] truncate">{label}</p>
         <p className="text-xs text-[var(--muted)]">
           {t("occurrenceCount", { count, suffix: count !== 1 ? "s" : "" })} · {formatCurrency(totalCents)}
         </p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={selectClass}>
+      <div className="flex items-center gap-2 w-full sm:w-auto">
+        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={`${selectClass} min-w-0 flex-1 sm:flex-initial`}>
           <option value="" disabled>
             {t("chooseCategory")}
           </option>

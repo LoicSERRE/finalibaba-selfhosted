@@ -1,5 +1,5 @@
 // Shared by components/export-accounts-button.tsx and
-// components/export-analytics-button.tsx — both build a Markdown export and
+// components/export-analytics-button.tsx - both build a Markdown export and
 // trigger a client-side download of it.
 
 export function fmt(cents: number, decimals = 0): string {

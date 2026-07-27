@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import { createGzip, gunzipSync } from "node:zlib";
 
 // Strip the password out of the connection string (so it never appears in
-// `ps` output for the spawned pg_dump/psql) but keep every other part —
-// including query params like ?sslmode=require — intact. libpq falls back to
+// `ps` output for the spawned pg_dump/psql) but keep every other part -
+// including query params like ?sslmode=require - intact. libpq falls back to
 // PGPASSWORD when the URI has a username but no password.
 function buildConnectionString(databaseUrl: string): { connStr: string; password: string } {
   const u = new URL(databaseUrl);
@@ -32,7 +32,7 @@ export async function GET() {
   // flushed) and pg_dump's "close" (exit code known). If we settled the
   // stream as soon as gzip finished, a pg_dump that wrote a valid-looking
   // partial dump before dying mid-run would look like a *successful*
-  // download — the corruption would only surface later, during an actual
+  // download - the corruption would only surface later, during an actual
   // restore. Wait for both, and only close() if the exit code was 0;
   // otherwise error() so the download visibly fails.
   let gzipEnded = false;
@@ -133,13 +133,13 @@ export async function POST(req: NextRequest) {
       psql.stdin.end();
     });
   } catch (err) {
-    // Full detail stays server-side only — never echo raw exception output to the client.
+    // Full detail stays server-side only - never echo raw exception output to the client.
     console.error("Restore failed:", err);
     return NextResponse.json({ error: "Restore failed. Check server logs for details." }, { status: 500 });
   }
 
   // The restore just dropped and recreated the whole schema out from under
-  // this process's own Prisma connection pool — any pooled connection can now
+  // this process's own Prisma connection pool - any pooled connection can now
   // hold a query plan referencing pre-restore table/type OIDs. Exit and let
   // the container's `restart: unless-stopped` policy bring the app back up
   // with a fresh pool, the same safety net scripts/restore.sh gets by

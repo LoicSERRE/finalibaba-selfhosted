@@ -17,7 +17,7 @@ export default function AppleIcon() {
           borderRadius: "40px",
         }}
       >
-        {/* F — vertical bar */}
+        {/* F - vertical bar */}
         <div
           style={{
             position: "absolute",
@@ -29,7 +29,7 @@ export default function AppleIcon() {
             borderRadius: 7,
           }}
         />
-        {/* F — top horizontal */}
+        {/* F - top horizontal */}
         <div
           style={{
             position: "absolute",
@@ -41,7 +41,7 @@ export default function AppleIcon() {
             borderRadius: 7,
           }}
         />
-        {/* F — middle horizontal */}
+        {/* F - middle horizontal */}
         <div
           style={{
             position: "absolute",

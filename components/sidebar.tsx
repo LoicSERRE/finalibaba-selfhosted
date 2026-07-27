@@ -64,7 +64,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
           })}
         </nav>
 
-        {/* Logout — only shown when AUTH_ENABLED=true */}
+        {/* Logout - only shown when AUTH_ENABLED=true */}
         {showLogout && (
           <button
             onClick={async () => {

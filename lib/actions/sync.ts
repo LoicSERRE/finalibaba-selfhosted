@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 const SYNC_URL = process.env.SYNC_SERVICE_URL ?? "http://sync:8000";
 
-// Explicit allowlist — prevents any user-controlled value from reaching the URL
+// Explicit allowlist - prevents any user-controlled value from reaching the URL
 const SYNC_PATHS = {
   "lcl": "/sync/lcl",
   "trade-republic": "/sync/trade-republic",

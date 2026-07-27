@@ -34,5 +34,5 @@ Out of scope:
 ## Security design notes
 
 - The sync service (`sync/`) listens on port 8000 **inside the Docker network only**. Never expose it externally.
-- `AUTH_ENABLED` is `false` by default — intended for trusted private networks. Enable it or place the app behind a VPN / reverse proxy with auth for any internet-exposed deployment.
-- All secrets live in `.env` — never commit it.
+- `AUTH_ENABLED` is `false` by default - intended for trusted private networks. Enable it or place the app behind a VPN / reverse proxy with auth for any internet-exposed deployment.
+- All secrets live in `.env` - never commit it.

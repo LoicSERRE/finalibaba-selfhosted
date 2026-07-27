@@ -122,7 +122,7 @@ export default async function AccountDetailPage({
       ? account.history[0].balanceCents - account.history[1].balanceCents
       : null;
 
-  // Chart data — chronological, last 60 points
+  // Chart data - chronological, last 60 points
   const chartData = [...account.history]
     .reverse()
     .slice(-60)
@@ -208,7 +208,7 @@ export default async function AccountDetailPage({
     hasCostBasis && totalCostBasis > BigInt(0)
       ? (Number(totalGain) / Number(totalCostBasis)) * 100
       : null;
-  // Tax on NET gain (losses offset gains — matches French PFU logic for hypothetical full liquidation)
+  // Tax on NET gain (losses offset gains - matches French PFU logic for hypothetical full liquidation)
   const totalTax =
     hasCostBasis && taxRate !== null && totalGain > BigInt(0)
       ? BigInt(Math.round(Number(totalGain) * taxRate))
@@ -336,7 +336,7 @@ export default async function AccountDetailPage({
         </div>
       </div>
 
-      {/* Balance chart — fiat only */}
+      {/* Balance chart - fiat only */}
       {isFiat && (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
           <div className="flex items-center justify-between gap-3 mb-4">
@@ -351,7 +351,7 @@ export default async function AccountDetailPage({
         </div>
       )}
 
-      {/* Holdings — investments & crypto */}
+      {/* Holdings - investments & crypto */}
       {isInvestment && (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
@@ -402,7 +402,7 @@ export default async function AccountDetailPage({
                     {/* Plus-value */}
                     <td className="px-4 py-4 tabular-nums">
                       {h.gainCents === null ? (
-                        <span className="text-[var(--muted)] text-xs">—</span>
+                        <span className="text-[var(--muted)] text-xs">-</span>
                       ) : (
                         <div>
                           <p
@@ -433,7 +433,7 @@ export default async function AccountDetailPage({
                     {/* Impôt latent */}
                     <td className="hidden sm:table-cell px-4 py-4 tabular-nums">
                       {h.taxCents === null ? (
-                        <span className="text-[var(--muted)] text-xs">—</span>
+                        <span className="text-[var(--muted)] text-xs">-</span>
                       ) : h.taxCents === BigInt(0) ? (
                         <span className="text-[var(--muted)] text-xs">0,00 €</span>
                       ) : (
@@ -817,7 +817,7 @@ export default async function AccountDetailPage({
         </div>
       )}
 
-      {/* Transactions — fiat synced accounts */}
+      {/* Transactions - fiat synced accounts */}
       {isFiat && account.transactions.length > 0 && (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-3">
@@ -883,7 +883,7 @@ export default async function AccountDetailPage({
         </div>
       )}
 
-      {/* Balance history table — fiat without transactions (manual accounts) */}
+      {/* Balance history table - fiat without transactions (manual accounts) */}
       {isFiat && account.transactions.length === 0 && historyRows.length > 0 && (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-3">
@@ -933,7 +933,7 @@ export default async function AccountDetailPage({
                   </td>
                   <td className="px-6 py-3 tabular-nums">
                     {row.delta === null ? (
-                      <span className="text-[var(--muted)]">—</span>
+                      <span className="text-[var(--muted)]">-</span>
                     ) : row.delta === BigInt(0) ? (
                       <span className="text-[var(--muted)]">±0</span>
                     ) : (
@@ -957,7 +957,7 @@ export default async function AccountDetailPage({
         </div>
       )}
 
-      {/* Empty state — manual fiat account with nothing recorded yet */}
+      {/* Empty state - manual fiat account with nothing recorded yet */}
       {canImportCsv && account.transactions.length === 0 && historyRows.length === 0 && (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl">
           <EmptyState

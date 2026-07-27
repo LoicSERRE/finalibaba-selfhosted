@@ -27,7 +27,7 @@ export async function importBalanceHistory(accountId: string, rows: BalanceRow[]
   const data = rows.map((r) => ({
     accountId,
     balanceCents: BigInt(Math.round(r.balanceCents)),
-    // Noon UTC — same convention as prisma/seed-demo.ts — keeps the date stable
+    // Noon UTC - same convention as prisma/seed-demo.ts - keeps the date stable
     // across timezones instead of risking a midnight-UTC day shift.
     recordedAt: new Date(`${r.date}T12:00:00.000Z`),
   }));

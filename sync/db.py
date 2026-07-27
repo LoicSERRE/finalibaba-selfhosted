@@ -109,7 +109,7 @@ def upsert_transaction(cur, *, account_id: str, sync_id: str, date, label: str, 
         (account_id, amount_cents, date, date),
     )
     if cur.fetchone():
-        return  # likely a pending/cleared duplicate — skip
+        return  # likely a pending/cleared duplicate - skip
 
     cur.execute(
         """

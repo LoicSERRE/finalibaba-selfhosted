@@ -35,5 +35,5 @@ labels: bug
 ## .env (redact all credentials)
 
 ```env
-# Paste relevant env vars here — remove all passwords, tokens, and personal data
+# Paste relevant env vars here - remove all passwords, tokens, and personal data
 ```

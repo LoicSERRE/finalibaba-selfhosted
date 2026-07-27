@@ -28,7 +28,7 @@ function parseFrequency(formData: FormData): RecurringFrequency {
 function parseAnchorDate(formData: FormData): Date {
   const raw = formData.get("anchorDate") as string | null;
   if (!raw) throw new Error("Anchor date required");
-  // Noon UTC — same convention as importTransactions/importBalanceHistory,
+  // Noon UTC - same convention as importTransactions/importBalanceHistory,
   // so anchorDate lines up day-for-day against real Transaction.date values.
   return new Date(`${raw}T12:00:00.000Z`);
 }

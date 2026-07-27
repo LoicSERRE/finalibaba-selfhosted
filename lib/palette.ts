@@ -1,6 +1,6 @@
-// Shared categorical color palettes. Kept as literal hex — these feed a DB
+// Shared categorical color palettes. Kept as literal hex - these feed a DB
 // column (Category.color) and inline `style` props for SVG/chart elements
-// that can't resolve CSS custom properties — so they can't just reference
+// that can't resolve CSS custom properties - so they can't just reference
 // the var(--token) system. Centralized here instead of each consumer
 // independently re-typing (and risking drift on) the same handful of hues.
 
@@ -11,7 +11,7 @@ export const CATEGORY_SWATCHES = [
 ] as const;
 
 // Asset-allocation chart series (components/asset-allocation-chart.tsx).
-// Deliberately excludes red — this app uses red exclusively for
+// Deliberately excludes red - this app uses red exclusively for
 // negative/loss amounts elsewhere, and reusing it for a neutral allocation
 // slice would misread as "this slice is bad."
 export const CHART_COLORS = [

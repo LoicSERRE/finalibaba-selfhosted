@@ -62,7 +62,7 @@ const ISIN_TO_YF_SYMBOL: Record<string, string> = {
 
 type YFDividendInfo = {
   exDividendDate: Date | null;
-  annualYield: number | null;       // trailingAnnualDividendYield (ex: 0.025 = 2.5%) — currency-agnostic
+  annualYield: number | null;       // trailingAnnualDividendYield (ex: 0.025 = 2.5%) - currency-agnostic
   annualRatePerShare: number | null; // trailingAnnualDividendRate in local currency (display only)
 };
 
@@ -157,7 +157,7 @@ export default async function AnalyticsPage() {
     }),
     prisma.historicalBalance.findMany({ orderBy: { recordedAt: "asc" } }),
     prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
-    // Fetch Yahoo Finance in parallel — ex-div dates + real yields (1h cache)
+    // Fetch Yahoo Finance in parallel - ex-div dates + real yields (1h cache)
     fetchYFDividends(Object.values(ISIN_TO_YF_SYMBOL)),
   ]);
 
@@ -172,7 +172,7 @@ export default async function AnalyticsPage() {
   let annualInterestCents = BigInt(0);     // already net (French regulated savings accounts are income-tax-exempt)
 
   // Effective dividend tax rate for a French tax resident under the flat tax (PFU) regime.
-  // PEA: reinvested within the wrapper — no immediate tax.
+  // PEA: reinvested within the wrapper - no immediate tax.
   // CTO French equities: flat tax 30% (12.8% income tax + 17.2% social levies).
   // CTO foreign equities (15% treaty): 15% withholding + 17.2% social levies
   //   → tax credit offsets the 12.8% income tax (credit 15% > IR 12.8% → IR = 0) → effective 32.2%.
@@ -265,7 +265,7 @@ export default async function AnalyticsPage() {
         techValueCents += BigInt(Math.round(Number(mv) * (TECH_WEIGHTS[h.ticker] ?? 0)));
         totalInvestCents += mv;
 
-        // Dividends — real Yahoo Finance yield, falls back to hard-coded rate
+        // Dividends - real Yahoo Finance yield, falls back to hard-coded rate
         const symbol = ISIN_TO_YF_SYMBOL[h.ticker];
         const yfInfo = symbol ? yfData[symbol] : null;
         const divYield = yfInfo?.annualYield ?? DIVIDEND_YIELDS[h.ticker] ?? 0;
@@ -321,7 +321,7 @@ export default async function AnalyticsPage() {
       allocation[account.type === "CRYPTO" ? "crypto" : "investments"] += value;
       grossAssets += value;
     } else if (account.type === "LOAN") {
-      // Loan: pure liability — reduces net worth, no asset counterpart
+      // Loan: pure liability - reduces net worth, no asset counterpart
       const loanBalance = hasLoanParams(account)
         ? calcCurrentCapital(
             {
@@ -335,13 +335,13 @@ export default async function AnalyticsPage() {
           )
         : (account.liabilityCents ?? BigInt(0));
       totalLiabilities += loanBalance;
-      // Skip assetRows — this is a liability, not an asset
+      // Skip assetRows - this is a liability, not an asset
       continue;
     } else {
       value = account.history[0]?.balanceCents ?? BigInt(0);
       if (account.type === "SAVINGS") {
         allocation["savings"] += value;
-        // French regulated savings rates as of 2026-06-01 — update when rates change
+        // French regulated savings rates as of 2026-06-01 - update when rates change
         const name = account.name.toLowerCase();
         let rate = 0;
         if (name.includes("lep")) rate = 0.025;           // LEP: 2.5%
@@ -382,7 +382,7 @@ export default async function AnalyticsPage() {
   const investReturnPct = investTotalCostBasis > BigInt(0)
     ? (Number(investTotalGain) / Number(investTotalCostBasis)) * 100
     : 0;
-  // Overall CAGR — weighted by invested capital when start dates are known
+  // Overall CAGR - weighted by invested capital when start dates are known
   // CAGR(r) = (value / cost)^(1/years) − 1
   const nowMs = Date.now();
   const investAllHaveDates = investPerfRows.length > 0 && investPerfRows.every((r) => r.investmentStartDate !== null);
@@ -463,7 +463,7 @@ export default async function AnalyticsPage() {
   const liabMap = new Map<string, bigint>();
   for (const a of accounts) liabMap.set(a.id, a.liabilityCents ?? BigInt(0));
 
-  // Monthly aggregation — for performance table & MOM delta
+  // Monthly aggregation - for performance table & MOM delta
   const monthMap = new Map<string, Map<string, bigint>>();
   for (const b of allBalances) {
     const month = b.recordedAt.toISOString().slice(0, 7);
@@ -485,7 +485,7 @@ export default async function AnalyticsPage() {
     };
   });
 
-  // Daily aggregation — for the chart
+  // Daily aggregation - for the chart
   const dayMap = new Map<string, Map<string, bigint>>();
   for (const b of allBalances) {
     const day = b.recordedAt.toISOString().slice(0, 10);
@@ -550,7 +550,7 @@ export default async function AnalyticsPage() {
   const totalAllocation = allocationSlices.reduce((s, d) => s + d.value, 0);
 
   // ── Debt accounts ────────────────────────────────────────────────────────
-  // Asset-backed liabilities (real estate, auto) only — LOAN accounts have their own tab
+  // Asset-backed liabilities (real estate, auto) only - LOAN accounts have their own tab
   const debtAccounts = accounts
     .filter((a) => a.type !== "LOAN" && (a.liabilityCents ?? BigInt(0)) > BigInt(0))
     .map((a) => ({
@@ -562,7 +562,7 @@ export default async function AnalyticsPage() {
       liability: a.liabilityCents ?? BigInt(0),
     }));
 
-  // Not grossAssets > 0 — a LOAN-only portfolio has real data (a mortgage,
+  // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
   // real payments) but zero gross assets by design (pure liability, no
   // asset counterpart). Gating on grossAssets showed the empty state to a
   // user who'd already added an account.
@@ -703,13 +703,13 @@ export default async function AnalyticsPage() {
               <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-3">{t("savingsRate.title")}</p>
               {!hasSalary ? (
                 <div>
-                  <p className="text-2xl font-semibold text-[var(--muted)]">—</p>
+                  <p className="text-2xl font-semibold text-[var(--muted)]">-</p>
                   <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
                     {t("savingsRate.configureSalary")}
                   </Link>
                 </div>
               ) : savingsRate === null ? (
-                <p className="text-2xl font-semibold text-[var(--muted)]">—</p>
+                <p className="text-2xl font-semibold text-[var(--muted)]">-</p>
               ) : (
                 <div>
                   <div className="flex items-baseline gap-2">
@@ -758,13 +758,13 @@ export default async function AnalyticsPage() {
               <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-3">{t("runway.title")}</p>
               {!hasExpenses ? (
                 <div>
-                  <p className="text-2xl font-semibold text-[var(--muted)]">—</p>
+                  <p className="text-2xl font-semibold text-[var(--muted)]">-</p>
                   <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
                     {t("runway.configureExpenses")}
                   </Link>
                 </div>
               ) : runwayMonths === null ? (
-                <p className="text-2xl font-semibold text-[var(--muted)]">—</p>
+                <p className="text-2xl font-semibold text-[var(--muted)]">-</p>
               ) : (
                 <div>
                   <p
@@ -1089,7 +1089,7 @@ export default async function AnalyticsPage() {
                                   {cagr >= 0 ? "+" : ""}{cagr.toFixed(1)}% {t("performance.perYear")}
                                 </span>
                               ) : (
-                                <span className="text-[var(--muted)] text-xs">—</span>
+                                <span className="text-[var(--muted)] text-xs">-</span>
                               )}
                             </td>
                           </tr>
@@ -1251,7 +1251,7 @@ export default async function AnalyticsPage() {
                       </td>
                       <td className="px-4 sm:px-6 py-3 tabular-nums">
                         {row.delta === null ? (
-                          <span className="text-[var(--muted)]">—</span>
+                          <span className="text-[var(--muted)]">-</span>
                         ) : (
                           <span className={row.delta >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
                             {row.delta >= 0 ? "+" : ""}{formatCurrency(row.delta, 0)}
@@ -1260,7 +1260,7 @@ export default async function AnalyticsPage() {
                       </td>
                       <td className="hidden sm:table-cell px-6 py-3 tabular-nums">
                         {row.deltaPct === null ? (
-                          <span className="text-[var(--muted)]">—</span>
+                          <span className="text-[var(--muted)]">-</span>
                         ) : (
                           <span className={row.deltaPct >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
                             {row.deltaPct >= 0 ? "+" : ""}{row.deltaPct.toFixed(1)}%
@@ -1325,7 +1325,7 @@ export default async function AnalyticsPage() {
                         </td>
                         <td className="hidden sm:table-cell px-6 py-3 tabular-nums">
                           {asset.gain === null ? (
-                            <span className="text-[var(--muted)] text-xs">—</span>
+                            <span className="text-[var(--muted)] text-xs">-</span>
                           ) : (
                             <span className={asset.gain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
                               {asset.gain >= BigInt(0) ? "+" : ""}{formatCurrency(asset.gain, 0)}
@@ -1334,7 +1334,7 @@ export default async function AnalyticsPage() {
                         </td>
                         <td className="hidden sm:table-cell px-6 py-3 tabular-nums">
                           {asset.tax === null ? (
-                            <span className="text-[var(--muted)] text-xs">—</span>
+                            <span className="text-[var(--muted)] text-xs">-</span>
                           ) : asset.tax === BigInt(0) ? (
                             <span className="text-[var(--muted)] text-xs">0 €</span>
                           ) : (

@@ -179,7 +179,7 @@ export function SyncStatus({ source, label, log }: Props) {
         </div>
       </div>
 
-      {/* TR — code input */}
+      {/* TR - code input */}
       {(setupStep === "awaiting_code" || setupStep === "submitting") && (
         <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
           <p className="text-xs text-[var(--muted)] mb-2">{t("trCodeHint")}</p>
@@ -211,7 +211,7 @@ export function SyncStatus({ source, label, log }: Props) {
         </div>
       )}
 
-      {/* LCL — Certicode Plus approval */}
+      {/* LCL - Certicode Plus approval */}
       {(setupStep === "awaiting_approval" || setupStep === "completing") && (
         <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
           <p className="text-xs text-[var(--muted)] mb-3">

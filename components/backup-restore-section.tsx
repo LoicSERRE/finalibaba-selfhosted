@@ -24,8 +24,8 @@ export function BackupRestoreSection() {
 
   async function waitForRestart() {
     // The server exits after a successful restore so the container restart
-    // policy hands the process a fresh DB connection pool — poll a cheap
-    // page (never /api/backup — that would trigger another full pg_dump)
+    // policy hands the process a fresh DB connection pool - poll a cheap
+    // page (never /api/backup - that would trigger another full pg_dump)
     // until it responds again, instead of reloading straight into a
     // connection-refused error.
     for (let i = 0; i < 30; i++) {

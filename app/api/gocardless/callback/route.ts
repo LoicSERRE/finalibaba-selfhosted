@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequisition, getAccountDetails, getAccountBalances, pickBalance, toAccountType } from "@/lib/gocardless";
 
 export async function GET(req: NextRequest) {
-  // GoCardless appends ?ref={reference} — we set reference = our institution DB id
+  // GoCardless appends ?ref={reference} - we set reference = our institution DB id
   const institutionId = req.nextUrl.searchParams.get("ref");
   if (!institutionId) {
     return NextResponse.redirect(new URL("/settings?gc=error", req.url));

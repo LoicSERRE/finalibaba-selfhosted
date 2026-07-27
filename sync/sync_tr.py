@@ -4,7 +4,7 @@ Trade Republic portfolio sync via pytr (web login).
 Handles multiple account types: CTO (STANDARD), PEA, CRYPTO.
 
 The TR WebSocket API requires passing the securitiesAccountNumber to
-compactPortfolio — without it, positions come back empty. Account numbers
+compactPortfolio - without it, positions come back empty. Account numbers
 are extracted from the tr_session JWT obtained via /api/v1/auth/web/session.
 
 First run: docker exec -it finalibaba-sync-1 python sync_tr.py --setup
@@ -36,7 +36,7 @@ BASE_URL = "https://api.traderepublic.com"
 ACC_TYPE_MAP = {
     "default":        ("INVESTMENT", "CTO", "CTO",   "cto"),
     "tax_wrapper_fr": ("INVESTMENT", "PEA", "PEA",   "pea"),
-    "CRYPTO":         ("CRYPTO",     None,  "Crypto", "crypto"),  # virtual — from featuresEnabled
+    "CRYPTO":         ("CRYPTO",     None,  "Crypto", "crypto"),  # virtual - from featuresEnabled
 }
 
 
@@ -86,7 +86,7 @@ def _get_securities_accounts(api) -> tuple[dict[str, list[str]], bool]:
         r = api._websession.get(f"{BASE_URL}/api/v1/auth/web/session", timeout=10)
         r.raise_for_status()
         # Response cookies (RequestsCookieJar) have .get(); session jar may be a
-        # MozillaCookieJar (no .get()) — check response first, then iterate.
+        # MozillaCookieJar (no .get()) - check response first, then iterate.
         tr_session = r.cookies.get("tr_session") or next(
             (c.value for c in api._websession.cookies if c.name == "tr_session"),
             None,
@@ -116,7 +116,7 @@ def _get_securities_accounts(api) -> tuple[dict[str, list[str]], bool]:
 
 async def _fetch_positions_for_account(api, sec_number: str) -> list:
     # TR deprecated compactPortfolio for web sessions (connect_id=31) in June 2026.
-    # compactPortfolioByType is the replacement — same secAccNo param, positions are
+    # compactPortfolioByType is the replacement - same secAccNo param, positions are
     # grouped in categories[].positions instead of a flat positions list.
     sub = await api.subscribe({"type": "compactPortfolioByType", "secAccNo": sec_number})
     data = await asyncio.wait_for(api._recv_subscription(sub), timeout=15)
@@ -173,7 +173,7 @@ async def _fetch_neon_portfolio_prices(api) -> tuple[dict[str, int], dict[str, s
 
     Returns:
       prices:          {isin: price_cents}
-      neon_quantities: {isin: virtual_size_str} — only for instruments where price was
+      neon_quantities: {isin: virtual_size_str} - only for instruments where price was
                        derived via netValue/virtualSize (PE/ELTIF). The same virtualSize
                        must be used as holding quantity so that quantity × price = netValue.
                        Empty for instruments with a direct price field.
@@ -223,7 +223,7 @@ async def _fetch_neon_portfolio_prices(api) -> tuple[dict[str, int], dict[str, s
 
             # netValue is TR's authoritative total position value (what the app displays).
             # For PE/ELTIF funds the exchange ticker currentPrice is stale while netValue
-            # reflects the current NAV — always prefer netValue/virtualSize over currentPrice.
+            # reflects the current NAV - always prefer netValue/virtualSize over currentPrice.
             net_value_raw = pos.get("netValue") or pos.get("netValueEur")
             if isinstance(net_value_raw, dict):
                 net_value_raw = net_value_raw.get("value", 0)
@@ -284,8 +284,8 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
                 log.warning("TR %s (%s) erreur : %s", acc_type, sec_num, e)
 
         # TR crypto assets (XF000* ISINs) are in the CTO portfolio but belong
-        # to a separate crypto wallet — split them out to the CRYPTO account.
-        # New format uses "isin" field; old used "instrumentId" — check both.
+        # to a separate crypto wallet - split them out to the CRYPTO account.
+        # New format uses "isin" field; old used "instrumentId" - check both.
         if acc_type == "default":
             def _isin(p: dict) -> str:
                 return p.get("instrumentId") or p.get("isin") or ""
@@ -313,7 +313,7 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
 
     # neonPortfolio gives accurate per-unit prices for all instruments including
     # illiquid ones (PE funds, funds with delayed NAV) where exchange tickers are wrong.
-    # neon_quantities carries the virtualSize used as price divisor for PE/ELTIFs — must
+    # neon_quantities carries the virtualSize used as price divisor for PE/ELTIFs - must
     # be reused as holding quantity so that quantity × price = netValue exactly.
     neon_prices, neon_quantities = await _fetch_neon_portfolio_prices(api)
 
@@ -356,13 +356,13 @@ def _sync_positions(cur, positions: list, account_id: str, acc_type_label: str, 
         ticker_price, ticker_name = prices.get(isin, (0, None))
         # Prefer neonPortfolio price (already resolved in _fetch_all: neon > exchange ticker).
         # neonPortfolio derives price from netValue/virtualSize which matches exactly what TR
-        # displays — including current NAV for illiquid PE/ELTIF funds where compactPortfolio
+        # displays - including current NAV for illiquid PE/ELTIF funds where compactPortfolio
         # returns averageBuyIn as currentPrice instead of the actual current NAV.
         raw_price = pos.get("currentPrice") or pos.get("lastPrice") or 0
         compact_price_cents = int(Decimal(str(raw_price)) * 100)
         price_cents = ticker_price or compact_price_cents
         name = ticker_name or pos.get("name") or isin
-        # Quantity: prefer neon_quantities[isin] when available — it's the virtualSize neonPortfolio
+        # Quantity: prefer neon_quantities[isin] when available - it's the virtualSize neonPortfolio
         # used as price divisor (netValue/virtualSize), so using the same value here ensures
         # quantity × price = netValue exactly. This fixes PE/ELTIF where compactPortfolioByType
         # may omit virtualSize and fall back to netSize, causing a ~20% undercount.
@@ -385,7 +385,7 @@ def _sync_positions(cur, positions: list, account_id: str, acc_type_label: str, 
                 'UPDATE "Holding" SET "costBasisCents" = %s WHERE "accountId" = %s AND ticker = %s',
                 (cost_basis_cents, account_id, isin),
             )
-        log.info("TR %s — %s (%s): qty %s @ %d cts", acc_type_label, name, isin, quantity, price_cents)
+        log.info("TR %s - %s (%s): qty %s @ %d cts", acc_type_label, name, isin, quantity, price_cents)
     record_balance(cur, account_id, total_cents)
     return total_cents
 
@@ -433,7 +433,7 @@ def run(interactive: bool = False) -> dict:
     except AuthRequiredError:
         conn = get_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        write_sync_log(cur, "trade_republic", "auth_required", "Session web absente — lance --setup")
+        write_sync_log(cur, "trade_republic", "auth_required", "Session web absente - lance --setup")
         conn.commit()
         raise
 
@@ -445,12 +445,12 @@ def run(interactive: bool = False) -> dict:
         raise RuntimeError("Institution 'Trade Republic' not found in DB. Run npm run db:seed.")
 
     # Discover securities account numbers from JWT.
-    # _get_securities_accounts() calls /api/v1/auth/web/session which refreshes TR cookies —
+    # _get_securities_accounts() calls /api/v1/auth/web/session which refreshes TR cookies -
     # persist them immediately so the next sync reads fresh cookies instead of the originals.
     sec_accounts, has_crypto = _get_securities_accounts(api)
     api.save_websession()
     if not sec_accounts:
-        log.warning("TR: JWT decode failed — no portfolio accounts found, only cash will be synced")
+        log.warning("TR: JWT decode failed - no portfolio accounts found, only cash will be synced")
 
     try:
         positions_by_type, cash_accounts, prices, neon_quantities = asyncio.run(_fetch_all(api, sec_accounts, has_crypto))
@@ -459,7 +459,7 @@ def run(interactive: bool = False) -> dict:
         if any(w in err for w in ["unauthorized", "401", "session", "expired", "login", "3003"]):
             api._cookies_file.unlink(missing_ok=True)
             conn.commit()
-            _mark_auth_required("Session expirée — reconnecte depuis Paramètres → Trade Republic")
+            _mark_auth_required("Session expirée - reconnecte depuis Paramètres → Trade Republic")
             raise AuthRequiredError("Trade Republic: session expired. Run --setup")
         raise
 
@@ -484,7 +484,7 @@ def run(interactive: bool = False) -> dict:
     cash_cents = int(Decimal(str(cash_eur)) * 100)
     record_balance(cur, cash_account_id, cash_cents)
     summary_parts.append(f"cash: {cash_eur:.2f}€")
-    log.info("TR cash — %d cts", cash_cents)
+    log.info("TR cash - %d cts", cash_cents)
 
     # XF000* ISINs (TR crypto) always belong in the CRYPTO account, never in CTO.
     # Purge unconditionally so stale entries from previous syncs are removed.
@@ -513,7 +513,7 @@ def _mark_auth_required(msg: str) -> None:
         conn.close()
         log.info("TR: auth_required written to DB")
     except Exception as db_err:
-        log.warning("TR: failed to write auth_required to DB — %s", db_err)
+        log.warning("TR: failed to write auth_required to DB - %s", db_err)
 
 
 def keepalive() -> None:
@@ -527,22 +527,22 @@ def keepalive() -> None:
     pin = os.environ["TR_PIN"]
     api = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=True)
     if not api._cookies_file.exists():
-        log.debug("TR keepalive: no saved session — skipped")
+        log.debug("TR keepalive: no saved session - skipped")
         return
     try:
         if api.resume_websession():
             # Call /api/v1/auth/web/session to refresh the server-side cookie TTL.
             # Without this, resume_websession() only validates existing cookies but
-            # does NOT extend their expiry — causing failures ~2h after last full sync.
+            # does NOT extend their expiry - causing failures ~2h after last full sync.
             r = api._websession.get(f"{BASE_URL}/api/v1/auth/web/session", timeout=10)
             r.raise_for_status()
             api.save_websession()
             log.info("TR keepalive: session refreshed and saved")
         else:
-            log.warning("TR keepalive: session expired — re-auth required")
-            _mark_auth_required("Session expired — reconnect from Settings → Trade Republic")
+            log.warning("TR keepalive: session expired - re-auth required")
+            _mark_auth_required("Session expired - reconnect from Settings → Trade Republic")
     except Exception as e:
-        log.warning("TR keepalive: error — %s", e)
+        log.warning("TR keepalive: error - %s", e)
 
 
 class AuthRequiredError(Exception):
@@ -554,7 +554,7 @@ if __name__ == "__main__":
     interactive = "--setup" in sys.argv
     try:
         result = run(interactive=interactive)
-        print(f"✓ TR sync OK — {result['positions']} position(s), cash {result['cash_cents']/100:.2f}€")
+        print(f"✓ TR sync OK - {result['positions']} position(s), cash {result['cash_cents']/100:.2f}€")
     except AuthRequiredError as e:
         print(f"⚠ {e}")
         print("→ Re-run with: docker exec -it finalibaba-sync-1 python sync_tr.py --setup")

@@ -146,7 +146,7 @@ export default async function AccountsPage({
   };
 
   // Only liquidités/investissements ever render the generic AddAccountDialog
-  // below (see the header) — immobilier/automobiles/credits each have their
+  // below (see the header) - immobilier/automobiles/credits each have their
   // own dedicated add dialog instead, so INVESTMENT/CHECKING are the only
   // reachable values here.
   const defaultType = tab === "investissements" ? "INVESTMENT" : "CHECKING";
@@ -272,7 +272,7 @@ export default async function AccountsPage({
           />
           {/* immobilier/automobiles/credits have their own dedicated add
               dialog further down (with type-specific fields this generic
-              one doesn't cover, or doesn't cover at all for LOAN) — showing
+              one doesn't cover, or doesn't cover at all for LOAN) - showing
               this one too would be a second, partially-broken way to create
               the same account type. */}
           {(tab === "liquidites" || tab === "investissements") && (
@@ -499,7 +499,7 @@ export default async function AccountsPage({
                               </td>
                               <td className="px-4 py-3 tabular-nums">
                                 {gain === null ? (
-                                  <span className="text-[var(--muted)] text-xs">—</span>
+                                  <span className="text-[var(--muted)] text-xs">-</span>
                                 ) : (
                                   <div>
                                     <p className={`font-medium ${gain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
@@ -516,7 +516,7 @@ export default async function AccountsPage({
                               {rate !== null && (
                                 <td className="hidden sm:table-cell px-4 py-3 tabular-nums">
                                   {tax === null ? (
-                                    <span className="text-[var(--muted)] text-xs">—</span>
+                                    <span className="text-[var(--muted)] text-xs">-</span>
                                   ) : tax === BigInt(0) ? (
                                     <span className="text-[var(--muted)] text-xs">0,00 €</span>
                                   ) : (
@@ -848,7 +848,7 @@ export default async function AccountsPage({
                     <div>
                       <p className="text-[var(--muted)] text-xs mb-1">{t("auto.loanDue")}</p>
                       <p className={`tabular-nums font-medium ${liability > BigInt(0) ? "text-[var(--negative)]" : "text-[var(--muted)]"}`}>
-                        {liability > BigInt(0) ? formatCurrency(liability, 0) : "—"}
+                        {liability > BigInt(0) ? formatCurrency(liability, 0) : "-"}
                       </p>
                     </div>
                     <div>

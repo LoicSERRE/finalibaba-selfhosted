@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
-// Simple in-memory rate limiter — max 5 attempts per 15 min per IP
+// Simple in-memory rate limiter - max 5 attempts per 15 min per IP
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(ip: string): boolean {

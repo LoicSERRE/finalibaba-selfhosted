@@ -13,7 +13,7 @@ import { normalizeLabel } from "@/lib/recurring";
 import { getTranslations } from "next-intl/server";
 
 // How many of the most-frequent uncategorized label groups to surface at
-// once — bounded so the page doesn't turn into a full inbox-zero triage
+// once - bounded so the page doesn't turn into a full inbox-zero triage
 // list; the rest still show up once the top ones are cleared (this section
 // only ever queries the current, still-uncategorized set on each render).
 const MAX_UNCATEGORIZED_GROUPS = 8;

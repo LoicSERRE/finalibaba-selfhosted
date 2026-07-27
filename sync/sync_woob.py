@@ -1,5 +1,5 @@
 """
-Generic Woob sync — works with any Woob-compatible bank module.
+Generic Woob sync - works with any Woob-compatible bank module.
 
 Called per institution by main.py. Credentials are stored in the Institution
 table (woobModule / woobLogin / woobPassword), not in env vars.
@@ -117,7 +117,7 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
         accounts = []
         try:
             for result in w.do("iter_accounts", backends=backend_name):
-                accounts.append(result)  # noqa: PERF402 — must keep partial results gathered before a mid-iteration CallErrors
+                accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
         except CallErrors as e:
             for _backend, exc, tb in e.errors:
                 msg = (str(exc) + tb).lower()
@@ -132,7 +132,7 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
         accounts = _iter_accounts()
     except (AppValidation, AppValidationExpired, NeedInteractiveFor2FA, NeedInteractive):
         conn.rollback()
-        msg = f"2FA required — run setup manually in the container: docker exec -it finalibaba-sync-1 python sync_woob.py --setup {institution_id}"
+        msg = f"2FA required - run setup manually in the container: docker exec -it finalibaba-sync-1 python sync_woob.py --setup {institution_id}"
         write_sync_log(cur, sync_source, "auth_required", msg)
         conn.commit()
         cur.close()
@@ -149,7 +149,7 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
         raise
 
     if not accounts:
-        msg = "No accounts returned — check credentials or run interactive setup"
+        msg = "No accounts returned - check credentials or run interactive setup"
         log.warning("%s: %s", institution_name, msg)
         write_sync_log(cur, sync_source, "auth_required", msg)
         conn.commit()
@@ -174,7 +174,7 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
         )
         record_balance(cur, account_db_id, balance_cents)
         synced.append({"label": account.label, "balance_cents": balance_cents})
-        log.info("%s — %s: %d cents", institution_name, account.label, balance_cents)
+        log.info("%s - %s: %d cents", institution_name, account.label, balance_cents)
 
         # Fetch transactions
         try:
@@ -195,13 +195,13 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
                         account_id=account_db_id,
                         sync_id=tx_sync_id,
                         date=tx.date,
-                        label=(tx.label or tx.raw or "").strip() or "—",
+                        label=(tx.label or tx.raw or "").strip() or "-",
                         amount_cents=amount_cents,
                     )
                     tx_count += 1
             except CallErrors as e:
                 log.warning("%s iter_history errors (ignored): %s", institution_name, str(e)[:120])
-            log.info("%s — %s: %d transaction(s) imported", institution_name, account.label, tx_count)
+            log.info("%s - %s: %d transaction(s) imported", institution_name, account.label, tx_count)
         except Exception as e:
             log.warning("%s transactions skipped for %s: %s", institution_name, account.label, e)
 
@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
     try:
         result = run(row["id"], row["name"], row["woobModule"], row["woobLogin"], row["woobPassword"])
-        print(f"✓ {row['name']} sync OK — {len(result['synced'])} account(s)")
+        print(f"✓ {row['name']} sync OK - {len(result['synced'])} account(s)")
     except AuthRequiredError as e:
         print(f"⚠ {e}")
         sys.exit(2)

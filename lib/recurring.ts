@@ -1,7 +1,7 @@
 /**
  * Calculation module for recurring transactions: pattern detection over
  * transaction history, occurrence scheduling, missed-payment checks, and
- * cash-flow projection. Pure functions, no DB calls — mirrors lib/loan.ts's
+ * cash-flow projection. Pure functions, no DB calls - mirrors lib/loan.ts's
  * shape (params in, computed stats out, an asOf/range argument for anything
  * date-dependent).
  */
@@ -62,7 +62,7 @@ function stepDate(date: Date, frequency: RecurringFrequency, steps: number, inte
 
 /**
  * Expected occurrence dates for a series between `from` and `to` (inclusive),
- * stepping forward and backward from `anchorDate` — used both for future
+ * stepping forward and backward from `anchorDate` - used both for future
  * projection and for walking back to find the most recent past occurrence.
  */
 export function getOccurrencesInRange(series: RecurringSeries, from: Date, to: Date): Date[] {
@@ -143,7 +143,7 @@ export type Candidate = {
   frequency: RecurringFrequency;
   anchorDate: Date;
   // Most common category already assigned among the matched transactions, if
-  // any — lets the confirm dialog start pre-filled instead of forcing the
+  // any - lets the confirm dialog start pre-filled instead of forcing the
   // user to re-pick a category they've already chosen for this label before.
   categoryId: string | null;
 };
@@ -151,13 +151,13 @@ export type Candidate = {
 /**
  * Groups transactions by (accountId, normalized label) and flags groups whose
  * amounts and date spacing look regular enough to be a subscription or
- * regular income. Only ever proposes intervalCount = 1 — inferring "every 2
+ * regular income. Only ever proposes intervalCount = 1 - inferring "every 2
  * months" style cadences from noisy gaps is out of scope; the manual
  * create/edit form covers that case.
  *
  * `existingKeys` (each `${accountId}|${normalizeLabel(label)}`) excludes
- * patterns already represented by a RecurringTransaction row — confirmed,
- * paused, or a previously dismissed suggestion — so they never resurface.
+ * patterns already represented by a RecurringTransaction row - confirmed,
+ * paused, or a previously dismissed suggestion - so they never resurface.
  */
 export function detectCandidates(transactions: TxLike[], existingKeys: Set<string>): Candidate[] {
   const groups = new Map<string, TxLike[]>();
@@ -204,7 +204,7 @@ export function detectCandidates(transactions: TxLike[], existingKeys: Set<strin
 
 /**
  * Day-by-day cumulative projected net change from active recurring series
- * over [from, to] — a relative running total starting at 0, not tied to
+ * over [from, to] - a relative running total starting at 0, not tied to
  * actual account balances. One point per calendar day so a step chart
  * renders the "flat, then jump on occurrence day" shape correctly.
  */

@@ -35,13 +35,13 @@ model Account {
   id                  String              @id @default(cuid())
   name                String
   type                AccountType
-  institutionId       String?             // nullable — cars and loans may have no associated bank
+  institutionId       String?             // nullable - cars and loans may have no associated bank
   institution         Institution?        @relation(fields: [institutionId], references: [id])
   manualValueCents    BigInt?
   liabilityCents      BigInt?
   purchasePriceCents  BigInt?             // AUTOMOBILE: original purchase price
   insuranceMonthlyCents BigInt?           // AUTOMOBILE + LOAN: monthly insurance premium
-  investmentSubtype   String?             // "PEA" | "CTO" — only for INVESTMENT type
+  investmentSubtype   String?             // "PEA" | "CTO" - only for INVESTMENT type
   investmentStartDate DateTime?           // Investment start date (manual entry)
   loanAmountCents     BigInt?             // LOAN: initial borrowed amount
   loanTaeg            Float?              // LOAN: annual interest rate in % (e.g. 5.47)
@@ -95,7 +95,7 @@ model Transaction {
   id          String    @id @default(cuid())
   accountId   String
   account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  syncId      String    @unique // woob transaction id — used for deduplication
+  syncId      String    @unique // woob transaction id - used for deduplication
   date        DateTime
   label       String
   amountCents BigInt    // positive = credit, negative = debit
@@ -111,7 +111,7 @@ model Category {
   id                    String                 @id @default(cuid())
   name                  String                 @unique
   color                 String                 // hex, e.g. "#6366f1"
-  budgetCents           BigInt?                // monthly envelope — null means no budget set
+  budgetCents           BigInt?                // monthly envelope - null means no budget set
   transactions          Transaction[]
   recurringTransactions RecurringTransaction[]
   createdAt             DateTime               @default(now())
@@ -133,7 +133,7 @@ model RecurringTransaction {
   category      Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   frequency     RecurringFrequency @default(MONTHLY)
   intervalCount Int                @default(1) // e.g. frequency=WEEKLY, intervalCount=2 → every 2 weeks
-  anchorDate    DateTime           // a real known occurrence — day/weekday/month is derived from this
+  anchorDate    DateTime           // a real known occurrence - day/weekday/month is derived from this
   active        Boolean            @default(true)
   autoDetected  Boolean            @default(false) // created by confirming a detected suggestion vs manually
   createdAt     DateTime           @default(now())

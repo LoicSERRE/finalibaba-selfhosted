@@ -32,7 +32,7 @@ async function main() {
       create: inst,
     });
   }
-  console.log(`Done — ${INSTITUTIONS.length} institutions seeded.`);
+  console.log(`Done - ${INSTITUTIONS.length} institutions seeded.`);
 }
 
 main()

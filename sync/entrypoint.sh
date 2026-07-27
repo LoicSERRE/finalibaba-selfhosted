@@ -17,7 +17,7 @@ candidates = [
 ]
 path = candidates[0] if candidates else None
 if not path:
-    print("[patch] lcl/browser.py not found — skip")
+    print("[patch] lcl/browser.py not found - skip")
     sys.exit(0)
 
 content = open(path).read()
@@ -27,7 +27,7 @@ if "# PATCH_410" in content:
 
 m = re.search(r"( +)(if self\.go_bourse_website\(\) and self\.connexion_bourse\(\):)", content)
 if not m:
-    print("[patch] Pattern not found — LCL module format may have changed, skip")
+    print("[patch] Pattern not found - LCL module format may have changed, skip")
     sys.exit(0)
 
 indent = m.group(1)

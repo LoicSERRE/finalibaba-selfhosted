@@ -1,7 +1,7 @@
 #!/bin/bash
 # Sync application files from the private Finalibaba repo to this selfhosted repo.
 # Excludes personal infra files (CI/CD pipeline, VPS config, personal credentials).
-# Always review `git diff` after running — never commit blindly.
+# Always review `git diff` after running - never commit blindly.
 #
 # Usage: ./scripts/sync-from-upstream.sh [path/to/upstream]
 # Default upstream path: /mnt/c/Projets/Finalibaba
@@ -62,7 +62,7 @@ echo ""
 echo "✓ Sync complete."
 echo ""
 echo "Next steps:"
-echo "  1. git diff — verify no personal files were copied"
+echo "  1. git diff - verify no personal files were copied"
 echo "  2. Translate any new French code comments to English"
 echo "  3. If a new sync module was added, add a credential guard in sync/main.py"
 echo "  4. git add -p && git commit (message in English)"

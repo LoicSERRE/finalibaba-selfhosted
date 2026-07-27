@@ -36,7 +36,7 @@ export function CashflowChart({ data }: { data: DataPoint[] }) {
     );
   }
 
-  // Dense daily data (90 points) — thin the X axis ticks so labels don't overlap.
+  // Dense daily data (90 points) - thin the X axis ticks so labels don't overlap.
   const tickInterval = Math.ceil(data.length / 8);
 
   return (

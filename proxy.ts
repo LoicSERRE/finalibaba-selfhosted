@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 
 export default withAuth(
   function middleware(req) {
-    // Demo mode — block all mutations (Server Actions use POST)
+    // Demo mode - block all mutations (Server Actions use POST)
     if (process.env.DEMO_MODE === "true" && req.method !== "GET") {
       return new NextResponse(
-        JSON.stringify({ error: "Mode démo — données en lecture seule." }),
+        JSON.stringify({ error: "Mode démo - données en lecture seule." }),
         { status: 403, headers: { "Content-Type": "application/json" } }
       );
     }
