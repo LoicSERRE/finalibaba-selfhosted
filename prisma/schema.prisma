@@ -77,6 +77,7 @@ model Holding {
   quantity       Decimal  @db.Decimal(24, 10)
   lastPriceCents BigInt   @default(0)
   costBasisCents BigInt?  // total acquisition cost in cents (null = unknown)
+  targetPct      Float?   // 0-1 ratio, target share of the account's total value - null means not part of the rebalancing plan
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

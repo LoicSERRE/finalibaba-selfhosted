@@ -153,6 +153,7 @@ export default async function AccountDetailPage({
     quantity: Decimal;
     lastPriceCents: bigint;
     costBasisCents: bigint | null;
+    targetPct: number | null;
     marketValueCents: bigint;
     gainCents: bigint | null;       // null = no cost basis known
     gainPct: number | null;
@@ -465,6 +466,59 @@ export default async function AccountDetailPage({
                 ))}
               </tbody>
             </table>
+            </div>
+          )}
+
+          {/* Rééquilibrage */}
+          {holdingsWithTax.some((h) => h.targetPct != null) && (
+            <div className="border-t border-[var(--border)] px-6 py-4">
+              <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-3">
+                {td("rebalancing.title")}
+              </p>
+              <div className="space-y-3">
+                {holdingsWithTax
+                  .filter((h): h is typeof h & { targetPct: number } => h.targetPct != null)
+                  .map((h) => {
+                    const targetPctInt = Math.round(h.targetPct * 100);
+                    const driftPts = h.pct - targetPctInt;
+                    const targetValueCents = BigInt(Math.round(Number(currentValue) * h.targetPct));
+                    const driftValueCents = h.marketValueCents - targetValueCents;
+                    const isOverweight = driftValueCents > BigInt(0);
+                    const suggestedQty =
+                      h.lastPriceCents > BigInt(0)
+                        ? Math.abs(Number(driftValueCents)) / Number(h.lastPriceCents)
+                        : null;
+                    return (
+                      <div key={h.id} className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[var(--foreground)]">{h.ticker}</p>
+                          <p className="text-xs text-[var(--muted)]">
+                            {td("rebalancing.currentVsTarget", { current: h.pct, target: targetPctInt })}
+                            {driftPts !== 0 && (
+                              <span className={driftPts > 0 ? "text-[var(--negative)]" : "text-[var(--positive)]"}>
+                                {" "}({driftPts > 0 ? "+" : ""}{driftPts} {td("rebalancing.pts")})
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        {driftValueCents !== BigInt(0) && (
+                          <div className="text-right shrink-0">
+                            <p className={`text-sm font-medium tabular-nums ${isOverweight ? "text-[var(--negative)]" : "text-[var(--positive)]"}`}>
+                              {isOverweight ? td("rebalancing.suggestSell") : td("rebalancing.suggestBuy")}{" "}
+                              {formatCurrency(isOverweight ? driftValueCents : -driftValueCents)}
+                            </p>
+                            {suggestedQty !== null && (
+                              <p className="text-xs text-[var(--muted)]">
+                                {td("rebalancing.approxShares", { count: suggestedQty.toFixed(2) })}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+              <p className="text-xs text-[var(--muted)] mt-3 opacity-70">{td("rebalancing.footnote")}</p>
             </div>
           )}
 

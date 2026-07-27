@@ -185,6 +185,15 @@
       "taxTreatmentDeferred": "Deferred (401k, PER…)",
       "taxReportLink": "View the annual tax report →"
     },
+    "rebalancing": {
+      "title": "Rebalancing",
+      "currentVsTarget": "Current {current}% · Target {target}%",
+      "pts": "pts",
+      "suggestBuy": "Buy",
+      "suggestSell": "Sell",
+      "approxShares": "≈ {count} share(s)",
+      "footnote": "Targets don't need to add up to 100% — a position with no target set is simply excluded from the rebalancing plan."
+    },
     "loanDetail": {
       "amountBorrowed": "Borrowed amount",
       "remaining": "Remaining capital",
@@ -616,6 +625,9 @@
     "costBasis": "Total cost basis (€) — optional",
     "costBasisPlaceholder": "Total amount invested, e.g. 5000.00",
     "taxHint": "Used to compute gains and latent tax.",
+    "targetPct": "Target allocation (%) — optional",
+    "targetPctPlaceholder": "e.g. 30",
+    "targetPctHint": "Used for rebalancing — leave blank if this position isn't part of it.",
     "update": "Update",
     "submit": "Add"
   },

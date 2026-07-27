@@ -279,6 +279,15 @@ Before this feature, selling a holding meant retyping a smaller `quantity`/`cost
 - `computeIndexCAGR(series, startDate, now)` finds the closest historical close to `startDate` (via `priceAt`, nearest-timestamp match - the fetched series is monthly, not daily) and to `now`, then applies the same `(end/start)^(1/years) - 1` formula as `investCAGR`, over the identical `investCAGRWeightedYears` lookback so the comparison is apples-to-apples.
 - Only rendered when `investCAGR !== null` (same gate as the aggregate CAGR itself) and per-index only when that index's fetch actually returned data (Yahoo being unreachable degrades to that one row being omitted, not a crash - same `try/catch` → empty-array fallback as the dividend fetch).
 
+### Portfolio rebalancing
+
+`Holding.targetPct` (0-1 ratio, nullable - same convention as `taxRatePct`) adds a target counterpart to the per-holding "Poids" (current weight) column that already existed on `app/accounts/[id]/page.tsx`'s holdings table (`pct = marketValueCents / accountTotal`). This is scoped **within one account's own holdings** - unrelated to the Analytics allocation chart, which only buckets by account *type* (cash/savings/investments/crypto/realEstate/auto), never per-ticker.
+
+- Set via the existing `components/add-holding-dialog.tsx` edit form (one more optional field, not a new dialog), input as a 0-100 percentage and converted to a 0-1 ratio in `upsertHolding` (`lib/actions/holdings.ts`). Same optional-update semantics as `costBasisCents`: leaving it blank on an edit does not clear a previously-set target.
+- Targets are **not required to sum to 100%** - a holding with `targetPct: null` is simply excluded from the rebalancing plan (e.g. an untouched legacy position the user doesn't want to manage this way).
+- The "Rééquilibrage" section on the account detail page (only shown when at least one holding has a target set) computes, per targeted holding: drift in points (`pct - targetPct*100`) and a suggested trade (`driftValueCents = marketValueCents - accountTotal*targetPct`; positive → suggest selling that amount, negative → suggest buying it), plus an approximate share count from `driftValueCents / lastPriceCents`.
+- **Informational only** - the suggestion is displayed as text, not wired to pre-fill `AddHoldingDialog`/`SellHoldingDialog` (neither currently accepts external suggested-quantity props, and both are already one scroll up in the same holdings table for the user to act on manually). Keeps this change to one field + one read-only section, no changes to two already-working dialogs' APIs.
+
 ### Data model
 
 - `Institution` → many `Account`
@@ -287,7 +296,7 @@ Before this feature, selling a holding meant retyping a smaller `quantity`/`cost
   - Investment/Crypto: `Holding` (ticker + `Decimal` quantity) + live price at runtime. `investmentSubtype` = `"PEA"` or `"CTO"` (cosmetic label only). `taxTreatment` (`TaxTreatment` enum) + `taxRatePct` drive the actual latent-tax rate - see "Tax treatment" below
   - Real Estate & Automobile: `manualValueCents` + optional `liabilityCents`
   - LOAN: capital computed at runtime via `calcCurrentCapital()` from `lib/loan.ts`
-- `Holding` - unique on `(accountId, ticker)`. `costBasisCents` for P&L
+- `Holding` - unique on `(accountId, ticker)`. `costBasisCents` for P&L. `targetPct` (0-1 ratio, nullable) drives the "Portfolio rebalancing" feature below - independent of any other field
 - `HistoricalBalance` - daily balance snapshots
 - `Transaction` - bank movements. `amountCents`: positive = credit, negative = debit. Deduplicated via `syncId`. Optional `categoryId` → `Category` (`onDelete: SetNull` - deleting a category un-categorizes its transactions instead of deleting them)
 - `Category` - user-defined spending category (name, hex `color`, optional `budgetCents`). `budgetCents` is a single ongoing monthly envelope, not a per-month history - editing it takes effect immediately, including retroactively on the current month's progress bar (no historical record of past amounts). `/budgets` computes each category's current-calendar-month spend via `prisma.transaction.groupBy({ by: ["categoryId"] })` filtered to `amountCents < 0` (debits only) - a `categoryId: null` bucket in that same query is the "uncategorized spend" figure. Clicking a category name links to `/budgets/[categoryId]`, a drill-down page listing every transaction (across all accounts) tagged with it, reusing `TransactionCategorySelect` so a mis-tagged row can be recategorized in place.

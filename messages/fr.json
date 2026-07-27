@@ -185,6 +185,15 @@
       "taxTreatmentDeferred": "Différé (PER, 401k…)",
       "taxReportLink": "Voir le rapport fiscal annuel →"
     },
+    "rebalancing": {
+      "title": "Rééquilibrage",
+      "currentVsTarget": "Actuel {current}% · Cible {target}%",
+      "pts": "pts",
+      "suggestBuy": "Acheter",
+      "suggestSell": "Vendre",
+      "approxShares": "≈ {count} part(s)",
+      "footnote": "Les cibles n'ont pas besoin de totaliser 100 % — une position sans cible définie est simplement exclue du plan de rééquilibrage."
+    },
     "loanDetail": {
       "amountBorrowed": "Montant emprunté",
       "remaining": "Capital restant dû",
@@ -616,6 +625,9 @@
     "costBasis": "Prix de revient total (€) — optionnel",
     "costBasisPlaceholder": "Montant total investi, ex: 5000.00",
     "taxHint": "Sert à calculer les plus-values et l'impôt latent.",
+    "targetPct": "Allocation cible (%) — optionnel",
+    "targetPctPlaceholder": "Ex: 30",
+    "targetPctHint": "Sert au rééquilibrage — laisse vide si cette position n'en fait pas partie.",
     "update": "Mettre à jour",
     "submit": "Ajouter"
   },

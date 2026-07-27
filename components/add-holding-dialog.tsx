@@ -15,6 +15,7 @@ type Holding = {
   quantity: { toString(): string };
   lastPriceCents: bigint;
   costBasisCents: bigint | null;
+  targetPct: number | null;
 };
 
 export function AddHoldingDialog({
@@ -109,6 +110,17 @@ export function AddHoldingDialog({
           }
         />
         <p className="text-xs text-[var(--muted)] -mt-2">{t("taxHint")}</p>
+        <Input
+          label={t("targetPct")}
+          name="targetPct"
+          type="number"
+          step="0.1"
+          min="0"
+          max="100"
+          placeholder={t("targetPctPlaceholder")}
+          defaultValue={existing?.targetPct != null ? (existing.targetPct * 100).toFixed(1) : ""}
+        />
+        <p className="text-xs text-[var(--muted)] -mt-2">{t("targetPctHint")}</p>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>
             {tc("cancel")}
