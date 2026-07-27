@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, PiggyBank, Repeat, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Wallet, PiggyBank, Repeat, Coins, BarChart3, Settings, LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 type SidebarProps = { showLogout?: boolean };
@@ -17,6 +17,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
     { href: "/accounts", label: t("accounts"), icon: Wallet, exact: false },
     { href: "/budgets", label: t("budgets"), icon: PiggyBank, exact: false },
     { href: "/recurring", label: t("recurring"), icon: Repeat, exact: false },
+    { href: "/income", label: t("income"), icon: Coins, exact: false },
     { href: "/analytics", label: t("analytics"), icon: BarChart3, exact: false },
     { href: "/settings", label: t("settings"), icon: Settings, exact: false },
   ];

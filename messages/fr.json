@@ -24,6 +24,7 @@
     "accounts": "Comptes",
     "budgets": "Budgets",
     "recurring": "Récurrent",
+    "income": "Revenus",
     "analytics": "Analytique",
     "settings": "Paramètres",
     "logout": "Déconnexion",
@@ -255,6 +256,28 @@
     "anchorDate": "Depuis le",
     "submit": "Enregistrer"
   },
+  "income": {
+    "title": "Revenus",
+    "subtitle": "Dividendes et intérêts perçus",
+    "emptyTitle": "Aucun revenu enregistré",
+    "emptyDescription": "Enregistrez les dividendes et intérêts perçus pour suivre vos revenus passifs réels.",
+    "create": "Ajouter un revenu",
+    "edit": "Modifier le revenu",
+    "submit": "Enregistrer",
+    "type": "Type",
+    "dividend": "Dividende",
+    "interest": "Intérêts",
+    "account": "Compte",
+    "ticker": "Titre (optionnel)",
+    "amount": "Montant brut (€)",
+    "taxWithheld": "Retenue à la source (€, optionnel)",
+    "date": "Date",
+    "ytdTitle": "Cette année",
+    "ytdDividends": "Dividendes nets",
+    "ytdInterest": "Intérêts nets",
+    "ytdTotal": "Total net",
+    "grossOfTax": "brut {gross}, −{tax} retenue"
+  },
   "analytics": {
     "title": "Analytique",
     "subtitle": "Analyse détaillée de votre patrimoine",
@@ -294,15 +317,10 @@
       "aria": "Objectif : {pct}%"
     },
     "passive": {
-      "title": "Revenus passifs estimés",
-      "perYear": "Par an",
-      "perMonth": "Par mois",
-      "perDay": "Par jour",
-      "tagline": "même quand tu dors",
-      "dividendsNet": "Dividendes (net) {amount}",
-      "dividendsGross": "brut {gross} − PFU 30%",
-      "interest": "Intérêts livrets {amount} (exonérés d'IR)",
-      "footnote": "Montants nets · Livrets (LEP 2,5 % · Livret Jeune 2,5 % · Livret A 1,5 % · LDDS 1,5 %) + TR cash 1,372 % net (2 % brut − PFU 31,4 %) + dividendes actions — ETFs capitalisants exclus"
+      "title": "Revenus perçus (cette année)",
+      "viewDetail": "Voir le détail →",
+      "emptyPrompt": "Aucun revenu enregistré pour l'instant.",
+      "emptyAction": "Suivre mes revenus →"
     },
     "charts": {
       "netWorthEvolution": "Évolution du patrimoine",

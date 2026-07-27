@@ -141,13 +141,18 @@ function holdingMarketValue(h: { quantity: Decimal; lastPriceCents: bigint }): b
 }
 
 export default async function AnalyticsPage() {
-  const [t, ta, tAlloc] = await Promise.all([
+  const [t, ta, tAlloc, tIncome] = await Promise.all([
     getTranslations("analytics"),
     getTranslations("accountTypes"),
     getTranslations("allocation"),
+    getTranslations("income"),
   ]);
 
-  const [accounts, allBalances, settings, yfData] = await Promise.all([
+  const currentYear = new Date().getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
+  const startOfNextYear = new Date(Date.UTC(currentYear + 1, 0, 1));
+
+  const [accounts, allBalances, settings, yfData, incomeEventsYtd] = await Promise.all([
     prisma.account.findMany({
       include: {
         institution: true,
@@ -159,6 +164,12 @@ export default async function AnalyticsPage() {
     prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
     // Fetch Yahoo Finance in parallel - ex-div dates + real yields (1h cache)
     fetchYFDividends(Object.values(ISIN_TO_YF_SYMBOL)),
+    // Real tracked income (IncomeEvent) - separate from the estimate below,
+    // which still feeds the dividend calendar further down this page.
+    prisma.incomeEvent.findMany({
+      where: { date: { gte: startOfYear, lt: startOfNextYear } },
+      select: { type: true, amountCents: true, taxWithheldCents: true },
+    }),
   ]);
 
   // ── Compute current values ──────────────────────────────────────────────
@@ -427,8 +438,22 @@ export default async function AnalyticsPage() {
   // Dividends: net after flat tax / social levies depending on account type
   // Savings interest: already net (Livret A, LDDS, LEP are income-tax-exempt in France)
   const annualPassiveCents = annualDividendsNetCents + annualInterestCents;
-  const dailyPassiveCents = Number(annualPassiveCents) / 365;
   const monthlyPassiveCents = Number(annualPassiveCents) / 12;
+
+  // ── Real tracked income (IncomeEvent, year-to-date) ─────────────────────
+  // This is what the "Passive income" card displays - real, user-entered
+  // events, not the estimate above (annualPassiveCents/annualDividendsCents/
+  // annualInterestCents survive untouched - the dividend calendar below still
+  // needs them).
+  const netIncomeCents = (e: { amountCents: bigint; taxWithheldCents: bigint | null }) =>
+    e.amountCents - (e.taxWithheldCents ?? BigInt(0));
+  const realYtdDividendsNetCents = incomeEventsYtd
+    .filter((e) => e.type === "DIVIDEND")
+    .reduce((sum, e) => sum + netIncomeCents(e), BigInt(0));
+  const realYtdInterestNetCents = incomeEventsYtd
+    .filter((e) => e.type === "INTEREST")
+    .reduce((sum, e) => sum + netIncomeCents(e), BigInt(0));
+  const realYtdPassiveNetCents = realYtdDividendsNetCents + realYtdInterestNetCents;
 
   // ── Dividend calendar ────────────────────────────────────────────────────
   const dividendCalendar = dividendRowsData
@@ -837,51 +862,46 @@ export default async function AnalyticsPage() {
               </div>
             </div>
 
-            {/* Passive income */}
-            {annualPassiveCents > BigInt(0) && (
-              <div className="pt-4 border-t border-[var(--border)]">
-                <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-3">
+            {/* Passive income - real, tracked (IncomeEvent), not the estimate below */}
+            <div className="pt-4 border-t border-[var(--border)]">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
                   {t("passive.title")}
                 </p>
+                <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0">
+                  {t("passive.viewDetail")}
+                </Link>
+              </div>
+              {realYtdPassiveNetCents > BigInt(0) ? (
                 <div className="grid grid-cols-3 gap-2 sm:gap-4">
                   <div>
-                    <p className="text-xs text-[var(--muted)] mb-1">{t("passive.perYear")}</p>
+                    <p className="text-xs text-[var(--muted)] mb-1">{tIncome("ytdDividends")}</p>
                     <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">
-                      {formatCurrency(annualPassiveCents, 0)}
+                      {formatCurrency(realYtdDividendsNetCents, 0)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--muted)] mb-1">{t("passive.perMonth")}</p>
+                    <p className="text-xs text-[var(--muted)] mb-1">{tIncome("ytdInterest")}</p>
                     <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">
-                      {formatCurrency(monthlyPassiveCents, 0)}
+                      {formatCurrency(realYtdInterestNetCents, 0)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--muted)] mb-1">{t("passive.perDay")}</p>
+                    <p className="text-xs text-[var(--muted)] mb-1">{tIncome("ytdTotal")}</p>
                     <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">
-                      {formatCurrency(dailyPassiveCents, 2)}
+                      {formatCurrency(realYtdPassiveNetCents, 0)}
                     </p>
-                    <p className="text-xs text-[var(--muted)] mt-0.5">{t("passive.tagline")}</p>
                   </div>
                 </div>
-                {annualDividendsCents > BigInt(0) && (
-                  <div className="mt-3 space-y-0.5">
-                    <p className="text-xs text-[var(--muted)] opacity-70">
-                      {t("passive.dividendsNet", { amount: formatCurrency(annualDividendsNetCents, 0) })}
-                      <span className="ml-1 opacity-60">{t("passive.dividendsGross", { gross: formatCurrency(annualDividendsCents, 0) })}</span>
-                    </p>
-                    {annualInterestCents > BigInt(0) && (
-                      <p className="text-xs text-[var(--muted)] opacity-70">
-                        {t("passive.interest", { amount: formatCurrency(annualInterestCents, 0) })}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <p className="text-xs text-[var(--muted)] mt-1 opacity-70">
-                  {t("passive.footnote")}
-                </p>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-[var(--muted)]">{t("passive.emptyPrompt")}</p>
+                  <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0">
+                    {t("passive.emptyAction")}
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── Charts ── */}

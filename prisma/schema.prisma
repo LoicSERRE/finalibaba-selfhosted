@@ -52,6 +52,7 @@ model Account {
   history             HistoricalBalance[]
   transactions        Transaction[]
   recurringTransactions RecurringTransaction[]
+  incomeEvents        IncomeEvent[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   gocardlessAccountId String?             @unique
@@ -139,6 +140,25 @@ model RecurringTransaction {
   createdAt     DateTime           @default(now())
 
   @@index([accountId])
+}
+
+enum IncomeType {
+  DIVIDEND
+  INTEREST
+}
+
+model IncomeEvent {
+  id               String     @id @default(cuid())
+  accountId        String
+  account          Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type             IncomeType
+  ticker           String?    // e.g. "AAPL" - ties a DIVIDEND to a specific holding; null for INTEREST or an unattributed dividend
+  amountCents      BigInt     // gross amount received
+  taxWithheldCents BigInt?    // foreign withholding tax (e.g. 15% US treaty rate) - null means none withheld
+  date             DateTime
+  createdAt        DateTime   @default(now())
+
+  @@index([accountId, date])
 }
 
 model UserSettings {

@@ -24,6 +24,7 @@
     "accounts": "Accounts",
     "budgets": "Budgets",
     "recurring": "Recurring",
+    "income": "Income",
     "analytics": "Analytics",
     "settings": "Settings",
     "logout": "Sign out",
@@ -255,6 +256,28 @@
     "anchorDate": "Since",
     "submit": "Save"
   },
+  "income": {
+    "title": "Income",
+    "subtitle": "Dividends and interest received",
+    "emptyTitle": "No income recorded yet",
+    "emptyDescription": "Record dividends and interest received to track your real passive income.",
+    "create": "Add income",
+    "edit": "Edit income",
+    "submit": "Save",
+    "type": "Type",
+    "dividend": "Dividend",
+    "interest": "Interest",
+    "account": "Account",
+    "ticker": "Ticker (optional)",
+    "amount": "Gross amount (€)",
+    "taxWithheld": "Withholding tax (€, optional)",
+    "date": "Date",
+    "ytdTitle": "This year",
+    "ytdDividends": "Net dividends",
+    "ytdInterest": "Net interest",
+    "ytdTotal": "Net total",
+    "grossOfTax": "gross {gross}, −{tax} withheld"
+  },
   "analytics": {
     "title": "Analytics",
     "subtitle": "Detailed analysis of your wealth",
@@ -294,15 +317,10 @@
       "aria": "Goal: {pct}%"
     },
     "passive": {
-      "title": "Estimated passive income",
-      "perYear": "Per year",
-      "perMonth": "Per month",
-      "perDay": "Per day",
-      "tagline": "even while you sleep",
-      "dividendsNet": "Dividends (net) {amount}",
-      "dividendsGross": "gross {gross} − 30% flat tax",
-      "interest": "Savings interest {amount} (income tax exempt)",
-      "footnote": "Net amounts · Savings accounts (LEP 2.5% · Livret Jeune 2.5% · Livret A 1.5% · LDDS 1.5%) + TR cash 1.372% net (2% gross − 31.4% flat tax) + stock dividends — capitalizing ETFs excluded"
+      "title": "Income received (this year)",
+      "viewDetail": "View detail →",
+      "emptyPrompt": "No income recorded yet.",
+      "emptyAction": "Track my income →"
     },
     "charts": {
       "netWorthEvolution": "Net worth history",
