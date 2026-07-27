@@ -17,7 +17,9 @@
 - **Budgets & categories** - categorize transactions, set monthly budget envelopes, bulk-categorize recurring spend
 - **Recurring transactions** - auto-detected subscriptions and regular income, 90-day cash-flow projection, missed-payment alerts
 - **Income tracking** - record dividends and interest received as real events, separate from balance snapshots
-- **Analytics** - savings rate, survival runway, sector exposure, passive income, CAGR per account
+- **Multi-currency** - hold positions in USD, GBP, or CHF, converted to EUR automatically
+- **Analytics** - savings rate, survival runway, sector exposure, passive income, CAGR per account, benchmark comparison (MSCI World / S&P 500 / CAC 40), portfolio rebalancing suggestions
+- **Annual tax report** - realized gains, dividend income, and taxable events for the year, exportable
 - **CSV import & backup/restore** - bulk-import transactions/balance history for accounts without auto-sync; one-command database export and restore
 - **Automatic sync** (optional) - Trade Republic (18 EU countries) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
 - **English & French UI** - language auto-detected from browser, switchable in Settings

@@ -119,6 +119,7 @@ lib/
   actions/            Server Actions (all DB mutations go here)
   auth.ts             NextAuth config + in-memory rate limiter
   csv-import.ts       CSV parsing/validation shared by transaction & balance-history importers
+  exchange-rate.ts    fetchExchangeRateToEur() - USD/GBP/CHF→EUR via Yahoo Finance
   format.ts           Monetary helpers: cents↔Decimal, formatCurrency, formatPercent
   gocardless.ts       GoCardless API client (token cache, typed fetch helpers)
   institutions.ts     Bank/broker name → favicon domain mapping (used for logos)
@@ -288,6 +289,15 @@ Before this feature, selling a holding meant retyping a smaller `quantity`/`cost
 - The "Rééquilibrage" section on the account detail page (only shown when at least one holding has a target set) computes, per targeted holding: drift in points (`pct - targetPct*100`) and a suggested trade (`driftValueCents = marketValueCents - accountTotal*targetPct`; positive → suggest selling that amount, negative → suggest buying it), plus an approximate share count from `driftValueCents / lastPriceCents`.
 - **Informational only** - the suggestion is displayed as text, not wired to pre-fill `AddHoldingDialog`/`SellHoldingDialog` (neither currently accepts external suggested-quantity props, and both are already one scroll up in the same holdings table for the user to act on manually). Keeps this change to one field + one read-only section, no changes to two already-working dialogs' APIs.
 
+### Multi-currency
+
+`Holding` positions can be entered in USD, GBP, or CHF and are converted to EUR **once, at entry time** - `lastPriceCents`/`costBasisCents` stay exactly what they've always been (plain EUR cents), so every existing calculation (net worth, tax, rebalancing, the tax report, the 3 chart components) keeps working completely unmodified. This is deliberately narrower than a "live multi-currency ledger": holdings aren't live-refreshed today either except via sync, so a snapshot-on-entry FX rate matches the app's existing "manually update the price when you check in" paradigm.
+
+- `lib/exchange-rate.ts`'s `fetchExchangeRateToEur(currency)` reuses the same unauthenticated Yahoo Finance chart endpoint/headers/`revalidate: 3600` caching convention as the dividend/benchmark fetches in `app/analytics/page.tsx`, via the `EURUSD=X`/`EURGBP=X`/`EURCHF=X` pairs (Yahoo quotes these as "X per 1 EUR", so the raw price is inverted to get "EUR per 1 X"). Extracted to `lib/` rather than kept page-local since it's the first Yahoo fetch called from a Server Action rather than a page.
+- `upsertHolding` (`lib/actions/holdings.ts`) reads `currency` from the form (default `"EUR"`, unchanged path - the 3 new fields stay `null`). For a foreign currency, it fetches the rate and **throws if the rate can't be fetched** - no silent fallback to a stale/wrong rate - then stores `nativePriceCents`/`nativeCostBasisCents` (exactly what the user typed) and `fxRateToEur` (the rate captured at entry time) alongside the EUR-converted `lastPriceCents`/`costBasisCents`. Switching a holding's currency back to EUR on an edit nulls out all three native fields.
+- `components/add-holding-dialog.tsx`'s price/cost-basis inputs pre-fill from `nativePriceCents`/`nativeCostBasisCents` when set (not `lastPriceCents`) so re-opening the edit dialog on a foreign-currency holding shows back exactly what was typed (e.g. "150.00"), not a lossy back-converted approximation.
+- The holdings table (`app/accounts/[id]/page.tsx`) shows a small muted currency-code badge next to the ticker (e.g. "AAPL · USD") when `currency !== "EUR"` - no new table column, to avoid the mobile-width concerns already worked through for this same table (see "Portfolio rebalancing" above).
+
 ### Data model
 
 - `Institution` → many `Account`
@@ -296,7 +306,7 @@ Before this feature, selling a holding meant retyping a smaller `quantity`/`cost
   - Investment/Crypto: `Holding` (ticker + `Decimal` quantity) + live price at runtime. `investmentSubtype` = `"PEA"` or `"CTO"` (cosmetic label only). `taxTreatment` (`TaxTreatment` enum) + `taxRatePct` drive the actual latent-tax rate - see "Tax treatment" below
   - Real Estate & Automobile: `manualValueCents` + optional `liabilityCents`
   - LOAN: capital computed at runtime via `calcCurrentCapital()` from `lib/loan.ts`
-- `Holding` - unique on `(accountId, ticker)`. `costBasisCents` for P&L. `targetPct` (0-1 ratio, nullable) drives the "Portfolio rebalancing" feature below - independent of any other field
+- `Holding` - unique on `(accountId, ticker)`. `costBasisCents` for P&L. `targetPct` (0-1 ratio, nullable) drives the "Portfolio rebalancing" feature below - independent of any other field. `currency` (`HoldingCurrency` enum, default `EUR`) + `nativePriceCents`/`nativeCostBasisCents`/`fxRateToEur` (all null when `currency = EUR`) drive "Multi-currency" below - `lastPriceCents`/`costBasisCents` are always EUR regardless of `currency`
 - `HistoricalBalance` - daily balance snapshots
 - `Transaction` - bank movements. `amountCents`: positive = credit, negative = debit. Deduplicated via `syncId`. Optional `categoryId` → `Category` (`onDelete: SetNull` - deleting a category un-categorizes its transactions instead of deleting them)
 - `Category` - user-defined spending category (name, hex `color`, optional `budgetCents`). `budgetCents` is a single ongoing monthly envelope, not a per-month history - editing it takes effect immediately, including retroactively on the current month's progress bar (no historical record of past amounts). `/budgets` computes each category's current-calendar-month spend via `prisma.transaction.groupBy({ by: ["categoryId"] })` filtered to `amountCents < 0` (debits only) - a `categoryId: null` bucket in that same query is the "uncategorized spend" figure. Clicking a category name links to `/budgets/[categoryId]`, a drill-down page listing every transaction (across all accounts) tagged with it, reusing `TransactionCategorySelect` so a mis-tagged row can be recategorized in place.

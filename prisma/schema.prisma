@@ -18,6 +18,13 @@ enum AccountType {
   LOAN
 }
 
+enum HoldingCurrency {
+  EUR
+  USD
+  GBP
+  CHF
+}
+
 enum TaxTreatment {
   EXEMPT   // never taxed on gains (foreign ISA/Roth IRA equivalents)
   DEFERRED // taxed only on withdrawal (PER/401k) - not taxed for latent/net-worth purposes today
@@ -78,6 +85,10 @@ model Holding {
   lastPriceCents BigInt   @default(0)
   costBasisCents BigInt?  // total acquisition cost in cents (null = unknown)
   targetPct      Float?   // 0-1 ratio, target share of the account's total value - null means not part of the rebalancing plan
+  currency             HoldingCurrency @default(EUR)
+  nativePriceCents     BigInt?         // price as entered, in `currency` - null when currency = EUR (lastPriceCents IS the native price)
+  nativeCostBasisCents BigInt?         // cost basis as entered, in `currency` - same null convention
+  fxRateToEur          Float?          // EUR per 1 unit of `currency`, captured at entry time - null when currency = EUR
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

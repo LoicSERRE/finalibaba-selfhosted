@@ -154,6 +154,9 @@ export default async function AccountDetailPage({
     lastPriceCents: bigint;
     costBasisCents: bigint | null;
     targetPct: number | null;
+    currency: string;
+    nativePriceCents: bigint | null;
+    nativeCostBasisCents: bigint | null;
     marketValueCents: bigint;
     gainCents: bigint | null;       // null = no cost basis known
     gainPct: number | null;
@@ -382,7 +385,10 @@ export default async function AccountDetailPage({
                   >
                     <td className="px-4 py-4">
                       <p className="font-medium text-[var(--foreground)]">{h.name || h.ticker}</p>
-                      <p className="text-xs text-[var(--muted)] mt-0.5">{h.ticker}</p>
+                      <p className="text-xs text-[var(--muted)] mt-0.5">
+                        {h.ticker}
+                        {h.currency !== "EUR" && ` · ${h.currency}`}
+                      </p>
                     </td>
                     <td className="hidden sm:table-cell px-4 py-4 tabular-nums text-[var(--foreground)]">
                       {new Decimal(h.quantity.toString()).toSignificantDigits(6).toString()}
