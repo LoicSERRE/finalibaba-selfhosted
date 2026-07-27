@@ -17,7 +17,9 @@
     "noData": "—",
     "personal": "Personal",
     "unknown": "Unknown",
-    "optional": "optional"
+    "optional": "optional",
+    "previous": "Previous",
+    "next": "Next"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -180,7 +182,8 @@
       "taxTreatmentLabel": "Tax treatment",
       "taxTreatmentTaxable": "Taxable",
       "taxTreatmentExempt": "Exempt (ISA, Roth IRA…)",
-      "taxTreatmentDeferred": "Deferred (401k, PER…)"
+      "taxTreatmentDeferred": "Deferred (401k, PER…)",
+      "taxReportLink": "View the annual tax report →"
     },
     "loanDetail": {
       "amountBorrowed": "Borrowed amount",
@@ -282,6 +285,33 @@
     "ytdTotal": "Net total",
     "grossOfTax": "gross {gross}, −{tax} withheld"
   },
+  "taxReport": {
+    "title": "Annual tax report",
+    "subtitle": "Realized gains, dividends, and interest received, by year",
+    "emptyTitle": "No data for this year",
+    "emptyDescription": "Record a sale or an income event to see this year's report.",
+    "realizedGains": "Realized gains",
+    "estimatedTaxOnGains": "Estimated tax on gains",
+    "dividendsGross": "Gross dividends",
+    "dividendsNet": "Net dividends",
+    "interestGross": "Gross interest",
+    "interestNet": "Net interest",
+    "disclaimer": "Estimate for informational purposes, not an official tax document. Cost basis computed using the average-cost method.",
+    "dividendIncome": "Dividend income",
+    "interestIncome": "Interest income",
+    "colDate": "Date",
+    "colTicker": "Ticker",
+    "colAccount": "Account",
+    "colProceeds": "Proceeds",
+    "colCostBasis": "Cost basis",
+    "colGain": "Gain",
+    "colTax": "Tax",
+    "colValue": "Amount",
+    "export": "Export",
+    "mdSummary": "Summary",
+    "mdIndicator": "Indicator",
+    "mdValue": "Value"
+  },
   "analytics": {
     "title": "Analytics",
     "subtitle": "Detailed analysis of your wealth",
@@ -324,7 +354,8 @@
       "title": "Income received (this year)",
       "viewDetail": "View detail →",
       "emptyPrompt": "No income recorded yet.",
-      "emptyAction": "Track my income →"
+      "emptyAction": "Track my income →",
+      "taxReportLink": "Annual tax report →"
     },
     "charts": {
       "netWorthEvolution": "Net worth history",
@@ -578,6 +609,16 @@
     "taxHint": "Used to compute gains and latent tax.",
     "update": "Update",
     "submit": "Add"
+  },
+  "sellHolding": {
+    "title": "Sell — {ticker}",
+    "trigger": "Sell",
+    "quantitySold": "Quantity sold (of {available})",
+    "proceeds": "Sale proceeds (€)",
+    "costBasis": "Cost basis of sold portion (€)",
+    "date": "Sale date",
+    "gainPreview": "Realized gain:",
+    "submit": "Record sale"
   },
   "addRealEstate": {
     "title": "Add a property",

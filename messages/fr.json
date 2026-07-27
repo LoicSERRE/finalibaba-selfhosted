@@ -17,7 +17,9 @@
     "noData": "—",
     "personal": "Personnel",
     "unknown": "Inconnu",
-    "optional": "optionnel"
+    "optional": "optionnel",
+    "previous": "Précédent",
+    "next": "Suivant"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -180,7 +182,8 @@
       "taxTreatmentLabel": "Régime fiscal",
       "taxTreatmentTaxable": "Imposable",
       "taxTreatmentExempt": "Exonéré (ISA, Roth IRA…)",
-      "taxTreatmentDeferred": "Différé (PER, 401k…)"
+      "taxTreatmentDeferred": "Différé (PER, 401k…)",
+      "taxReportLink": "Voir le rapport fiscal annuel →"
     },
     "loanDetail": {
       "amountBorrowed": "Montant emprunté",
@@ -282,6 +285,33 @@
     "ytdTotal": "Total net",
     "grossOfTax": "brut {gross}, −{tax} retenue"
   },
+  "taxReport": {
+    "title": "Rapport fiscal annuel",
+    "subtitle": "Gains réalisés, dividendes et intérêts perçus, par année",
+    "emptyTitle": "Aucune donnée pour cette année",
+    "emptyDescription": "Enregistrez une vente ou un revenu pour voir apparaître le rapport de cette année.",
+    "realizedGains": "Plus-values réalisées",
+    "estimatedTaxOnGains": "Impôt estimé sur les plus-values",
+    "dividendsGross": "Dividendes bruts",
+    "dividendsNet": "Dividendes nets",
+    "interestGross": "Intérêts bruts",
+    "interestNet": "Intérêts nets",
+    "disclaimer": "Estimation à titre informatif, pas un document fiscal officiel. Prix de revient calculé au coût moyen pondéré.",
+    "dividendIncome": "Dividendes perçus",
+    "interestIncome": "Intérêts perçus",
+    "colDate": "Date",
+    "colTicker": "Titre",
+    "colAccount": "Compte",
+    "colProceeds": "Produit de la vente",
+    "colCostBasis": "Prix de revient",
+    "colGain": "Plus-value",
+    "colTax": "Impôt",
+    "colValue": "Montant",
+    "export": "Exporter",
+    "mdSummary": "Résumé",
+    "mdIndicator": "Indicateur",
+    "mdValue": "Valeur"
+  },
   "analytics": {
     "title": "Analytique",
     "subtitle": "Analyse détaillée de votre patrimoine",
@@ -324,7 +354,8 @@
       "title": "Revenus perçus (cette année)",
       "viewDetail": "Voir le détail →",
       "emptyPrompt": "Aucun revenu enregistré pour l'instant.",
-      "emptyAction": "Suivre mes revenus →"
+      "emptyAction": "Suivre mes revenus →",
+      "taxReportLink": "Rapport fiscal annuel →"
     },
     "charts": {
       "netWorthEvolution": "Évolution du patrimoine",
@@ -578,6 +609,16 @@
     "taxHint": "Sert à calculer les plus-values et l'impôt latent.",
     "update": "Mettre à jour",
     "submit": "Ajouter"
+  },
+  "sellHolding": {
+    "title": "Vendre — {ticker}",
+    "trigger": "Vendre",
+    "quantitySold": "Quantité vendue (sur {available})",
+    "proceeds": "Produit de la vente (€)",
+    "costBasis": "Prix de revient de la part vendue (€)",
+    "date": "Date de la vente",
+    "gainPreview": "Plus-value réalisée :",
+    "submit": "Enregistrer la vente"
   },
   "addRealEstate": {
     "title": "Ajouter un bien immobilier",

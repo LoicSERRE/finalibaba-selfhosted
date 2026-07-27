@@ -48,7 +48,7 @@ export async function deleteHolding(id: string, accountId: string) {
   revalidatePath("/");
 }
 
-async function refreshAccountBalance(accountId: string) {
+export async function refreshAccountBalance(accountId: string) {
   const holdings = await prisma.holding.findMany({ where: { accountId } });
   const totalCents = holdings.reduce((sum, h) => {
     const value = new Decimal(h.quantity.toString())

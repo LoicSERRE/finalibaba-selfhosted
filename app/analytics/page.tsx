@@ -895,6 +895,9 @@ export default async function AnalyticsPage() {
                   </Link>
                 </div>
               )}
+              <Link href="/tax-report" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3">
+                {t("passive.taxReportLink")}
+              </Link>
             </div>
           </div>
 

@@ -61,6 +61,7 @@ model Account {
   transactions        Transaction[]
   recurringTransactions RecurringTransaction[]
   incomeEvents        IncomeEvent[]
+  sales               Sale[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   gocardlessAccountId String?             @unique
@@ -165,6 +166,20 @@ model IncomeEvent {
   taxWithheldCents BigInt?    // foreign withholding tax (e.g. 15% US treaty rate) - null means none withheld
   date             DateTime
   createdAt        DateTime   @default(now())
+
+  @@index([accountId, date])
+}
+
+model Sale {
+  id             String   @id @default(cuid())
+  accountId      String
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ticker         String
+  quantity       Decimal  @db.Decimal(24, 10)
+  proceedsCents  BigInt   // gross sale proceeds
+  costBasisCents BigInt   // cost basis of the sold portion (average-cost method)
+  date           DateTime
+  createdAt      DateTime @default(now())
 
   @@index([accountId, date])
 }

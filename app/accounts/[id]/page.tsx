@@ -11,6 +11,7 @@ import { BalanceHistoryChart } from "@/components/balance-history-chart";
 import { UpdateRealEstateDialog } from "@/components/update-real-estate-dialog";
 import { UpdateAutomobileDialog } from "@/components/update-automobile-dialog";
 import { AddHoldingDialog } from "@/components/add-holding-dialog";
+import { SellHoldingDialog } from "@/components/sell-holding-dialog";
 import { DeleteAccountButton } from "@/components/delete-account-button";
 import { ImportTransactionsDialog } from "@/components/import-transactions-dialog";
 import { ImportBalanceHistoryDialog } from "@/components/import-balance-history-dialog";
@@ -450,11 +451,14 @@ export default async function AccountDetailPage({
                     </td>
                     {!isSynced && (
                       <td className="px-4 py-4">
-                        <AddHoldingDialog
-                          accountId={account.id}
-                          accountName={account.name}
-                          existing={h}
-                        />
+                        <div className="flex flex-wrap items-center gap-1">
+                          <SellHoldingDialog accountId={account.id} holding={h} />
+                          <AddHoldingDialog
+                            accountId={account.id}
+                            accountName={account.name}
+                            existing={h}
+                          />
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -580,6 +584,9 @@ export default async function AccountDetailPage({
                 {td("fiscalSummary.save")}
               </button>
             </form>
+            <Link href="/tax-report" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3">
+              {td("fiscalSummary.taxReportLink")}
+            </Link>
           </div>
         </div>
       )}
