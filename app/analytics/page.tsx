@@ -132,6 +132,76 @@ async function fetchYFDividends(symbols: string[]): Promise<Record<string, YFDiv
   return Object.fromEntries(entries);
 }
 
+// Reference indices for the benchmark comparison. URTH (iShares MSCI World
+// ETF) is the standard free proxy for the MSCI World index itself - Yahoo
+// has no clean "^" ticker for it, unlike S&P 500/CAC 40.
+const BENCHMARK_SYMBOLS = {
+  msciWorld: "URTH",
+  sp500: "^GSPC",
+  cac40: "^FCHI",
+} as const;
+
+type PricePoint = { date: Date; close: number };
+
+// Same unauthenticated chart endpoint as fetchYFDividendForSymbol, but reads
+// the OHLC close/timestamp arrays that endpoint also returns instead of
+// events.dividends - used to compute a benchmark index's own CAGR over an
+// arbitrary lookback window, the same snapshot-to-snapshot way investCAGR
+// is computed for the portfolio itself.
+async function fetchYFPriceHistory(symbol: string): Promise<PricePoint[]> {
+  try {
+    const res = await fetch(
+      `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1mo&range=10y`,
+      {
+        headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
+        next: { revalidate: 3600 },
+      }
+    );
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const result = data?.chart?.result?.[0];
+    const timestamps = (result?.timestamp ?? []) as number[];
+    const closes = (result?.indicators?.quote?.[0]?.close ?? []) as (number | null)[];
+
+    const points: PricePoint[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const close = closes[i];
+      if (close != null) points.push({ date: new Date(timestamps[i] * 1000), close });
+    }
+    return points;
+  } catch {
+    return [];
+  }
+}
+
+/** Closest data point to `target`, or null if the series is empty. */
+function priceAt(series: PricePoint[], target: Date): number | null {
+  if (series.length === 0) return null;
+  let closest = series[0];
+  let minDiffMs = Math.abs(series[0].date.getTime() - target.getTime());
+  for (const p of series) {
+    const diffMs = Math.abs(p.date.getTime() - target.getTime());
+    if (diffMs < minDiffMs) {
+      minDiffMs = diffMs;
+      closest = p;
+    }
+  }
+  return closest.close;
+}
+
+/** Same CAGR(r) = (end/start)^(1/years) − 1 formula used for investCAGR. */
+function computeIndexCAGR(series: PricePoint[], startDate: Date, now: Date): number | null {
+  const startPrice = priceAt(series, startDate);
+  const endPrice = priceAt(series, now);
+  if (startPrice === null || endPrice === null || startPrice <= 0) return null;
+
+  const years = (now.getTime() - startDate.getTime()) / (365.25 * 86_400_000);
+  if (years < 1 / 12) return null;
+
+  return (Math.pow(endPrice / startPrice, 1 / years) - 1) * 100;
+}
+
 function holdingMarketValue(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
   return BigInt(
     new Decimal(h.quantity.toString())
@@ -153,7 +223,7 @@ export default async function AnalyticsPage() {
   const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
   const startOfNextYear = new Date(Date.UTC(currentYear + 1, 0, 1));
 
-  const [accounts, allBalances, settings, yfData, incomeEventsYtd] = await Promise.all([
+  const [accounts, allBalances, settings, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History] = await Promise.all([
     prisma.account.findMany({
       include: {
         institution: true,
@@ -171,6 +241,10 @@ export default async function AnalyticsPage() {
       where: { date: { gte: startOfYear, lt: startOfNextYear } },
       select: { type: true, amountCents: true, taxWithheldCents: true },
     }),
+    // Benchmark comparison - historical closes for the 3 reference indices (1h cache)
+    fetchYFPriceHistory(BENCHMARK_SYMBOLS.msciWorld),
+    fetchYFPriceHistory(BENCHMARK_SYMBOLS.sp500),
+    fetchYFPriceHistory(BENCHMARK_SYMBOLS.cac40),
   ]);
 
   // ── Compute current values ──────────────────────────────────────────────
@@ -392,6 +466,7 @@ export default async function AnalyticsPage() {
   const nowMs = Date.now();
   const investAllHaveDates = investPerfRows.length > 0 && investPerfRows.every((r) => r.investmentStartDate !== null);
   let investCAGR: number | null = null;
+  let investCAGRWeightedYears: number | null = null;
   if (investAllHaveDates && investTotalCostBasis > BigInt(0)) {
     // Duration in years per account, weighted by cost basis
     const weightedYears = investPerfRows.reduce((sum, r) => {
@@ -401,8 +476,25 @@ export default async function AnalyticsPage() {
     if (weightedYears >= 1 / 12) {
       const totalReturn = Number(investTotalValue) / Number(investTotalCostBasis);
       investCAGR = (Math.pow(totalReturn, 1 / weightedYears) - 1) * 100;
+      investCAGRWeightedYears = weightedYears;
     }
   }
+
+  // ── Benchmark comparison ─────────────────────────────────────────────────
+  // Same lookback window as investCAGR, applied to 3 reference indices - a
+  // point-in-time comparison (two price snapshots), not a historical chart,
+  // for the same reason investCAGR itself isn't a smooth curve (see lib/tax
+  // report/CLAUDE.md note: investment HistoricalBalance snapshots are
+  // event-driven, not scheduled, so there's no reliable daily series here).
+  const benchmarkNow = new Date(nowMs);
+  const benchmarkCAGRs =
+    investCAGRWeightedYears !== null
+      ? {
+          msciWorld: computeIndexCAGR(msciWorldHistory, new Date(nowMs - investCAGRWeightedYears * 365.25 * 86_400_000), benchmarkNow),
+          sp500: computeIndexCAGR(sp500History, new Date(nowMs - investCAGRWeightedYears * 365.25 * 86_400_000), benchmarkNow),
+          cac40: computeIndexCAGR(cac40History, new Date(nowMs - investCAGRWeightedYears * 365.25 * 86_400_000), benchmarkNow),
+        }
+      : null;
 
   const netWorth = grossAssets - totalLiabilities;
   const netWorthAfterTax = netWorth - totalLatentTax;
@@ -1122,6 +1214,54 @@ export default async function AnalyticsPage() {
                   <> · {t("performance.addDateHint")}</>
                 )}
               </p>
+            </div>
+          )}
+
+          {/* ── Comparaison aux indices ── */}
+          {benchmarkCAGRs !== null && investCAGR !== null && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
+              <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+                {t("benchmark.title")}
+              </h2>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[var(--foreground)]">{t("benchmark.yourPortfolio")}</span>
+                  <span className={`text-sm font-semibold tabular-nums ${investCAGR >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+                    {investCAGR >= 0 ? "+" : ""}
+                    {investCAGR.toFixed(1)}%
+                  </span>
+                </div>
+                {(
+                  [
+                    ["msciWorld", benchmarkCAGRs.msciWorld],
+                    ["sp500", benchmarkCAGRs.sp500],
+                    ["cac40", benchmarkCAGRs.cac40],
+                  ] as const
+                ).map(([key, indexCAGR]) =>
+                  indexCAGR !== null ? (
+                    <div key={key} className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
+                      <span className="text-sm text-[var(--muted)]">{t(`benchmark.${key}`)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm tabular-nums text-[var(--muted)]">
+                          {indexCAGR >= 0 ? "+" : ""}
+                          {indexCAGR.toFixed(1)}%
+                        </span>
+                        <span
+                          className={`text-xs font-medium tabular-nums px-1.5 py-0.5 rounded ${
+                            investCAGR >= indexCAGR
+                              ? "bg-[var(--positive)]/15 text-[var(--positive)]"
+                              : "bg-[var(--negative)]/15 text-[var(--negative)]"
+                          }`}
+                        >
+                          {investCAGR >= indexCAGR ? "+" : ""}
+                          {(investCAGR - indexCAGR).toFixed(1)} {t("benchmark.pts")}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null
+                )}
+              </div>
+              <p className="text-xs text-[var(--muted)] mt-4 opacity-70">{t("benchmark.footnote")}</p>
             </div>
           )}
 

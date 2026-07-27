@@ -393,6 +393,15 @@
       "cagr": "CAGR = compound annual return since start date · Net = gross after latent taxes (PEA {pea}% · CTO {cto}%) — not yet realized.",
       "addDateHint": "Set the start date on each account page to enable CAGR."
     },
+    "benchmark": {
+      "title": "Benchmark comparison",
+      "yourPortfolio": "Your portfolio",
+      "msciWorld": "MSCI World (URTH proxy)",
+      "sp500": "S&P 500",
+      "cac40": "CAC 40",
+      "pts": "pts",
+      "footnote": "Point-in-time comparison over the same window as your portfolio's CAGR, not a historical chart. MSCI World approximated via the URTH ETF (~0.24% expense ratio), since Yahoo Finance has no direct ticker for the index itself."
+    },
     "radar": {
       "title": "Allocation radar",
       "safeVsRisky": "Safe vs Risky",

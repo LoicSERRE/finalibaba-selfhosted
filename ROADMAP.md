@@ -38,7 +38,7 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 *Power features for investors, and making the tax layer work correctly regardless of where you live.*
 
-- [ ] **Benchmark comparison** - overlay portfolio CAGR against a reference index (MSCI World, S&P 500, CAC 40)
+- [x] **Benchmark comparison** - overlay portfolio CAGR against a reference index (MSCI World, S&P 500, CAC 40)
 - [ ] **Portfolio rebalancing** - define a target allocation per account, show current drift, suggest trades to rebalance
 - [X] **Interest & dividend income tracking** - record interest earned on savings accounts (taxable or exempt) and dividends received on investment accounts as discrete income events, separate from balance snapshots; display as income in analytics
 - [X] **Flexible account tax treatment** - each investment account gets a user-defined tax status (tax-exempt like PEA/ISA/Roth IRA, tax-deferred like PER/401k, or fully taxable); latent tax calculation uses the account's own status instead of a global type - makes the app correct for non-French users who have no PEA equivalent

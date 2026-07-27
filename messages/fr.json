@@ -393,6 +393,15 @@
       "cagr": "CAGR = rendement annuel composé depuis la date de début · Net = brut après impôts latents (PEA {pea}% · CTO {cto}%) — non encore réalisés.",
       "addDateHint": "Renseigne la date de début dans chaque page de compte pour activer le CAGR."
     },
+    "benchmark": {
+      "title": "Comparaison aux indices",
+      "yourPortfolio": "Votre portefeuille",
+      "msciWorld": "MSCI World (proxy URTH)",
+      "sp500": "S&P 500",
+      "cac40": "CAC 40",
+      "pts": "pts",
+      "footnote": "Comparaison ponctuelle sur la même durée que le CAGR de votre portefeuille, pas une courbe historique. MSCI World approximé via l'ETF URTH (frais de gestion ~0,24 %), faute de ticker Yahoo Finance direct pour l'indice."
+    },
     "radar": {
       "title": "Radar d'allocation",
       "safeVsRisky": "Garantis vs Risqués",
