@@ -12,6 +12,7 @@ import {
   type AnalyticsExportData,
 } from "@/components/export-analytics-button";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
+import { getAccountTaxRate } from "@/lib/tax";
 import { getTranslations } from "next-intl/server";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -251,14 +252,7 @@ export default async function AnalyticsPage() {
     let accountTax = BigInt(0);
     let hasBasis = false;
 
-    const taxRate =
-      account.type === "CRYPTO"
-        ? settings.taxRateCrypto
-        : account.type === "INVESTMENT" && account.investmentSubtype === "PEA"
-        ? settings.taxRatePea
-        : account.type === "INVESTMENT" && account.investmentSubtype === "CTO"
-        ? settings.taxRateCto
-        : null;
+    const taxRate = getAccountTaxRate(account);
 
     if (account.type === "REAL_ESTATE" || account.type === "AUTOMOBILE") {
       value = account.manualValueCents ?? BigInt(0);

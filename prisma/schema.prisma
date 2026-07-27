@@ -18,6 +18,12 @@ enum AccountType {
   LOAN
 }
 
+enum TaxTreatment {
+  EXEMPT   // never taxed on gains (foreign ISA/Roth IRA equivalents)
+  DEFERRED // taxed only on withdrawal (PER/401k) - not taxed for latent/net-worth purposes today
+  TAXABLE  // taxed now, at this account's own taxRatePct
+}
+
 model Institution {
   id                      String    @id @default(cuid())
   name                    String    @unique
@@ -43,6 +49,8 @@ model Account {
   insuranceMonthlyCents BigInt?           // AUTOMOBILE + LOAN: monthly insurance premium
   investmentSubtype   String?             // "PEA" | "CTO" - only for INVESTMENT type
   investmentStartDate DateTime?           // Investment start date (manual entry)
+  taxTreatment        TaxTreatment        @default(TAXABLE) // INVESTMENT/CRYPTO only - see TaxTreatment
+  taxRatePct          Float?              // 0-1 ratio, meaningful only when taxTreatment = TAXABLE
   loanAmountCents     BigInt?             // LOAN: initial borrowed amount
   loanTaeg            Float?              // LOAN: annual interest rate in % (e.g. 5.47)
   loanDurationMonths  Int?                // LOAN: total duration in months

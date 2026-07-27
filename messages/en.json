@@ -176,7 +176,11 @@
       "taxLabel": "Latent tax ({rate}%)",
       "netAfterTax": "Net value after taxes",
       "annualizedHint": "Used for annualized return in Analytics",
-      "save": "Save"
+      "save": "Save",
+      "taxTreatmentLabel": "Tax treatment",
+      "taxTreatmentTaxable": "Taxable",
+      "taxTreatmentExempt": "Exempt (ISA, Roth IRA…)",
+      "taxTreatmentDeferred": "Deferred (401k, PER…)"
     },
     "loanDetail": {
       "amountBorrowed": "Borrowed amount",
@@ -551,6 +555,11 @@
     "typeMealVoucher": "Meal vouchers",
     "typeRealEstate": "Real estate",
     "typeAutomobile": "Auto / Vehicle",
+    "taxTreatment": "Tax treatment",
+    "taxTreatmentTaxable": "Taxable",
+    "taxTreatmentExempt": "Exempt (ISA, Roth IRA…)",
+    "taxTreatmentDeferred": "Deferred (401k, PER…)",
+    "taxRatePct": "Tax rate (%)",
     "creating": "Creating…",
     "submit": "Create",
     "addFirst": "Add an institution in Settings first."

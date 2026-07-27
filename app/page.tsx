@@ -9,26 +9,22 @@ import { InstitutionLogo } from "@/components/institution-logo";
 import Link from "next/link";
 import Decimal from "decimal.js";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
+import { getAccountTaxRate } from "@/lib/tax";
 import { getInstitutionLogoUrl } from "@/lib/institutions";
 import { getTranslations } from "next-intl/server";
 
 async function getDashboardData() {
-  const [accounts, settings] = await Promise.all([
-    prisma.account.findMany({
-      include: {
-        institution: true,
-        holdings: true,
-        history: {
-          orderBy: { recordedAt: "desc" },
-          take: 1,
-        },
+  const accounts = await prisma.account.findMany({
+    include: {
+      institution: true,
+      holdings: true,
+      history: {
+        orderBy: { recordedAt: "desc" },
+        take: 1,
       },
-      orderBy: { name: "asc" },
-    }),
-    prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
-  ]);
-
-  const TAX_RATES = { PEA: settings.taxRatePea, CTO: settings.taxRateCto, CRYPTO: settings.taxRateCrypto };
+    },
+    orderBy: { name: "asc" },
+  });
 
   let grossAssets = BigInt(0);
   let totalLiabilities = BigInt(0);
@@ -84,14 +80,7 @@ async function getDashboardData() {
       }, BigInt(0));
       // Latent tax on net gain
       if (hasBasis) {
-        const taxRate =
-          account.type === "CRYPTO"
-            ? TAX_RATES.CRYPTO
-            : account.investmentSubtype === "PEA"
-            ? TAX_RATES.PEA
-            : account.investmentSubtype === "CTO"
-            ? TAX_RATES.CTO
-            : null;
+        const taxRate = getAccountTaxRate(account);
         if (taxRate !== null && accountGain > BigInt(0)) {
           totalLatentTax += BigInt(Math.round(Number(accountGain) * taxRate));
         }

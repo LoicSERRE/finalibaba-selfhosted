@@ -118,11 +118,16 @@ components/
 lib/
   actions/            Server Actions (all DB mutations go here)
   auth.ts             NextAuth config + in-memory rate limiter
+  csv-import.ts       CSV parsing/validation shared by transaction & balance-history importers
   format.ts           Monetary helpers: cents↔Decimal, formatCurrency, formatPercent
   gocardless.ts       GoCardless API client (token cache, typed fetch helpers)
   institutions.ts     Bank/broker name → favicon domain mapping (used for logos)
   loan.ts             calcCurrentCapital() helper
+  markdown-export.ts  Shared export helpers (fmt, sign, downloadFile) for accounts/analytics exports
+  palette.ts          Shared color palettes (category swatches, chart colors, avatar colors)
   prisma.ts           Singleton PrismaClient via @prisma/adapter-pg + pg Pool
+  recurring.ts        Pure recurring-transaction detection/projection functions
+  tax.ts              getAccountTaxRate() - per-account tax rate resolution
 messages/
   fr.json             French UI strings (default locale)
   en.json             English UI strings
@@ -240,16 +245,28 @@ Shared design across both importers:
 - Month-stepping (`addMonthsClamped` in `lib/recurring.ts`) clamps to the last day of shorter months (anchor on the 31st → lands on Feb 28/29) - `lib/loan.ts`'s `endDate.setMonth(...)` pattern does NOT do this (native `Date` overflows instead of clamping, e.g. Jan 31 + 1 month rolls to Mar 3) and must not be copied here.
 - Dates use the noon-UTC convention (`${dateStr}T12:00:00.000Z`) throughout, same as CSV import - `anchorDate` must line up day-for-day against real `Transaction.date` values for missed-payment matching to work.
 
-### Tax rates
+### Interest & dividend income tracking
 
-Stored in `UserSettings` (`taxRatePea`, `taxRateCto`, `taxRateCrypto`). All four pages that compute latent taxes (`app/page.tsx`, `app/accounts/page.tsx`, `app/accounts/[id]/page.tsx`, `app/analytics/page.tsx`) fetch settings and use the user-defined rates. Defaults: PEA 17.2%, CTO 31.4%, Crypto 31.4%.
+`/income` - manually-recorded `IncomeEvent` rows (`DIVIDEND` or `INTEREST`, optional `ticker`, gross `amountCents`, optional `taxWithheldCents` for foreign withholding tax, `date`). This is a real, user-entered record, distinct from the estimate described below - nothing here is auto-synced or auto-detected.
+
+- Net amount is always computed as `amountCents - (taxWithheldCents ?? 0)`, never stored. `ticker` is free text (not a FK to `Holding`) so a sold position's dividend history survives the holding being deleted.
+- The Analytics page's "Passive income" card shows real year-to-date `IncomeEvent` totals (dividends/interest, net of withholding) with a link to `/income` - **this replaced an estimate** that used a hardcoded `DIVIDEND_YIELDS` map and unauthenticated Yahoo Finance dividend-history fetches, plus French regulated-savings rates matched by account **name substring** (`"livret a"`, `"ldds"`, etc.).
+- That estimate machinery (`DIVIDEND_YIELDS`, `ISIN_TO_YF_SYMBOL`, `fetchYFDividendForSymbol`, the name-matched savings rates in `app/analytics/page.tsx`) is **not removed** - it still feeds the separate "Dividend calendar" section (upcoming per-holding ex-dividend dates), a genuinely different, forward-looking concept that this feature doesn't replace. Don't confuse the two `taxRate` variables in that file: `dividendEffectiveTaxRate()` is dividend withholding tax (ISIN country + `investmentSubtype`-based), unrelated to the latent capital-gains tax described below.
+
+### Tax treatment
+
+Latent (unrealized capital-gains) tax is a **per-account** setting, not a global one: `Account.taxTreatment` (`TaxTreatment` enum: `EXEMPT` | `DEFERRED` | `TAXABLE`) + `Account.taxRatePct` (0-1 ratio, meaningful only when `TAXABLE`). `lib/tax.ts`'s `getAccountTaxRate(account)` is the single shared resolver - `EXEMPT`/`DEFERRED` both return `0`, `TAXABLE` returns `taxRatePct` - used by all four pages that compute latent tax (`app/page.tsx`, `app/accounts/page.tsx`, `app/accounts/[id]/page.tsx`, `app/analytics/page.tsx`), replacing 4 previously-duplicated `account.type`/`investmentSubtype` branching helpers.
+
+- This exists so non-French wrappers have somewhere to go: a UK ISA or US Roth IRA is `EXEMPT`, a PER/401k is `DEFERRED` (not taxed until withdrawal - not taxed for latent/net-worth purposes today either), anything else is `TAXABLE` at whatever rate the user enters. `investmentSubtype` (`"PEA"`/`"CTO"`, cosmetic label only) is fully decoupled from this - an ISA doesn't need to pretend to be a "CTO" to get taxed correctly.
+- Set at account creation (`components/add-account-dialog.tsx` + `createAccount`, rate pre-filled with a hardcoded 17.2%/31.4% suggestion based on the PEA/CTO/Crypto choice, always editable) or afterward via an inline form in the account detail page's fiscal summary (`updateAccountTaxTreatment` in `lib/actions/accounts.ts`, same `<form action={...}>` pattern as `updateInvestmentStartDate`) - there was no prior UI to edit `investmentSubtype` post-creation either, so this is the first edit surface for either field.
+- `UserSettings.taxRatePea`/`taxRateCto`/`taxRateCrypto` (Settings → Fiscalité) still exist, but only as **defaults offered when creating a new account** - they are no longer read per-render for existing accounts. Migration `20260727141819_add_account_tax_treatment` backfilled every pre-existing account's `taxRatePct` from these same global rates at the time it ran, so upgrading never changes a displayed number: CRYPTO → `taxRateCrypto`, PEA → `taxRatePea`, CTO → `taxRateCto`, INVESTMENT with no subtype set → `EXEMPT` (reproducing the old chain's `null` = "no tax computed" outcome exactly, not a claim that the account is a real tax-exempt wrapper).
 
 ### Data model
 
 - `Institution` → many `Account`
 - `Account` (`AccountType`: `CHECKING | SAVINGS | INVESTMENT | REAL_ESTATE | MEAL_VOUCHER | CRYPTO | AUTOMOBILE | LOAN`)
   - Fiat (CHECKING, SAVINGS, MEAL_VOUCHER): `HistoricalBalance` (balance in cents as `BigInt`)
-  - Investment/Crypto: `Holding` (ticker + `Decimal` quantity) + live price at runtime. `investmentSubtype` = `"PEA"` or `"CTO"`
+  - Investment/Crypto: `Holding` (ticker + `Decimal` quantity) + live price at runtime. `investmentSubtype` = `"PEA"` or `"CTO"` (cosmetic label only). `taxTreatment` (`TaxTreatment` enum) + `taxRatePct` drive the actual latent-tax rate - see "Tax treatment" below
   - Real Estate & Automobile: `manualValueCents` + optional `liabilityCents`
   - LOAN: capital computed at runtime via `calcCurrentCapital()` from `lib/loan.ts`
 - `Holding` - unique on `(accountId, ticker)`. `costBasisCents` for P&L
@@ -259,15 +276,16 @@ Stored in `UserSettings` (`taxRatePea`, `taxRateCto`, `taxRateCrypto`). All four
   - **Bulk categorization**: `/budgets` also lists the top `MAX_UNCATEGORIZED_GROUPS` (8) uncategorized-transaction label groups by total absolute spend (`components/uncategorized-group-card.tsx`, grouped in-memory by `normalizeLabel()` from `lib/recurring.ts` - same normalization the recurring-detection heuristic uses, since it's the same "same real-world thing, different bank-feed casing" problem). `bulkAssignCategory(transactionIds, categoryId)` in `lib/actions/transactions.ts` sets one category on an arbitrary batch of transaction ids in one `updateMany` - the ids come from a server-computed group, never from client-supplied label matching, so there's no risk of a stale/forged id list touching the wrong rows.
   - Recurring-suggestion candidates (`detectCandidates` in `lib/recurring.ts`) carry a `categoryId` guess: the majority (mode) category already assigned among the matched transactions, if any. This is why confirming a long-standing subscription's suggestion often needs no manual category pick - it's inherited from however you'd already tagged that label's past transactions, not re-guessed from scratch.
 - `RecurringTransaction` - a subscription/bill/regular-income template (`label`, signed `amountCents`, `frequency` enum `WEEKLY|MONTHLY|YEARLY`, `intervalCount`, `anchorDate`, optional `categoryId`). `active: false` means either user-paused or a dismissed auto-detection suggestion - both states are excluded from projections and from resurfacing as a suggestion (see below), there's no separate "dismissed" table
+- `IncomeEvent` - a real, manually-recorded dividend or interest payment (`type` enum `DIVIDEND|INTEREST`, optional `ticker`, gross `amountCents`, optional `taxWithheldCents`, `date`). See "Interest & dividend income tracking" below - distinct from the Analytics page's separate Yahoo-Finance-based dividend/interest *estimate*.
 - `SyncLog` - per-run log entries: `source` ("lcl" | "trade_republic"), `status` ("success" | "error" | "auth_required"), optional `message`
-- `UserSettings` - singleton (`id = "singleton"`): salary, expenses, savings goal, monthly saved, `taxRatePea`/`taxRateCto`/`taxRateCrypto` (Float, defaults 0.172/0.314/0.314)
+- `UserSettings` - singleton (`id = "singleton"`): salary, expenses, savings goal, monthly saved, `taxRatePea`/`taxRateCto`/`taxRateCrypto` (Float, defaults 0.172/0.314/0.314) - now only defaults suggested when creating a new account, see "Tax treatment" below
 
 ### Net worth calculation
 
 **Gross = fiat balances + holdings market value + real estate/automobile manualValueCents**
 **Net = Gross − liabilityCents − loan remaining capital − latent taxes**
 
-Latent tax rates: read from `UserSettings` (defaults: PEA 17.2%, CTO 31.4%, Crypto 31.4%). User-editable in Settings → Fiscalité.
+Latent tax rate: per-account via `getAccountTaxRate()` - see "Tax treatment" above. `UserSettings`'s PEA/CTO/Crypto rates (Settings → Fiscalité) are only the defaults suggested when creating a new account.
 
 ### Prisma client
 

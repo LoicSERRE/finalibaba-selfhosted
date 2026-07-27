@@ -176,7 +176,11 @@
       "taxLabel": "Impôt latent ({rate}%)",
       "netAfterTax": "Valeur nette après impôts",
       "annualizedHint": "Utilisée pour le rendement annualisé dans Analytique",
-      "save": "Enregistrer"
+      "save": "Enregistrer",
+      "taxTreatmentLabel": "Régime fiscal",
+      "taxTreatmentTaxable": "Imposable",
+      "taxTreatmentExempt": "Exonéré (ISA, Roth IRA…)",
+      "taxTreatmentDeferred": "Différé (PER, 401k…)"
     },
     "loanDetail": {
       "amountBorrowed": "Montant emprunté",
@@ -551,6 +555,11 @@
     "typeMealVoucher": "Titres-restaurant",
     "typeRealEstate": "Immobilier",
     "typeAutomobile": "Automobile / Véhicule",
+    "taxTreatment": "Régime fiscal",
+    "taxTreatmentTaxable": "Imposable",
+    "taxTreatmentExempt": "Exonéré (ISA, Roth IRA…)",
+    "taxTreatmentDeferred": "Différé (PER, 401k…)",
+    "taxRatePct": "Taux d'imposition (%)",
     "creating": "Création…",
     "submit": "Créer",
     "addFirst": "Ajoutez d'abord une institution dans Paramètres."

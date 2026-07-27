@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.2.1**
+Current stable release: **v1.3.1**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -8,29 +8,29 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ## v1.1.0 - Released ✓
 
-- [x] **English & French UI** - `next-intl` integration, language auto-detected from browser (`Accept-Language`), manual switcher in Settings. No URL prefix per locale.
-- [x] **User-configurable tax rates** - PEA, CTO, and Crypto rates editable in Settings.
-- [x] **Mobile UX improvements** - WCAG-compliant touch targets (44×44px), responsive header layouts, icon-only buttons on narrow viewports.
-- [x] **Auto-sync on app open** - sync triggered automatically when opening the app (all sources: LCL, Trade Republic, Woob institutions). Badge shown during sync.
+- [X] **English & French UI** - `next-intl` integration, language auto-detected from browser (`Accept-Language`), manual switcher in Settings. No URL prefix per locale.
+- [X] **User-configurable tax rates** - PEA, CTO, and Crypto rates editable in Settings.
+- [X] **Mobile UX improvements** - WCAG-compliant touch targets (44×44px), responsive header layouts, icon-only buttons on narrow viewports.
+- [X] **Auto-sync on app open** - sync triggered automatically when opening the app (all sources: LCL, Trade Republic, Woob institutions). Badge shown during sync.
 
 ---
 
-## v1.2 - Data import & resilience
+## v1.2 - Data import & resilience - Released ✓
 
 *The most-requested gap vs alternatives: getting data in without auto-sync, and keeping it safe.*
 
-- [x] **CSV import** - bulk import of transactions for accounts not covered by auto-sync
-- [x] **Historical net worth import** - import past balance snapshots (CSV/spreadsheet) to backfill the historical chart for users migrating from Excel or Finary
-- [x] **Backup & restore** - one-command database export and full restore; critical for self-hosters before upgrades
+- [X] **CSV import** - bulk import of transactions for accounts not covered by auto-sync
+- [X] **Historical net worth import** - import past balance snapshots (CSV/spreadsheet) to backfill the historical chart for users migrating from Excel or Finary
+- [X] **Backup & restore** - one-command database export and full restore; critical for self-hosters before upgrades
 
 ---
 
-## v1.3 - Budgeting & cash-flow
+## v1.3 - Budgeting & cash-flow - Released ✓
 
 *The main gap vs Firefly III: spending visibility and forward projection.*
 
-- [x] **Transaction categories & budgets** - categorize transactions (food, transport, housing…), set monthly budget envelopes per category, track spending vs budget
-- [x] **Recurring transactions** - flag subscriptions and regular income; project future cash flow and detect missed payments
+- [X] **Transaction categories & budgets** - categorize transactions (food, transport, housing…), set monthly budget envelopes per category, track spending vs budget
+- [X] **Recurring transactions** - flag subscriptions and regular income; project future cash flow and detect missed payments
 
 ---
 
@@ -40,8 +40,8 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 - [ ] **Benchmark comparison** - overlay portfolio CAGR against a reference index (MSCI World, S&P 500, CAC 40)
 - [ ] **Portfolio rebalancing** - define a target allocation per account, show current drift, suggest trades to rebalance
-- [x] **Interest & dividend income tracking** - record interest earned on savings accounts (taxable or exempt) and dividends received on investment accounts as discrete income events, separate from balance snapshots; display as income in analytics
-- [ ] **Flexible account tax treatment** - each investment account gets a user-defined tax status (tax-exempt like PEA/ISA/Roth IRA, tax-deferred like PER/401k, or fully taxable); latent tax calculation uses the account's own status instead of a global type - makes the app correct for non-French users who have no PEA equivalent
+- [X] **Interest & dividend income tracking** - record interest earned on savings accounts (taxable or exempt) and dividends received on investment accounts as discrete income events, separate from balance snapshots; display as income in analytics
+- [X] **Flexible account tax treatment** - each investment account gets a user-defined tax status (tax-exempt like PEA/ISA/Roth IRA, tax-deferred like PER/401k, or fully taxable); latent tax calculation uses the account's own status instead of a global type - makes the app correct for non-French users who have no PEA equivalent
 - [ ] **Annual tax report** - yearly fiscal summary: realised gains, dividend income, taxable events; designed to be country-agnostic (exportable data) with a French IFU-ready view as a first implementation
 - [ ] **Multi-currency** - hold positions in USD, GBP, CHF and display everything converted to the reference currency (EUR)
 
@@ -80,15 +80,15 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ## v1.0.0 - Released ✓
 
-- [x] `docker compose up` one-command setup
-- [x] All account types: checking/savings, PEA/CTO, crypto, real estate, automobile, loan, meal vouchers
-- [x] Live prices via Yahoo Finance (stocks, ETFs, crypto)
-- [x] French tax calculations - latent taxes: PEA 17.2%, CTO 31.4%, Crypto 31.4%
-- [x] Analytics: savings rate, runway, passive income, CAGR, sector allocation, benchmark radar
-- [x] Auto-sync: Trade Republic (18 EU countries), LCL via Woob, generic Woob for other FR banks
-- [x] GoCardless PSD2 open banking - 2,200+ banks across EU and UK
-- [x] Optional built-in password authentication (`AUTH_ENABLED=true`)
-- [x] CSV and PDF export
-- [x] Demo mode - pre-seeded fictional data, read-only (`DEMO_MODE=true`), cron reset
-- [x] WCAG 2.1 accessibility (keyboard navigation, screen reader, focus management)
-- [x] AGPL-3.0 open-source release
+- [X] `docker compose up` one-command setup
+- [X] All account types: checking/savings, PEA/CTO, crypto, real estate, automobile, loan, meal vouchers
+- [X] Live prices via Yahoo Finance (stocks, ETFs, crypto)
+- [X] French tax calculations - latent taxes: PEA 17.2%, CTO 31.4%, Crypto 31.4%
+- [X] Analytics: savings rate, runway, passive income, CAGR, sector allocation, benchmark radar
+- [X] Auto-sync: Trade Republic (18 EU countries), LCL via Woob, generic Woob for other FR banks
+- [X] GoCardless PSD2 open banking - 2,200+ banks across EU and UK
+- [X] Optional built-in password authentication (`AUTH_ENABLED=true`)
+- [X] CSV and PDF export
+- [X] Demo mode - pre-seeded fictional data, read-only (`DEMO_MODE=true`), cron reset
+- [X] WCAG 2.1 accessibility (keyboard navigation, screen reader, focus management)
+- [X] AGPL-3.0 open-source release

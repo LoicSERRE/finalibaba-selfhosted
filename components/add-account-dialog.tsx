@@ -19,6 +19,9 @@ export function AddAccountDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState(defaultType ?? "CHECKING");
+  const [subtype, setSubtype] = useState("");
+  const [taxTreatment, setTaxTreatment] = useState("TAXABLE");
+  const [taxRatePct, setTaxRatePct] = useState("31.4");
   const [pending, startTransition] = useTransition();
   const t = useTranslations("addAccount");
   const tc = useTranslations("common");
@@ -28,6 +31,16 @@ export function AddAccountDialog({
   const isManualValue = isRealEstate || isAutomobile;
   const isInvestment = type === "INVESTMENT" || type === "CRYPTO";
   const isPEACTO = type === "INVESTMENT";
+
+  function handleTypeChange(newType: string) {
+    setType(newType);
+    if (newType === "CRYPTO") setTaxRatePct("31.4");
+  }
+
+  function handleSubtypeChange(newSubtype: string) {
+    setSubtype(newSubtype);
+    setTaxRatePct(newSubtype === "PEA" ? "17.2" : "31.4");
+  }
 
   const ACCOUNT_TYPES = [
     { value: "CHECKING", label: t("typeChecking") },
@@ -65,7 +78,7 @@ export function AddAccountDialog({
           label={t("type")}
           name="type"
           value={type}
-          onChange={(e) => setType(e.target.value)}
+          onChange={(e) => handleTypeChange(e.target.value)}
           options={ACCOUNT_TYPES}
         />
         <Select
@@ -108,12 +121,41 @@ export function AddAccountDialog({
           <Select
             label={t("subtype")}
             name="investmentSubtype"
+            value={subtype}
+            onChange={(e) => handleSubtypeChange(e.target.value)}
             options={[
               { value: "", label: t("noSubtype") },
               { value: "PEA", label: t("peaLabel") },
               { value: "CTO", label: t("ctoLabel") },
             ]}
           />
+        )}
+        {isInvestment && (
+          <>
+            <Select
+              label={t("taxTreatment")}
+              name="taxTreatment"
+              value={taxTreatment}
+              onChange={(e) => setTaxTreatment(e.target.value)}
+              options={[
+                { value: "TAXABLE", label: t("taxTreatmentTaxable") },
+                { value: "EXEMPT", label: t("taxTreatmentExempt") },
+                { value: "DEFERRED", label: t("taxTreatmentDeferred") },
+              ]}
+            />
+            {taxTreatment === "TAXABLE" && (
+              <Input
+                label={t("taxRatePct")}
+                name="taxRatePct"
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={taxRatePct}
+                onChange={(e) => setTaxRatePct(e.target.value)}
+              />
+            )}
+          </>
         )}
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>

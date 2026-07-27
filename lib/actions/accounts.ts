@@ -2,8 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { AccountType } from "@/app/generated/prisma/enums";
+import { AccountType, TaxTreatment } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/format";
+
+const TAX_TREATMENTS = new Set(Object.values(TaxTreatment));
+
+function parseTaxTreatment(formData: FormData): TaxTreatment {
+  const raw = formData.get("taxTreatment") as string | null;
+  return raw && TAX_TREATMENTS.has(raw as TaxTreatment) ? (raw as TaxTreatment) : "TAXABLE";
+}
+
+// Percent input (0-100) -> ratio (0-1), same convention as UserSettings.taxRateX.
+function parseTaxRatePct(val: FormDataEntryValue | null): number | undefined {
+  if (!val || (val as string).trim() === "") return undefined;
+  const n = parseFloat(val as string);
+  return isNaN(n) ? undefined : Math.min(1, Math.max(0, n / 100));
+}
 
 const MANUAL_VALUE_TYPES = ["REAL_ESTATE", "AUTOMOBILE"] as const;
 type ManualType = (typeof MANUAL_VALUE_TYPES)[number];
@@ -46,6 +60,8 @@ export async function createAccount(formData: FormData) {
   const liabilityStr = formData.get("liability") as string | null;
   const investmentSubtype = (formData.get("investmentSubtype") as string | null) || null;
   const purchasePriceStr = formData.get("purchasePrice") as string | null;
+  const taxTreatment = parseTaxTreatment(formData);
+  const taxRatePct = parseTaxRatePct(formData.get("taxRatePct"));
 
   const balanceCents = initialBalanceStr ? parseCents(initialBalanceStr) : null;
   const liabilityCents = liabilityStr ? parseCents(liabilityStr) : null;
@@ -61,6 +77,7 @@ export async function createAccount(formData: FormData) {
   const loanStartDate = loanStartDateStr ? new Date(loanStartDateStr) : undefined;
 
   const isLoan = type === "LOAN";
+  const isInvestment = type === "INVESTMENT" || type === "CRYPTO";
 
   const account = await prisma.account.create({
     data: {
@@ -76,6 +93,8 @@ export async function createAccount(formData: FormData) {
       purchasePriceCents: type === "AUTOMOBILE" ? (purchasePriceCents ?? undefined) : undefined,
       insuranceMonthlyCents: (type === "AUTOMOBILE" || isLoan) ? insuranceMonthlyCents : undefined,
       investmentSubtype: type === "INVESTMENT" ? investmentSubtype : undefined,
+      taxTreatment: isInvestment ? taxTreatment : undefined,
+      taxRatePct: isInvestment && taxTreatment === "TAXABLE" ? (taxRatePct ?? null) : null,
       loanAmountCents: isLoan ? loanAmountCents : undefined,
       loanTaeg: isLoan ? loanTaeg : undefined,
       loanDurationMonths: isLoan ? loanDurationMonths : undefined,
@@ -142,6 +161,25 @@ export async function updateInvestmentStartDate(formData: FormData) {
   });
 
   revalidatePath(`/accounts/${id}`);
+  revalidatePath("/analytics");
+}
+
+export async function updateAccountTaxTreatment(formData: FormData) {
+  const id = formData.get("id") as string;
+  const taxTreatment = parseTaxTreatment(formData);
+  const taxRatePct = parseTaxRatePct(formData.get("taxRatePct"));
+
+  await prisma.account.update({
+    where: { id },
+    data: {
+      taxTreatment,
+      taxRatePct: taxTreatment === "TAXABLE" ? (taxRatePct ?? null) : null,
+    },
+  });
+
+  revalidatePath(`/accounts/${id}`);
+  revalidatePath("/");
+  revalidatePath("/accounts");
   revalidatePath("/analytics");
 }
 

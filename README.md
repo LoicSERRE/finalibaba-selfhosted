@@ -1,7 +1,7 @@
 # Finalibaba - Self-Hosted
 
 > Self-hosted personal wealth dashboard. Track net worth, investments, real estate, loans, and crypto in one place.
-> Open-source alternative to Finary, with built-in French tax calculations (PEA · CTO · Crypto).
+> Open-source alternative to Finary, with per-account tax treatment (French PEA/CTO defaults, or Exempt/Deferred/custom rate for ISA, Roth IRA, 401k, and other non-French wrappers).
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
@@ -13,8 +13,12 @@
 
 - **Net worth dashboard** - gross and net of latent taxes, monthly trend, allocation breakdown
 - **All asset types** - bank accounts, investments (PEA / CTO / Crypto), real estate, automobiles, loans
-- **French tax calculations** - latent taxes: PEA 17.2%, CTO 31.4%, Crypto 31.4% (user-configurable)
+- **Per-account tax treatment** - each investment/crypto account is Taxable (its own rate), Exempt (ISA, Roth IRA), or Deferred (PER, 401k) - not limited to the French PEA/CTO model
+- **Budgets & categories** - categorize transactions, set monthly budget envelopes, bulk-categorize recurring spend
+- **Recurring transactions** - auto-detected subscriptions and regular income, 90-day cash-flow projection, missed-payment alerts
+- **Income tracking** - record dividends and interest received as real events, separate from balance snapshots
 - **Analytics** - savings rate, survival runway, sector exposure, passive income, CAGR per account
+- **CSV import & backup/restore** - bulk-import transactions/balance history for accounts without auto-sync; one-command database export and restore
 - **Automatic sync** (optional) - Trade Republic (18 EU countries) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
 - **English & French UI** - language auto-detected from browser, switchable in Settings
 - **100% self-hosted** - your data stays on your server

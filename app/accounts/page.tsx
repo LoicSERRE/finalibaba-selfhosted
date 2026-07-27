@@ -22,15 +22,10 @@ import {
 } from "@/components/export-accounts-button";
 import Decimal from "decimal.js";
 import { calcLoanStats, hasLoanParams } from "@/lib/loan";
+import { getAccountTaxRate } from "@/lib/tax";
 import { getTranslations } from "next-intl/server";
 
 type TabId = "liquidites" | "investissements" | "immobilier" | "automobiles" | "credits";
-
-function taxRate(type: string, subtype: string | null, rates: { PEA: number; CTO: number; CRYPTO: number }): number | null {
-  if (type === "CRYPTO") return rates.CRYPTO;
-  if (type === "INVESTMENT" && subtype) return rates[subtype as "PEA" | "CTO"] ?? null;
-  return null;
-}
 
 function holdingValue(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
   return BigInt(
@@ -63,7 +58,7 @@ export default async function AccountsPage({
   const { tab: rawTab = "liquidites" } = await searchParams;
   const tab = (TABS.some((tb) => tb.id === rawTab) ? rawTab : "liquidites") as TabId;
 
-  const [fiatAccounts, investAccounts, realEstateAccounts, automobileAccounts, loanAccounts, institutions, userSettings] =
+  const [fiatAccounts, investAccounts, realEstateAccounts, automobileAccounts, loanAccounts, institutions] =
     await Promise.all([
       prisma.account.findMany({
         where: { type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
@@ -97,10 +92,7 @@ export default async function AccountsPage({
         orderBy: { name: "asc" },
       }),
       prisma.institution.findMany({ orderBy: { name: "asc" } }),
-      prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
     ]);
-
-  const TAX_RATES = { PEA: userSettings.taxRatePea, CTO: userSettings.taxRateCto, CRYPTO: userSettings.taxRateCrypto };
 
   const fiatTotal = fiatAccounts.reduce(
     (s, a) => s + (a.history[0]?.balanceCents ?? BigInt(0)),
@@ -165,7 +157,7 @@ export default async function AccountsPage({
   }));
 
   const investExport: InvestAccountExport[] = investAccounts.map((account) => {
-    const rate = taxRate(account.type, account.investmentSubtype ?? null, TAX_RATES);
+    const rate = getAccountTaxRate(account);
     const accountTotal = account.holdings.reduce((s, h) => s + holdingValue(h), BigInt(0));
     let accountGain = BigInt(0);
     let hasCostBasis = false;
@@ -376,7 +368,7 @@ export default async function AccountsPage({
             </div>
           ) : (
             investAccounts.map((account) => {
-              const rate = taxRate(account.type, account.investmentSubtype ?? null, TAX_RATES);
+              const rate = getAccountTaxRate(account);
               const accountTotal = account.holdings.reduce(
                 (s, h) => s + holdingValue(h),
                 BigInt(0)

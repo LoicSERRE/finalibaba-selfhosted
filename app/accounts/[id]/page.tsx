@@ -16,9 +16,10 @@ import { ImportTransactionsDialog } from "@/components/import-transactions-dialo
 import { ImportBalanceHistoryDialog } from "@/components/import-balance-history-dialog";
 import { TransactionCategorySelect } from "@/components/transaction-category-select";
 import { EmptyState } from "@/components/empty-state";
-import { updateInvestmentStartDate } from "@/lib/actions/accounts";
+import { updateInvestmentStartDate, updateAccountTaxTreatment } from "@/lib/actions/accounts";
 import Decimal from "decimal.js";
 import { calcLoanStats, hasLoanParams } from "@/lib/loan";
+import { getAccountTaxRate } from "@/lib/tax";
 import { getTranslations } from "next-intl/server";
 
 const TYPE_TO_TAB: Record<string, string> = {
@@ -31,12 +32,6 @@ const TYPE_TO_TAB: Record<string, string> = {
   AUTOMOBILE: "automobiles",
   LOAN: "credits",
 };
-
-function getTaxRate(type: string, subtype: string | null, rates: { PEA: number; CTO: number; CRYPTO: number }): number | null {
-  if (type === "CRYPTO") return rates.CRYPTO;
-  if (type === "INVESTMENT" && subtype) return rates[subtype as "PEA" | "CTO"] ?? null;
-  return null;
-}
 
 export default async function AccountDetailPage({
   params,
@@ -51,7 +46,7 @@ export default async function AccountDetailPage({
     getTranslations("accounts"),
   ]);
 
-  const [account, userSettings, categories] = await Promise.all([
+  const [account, categories] = await Promise.all([
     prisma.account.findUnique({
       where: { id },
       include: {
@@ -61,13 +56,10 @@ export default async function AccountDetailPage({
         transactions: { orderBy: { date: "desc" }, take: 200 },
       },
     }),
-    prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
     prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
   ]);
 
   if (!account) notFound();
-
-  const TAX_RATES = { PEA: userSettings.taxRatePea, CTO: userSettings.taxRateCto, CRYPTO: userSettings.taxRateCrypto };
 
   const isFiat = ["CHECKING", "SAVINGS", "MEAL_VOUCHER"].includes(account.type);
   const isInvestment = ["INVESTMENT", "CRYPTO"].includes(account.type);
@@ -81,7 +73,7 @@ export default async function AccountDetailPage({
   );
   const existingBalanceDates = account.history.map((h) => h.recordedAt.toISOString().slice(0, 10));
 
-  const taxRate = getTaxRate(account.type, account.investmentSubtype ?? null, TAX_RATES);
+  const taxRate = getAccountTaxRate(account);
 
   // Loan stats (calculated once)
   const loanStats =
@@ -552,6 +544,41 @@ export default async function AccountDetailPage({
                   {td("fiscalSummary.annualizedHint")}
                 </span>
               )}
+            </form>
+          </div>
+
+          {/* Régime fiscal */}
+          <div className="border-t border-[var(--border)] px-6 py-4">
+            <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-3">
+              {td("fiscalSummary.taxTreatmentLabel")}
+            </p>
+            <form action={updateAccountTaxTreatment} className="flex items-center gap-3 flex-wrap">
+              <input type="hidden" name="id" value={account.id} />
+              <select
+                name="taxTreatment"
+                defaultValue={account.taxTreatment}
+                className="text-sm bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 transition-colors cursor-pointer"
+              >
+                <option value="TAXABLE">{td("fiscalSummary.taxTreatmentTaxable")}</option>
+                <option value="EXEMPT">{td("fiscalSummary.taxTreatmentExempt")}</option>
+                <option value="DEFERRED">{td("fiscalSummary.taxTreatmentDeferred")}</option>
+              </select>
+              <input
+                type="number"
+                name="taxRatePct"
+                step="0.1"
+                min="0"
+                max="100"
+                placeholder="%"
+                defaultValue={account.taxRatePct != null ? (account.taxRatePct * 100).toFixed(1) : ""}
+                className="w-24 text-sm bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 transition-colors"
+              />
+              <button
+                type="submit"
+                className="text-xs px-3 py-2 rounded-lg bg-[var(--accent)]/15 text-[var(--accent-text)] hover:bg-[var(--accent)]/25 active:scale-[0.97] transition cursor-pointer font-medium min-h-[44px]"
+              >
+                {td("fiscalSummary.save")}
+              </button>
             </form>
           </div>
         </div>
