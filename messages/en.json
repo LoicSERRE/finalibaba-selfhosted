@@ -18,6 +18,7 @@
     "personal": "Personal",
     "unknown": "Unknown",
     "optional": "optional",
+    "selectAccount": "Select an account",
     "previous": "Previous",
     "next": "Next"
   },
@@ -305,7 +306,7 @@
     "dividendsNet": "Net dividends",
     "interestGross": "Gross interest",
     "interestNet": "Net interest",
-    "disclaimer": "Estimate for informational purposes, not an official tax document. Cost basis computed using the average-cost method.",
+    "disclaimer": "Estimate for informational purposes, not an official tax document. Cost basis computed using the average-cost method. The estimated tax nets the year's gains and losses within each account; the \"Tax\" column below is a per-sale reference figure and won't necessarily add up to this total.",
     "dividendIncome": "Dividend income",
     "interestIncome": "Interest income",
     "colDate": "Date",

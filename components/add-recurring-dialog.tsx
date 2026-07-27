@@ -90,7 +90,7 @@ export function AddRecurringDialog({
           name="accountId"
           defaultValue={initial?.accountId}
           required
-          options={[{ value: "", label: tc("optional"), disabled: true }, ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+          options={[{ value: "", label: tc("selectAccount"), disabled: true }, ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
         />
 
         <div className="grid grid-cols-2 gap-3">

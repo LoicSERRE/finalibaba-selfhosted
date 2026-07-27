@@ -25,6 +25,7 @@ export async function recordSale(formData: FormData) {
   const date = dateStr ? new Date(`${dateStr}T12:00:00.000Z`) : new Date();
 
   if (quantitySold.lte(0)) throw new Error("Quantity must be positive");
+  if (costBasisCents < BigInt(0)) throw new Error("Cost basis cannot be negative");
 
   const holding = await prisma.holding.findUnique({
     where: { accountId_ticker: { accountId, ticker } },
@@ -33,6 +34,12 @@ export async function recordSale(formData: FormData) {
 
   const holdingQuantity = new Decimal(holding.quantity.toString());
   if (quantitySold.gt(holdingQuantity)) throw new Error("Cannot sell more than the current position");
+  // The sold portion's cost basis can never exceed what's left on the position -
+  // otherwise the remaining Holding.costBasisCents goes negative and corrupts
+  // every future gain/tax display for it.
+  if (holding.costBasisCents != null && costBasisCents > holding.costBasisCents) {
+    throw new Error("Cost basis for the sold portion cannot exceed the position's remaining cost basis");
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.sale.create({

@@ -18,6 +18,7 @@
     "personal": "Personnel",
     "unknown": "Inconnu",
     "optional": "optionnel",
+    "selectAccount": "Sélectionner un compte",
     "previous": "Précédent",
     "next": "Suivant"
   },
@@ -305,7 +306,7 @@
     "dividendsNet": "Dividendes nets",
     "interestGross": "Intérêts bruts",
     "interestNet": "Intérêts nets",
-    "disclaimer": "Estimation à titre informatif, pas un document fiscal officiel. Prix de revient calculé au coût moyen pondéré.",
+    "disclaimer": "Estimation à titre informatif, pas un document fiscal officiel. Prix de revient calculé au coût moyen pondéré. L'impôt estimé compense les gains et pertes de l'année au sein de chaque compte ; la colonne « Impôt » du tableau ci-dessous est indicative par vente et ne se totalise donc pas forcément avec ce montant.",
     "dividendIncome": "Dividendes perçus",
     "interestIncome": "Intérêts perçus",
     "colDate": "Date",

@@ -7,6 +7,27 @@ import { parseCents } from "@/lib/format";
 
 const INCOME_TYPES = new Set(Object.values(IncomeType));
 
+// Mirrors the DIVIDEND_ACCOUNT_TYPES/INTEREST_ACCOUNT_TYPES filter in
+// add-income-dialog.tsx. That filter only controls what's selectable in the
+// UI - Server Actions are reachable directly regardless of what's on screen,
+// so the same rule must be enforced here too before writing anything.
+const ELIGIBLE_ACCOUNT_TYPES: Record<IncomeType, Set<string>> = {
+  DIVIDEND: new Set(["INVESTMENT", "CRYPTO"]),
+  INTEREST: new Set(["CHECKING", "SAVINGS"]),
+};
+
+async function assertIncomeEventEligible(accountId: string, type: IncomeType): Promise<void> {
+  const account = await prisma.account.findUnique({ where: { id: accountId }, select: { type: true } });
+  if (!account) throw new Error("Account not found.");
+  if (!ELIGIBLE_ACCOUNT_TYPES[type].has(account.type)) {
+    throw new Error(
+      type === "DIVIDEND"
+        ? "Dividends can only be recorded on investment/crypto accounts."
+        : "Interest can only be recorded on checking/savings accounts."
+    );
+  }
+}
+
 function revalidateAll() {
   revalidatePath("/income");
   revalidatePath("/analytics");
@@ -46,6 +67,7 @@ export async function createIncomeEvent(formData: FormData) {
   if (!accountId) throw new Error("Account required");
 
   const type = parseIncomeType(formData);
+  await assertIncomeEventEligible(accountId, type);
   const amountCents = parseGrossAmount(formData);
   const taxWithheldCents = parseOptionalTaxWithheld(formData, amountCents);
   const date = parseDate(formData);
@@ -62,6 +84,7 @@ export async function updateIncomeEvent(id: string, formData: FormData) {
   if (!accountId) throw new Error("Account required");
 
   const type = parseIncomeType(formData);
+  await assertIncomeEventEligible(accountId, type);
   const amountCents = parseGrossAmount(formData);
   const taxWithheldCents = parseOptionalTaxWithheld(formData, amountCents);
   const date = parseDate(formData);

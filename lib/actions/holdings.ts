@@ -27,17 +27,36 @@ export async function upsertHolding(formData: FormData) {
   const nativePriceCents = parseCents(formData.get("price") as string);
   const nativeCostBasisCents = costBasisStr && costBasisStr.trim() !== "" ? parseCents(costBasisStr) : null;
 
+  const existing = await prisma.holding.findUnique({ where: { accountId_ticker: { accountId, ticker } } });
+
   let lastPriceCents = nativePriceCents;
   let costBasisCents = nativeCostBasisCents;
   let fxRateToEur: number | null = null;
 
   if (currency !== "EUR") {
-    fxRateToEur = await fetchExchangeRateToEur(currency as "USD" | "GBP" | "CHF");
-    if (fxRateToEur === null) {
-      throw new Error(`Could not fetch the ${currency}→EUR exchange rate - try again or use EUR`);
+    // fxRateToEur is meant to be captured at entry time, not re-rolled on
+    // every edit - if the native price/cost basis/currency haven't actually
+    // changed, reuse the stored conversion instead of re-fetching (which
+    // could silently shift the EUR value on an edit that only touched an
+    // unrelated field like targetPct, once the market rate has moved since).
+    const unchanged =
+      existing !== null &&
+      existing.currency === currency &&
+      existing.nativePriceCents === nativePriceCents &&
+      (existing.nativeCostBasisCents ?? null) === nativeCostBasisCents;
+
+    if (unchanged && existing.fxRateToEur != null) {
+      fxRateToEur = existing.fxRateToEur;
+      lastPriceCents = existing.lastPriceCents;
+      costBasisCents = existing.costBasisCents;
+    } else {
+      fxRateToEur = await fetchExchangeRateToEur(currency as "USD" | "GBP" | "CHF");
+      if (fxRateToEur === null) {
+        throw new Error(`Could not fetch the ${currency}→EUR exchange rate - try again or use EUR`);
+      }
+      lastPriceCents = BigInt(Math.round(Number(nativePriceCents) * fxRateToEur));
+      costBasisCents = nativeCostBasisCents !== null ? BigInt(Math.round(Number(nativeCostBasisCents) * fxRateToEur)) : null;
     }
-    lastPriceCents = BigInt(Math.round(Number(nativePriceCents) * fxRateToEur));
-    costBasisCents = nativeCostBasisCents !== null ? BigInt(Math.round(Number(nativeCostBasisCents) * fxRateToEur)) : null;
   }
 
   await prisma.holding.upsert({

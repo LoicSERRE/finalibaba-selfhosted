@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, localeToIntl } from "@/lib/format";
 import Link from "next/link";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { AddAutomobileDialog } from "@/components/add-automobile-dialog";
@@ -23,7 +23,7 @@ import {
 import Decimal from "decimal.js";
 import { calcLoanStats, hasLoanParams } from "@/lib/loan";
 import { getAccountTaxRate } from "@/lib/tax";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 
 type TabId = "liquidites" | "investissements" | "immobilier" | "automobiles" | "credits";
 
@@ -41,11 +41,13 @@ export default async function AccountsPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const [t, ta, td] = await Promise.all([
+  const [t, ta, td, locale] = await Promise.all([
     getTranslations("accounts"),
     getTranslations("accountTypes"),
     getTranslations("accountDetail"),
+    getLocale(),
   ]);
+  const intlLocale = localeToIntl(locale);
 
   const TABS = [
     { id: "liquidites" as const, label: t("tabs.cash"), labelShort: t("tabs.cashShort") },
@@ -730,7 +732,7 @@ export default async function AccountsPage({
                     <div>
                       <p className="text-[var(--muted)] text-xs mb-1">{t("loan.projectedEnd")}</p>
                       <p className="tabular-nums font-medium text-[var(--foreground)]">
-                        {new Intl.DateTimeFormat("fr-FR", { month: "short", year: "numeric" }).format(stats.endDate)}
+                        {new Intl.DateTimeFormat(intlLocale, { month: "short", year: "numeric" }).format(stats.endDate)}
                       </p>
                     </div>
                   </div>

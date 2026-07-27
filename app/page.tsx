@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, localeToIntl } from "@/lib/format";
 import { NetWorthChart } from "@/components/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/asset-allocation-chart";
 import { DashboardEmptyState } from "@/components/dashboard-empty-state";
@@ -11,9 +11,10 @@ import Decimal from "decimal.js";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
 import { getAccountTaxRate } from "@/lib/tax";
 import { getInstitutionLogoUrl } from "@/lib/institutions";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 
 async function getDashboardData() {
+  const intlLocale = localeToIntl(await getLocale());
   const accounts = await prisma.account.findMany({
     include: {
       institution: true,
@@ -166,7 +167,7 @@ async function getDashboardData() {
   const history = historyRaw.map(({ day, netWorth }) => {
     const [y, m, d] = day.split("-");
     return {
-      date: new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(
+      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(
         new Date(+y, +m - 1, +d)
       ),
       netWorth,

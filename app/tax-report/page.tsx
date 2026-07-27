@@ -6,8 +6,8 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { ExportTaxReportButton, type TaxReportExportData } from "@/components/export-tax-report-button";
 import { getAccountTaxRate } from "@/lib/tax";
-import { formatCurrency } from "@/lib/format";
-import { getTranslations } from "next-intl/server";
+import { formatCurrency, localeToIntl } from "@/lib/format";
+import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function TaxReportPage({
   searchParams,
@@ -15,7 +15,8 @@ export default async function TaxReportPage({
   searchParams: Promise<{ year?: string }>;
 }) {
   const { year: yearParam } = await searchParams;
-  const [t, tc] = await Promise.all([getTranslations("taxReport"), getTranslations("common")]);
+  const [t, tc, locale] = await Promise.all([getTranslations("taxReport"), getTranslations("common"), getLocale()]);
+  const intlLocale = localeToIntl(locale);
 
   const now = new Date();
   const year = yearParam ? parseInt(yearParam, 10) : now.getUTCFullYear();
@@ -38,11 +39,30 @@ export default async function TaxReportPage({
   const salesWithGain = sales.map((s) => {
     const gainCents = s.proceedsCents - s.costBasisCents;
     const rate = getAccountTaxRate(s.account);
+    // Per-row reference figure only (as if this were the year's only sale) -
+    // the actual estimated tax due (totalGainTaxCents below) nets gains and
+    // losses per account first, same convention as the account-detail page's
+    // aggregate tax figure.
     const taxCents = rate !== null && gainCents > BigInt(0) ? BigInt(Math.round(Number(gainCents) * rate)) : BigInt(0);
     return { ...s, gainCents, taxCents };
   });
   const totalRealizedGainCents = salesWithGain.reduce((sum, s) => sum + s.gainCents, BigInt(0));
-  const totalGainTaxCents = salesWithGain.reduce((sum, s) => sum + s.taxCents, BigInt(0));
+
+  // Net gains/losses per account for the year before taxing - taxing each
+  // sale independently (summing per-row taxCents) would overstate tax due
+  // whenever an account has both a gain and a loss sale in the same year.
+  const netGainByAccount = new Map<string, { gainCents: bigint; rate: number | null }>();
+  for (const s of salesWithGain) {
+    const rate = getAccountTaxRate(s.account);
+    const prev = netGainByAccount.get(s.accountId) ?? { gainCents: BigInt(0), rate };
+    netGainByAccount.set(s.accountId, { gainCents: prev.gainCents + s.gainCents, rate });
+  }
+  let totalGainTaxCents = BigInt(0);
+  for (const { gainCents, rate } of netGainByAccount.values()) {
+    if (rate !== null && gainCents > BigInt(0)) {
+      totalGainTaxCents += BigInt(Math.round(Number(gainCents) * rate));
+    }
+  }
 
   const netIncomeCents = (e: { amountCents: bigint; taxWithheldCents: bigint | null }) =>
     e.amountCents - (e.taxWithheldCents ?? BigInt(0));
@@ -164,7 +184,7 @@ export default async function TaxReportPage({
                     {salesWithGain.map((s) => (
                       <tr key={s.id} className="border-b border-[var(--border)] last:border-0">
                         <td className="px-4 py-3 text-[var(--muted)] tabular-nums whitespace-nowrap text-xs">
-                          {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(s.date)}
+                          {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(s.date)}
                         </td>
                         <td className="px-4 py-3 text-[var(--foreground)] font-medium">{s.ticker}</td>
                         <td className="px-4 py-3 text-[var(--muted)]">{s.account.name}</td>
@@ -194,7 +214,7 @@ export default async function TaxReportPage({
                     <div className="min-w-0">
                       <p className="text-sm text-[var(--foreground)]">{e.ticker ?? e.account.name}</p>
                       <p className="text-xs text-[var(--muted)]">
-                        {e.account.name} · {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(e.date)}
+                        {e.account.name} · {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(e.date)}
                       </p>
                     </div>
                     <p className="text-sm tabular-nums font-medium text-[var(--positive)]">{formatCurrency(netIncomeCents(e))}</p>
@@ -215,7 +235,7 @@ export default async function TaxReportPage({
                     <div className="min-w-0">
                       <p className="text-sm text-[var(--foreground)]">{e.account.name}</p>
                       <p className="text-xs text-[var(--muted)]">
-                        {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(e.date)}
+                        {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(e.date)}
                       </p>
                     </div>
                     <p className="text-sm tabular-nums font-medium text-[var(--positive)]">{formatCurrency(netIncomeCents(e))}</p>

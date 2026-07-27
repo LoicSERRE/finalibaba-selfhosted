@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, localeToIntl } from "@/lib/format";
 import { AnalyticsEmptyState } from "@/components/analytics-empty-state";
 import { NetWorthChart } from "@/components/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/asset-allocation-chart";
@@ -13,7 +13,7 @@ import {
 } from "@/components/export-analytics-button";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
 import { getAccountTaxRate } from "@/lib/tax";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 
 const CATEGORY_COLORS: Record<string, string> = {
   cash: "#6366f1",
@@ -151,7 +151,11 @@ type PricePoint = { date: Date; close: number };
 async function fetchYFPriceHistory(symbol: string): Promise<PricePoint[]> {
   try {
     const res = await fetch(
-      `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1mo&range=10y`,
+      // "max" rather than a fixed window - investCAGRWeightedYears (the
+      // lookback this feeds) can exceed 10 years for a long-held PEA, and
+      // clipping the fetch would silently understate an index's CAGR (see
+      // priceAt/computeIndexCAGR below for the other half of that fix).
+      `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1mo&range=max`,
       {
         headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
         next: { revalidate: 3600 },
@@ -176,7 +180,7 @@ async function fetchYFPriceHistory(symbol: string): Promise<PricePoint[]> {
 }
 
 /** Closest data point to `target`, or null if the series is empty. */
-function priceAt(series: PricePoint[], target: Date): number | null {
+function priceAt(series: PricePoint[], target: Date): PricePoint | null {
   if (series.length === 0) return null;
   let closest = series[0];
   let minDiffMs = Math.abs(series[0].date.getTime() - target.getTime());
@@ -187,19 +191,26 @@ function priceAt(series: PricePoint[], target: Date): number | null {
       closest = p;
     }
   }
-  return closest.close;
+  return closest;
 }
 
-/** Same CAGR(r) = (end/start)^(1/years) − 1 formula used for investCAGR. */
+/**
+ * Same CAGR(r) = (end/start)^(1/years) − 1 formula used for investCAGR.
+ * Years is derived from the *actual* matched start point, not the requested
+ * startDate - if the fetched series doesn't reach back that far (shouldn't
+ * happen with range=max, but degrades safely if Yahoo returns less), this
+ * keeps the exponent consistent with the prices actually being compared
+ * instead of silently understating the CAGR.
+ */
 function computeIndexCAGR(series: PricePoint[], startDate: Date, now: Date): number | null {
-  const startPrice = priceAt(series, startDate);
-  const endPrice = priceAt(series, now);
-  if (startPrice === null || endPrice === null || startPrice <= 0) return null;
+  const startPoint = priceAt(series, startDate);
+  const endPoint = priceAt(series, now);
+  if (startPoint === null || endPoint === null || startPoint.close <= 0) return null;
 
-  const years = (now.getTime() - startDate.getTime()) / (365.25 * 86_400_000);
+  const years = (endPoint.date.getTime() - startPoint.date.getTime()) / (365.25 * 86_400_000);
   if (years < 1 / 12) return null;
 
-  return (Math.pow(endPrice / startPrice, 1 / years) - 1) * 100;
+  return (Math.pow(endPoint.close / startPoint.close, 1 / years) - 1) * 100;
 }
 
 function holdingMarketValue(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
@@ -212,12 +223,14 @@ function holdingMarketValue(h: { quantity: Decimal; lastPriceCents: bigint }): b
 }
 
 export default async function AnalyticsPage() {
-  const [t, ta, tAlloc, tIncome] = await Promise.all([
+  const [t, ta, tAlloc, tIncome, locale] = await Promise.all([
     getTranslations("analytics"),
     getTranslations("accountTypes"),
     getTranslations("allocation"),
     getTranslations("income"),
+    getLocale(),
   ]);
+  const intlLocale = localeToIntl(locale);
 
   const currentYear = new Date().getUTCFullYear();
   const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
@@ -591,7 +604,7 @@ export default async function AnalyticsPage() {
     const [y, m] = month.split("-");
     return {
       month,
-      date: new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" }).format(new Date(+y, +m - 1, 1)),
+      date: new Intl.DateTimeFormat(intlLocale, { month: "short", year: "2-digit" }).format(new Date(+y, +m - 1, 1)),
       netWorth: Number(gross - liab),
     };
   });
@@ -612,7 +625,7 @@ export default async function AnalyticsPage() {
     for (const [id, v] of liabMap) { if (runningD.has(id)) liab += v; }
     const [y, m, d] = day.split("-");
     return {
-      date: new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(new Date(+y, +m - 1, +d)),
+      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(new Date(+y, +m - 1, +d)),
       netWorth: Number(gross - liab),
     };
   });
@@ -1064,10 +1077,10 @@ export default async function AnalyticsPage() {
                             isPast ? "text-[var(--muted)]" : isSoon ? "text-[var(--warning)]" : "text-[var(--foreground)]"
                           }`}>
                             {isPast
-                              ? t("dividends.exDivPast", { date: row.exDividendDate.toLocaleDateString("fr-FR") })
+                              ? t("dividends.exDivPast", { date: row.exDividendDate.toLocaleDateString(intlLocale) })
                               : daysLeft === 0
                               ? t("dividends.exDivToday")
-                              : t("dividends.exDivSoon", { days: daysLeft!, date: row.exDividendDate.toLocaleDateString("fr-FR") })
+                              : t("dividends.exDivSoon", { days: daysLeft!, date: row.exDividendDate.toLocaleDateString(intlLocale) })
                             }
                           </p>
                         ) : (
@@ -1169,7 +1182,7 @@ export default async function AnalyticsPage() {
                               <p className="text-xs text-[var(--muted)]">
                                 {row.institution}{row.subtype && ` · ${row.subtype}`}
                                 {row.investmentStartDate && (
-                                  <> · {t("performance.since", { date: row.investmentStartDate.toLocaleDateString("fr-FR", { month: "short", year: "numeric" }) })}</>
+                                  <> · {t("performance.since", { date: row.investmentStartDate.toLocaleDateString(intlLocale, { month: "short", year: "numeric" }) })}</>
                                 )}
                               </p>
                             </td>

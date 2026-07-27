@@ -5,7 +5,8 @@ import { Download } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { fmt, sign, downloadFile } from "@/lib/markdown-export";
-import { useTranslations } from "next-intl";
+import { localeToIntl } from "@/lib/format";
+import { useTranslations, useLocale } from "next-intl";
 
 // ── Serialized types (no BigInt) ──────────────────────────────────────────────
 
@@ -140,9 +141,10 @@ interface AnalyticsExportStrings {
 function buildMarkdown(
   data: AnalyticsExportData,
   sections: Set<Section>,
-  s: AnalyticsExportStrings
+  s: AnalyticsExportStrings,
+  intlLocale: string
 ): string {
-  const date = new Date().toLocaleDateString("fr-FR", {
+  const date = new Date().toLocaleDateString(intlLocale, {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -240,7 +242,7 @@ function buildMarkdown(
         const envelope = r.subtype ?? "CTO";
         const yieldStr = `${(r.divYield * 100).toFixed(2)}%`;
         const exDiv = r.exDividendDate
-          ? new Date(r.exDividendDate).toLocaleDateString("fr-FR", {
+          ? new Date(r.exDividendDate).toLocaleDateString(intlLocale, {
               day: "numeric",
               month: "short",
               year: "numeric",
@@ -275,6 +277,7 @@ function buildMarkdown(
 
 export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
   const t = useTranslations("exportAnalytics");
+  const intlLocale = localeToIntl(useLocale());
 
   const sections = [
     { id: "resume" as const, label: t("sectionSummary") },
@@ -349,7 +352,7 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
       cagrSuffix: (cagr) => t("mdCagrSuffix", { cagr }),
       passiveLine: (params) => t("mdPassiveLine", params),
     };
-    const md = buildMarkdown(data, selected, s);
+    const md = buildMarkdown(data, selected, s, intlLocale);
     downloadFile(md, "analytique");
     setOpen(false);
   }

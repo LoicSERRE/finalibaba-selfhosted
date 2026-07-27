@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, localeToIntl } from "@/lib/format";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload } from "lucide-react";
@@ -21,7 +21,7 @@ import { updateInvestmentStartDate, updateAccountTaxTreatment } from "@/lib/acti
 import Decimal from "decimal.js";
 import { calcLoanStats, hasLoanParams } from "@/lib/loan";
 import { getAccountTaxRate } from "@/lib/tax";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 
 const TYPE_TO_TAB: Record<string, string> = {
   CHECKING: "liquidites",
@@ -41,11 +41,13 @@ export default async function AccountDetailPage({
 }) {
   const { id } = await params;
 
-  const [td, ta, t] = await Promise.all([
+  const [td, ta, t, locale] = await Promise.all([
     getTranslations("accountDetail"),
     getTranslations("accountTypes"),
     getTranslations("accounts"),
+    getLocale(),
   ]);
+  const intlLocale = localeToIntl(locale);
 
   const [account, categories] = await Promise.all([
     prisma.account.findUnique({
@@ -120,7 +122,7 @@ export default async function AccountDetailPage({
     .reverse()
     .slice(-60)
     .map((h) => ({
-      date: new Intl.DateTimeFormat("fr-FR", {
+      date: new Intl.DateTimeFormat(intlLocale, {
         day: "numeric",
         month: "short",
       }).format(h.recordedAt),
@@ -459,11 +461,14 @@ export default async function AccountDetailPage({
                     {!isSynced && (
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center gap-1">
-                          <SellHoldingDialog accountId={account.id} holding={h} />
+                          {/* quantity is a Prisma Decimal - not a plain object, so it
+                              can't cross the Server->Client boundary raw (same rule as
+                              BigInt, see export-accounts-button.tsx) - stringify it here. */}
+                          <SellHoldingDialog accountId={account.id} holding={{ ...h, quantity: h.quantity.toString() }} />
                           <AddHoldingDialog
                             accountId={account.id}
                             accountName={account.name}
-                            existing={h}
+                            existing={{ ...h, quantity: h.quantity.toString() }}
                           />
                         </div>
                       </td>
@@ -507,7 +512,7 @@ export default async function AccountDetailPage({
                             )}
                           </p>
                         </div>
-                        {driftValueCents !== BigInt(0) && (
+                        {driftValueCents !== BigInt(0) && driftPts !== 0 && (
                           <div className="text-right shrink-0">
                             <p className={`text-sm font-medium tabular-nums ${isOverweight ? "text-[var(--negative)]" : "text-[var(--positive)]"}`}>
                               {isOverweight ? td("rebalancing.suggestSell") : td("rebalancing.suggestBuy")}{" "}
@@ -806,7 +811,7 @@ export default async function AccountDetailPage({
             <div>
               <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.projectedEnd")}</p>
               <p className="tabular-nums font-semibold text-[var(--foreground)]">
-                {new Intl.DateTimeFormat("fr-FR", { month: "short", year: "numeric" }).format(loanStats.endDate)}
+                {new Intl.DateTimeFormat(intlLocale, { month: "short", year: "numeric" }).format(loanStats.endDate)}
               </p>
             </div>
           </div>
@@ -901,10 +906,10 @@ export default async function AccountDetailPage({
             </div>
             <div className="flex justify-between text-xs text-[var(--muted)] mt-2">
               <span>
-                {new Intl.DateTimeFormat("fr-FR", { month: "short", year: "numeric" }).format(account.loanStartDate)}
+                {new Intl.DateTimeFormat(intlLocale, { month: "short", year: "numeric" }).format(account.loanStartDate)}
               </span>
               <span>
-                {new Intl.DateTimeFormat("fr-FR", { month: "short", year: "numeric" }).format(loanStats.endDate)}
+                {new Intl.DateTimeFormat(intlLocale, { month: "short", year: "numeric" }).format(loanStats.endDate)}
               </span>
             </div>
           </div>
@@ -945,7 +950,7 @@ export default async function AccountDetailPage({
                   } hover:bg-[var(--surface-elevated)] transition-colors`}
                 >
                   <td className="px-3 sm:px-6 py-3 text-[var(--muted)] tabular-nums whitespace-nowrap text-xs sm:text-sm">
-                    {new Intl.DateTimeFormat("fr-FR", {
+                    {new Intl.DateTimeFormat(intlLocale, {
                       day: "numeric",
                       month: "short",
                       year: "numeric",
@@ -1014,7 +1019,7 @@ export default async function AccountDetailPage({
                   } hover:bg-[var(--surface-elevated)] transition-colors`}
                 >
                   <td className="px-6 py-3 text-[var(--muted)] tabular-nums">
-                    {new Intl.DateTimeFormat("fr-FR", {
+                    {new Intl.DateTimeFormat(intlLocale, {
                       day: "numeric",
                       month: "short",
                       year: "numeric",

@@ -113,7 +113,7 @@ export function AddIncomeDialog({
           name="accountId"
           defaultValue={initial?.accountId}
           required
-          options={[{ value: "", label: tc("optional"), disabled: true }, ...relevantAccounts.map((a) => ({ value: a.id, label: a.name }))]}
+          options={[{ value: "", label: tc("selectAccount"), disabled: true }, ...relevantAccounts.map((a) => ({ value: a.id, label: a.name }))]}
         />
 
         {type === "DIVIDEND" && (

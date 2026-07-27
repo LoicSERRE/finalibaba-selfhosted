@@ -5,8 +5,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { TransactionCategorySelect } from "@/components/transaction-category-select";
-import { formatCurrency } from "@/lib/format";
-import { getTranslations } from "next-intl/server";
+import { formatCurrency, localeToIntl } from "@/lib/format";
+import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function CategoryDetailPage({
   params,
@@ -14,7 +14,8 @@ export default async function CategoryDetailPage({
   params: Promise<{ categoryId: string }>;
 }) {
   const { categoryId } = await params;
-  const [t, td] = await Promise.all([getTranslations("budgets"), getTranslations("accountDetail")]);
+  const [t, td, locale] = await Promise.all([getTranslations("budgets"), getTranslations("accountDetail"), getLocale()]);
+  const intlLocale = localeToIntl(locale);
 
   const [category, categories] = await Promise.all([
     prisma.category.findUnique({
@@ -77,7 +78,7 @@ export default async function CategoryDetailPage({
                     } hover:bg-[var(--surface-elevated)] transition-colors`}
                   >
                     <td className="px-3 sm:px-6 py-3 text-[var(--muted)] tabular-nums whitespace-nowrap text-xs sm:text-sm">
-                      {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(tx.date)}
+                      {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(tx.date)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 text-[var(--muted)] whitespace-nowrap text-xs sm:text-sm">{tx.account.name}</td>
                     <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] max-w-[140px] sm:max-w-xs truncate" title={tx.label}>

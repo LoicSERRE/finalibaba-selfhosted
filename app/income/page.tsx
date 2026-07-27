@@ -6,13 +6,14 @@ import { AddIncomeDialog } from "@/components/add-income-dialog";
 import { DeleteButton } from "@/components/delete-button";
 import { EmptyState } from "@/components/empty-state";
 import { deleteIncomeEvent } from "@/lib/actions/income";
-import { formatCurrency, centsToEuro } from "@/lib/format";
-import { getTranslations } from "next-intl/server";
+import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/format";
+import { getTranslations, getLocale } from "next-intl/server";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT", "CRYPTO"] as const;
 
 export default async function IncomePage() {
-  const [t, tc] = await Promise.all([getTranslations("income"), getTranslations("common")]);
+  const [t, tc, locale] = await Promise.all([getTranslations("income"), getTranslations("common"), getLocale()]);
+  const intlLocale = localeToIntl(locale);
 
   const [events, accounts] = await Promise.all([
     prisma.incomeEvent.findMany({
@@ -110,7 +111,7 @@ export default async function IncomePage() {
                   <span className="text-[var(--positive)]">{formatCurrency(netCents(e))}</span>
                   <span className="text-[var(--muted)] font-normal">
                     {" "}
-                    · {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(e.date)}
+                    · {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(e.date)}
                     {e.taxWithheldCents != null && e.taxWithheldCents > BigInt(0) && (
                       <> · {t("grossOfTax", { gross: formatCurrency(e.amountCents), tax: formatCurrency(e.taxWithheldCents) })}</>
                     )}

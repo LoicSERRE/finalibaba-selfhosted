@@ -9,7 +9,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { EmptyState } from "@/components/empty-state";
 import { CashflowChart } from "@/components/cashflow-chart";
 import { deleteRecurringTransaction } from "@/lib/actions/recurring";
-import { formatCurrency, centsToEuro } from "@/lib/format";
+import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/format";
 import {
   detectCandidates,
   getOccurrencesInRange,
@@ -17,7 +17,7 @@ import {
   normalizeLabel,
   projectDailyCumulative,
 } from "@/lib/recurring";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 
 const FIAT_TYPES = ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] as const;
 const HORIZON_DAYS = 90;
@@ -26,7 +26,8 @@ const HORIZON_DAYS = 90;
 const DETECTION_WINDOW_MONTHS = 25;
 
 export default async function RecurringPage() {
-  const [t, tc] = await Promise.all([getTranslations("recurring"), getTranslations("common")]);
+  const [t, tc, locale] = await Promise.all([getTranslations("recurring"), getTranslations("common"), getLocale()]);
+  const intlLocale = localeToIntl(locale);
 
   const now = new Date();
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * 60 * 1000);
@@ -85,7 +86,7 @@ export default async function RecurringPage() {
   const netTotalCents = upcoming.reduce((sum, o) => sum + Number(o.amountCents), 0);
 
   const chartData = projectDailyCumulative(active, now, horizonEnd).map((p) => ({
-    date: new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(p.date),
+    date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(p.date),
     cumulative: p.cumulativeCents,
   }));
 
@@ -210,7 +211,7 @@ export default async function RecurringPage() {
                       <span className="text-sm text-[var(--foreground)] truncate">{o.label}</span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 text-sm tabular-nums">
-                      <span className="text-[var(--muted)]">{new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(o.date)}</span>
+                      <span className="text-[var(--muted)]">{new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(o.date)}</span>
                       <span className={Number(o.amountCents) >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
                         {formatCurrency(o.amountCents)}
                       </span>
