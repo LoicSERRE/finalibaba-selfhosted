@@ -19,6 +19,7 @@ import {
   type InvestAccountExport,
   type RealEstateAccountExport,
   type AutomobileAccountExport,
+  type LoanAccountExport,
 } from "@/components/export-accounts-button";
 import Decimal from "decimal.js";
 import { calcLoanStats, hasLoanParams } from "@/lib/loan";
@@ -208,6 +209,8 @@ export default async function AccountsPage({
           gainCents: gain != null ? Number(gain) : null,
           gainPct,
           taxCents: tax != null ? Number(tax) : null,
+          currency: h.currency,
+          targetPct: h.targetPct != null ? Math.round(h.targetPct * 100) : null,
         };
       }),
     };
@@ -253,6 +256,32 @@ export default async function AccountsPage({
     };
   });
 
+  const loanExport: LoanAccountExport[] = loanAccounts
+    .filter((loan) => hasLoanParams(loan))
+    .map((loan) => {
+      const loanParams = {
+        loanAmountCents: loan.loanAmountCents,
+        loanTaeg: loan.loanTaeg,
+        loanDurationMonths: loan.loanDurationMonths,
+        loanDeferralMonths: loan.loanDeferralMonths ?? 0,
+        loanStartDate: loan.loanStartDate,
+      };
+      const stats = calcLoanStats(loanParams, loan.insuranceMonthlyCents ?? BigInt(0), now);
+      return {
+        id: loan.id,
+        name: loan.name,
+        institutionName: loan.institution?.name ?? "",
+        amountBorrowedCents: Number(loan.loanAmountCents),
+        remainingCapitalCents: Number(stats.currentCapitalCents),
+        taeg: loan.loanTaeg!,
+        durationMonths: loan.loanDurationMonths!,
+        currentPaymentCents: Number(stats.currentMonthlyTotalCents),
+        totalCostCents: Number(stats.totalCostCents),
+        progressPct: stats.progressPct,
+        projectedEnd: new Intl.DateTimeFormat(intlLocale, { month: "short", year: "numeric" }).format(stats.endDate),
+      };
+    });
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -263,6 +292,7 @@ export default async function AccountsPage({
             investAccounts={investExport}
             realEstateAccounts={realEstateExport}
             automobileAccounts={automobileExport}
+            loanAccounts={loanExport}
           />
           {/* immobilier/automobiles/credits have their own dedicated add
               dialog further down (with type-specific fields this generic
@@ -392,8 +422,17 @@ export default async function AccountsPage({
               return (
                 <div
                   key={account.id}
-                  className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden"
+                  className="relative bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:border-[var(--accent)]/40 transition"
                 >
+                  {/* Full-card link to the account detail page - same pattern
+                      as the real estate/auto/loan cards below. This was
+                      missing here entirely: investment/crypto accounts had
+                      no way to reach /accounts/[id] (rebalancing, tax
+                      treatment, multi-currency badges, holding management
+                      all live there) from this list. z-0 + relative content
+                      below it (default z-auto stacking) keeps the holdings
+                      table's own text selectable/readable above the link. */}
+                  <Link href={`/accounts/${account.id}`} aria-label={`Voir ${account.name}`} className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset" />
                   <div className="px-4 sm:px-6 py-4 border-b border-[var(--border)] flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
@@ -739,7 +778,7 @@ export default async function AccountsPage({
 
                   <div>
                     <div className="flex justify-between text-xs text-[var(--muted)] mb-1.5">
-                      <span>{t("loan.repaymentProgress")}</span>
+                      <span>{t("loan.repaymentProgress", { elapsed: stats.monthsElapsed, total: loan.loanDurationMonths })}</span>
                       <span>{stats.progressPct}%</span>
                     </div>
                     <div className="h-1.5 bg-[var(--surface-elevated)] rounded-full overflow-hidden">

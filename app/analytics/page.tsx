@@ -81,7 +81,12 @@ export default async function AnalyticsPage() {
   const allocationLabels = Object.fromEntries(
     result.allocationSlices.map((s) => [s.key, tAlloc(s.key as Parameters<typeof tAlloc>[0])])
   );
-  const analyticsExport = buildAnalyticsExport(result, allocationLabels);
+  const typeLabels = Object.fromEntries(
+    (["CHECKING", "SAVINGS", "MEAL_VOUCHER", "INVESTMENT", "CRYPTO", "REAL_ESTATE", "AUTOMOBILE"] as const).map(
+      (k) => [k, ta(k)]
+    )
+  );
+  const analyticsExport = buildAnalyticsExport(result, allocationLabels, typeLabels);
   const allocationSlicesForChart = result.allocationSlices.map((s) => ({
     name: allocationLabels[s.key],
     value: s.value,

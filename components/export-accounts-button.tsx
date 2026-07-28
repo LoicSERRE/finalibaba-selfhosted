@@ -29,6 +29,8 @@ export type HoldingExport = {
   gainCents: number | null;
   gainPct: number | null;
   taxCents: number | null;
+  currency: string; // "EUR" | "USD" | "GBP" | "CHF"
+  targetPct: number | null; // 0-100, rebalancing target
 };
 
 export type InvestAccountExport = {
@@ -65,6 +67,20 @@ export type AutomobileAccountExport = {
   depreciationPct: number | null;
 };
 
+export type LoanAccountExport = {
+  id: string;
+  name: string;
+  institutionName: string;
+  amountBorrowedCents: number;
+  remainingCapitalCents: number;
+  taeg: number;
+  durationMonths: number;
+  currentPaymentCents: number;
+  totalCostCents: number;
+  progressPct: number;
+  projectedEnd: string; // pre-formatted per locale
+};
+
 // ── ExportStrings ─────────────────────────────────────────────────────────────
 
 type ExportStrings = {
@@ -73,6 +89,7 @@ type ExportStrings = {
   investments: string;
   realEstate: string;
   autos: string;
+  loans: string;
   balance: string;
   delta: string;
   total: string;
@@ -93,6 +110,14 @@ type ExportStrings = {
   colValue: string;
   colPct: string;
   colGain: string;
+  colTarget: string;
+  amountBorrowed: string;
+  remaining: string;
+  taeg: string;
+  currentPayment: string;
+  totalCost: string;
+  projectedEnd: string;
+  progress: string;
   typeLabels: Record<string, string>;
 };
 
@@ -103,6 +128,7 @@ function buildMarkdown(
   invest: InvestAccountExport[],
   realEstate: RealEstateAccountExport[],
   automobiles: AutomobileAccountExport[],
+  loans: LoanAccountExport[],
   s: ExportStrings
 ): string {
   const date = new Date().toLocaleDateString(undefined, {
@@ -146,16 +172,18 @@ function buildMarkdown(
 
       if (a.holdings.length > 0) {
         lines.push(
-          `| ${s.colAsset} | ${s.colIsin} | ${s.colQty} | ${s.colPrice} | ${s.colValue} | ${s.colPct} | ${s.colGain} |`
+          `| ${s.colAsset} | ${s.colIsin} | ${s.colQty} | ${s.colPrice} | ${s.colValue} | ${s.colPct} | ${s.colGain} | ${s.colTarget} |`
         );
-        lines.push("|---|---|---|---|---|---|---|");
+        lines.push("|---|---|---|---|---|---|---|---|");
         for (const h of a.holdings) {
           const gainStr =
             h.gainCents !== null
               ? `${sign(h.gainCents)}${fmt(h.gainCents)}${h.gainPct !== null ? ` (${sign(h.gainPct)}${h.gainPct.toFixed(1)}%)` : ""}`
               : "-";
+          const targetStr = h.targetPct !== null ? `${h.targetPct}%` : "-";
+          const nameStr = `${h.name ?? h.ticker}${h.currency !== "EUR" ? ` · ${h.currency}` : ""}`;
           lines.push(
-            `| ${h.name ?? h.ticker} | ${h.ticker} | ${h.quantity} | ${fmt(h.lastPriceCents, 2)} | ${fmt(h.valueCents)} | ${h.pct}% | ${gainStr} |`
+            `| ${nameStr} | ${h.ticker} | ${h.quantity} | ${fmt(h.lastPriceCents, 2)} | ${fmt(h.valueCents)} | ${h.pct}% | ${gainStr} | ${targetStr} |`
           );
         }
         lines.push("");
@@ -199,6 +227,21 @@ function buildMarkdown(
     }
   }
 
+  if (loans.length > 0) {
+    lines.push(`## ${s.loans}`, "");
+    for (const l of loans) {
+      lines.push(`### ${l.institutionName ? `${l.institutionName} · ` : ""}${l.name}`);
+      lines.push(`- **${s.amountBorrowed}** : ${fmt(l.amountBorrowedCents)}`);
+      lines.push(`- **${s.remaining}** : ${fmt(l.remainingCapitalCents)}`);
+      lines.push(`- **${s.taeg}** : ${l.taeg.toFixed(2)}%`);
+      lines.push(`- **${s.currentPayment}** : ${fmt(l.currentPaymentCents)}`);
+      lines.push(`- **${s.totalCost}** : ${fmt(l.totalCostCents)}`);
+      lines.push(`- **${s.projectedEnd}** : ${l.projectedEnd}`);
+      lines.push(`- **${s.progress}** : ${l.progressPct}%`);
+      lines.push("");
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -211,6 +254,7 @@ type Props = {
   investAccounts: InvestAccountExport[];
   realEstateAccounts: RealEstateAccountExport[];
   automobileAccounts: AutomobileAccountExport[];
+  loanAccounts: LoanAccountExport[];
 };
 
 export function ExportAccountsButton({
@@ -218,6 +262,7 @@ export function ExportAccountsButton({
   investAccounts,
   realEstateAccounts,
   automobileAccounts,
+  loanAccounts,
 }: Props) {
   const t = useTranslations("exportAccounts");
   const ta = useTranslations("accountTypes");
@@ -249,6 +294,13 @@ export function ExportAccountsButton({
       accounts: automobileAccounts.map((a) => ({
         id: a.id,
         label: `${a.institutionName} - ${a.name}`,
+      })),
+    },
+    {
+      label: t("groupLoans"),
+      accounts: loanAccounts.map((a) => ({
+        id: a.id,
+        label: a.institutionName ? `${a.institutionName} - ${a.name}` : a.name,
       })),
     },
   ].filter((g) => g.accounts.length > 0);
@@ -290,6 +342,7 @@ export function ExportAccountsButton({
       investments: t("groupInvestments"),
       realEstate: t("groupRealEstate"),
       autos: t("groupAutos"),
+      loans: t("groupLoans"),
       balance: t("mdBalance"),
       delta: t("mdDelta"),
       total: t("mdTotal"),
@@ -310,6 +363,14 @@ export function ExportAccountsButton({
       colValue: t("mdColValue"),
       colPct: t("mdColPct"),
       colGain: t("mdColGain"),
+      colTarget: t("mdColTarget"),
+      amountBorrowed: t("mdAmountBorrowed"),
+      remaining: t("mdRemaining"),
+      taeg: t("mdTaeg"),
+      currentPayment: t("mdCurrentPayment"),
+      totalCost: t("mdTotalCost"),
+      projectedEnd: t("mdProjectedEnd"),
+      progress: t("mdProgress"),
       typeLabels: {
         CHECKING: ta("CHECKING"),
         SAVINGS: ta("SAVINGS"),
@@ -324,6 +385,7 @@ export function ExportAccountsButton({
       investAccounts.filter((a) => selected.has(a.id)),
       realEstateAccounts.filter((a) => selected.has(a.id)),
       automobileAccounts.filter((a) => selected.has(a.id)),
+      loanAccounts.filter((a) => selected.has(a.id)),
       exportStrings
     );
     downloadFile(md, "comptes");

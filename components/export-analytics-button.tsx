@@ -47,6 +47,34 @@ export type PerfRowExport = {
   deltaPct: number | null;
 };
 
+export type BenchmarkExport = {
+  investCAGR: number;
+  msciWorld: number | null;
+  sp500: number | null;
+  cac40: number | null;
+};
+
+export type TopAssetRowExport = {
+  name: string;
+  institution: string;
+  typeLabel: string;
+  subtype: string | null;
+  valueCents: number;
+  gainCents: number | null;
+  taxCents: number | null;
+  pct: number;
+};
+
+export type DebtAccountRowExport = {
+  name: string;
+  institution: string;
+  typeLabel: string;
+  valueCents: number;
+  liabilityCents: number;
+  equityCents: number;
+  ltv: number;
+};
+
 export type AnalyticsExportData = {
   netWorth: number;
   netWorthAfterTax: number;
@@ -74,11 +102,38 @@ export type AnalyticsExportData = {
   annualPassiveCents: number;
   monthlyPassiveCents: number;
   performanceRows: PerfRowExport[];
+  // Real tracked income (IncomeEvent, year-to-date) - distinct from the
+  // Yahoo-yield-model estimate above, see lib/analytics.ts.
+  realYtdDividendsNetCents: number;
+  realYtdInterestNetCents: number;
+  realYtdPassiveNetCents: number;
+  // Benchmark comparison (null when investCAGR itself is null)
+  benchmark: BenchmarkExport | null;
+  // Allocation radar
+  garantisCents: number;
+  risquesCents: number;
+  garantisPct: number;
+  techPct: number;
+  // Top assets (top 10 by value)
+  topAssets: TopAssetRowExport[];
+  // Financing / debt analysis
+  debtAccounts: DebtAccountRowExport[];
+  debtRatio: number;
 };
 
 // ── Sections ──────────────────────────────────────────────────────────────────
 
-type Section = "resume" | "allocation" | "performance" | "dividendes" | "historique";
+type Section =
+  | "resume"
+  | "allocation"
+  | "performance"
+  | "dividendes"
+  | "revenusReels"
+  | "benchmark"
+  | "radar"
+  | "topActifs"
+  | "financement"
+  | "historique";
 
 // ── Markdown strings interface ────────────────────────────────────────────────
 
@@ -88,6 +143,11 @@ interface AnalyticsExportStrings {
   allocation: string;
   performance: string;
   passive: string;
+  realIncome: string;
+  benchmark: string;
+  radar: string;
+  topAssets: string;
+  financing: string;
   history: string;
   netWorthAfterTax: string;
   netWorth: string;
@@ -117,7 +177,25 @@ interface AnalyticsExportStrings {
   colAnnualNet: string;
   colExDiv: string;
   colMonth: string;
+  colGain: string;
+  colLoan: string;
+  colEquity: string;
+  colLtv: string;
   months: string;
+  ytdDividends: string;
+  ytdInterest: string;
+  ytdTotal: string;
+  yourPortfolio: string;
+  msciWorld: string;
+  sp500: string;
+  cac40: string;
+  safeVsRisky: string;
+  safe: string;
+  risky: string;
+  techExposure: string;
+  totalLiabilities: string;
+  debtRatio: string;
+  equity: string;
   goalFmt: (amount: string, pct: number) => string;
   summaryLine: (params: {
     invested: string;
@@ -256,6 +334,71 @@ function buildMarkdown(
     }
   }
 
+  // ── Revenus réels perçus (IncomeEvent, année en cours) ──
+  if (sections.has("revenusReels") && data.realYtdPassiveNetCents > 0) {
+    lines.push(`## ${s.realIncome}`, "");
+    lines.push(`| ${s.indicator} | ${s.value} |`);
+    lines.push("|---|---|");
+    lines.push(`| ${s.ytdDividends} | ${fmt(data.realYtdDividendsNetCents)} |`);
+    lines.push(`| ${s.ytdInterest} | ${fmt(data.realYtdInterestNetCents)} |`);
+    lines.push(`| ${s.ytdTotal} | **${fmt(data.realYtdPassiveNetCents)}** |`);
+    lines.push("");
+  }
+
+  // ── Comparaison aux indices ──
+  if (sections.has("benchmark") && data.benchmark !== null) {
+    lines.push(`## ${s.benchmark}`, "");
+    lines.push(`| ${s.indicator} | CAGR |`);
+    lines.push("|---|---|");
+    const cagrCell = (v: number) => `${sign(v)}${v.toFixed(1)}%`;
+    lines.push(`| ${s.yourPortfolio} | **${cagrCell(data.benchmark.investCAGR)}** |`);
+    if (data.benchmark.msciWorld !== null) lines.push(`| ${s.msciWorld} | ${cagrCell(data.benchmark.msciWorld)} |`);
+    if (data.benchmark.sp500 !== null) lines.push(`| ${s.sp500} | ${cagrCell(data.benchmark.sp500)} |`);
+    if (data.benchmark.cac40 !== null) lines.push(`| ${s.cac40} | ${cagrCell(data.benchmark.cac40)} |`);
+    lines.push("");
+  }
+
+  // ── Radar d'allocation ──
+  if (sections.has("radar")) {
+    lines.push(`## ${s.radar}`, "");
+    lines.push(`| ${s.indicator} | ${s.value} |`);
+    lines.push("|---|---|");
+    lines.push(`| ${s.safeVsRisky} | ${s.safe} ${fmt(data.garantisCents)} (${data.garantisPct}%) · ${s.risky} ${fmt(data.risquesCents)} (${100 - data.garantisPct}%) |`);
+    lines.push(`| ${s.techExposure} | ${data.techPct}% |`);
+    lines.push("");
+  }
+
+  // ── Mes actifs (top 10) ──
+  if (sections.has("topActifs") && data.topAssets.length > 0) {
+    lines.push(`## ${s.topAssets}`, "");
+    lines.push(`| ${s.colAsset} | ${s.category} | ${s.colValue} | ${s.colGain} | ${s.colTax} | ${s.pct} |`);
+    lines.push("|---|---|---|---|---|---|");
+    for (const a of data.topAssets) {
+      const label = a.subtype ? `${a.name} (${a.subtype})` : a.name;
+      const gainStr = a.gainCents !== null ? `${sign(a.gainCents)}${fmt(a.gainCents)}` : "-";
+      const taxStr = a.taxCents !== null ? (a.taxCents > 0 ? `-${fmt(a.taxCents)}` : fmt(0)) : "-";
+      lines.push(`| ${label} | ${a.typeLabel} | ${fmt(a.valueCents)} | ${gainStr} | ${taxStr} | ${a.pct}% |`);
+    }
+    lines.push("");
+  }
+
+  // ── Analyse du financement ──
+  if (sections.has("financement") && data.debtAccounts.length > 0) {
+    lines.push(`## ${s.financing}`, "");
+    lines.push(`| ${s.indicator} | ${s.value} |`);
+    lines.push("|---|---|");
+    lines.push(`| ${s.totalLiabilities} | ${fmt(data.totalLiabilities)} |`);
+    lines.push(`| ${s.debtRatio} | ${data.debtRatio}% |`);
+    lines.push(`| ${s.equity} | ${fmt(data.grossAssets - data.totalLiabilities)} |`);
+    lines.push("");
+    lines.push(`| ${s.colAsset} | ${s.colValue} | ${s.colLoan} | ${s.colEquity} | ${s.colLtv} |`);
+    lines.push("|---|---|---|---|---|");
+    for (const a of data.debtAccounts) {
+      lines.push(`| ${a.name} | ${fmt(a.valueCents)} | ${fmt(a.liabilityCents)} | ${fmt(a.equityCents)} | ${a.ltv}% |`);
+    }
+    lines.push("");
+  }
+
   // ── Historique mensuel ──
   if (sections.has("historique") && data.performanceRows.length > 0) {
     lines.push(`## ${s.history}`, "");
@@ -284,6 +427,11 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
     { id: "allocation" as const, label: t("sectionAllocation") },
     { id: "performance" as const, label: t("sectionPerformance") },
     { id: "dividendes" as const, label: t("sectionDividends") },
+    { id: "revenusReels" as const, label: t("sectionRealIncome") },
+    { id: "benchmark" as const, label: t("sectionBenchmark") },
+    { id: "radar" as const, label: t("sectionRadar") },
+    { id: "topActifs" as const, label: t("sectionTopAssets") },
+    { id: "financement" as const, label: t("sectionFinancing") },
     { id: "historique" as const, label: t("sectionHistory") },
   ] satisfies { id: Section; label: string }[];
 
@@ -317,6 +465,11 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
       allocation: t("mdAllocation"),
       performance: t("mdPerformance"),
       passive: t("mdPassive"),
+      realIncome: t("sectionRealIncome"),
+      benchmark: t("sectionBenchmark"),
+      radar: t("sectionRadar"),
+      topAssets: t("sectionTopAssets"),
+      financing: t("sectionFinancing"),
       history: t("mdHistory"),
       netWorthAfterTax: t("mdNetWorthAfterTax"),
       netWorth: t("mdNetWorth"),
@@ -346,7 +499,25 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
       colAnnualNet: t("mdColAnnualNet"),
       colExDiv: t("mdColExDiv"),
       colMonth: t("mdColMonth"),
+      colGain: t("mdColGain"),
+      colLoan: t("mdColLoan"),
+      colEquity: t("mdEquity"),
+      colLtv: t("mdColLtv"),
       months: t("mdMonths"),
+      ytdDividends: t("mdYtdDividends"),
+      ytdInterest: t("mdYtdInterest"),
+      ytdTotal: t("mdYtdTotal"),
+      yourPortfolio: t("mdYourPortfolio"),
+      msciWorld: t("mdMsciWorld"),
+      sp500: t("mdSp500"),
+      cac40: t("mdCac40"),
+      safeVsRisky: t("mdSafeVsRisky"),
+      safe: t("mdSafe"),
+      risky: t("mdRisky"),
+      techExposure: t("mdTechExposure"),
+      totalLiabilities: t("mdTotalLiabilities"),
+      debtRatio: t("mdDebtRatio"),
+      equity: t("mdEquity"),
       goalFmt: (amount, pct) => t("mdGoalFmt", { amount, pct }),
       summaryLine: (params) => t("mdSummaryLine", params),
       cagrSuffix: (cagr) => t("mdCagrSuffix", { cagr }),

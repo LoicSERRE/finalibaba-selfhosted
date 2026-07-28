@@ -846,12 +846,13 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
 /**
  * Builds the serialized (no BigInt) export payload for ExportAnalyticsButton.
  * Kept separate from computeAnalytics because it needs allocation category
- * labels already translated (tAlloc), which is a rendering/i18n concern the
- * pure computation above must stay free of.
+ * (and account type) labels already translated, which is a rendering/i18n
+ * concern the pure computation above must stay free of.
  */
 export function buildAnalyticsExport(
   result: AnalyticsResult,
-  allocationLabels: Record<string, string>
+  allocationLabels: Record<string, string>,
+  typeLabels: Record<string, string>
 ): AnalyticsExportData {
   return {
     netWorth: Number(result.netWorth),
@@ -909,5 +910,41 @@ export function buildAnalyticsExport(
       delta: r.delta ?? null,
       deltaPct: r.deltaPct ?? null,
     })),
+    realYtdDividendsNetCents: Number(result.realYtdDividendsNetCents),
+    realYtdInterestNetCents: Number(result.realYtdInterestNetCents),
+    realYtdPassiveNetCents: Number(result.realYtdPassiveNetCents),
+    benchmark:
+      result.investCAGR !== null && result.benchmarkCAGRs !== null
+        ? {
+            investCAGR: result.investCAGR,
+            msciWorld: result.benchmarkCAGRs.msciWorld,
+            sp500: result.benchmarkCAGRs.sp500,
+            cac40: result.benchmarkCAGRs.cac40,
+          }
+        : null,
+    garantisCents: Number(result.garantis),
+    risquesCents: Number(result.risques),
+    garantisPct: result.garantisPct,
+    techPct: result.techPct,
+    topAssets: result.topAssets.map((a) => ({
+      name: a.name,
+      institution: a.institution,
+      typeLabel: typeLabels[a.type] ?? a.type,
+      subtype: a.subtype,
+      valueCents: Number(a.value),
+      gainCents: a.gain !== null ? Number(a.gain) : null,
+      taxCents: a.tax !== null ? Number(a.tax) : null,
+      pct: a.pct,
+    })),
+    debtAccounts: result.debtAccounts.map((a) => ({
+      name: a.name,
+      institution: a.institution,
+      typeLabel: typeLabels[a.type] ?? a.type,
+      valueCents: Number(a.value),
+      liabilityCents: Number(a.liability),
+      equityCents: Number(a.equity),
+      ltv: a.ltv,
+    })),
+    debtRatio: result.debtRatio,
   };
 }

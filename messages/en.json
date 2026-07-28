@@ -488,7 +488,8 @@
       "crypto": "Crypto",
       "peaHint": "FR default: 17.2%",
       "ctoHint": "FR default: 31.4% (flat tax)",
-      "cryptoHint": "FR default: 31.4% (flat tax)"
+      "cryptoHint": "FR default: 31.4% (flat tax)",
+      "taxReportLink": "View the annual tax report →"
     },
     "language": {
       "title": "Language"
@@ -768,6 +769,7 @@
     "groupInvestments": "Investments",
     "groupRealEstate": "Real estate",
     "groupAutos": "Autos",
+    "groupLoans": "Loans",
     "mdTitle": "Account Export",
     "mdBalance": "Balance",
     "mdDelta": "Recent change",
@@ -788,7 +790,15 @@
     "mdColPrice": "Unit price",
     "mdColValue": "Value",
     "mdColPct": "%",
-    "mdColGain": "Gain/Loss"
+    "mdColGain": "Gain/Loss",
+    "mdColTarget": "Target",
+    "mdAmountBorrowed": "Amount borrowed",
+    "mdRemaining": "Remaining capital",
+    "mdTaeg": "APR",
+    "mdCurrentPayment": "Current payment",
+    "mdTotalCost": "Total loan cost",
+    "mdProjectedEnd": "Projected end",
+    "mdProgress": "Progress"
   },
   "charts": {
     "noData": "No data",
@@ -812,6 +822,11 @@
     "sectionAllocation": "Asset allocation",
     "sectionPerformance": "Investment performance",
     "sectionDividends": "Passive income & dividends",
+    "sectionRealIncome": "Real income received (this year)",
+    "sectionBenchmark": "Benchmark comparison",
+    "sectionRadar": "Allocation radar",
+    "sectionTopAssets": "My assets",
+    "sectionFinancing": "Financing analysis",
     "sectionHistory": "Monthly history",
     "mdTitle": "Analytics Export",
     "mdSummary": "Global summary",
@@ -855,6 +870,23 @@
     "mdMonthlyNet": "Monthly net",
     "mdGrossDividends": "Gross dividends",
     "mdInterest": "Savings interest",
-    "mdPassiveLine": "**Annual net**: {annual}  ·  **Monthly net**: {monthly}  ·  **Gross dividends**: {dividends}  ·  **Savings interest**: {interest}"
+    "mdPassiveLine": "**Annual net**: {annual}  ·  **Monthly net**: {monthly}  ·  **Gross dividends**: {dividends}  ·  **Savings interest**: {interest}",
+    "mdColGain": "Gain/Loss",
+    "mdColLoan": "Loan",
+    "mdColLtv": "LTV",
+    "mdYtdDividends": "Net dividends received",
+    "mdYtdInterest": "Net interest received",
+    "mdYtdTotal": "Total net received",
+    "mdYourPortfolio": "Your portfolio",
+    "mdMsciWorld": "MSCI World (URTH proxy)",
+    "mdSp500": "S&P 500",
+    "mdCac40": "CAC 40",
+    "mdSafeVsRisky": "Safe vs Risky",
+    "mdSafe": "Safe",
+    "mdRisky": "Risky",
+    "mdTechExposure": "Tech exposure",
+    "mdTotalLiabilities": "Total liabilities",
+    "mdDebtRatio": "Debt / gross ratio",
+    "mdEquity": "Equity"
   }
 }

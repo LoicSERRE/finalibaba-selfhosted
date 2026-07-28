@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 import { Settings } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/add-institution-dialog";
 import { DeleteButton } from "@/components/delete-button";
@@ -325,7 +326,13 @@ export default async function SettingsPage() {
               <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.cryptoHint")}</p>
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/tax-report"
+              className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2"
+            >
+              {t("settings.tax.taxReportLink")}
+            </Link>
             <SaveSettingsButton />
           </div>
         </form>

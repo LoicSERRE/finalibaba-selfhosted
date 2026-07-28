@@ -488,7 +488,8 @@
       "crypto": "Crypto",
       "peaHint": "Défaut FR : 17,2 %",
       "ctoHint": "Défaut FR : 31,4 % (PFU)",
-      "cryptoHint": "Défaut FR : 31,4 % (PFU)"
+      "cryptoHint": "Défaut FR : 31,4 % (PFU)",
+      "taxReportLink": "Voir le rapport fiscal annuel →"
     },
     "language": {
       "title": "Langue"
@@ -768,6 +769,7 @@
     "groupInvestments": "Investissements",
     "groupRealEstate": "Immobilier",
     "groupAutos": "Automobiles",
+    "groupLoans": "Crédits",
     "mdTitle": "Export Comptes",
     "mdBalance": "Solde",
     "mdDelta": "Variation récente",
@@ -788,7 +790,15 @@
     "mdColPrice": "Prix unitaire",
     "mdColValue": "Valeur",
     "mdColPct": "%",
-    "mdColGain": "Plus-value"
+    "mdColGain": "Plus-value",
+    "mdColTarget": "Cible",
+    "mdAmountBorrowed": "Montant emprunté",
+    "mdRemaining": "Capital restant dû",
+    "mdTaeg": "TAEG",
+    "mdCurrentPayment": "Mensualité actuelle",
+    "mdTotalCost": "Coût total crédit",
+    "mdProjectedEnd": "Fin prévue",
+    "mdProgress": "Avancement"
   },
   "charts": {
     "noData": "Aucune donnée",
@@ -812,6 +822,11 @@
     "sectionAllocation": "Allocation d'actifs",
     "sectionPerformance": "Performance investissements",
     "sectionDividends": "Revenus passifs & dividendes",
+    "sectionRealIncome": "Revenus réels perçus (année en cours)",
+    "sectionBenchmark": "Comparaison aux indices",
+    "sectionRadar": "Radar d'allocation",
+    "sectionTopAssets": "Mes actifs",
+    "sectionFinancing": "Analyse du financement",
     "sectionHistory": "Historique mensuel",
     "mdTitle": "Export Analytique",
     "mdSummary": "Résumé global",
@@ -855,6 +870,23 @@
     "mdMonthlyNet": "Mensuel net",
     "mdGrossDividends": "Dividendes bruts",
     "mdInterest": "Intérêts livrets",
-    "mdPassiveLine": "**Annuel net** : {annual}  ·  **Mensuel net** : {monthly}  ·  **Dividendes bruts** : {dividends}  ·  **Intérêts livrets** : {interest}"
+    "mdPassiveLine": "**Annuel net** : {annual}  ·  **Mensuel net** : {monthly}  ·  **Dividendes bruts** : {dividends}  ·  **Intérêts livrets** : {interest}",
+    "mdColGain": "Plus-value",
+    "mdColLoan": "Crédit",
+    "mdColLtv": "LTV",
+    "mdYtdDividends": "Dividendes nets perçus",
+    "mdYtdInterest": "Intérêts nets perçus",
+    "mdYtdTotal": "Total net perçu",
+    "mdYourPortfolio": "Votre portefeuille",
+    "mdMsciWorld": "MSCI World (proxy URTH)",
+    "mdSp500": "S&P 500",
+    "mdCac40": "CAC 40",
+    "mdSafeVsRisky": "Garantis vs Risqués",
+    "mdSafe": "Garantis",
+    "mdRisky": "Risqués",
+    "mdTechExposure": "Exposition Tech",
+    "mdTotalLiabilities": "Passif total",
+    "mdDebtRatio": "Ratio dette / brut",
+    "mdEquity": "Fonds propres"
   }
 }
