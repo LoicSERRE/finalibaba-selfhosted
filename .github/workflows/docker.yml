@@ -108,6 +108,13 @@ jobs:
     name: Notify private deploy repo
     needs: [build-app, build-sync]
     runs-on: ubuntu-latest
+    # This job never touches GITHUB_TOKEN - it authenticates to the private
+    # repo via the DEPLOY_DISPATCH_TOKEN secret instead - so it needs none of
+    # the default token's permissions. Explicit {} instead of leaving this
+    # unset (which would inherit the repo/org default, often broader than
+    # needed) is what CodeQL's actions/missing-workflow-permissions check
+    # flags without it.
+    permissions: {}
     steps:
       # Tells LoicSERRE/Finalibaba's deploy.yml to pull the images just
       # published above and redeploy - requires a PAT with permission to
