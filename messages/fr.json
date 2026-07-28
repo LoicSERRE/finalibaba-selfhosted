@@ -20,7 +20,11 @@
     "optional": "optionnel",
     "selectAccount": "Sélectionner un compte",
     "previous": "Précédent",
-    "next": "Suivant"
+    "next": "Suivant",
+    "notFoundTitle": "Page introuvable",
+    "backToDashboard": "Retour au dashboard",
+    "unexpectedError": "Une erreur inattendue s'est produite.",
+    "retry": "Réessayer"
   },
   "nav": {
     "dashboard": "Dashboard",

@@ -1,4 +1,5 @@
 import { formatCurrency } from "@/lib/format";
+import { ALLOCATION_CATEGORY_COLORS } from "@/lib/palette";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
@@ -32,11 +33,12 @@ export function AllocationRadarSection({
         </div>
         <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
           <div
-            className="bg-[#8b5cf6] rounded-l-full transition-all"
-            style={{ width: `${garantisPct}%` }}
+            className="rounded-l-full transition-all"
+            style={{ width: `${garantisPct}%`, background: ALLOCATION_CATEGORY_COLORS.savings }}
           />
           <div
-            className="bg-[#22c55e] flex-1 rounded-r-full transition-all"
+            className="flex-1 rounded-r-full transition-all"
+            style={{ background: ALLOCATION_CATEGORY_COLORS.investments }}
           />
         </div>
         <div className="flex justify-between text-xs text-[var(--muted)] mt-1.5">

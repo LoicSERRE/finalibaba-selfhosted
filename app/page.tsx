@@ -11,6 +11,7 @@ import Decimal from "decimal.js";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
 import { getAccountTaxRate } from "@/lib/tax";
 import { getInstitutionLogoUrl } from "@/lib/institutions";
+import { ALLOCATION_CATEGORY_COLORS } from "@/lib/palette";
 import { getTranslations, getLocale } from "next-intl/server";
 
 async function getDashboardData() {
@@ -228,12 +229,12 @@ export default async function DashboardPage() {
   const hasData = hasAccounts;
 
   const allocationSlices: AllocationSlice[] = [
-    { name: t("allocation.cash"), value: allocationRaw.cash, color: "#6366f1" },
-    { name: t("allocation.savings"), value: allocationRaw.savings, color: "#8b5cf6" },
-    { name: t("allocation.investments"), value: allocationRaw.investments, color: "#22c55e" },
-    { name: t("allocation.crypto"), value: allocationRaw.crypto, color: "#f59e0b" },
-    { name: t("allocation.realEstate"), value: allocationRaw.realEstate, color: "#3b82f6" },
-    { name: t("allocation.auto"), value: allocationRaw.auto, color: "#ec4899" },
+    { name: t("allocation.cash"), value: allocationRaw.cash, color: ALLOCATION_CATEGORY_COLORS.cash },
+    { name: t("allocation.savings"), value: allocationRaw.savings, color: ALLOCATION_CATEGORY_COLORS.savings },
+    { name: t("allocation.investments"), value: allocationRaw.investments, color: ALLOCATION_CATEGORY_COLORS.investments },
+    { name: t("allocation.crypto"), value: allocationRaw.crypto, color: ALLOCATION_CATEGORY_COLORS.crypto },
+    { name: t("allocation.realEstate"), value: allocationRaw.realEstate, color: ALLOCATION_CATEGORY_COLORS.realEstate },
+    { name: t("allocation.auto"), value: allocationRaw.auto, color: ALLOCATION_CATEGORY_COLORS.auto },
   ];
 
   return (

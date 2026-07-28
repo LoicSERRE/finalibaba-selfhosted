@@ -43,13 +43,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 relative overflow-hidden"
-            style={{ background: "linear-gradient(135deg, #6366f1, #4338ca)" }}
+            style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-strong))" }}
           >
             <span className="text-white font-extrabold text-3xl tracking-tighter select-none">F</span>
             <div className="absolute bottom-2 right-2 flex items-end gap-0.5">
-              <div className="w-1 h-1.5 rounded-sm bg-green-400 opacity-90" />
-              <div className="w-1 h-2.5 rounded-sm bg-green-400 opacity-90" />
-              <div className="w-1 h-3.5 rounded-sm bg-green-400 opacity-90" />
+              <div className="w-1 h-1.5 rounded-sm bg-[var(--positive)] opacity-90" />
+              <div className="w-1 h-2.5 rounded-sm bg-[var(--positive)] opacity-90" />
+              <div className="w-1 h-3.5 rounded-sm bg-[var(--positive)] opacity-90" />
             </div>
           </div>
           <h1 className="text-2xl font-bold text-[var(--foreground)] tracking-tight">Finalibaba</h1>
@@ -93,8 +93,8 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || !password}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "linear-gradient(135deg, #6366f1, #4338ca)" }}
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+              style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-strong))" }}
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

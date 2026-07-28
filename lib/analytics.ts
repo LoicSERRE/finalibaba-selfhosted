@@ -1,19 +1,11 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/tax";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
+import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/palette";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type { AnalyticsExportData } from "@/components/export-analytics-button";
 
 // ── Static config ────────────────────────────────────────────────────────────
-
-export const CATEGORY_COLORS: Record<string, string> = {
-  cash: "#6366f1",
-  savings: "#8b5cf6",
-  investments: "#22c55e",
-  crypto: "#f59e0b",
-  realEstate: "#3b82f6",
-  auto: "#ec4899",
-};
 
 // Approximate tech exposure per ticker (0–1)
 export const TECH_WEIGHTS: Record<string, number> = {

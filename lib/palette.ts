@@ -23,3 +23,18 @@ export const AVATAR_COLORS = [
   "#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4",
   "#22c55e", "#f59e0b", "#ec4899", "#ef4444",
 ] as const;
+
+// Net-worth allocation-by-category color coding - one fixed hue per asset
+// category, shared by the dashboard pie chart (app/page.tsx), the analytics
+// pie chart (lib/analytics.ts), and the analytics "safe vs risky" radar bar
+// (components/analytics/allocation-radar-section.tsx) so the same category
+// always reads as the same color everywhere in the app, not three
+// independently-typed copies that could silently drift apart.
+export const ALLOCATION_CATEGORY_COLORS: Record<string, string> = {
+  cash: "#6366f1",
+  savings: "#8b5cf6",
+  investments: "#22c55e",
+  crypto: "#f59e0b",
+  realEstate: "#3b82f6",
+  auto: "#ec4899",
+};

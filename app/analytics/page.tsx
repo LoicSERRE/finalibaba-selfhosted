@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { formatCurrency, localeToIntl } from "@/lib/format";
+import { localeToIntl } from "@/lib/format";
 import { AnalyticsEmptyState } from "@/components/analytics-empty-state";
 import {
   ExportAnalyticsButton,

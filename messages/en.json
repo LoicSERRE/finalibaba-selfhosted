@@ -20,7 +20,11 @@
     "optional": "optional",
     "selectAccount": "Select an account",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "notFoundTitle": "Page not found",
+    "backToDashboard": "Back to dashboard",
+    "unexpectedError": "An unexpected error occurred.",
+    "retry": "Retry"
   },
   "nav": {
     "dashboard": "Dashboard",
