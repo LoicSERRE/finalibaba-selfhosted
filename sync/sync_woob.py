@@ -141,7 +141,10 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
     except Exception as e:
         conn.rollback()
         msg = str(e)[:300]
-        log.error("%s: unexpected error during iter_accounts: %s", institution_name, msg)
+        # log.exception (not log.error(..., e)) so the traceback lands in
+        # docker compose logs - a bare message can't tell "Woob module raised
+        # something new" from "the account this ran against changed shape".
+        log.exception("%s: unexpected error during iter_accounts", institution_name)
         write_sync_log(cur, sync_source, "error", msg)
         conn.commit()
         cur.close()
@@ -202,8 +205,8 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
             except CallErrors as e:
                 log.warning("%s iter_history errors (ignored): %s", institution_name, str(e)[:120])
             log.info("%s - %s: %d transaction(s) imported", institution_name, account.label, tx_count)
-        except Exception as e:
-            log.warning("%s transactions skipped for %s: %s", institution_name, account.label, e)
+        except Exception:
+            log.warning("%s transactions skipped for %s", institution_name, account.label, exc_info=True)
 
     write_sync_log(cur, sync_source, "success", f"{len(synced)} account(s) synced")
     conn.commit()

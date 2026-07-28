@@ -8,8 +8,31 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # Publishing an image is not gated on ci.yml having passed - that workflow
+  # only runs on push/PR to main, and a release can be published from any
+  # commit regardless of what CI said about it. This job re-runs the tests
+  # here, as part of the actual publish path, so build-app/build-sync below
+  # (and therefore notify-deploy, which only runs after both) are hard-blocked
+  # if a test fails - no release ever reaches the private deploy pipeline
+  # without a green test run against that exact commit.
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test
+
   build-app:
     name: Build & push app image
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,6 +69,7 @@ jobs:
 
   build-sync:
     name: Build & push sync image
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,3 +103,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  notify-deploy:
+    name: Notify private deploy repo
+    needs: [build-app, build-sync]
+    runs-on: ubuntu-latest
+    steps:
+      # Tells LoicSERRE/Finalibaba's deploy.yml to pull the images just
+      # published above and redeploy - requires a PAT with permission to
+      # dispatch workflows on that repo, stored here as DEPLOY_DISPATCH_TOKEN
+      # (GITHUB_TOKEN can't reach across repos). Fires only after both images
+      # are confirmed pushed, so the private deploy never pulls a half-built
+      # release.
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DEPLOY_DISPATCH_TOKEN }}
+          repository: LoicSERRE/Finalibaba
+          event-type: image-published
+          client-payload: '{"release": "${{ github.event.release.tag_name }}"}'

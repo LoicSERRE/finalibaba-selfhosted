@@ -47,8 +47,14 @@ def _run_lcl():
         import sync_lcl
         result = sync_lcl.run()
         log.info("LCL sync done: %s", result)
-    except Exception as e:
-        log.error("LCL sync failed: %s", e)
+    except Exception:
+        # Broad on purpose - this is a scheduled background job, an unhandled
+        # exception here must not kill the scheduler thread. log.exception
+        # captures the traceback (bare log.error(..., e) previously logged
+        # only str(e), losing exactly the info needed to tell "woob module
+        # broke" from "DB unreachable" from "actual code bug" in `docker
+        # compose logs`).
+        log.exception("LCL sync failed")
     finally:
         _lcl_lock.release()
 
@@ -64,8 +70,8 @@ def _run_tr():
         import sync_tr
         result = sync_tr.run()
         log.info("TR sync done: %s", result)
-    except Exception as e:
-        log.error("TR sync failed: %s", e)
+    except Exception:
+        log.exception("TR sync failed")
     finally:
         _tr_lock.release()
 
@@ -76,8 +82,8 @@ def _keepalive_tr():
     try:
         import sync_tr
         sync_tr.keepalive()
-    except Exception as e:
-        log.warning("TR keepalive failed: %s", e)
+    except Exception:
+        log.warning("TR keepalive failed", exc_info=True)
 
 
 def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str, password: str):
@@ -88,7 +94,7 @@ def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str,
     except sync_woob.AuthRequiredError:
         pass  # already written to SyncLog inside sync_woob.run()
     except Exception as e:
-        log.error("Woob sync failed for %s: %s", inst_name, e)
+        log.exception("Woob sync failed for %s", inst_name)
         # Write to SyncLog so the UI shows the error (sync_woob.run() may not have caught it)
         try:
             import psycopg2.extras
@@ -100,13 +106,17 @@ def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str,
             conn.commit()
             cur.close()
             conn.close()
-        except Exception as db_err:
-            log.error("Failed to write sync log for %s: %s", inst_name, db_err)
+        except psycopg2.Error:
+            # Distinct from the outer except: this specifically means "we
+            # couldn't even write the failure to the DB" (connection down,
+            # schema drift) - worth telling apart from the sync failure
+            # itself in the logs.
+            log.exception("Failed to write sync log for %s (DB error)", inst_name)
+        except Exception:
+            log.exception("Failed to write sync log for %s", inst_name)
 
 
 def _run_all_woob():
-    import psycopg2.extras
-
     from db import get_conn, get_woob_institutions
     try:
         conn = get_conn()
@@ -114,8 +124,11 @@ def _run_all_woob():
         institutions = get_woob_institutions(cur)
         cur.close()
         conn.close()
-    except Exception as e:
-        log.error("Failed to fetch Woob institutions: %s", e)
+    except psycopg2.Error:
+        log.exception("Failed to fetch Woob institutions (DB error)")
+        return
+    except Exception:
+        log.exception("Failed to fetch Woob institutions")
         return
     for inst in institutions:
         _run_woob_institution(inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
@@ -213,9 +226,16 @@ async def get_status():
         cur.close()
         conn.close()
         return {row["source"]: {"status": row["status"], "message": row["message"], "at": row["createdAt"].isoformat()} for row in rows}
-    except Exception as e:
-        log.error("Failed to fetch sync status: %s", e)
+    except psycopg2.Error:
+        log.exception("Failed to fetch sync status (DB error)")
         return JSONResponse({"error": "Database error - check service logs"}, status_code=500)
+    except Exception:
+        # Still a catch-all - a FastAPI route must always return a response,
+        # never let an unexpected exception bubble up and 500 with no body.
+        # Kept separate from psycopg2.Error above so "DB error" in the log
+        # actually means the DB, not e.g. a malformed row shape.
+        log.exception("Failed to fetch sync status")
+        return JSONResponse({"error": "Internal error - check service logs"}, status_code=500)
 
 
 @app.post("/sync/lcl/setup/start")
@@ -227,8 +247,8 @@ async def lcl_setup_start():
     try:
         result = await loop.run_in_executor(executor, setup_lcl.start_setup)
         return result
-    except Exception as e:
-        log.error("LCL setup/start failed: %s", e)
+    except Exception:
+        log.exception("LCL setup/start failed")
         return JSONResponse({"error": "LCL setup failed - check service logs"}, status_code=500)
 
 
@@ -241,8 +261,8 @@ async def lcl_setup_complete():
     try:
         result = await loop.run_in_executor(executor, setup_lcl.complete_setup)
         return result
-    except Exception as e:
-        log.error("LCL setup/complete failed: %s", e)
+    except Exception:
+        log.exception("LCL setup/complete failed")
         return JSONResponse({"error": "LCL setup failed - check service logs"}, status_code=500)
 
 
@@ -255,8 +275,8 @@ async def tr_setup_start():
     try:
         result = await loop.run_in_executor(executor, setup_tr.start_setup)
         return result
-    except Exception as e:
-        log.error("TR setup/start failed: %s", e)
+    except Exception:
+        log.exception("TR setup/start failed")
         return JSONResponse({"error": "TR setup failed - check service logs"}, status_code=500)
 
 
@@ -273,8 +293,8 @@ async def tr_setup_complete(request: Request):
     try:
         await loop.run_in_executor(executor, setup_tr.complete_setup, code)
         return {"status": "ok"}
-    except Exception as e:
-        log.error("TR setup/complete failed: %s", e)
+    except Exception:
+        log.exception("TR setup/complete failed")
         return JSONResponse({"error": "TR setup failed - check service logs"}, status_code=500)
 
 
@@ -297,9 +317,12 @@ async def trigger_institution_sync(institution_id: str):
         inst = cur.fetchone()
         cur.close()
         conn.close()
-    except Exception as e:
-        log.error("Failed to fetch institution %s: %s", institution_id, e)
+    except psycopg2.Error:
+        log.exception("Failed to fetch institution %s (DB error)", institution_id)
         return JSONResponse({"error": "Database error - check service logs"}, status_code=500)
+    except Exception:
+        log.exception("Failed to fetch institution %s", institution_id)
+        return JSONResponse({"error": "Internal error - check service logs"}, status_code=500)
 
     if not inst:
         return JSONResponse({"error": "Institution not found"}, status_code=404)
