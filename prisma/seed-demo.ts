@@ -17,12 +17,27 @@ function at(monthsBack: number, day = 1): Date {
   return d;
 }
 
+// For IncomeEvent/Sale rows that need to land in the *current calendar year*
+// (the Analytics YTD passive-income card and the tax report's default year
+// both filter on it) regardless of which month this script actually runs in.
+// Clamping to currentMonth instead of using at()'s relative-months-back
+// avoids landing in the previous year (and therefore the "future" relative
+// to a January run) if it picked, say, "9 months back" in March.
+const now = new Date();
+const currentYear = now.getFullYear();
+const currentMonth = now.getMonth();
+function inYear(monthIndex: number, day = 15): Date {
+  return new Date(currentYear, Math.min(monthIndex, currentMonth), day, 12, 0, 0);
+}
+
 async function main() {
   console.log("Clearing existing data…");
   await prisma.syncLog.deleteMany();
   await prisma.recurringTransaction.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.historicalBalance.deleteMany();
+  await prisma.incomeEvent.deleteMany();
+  await prisma.sale.deleteMany();
   await prisma.holding.deleteMany();
   await prisma.userSettings.deleteMany();
   await prisma.account.deleteMany();
@@ -51,6 +66,12 @@ async function main() {
     institutionId: tr.id,
     investmentSubtype: "PEA",
     investmentStartDate: new Date("2021-01-15"),
+    // Opened >5 years ago -> exempt from income tax on gains (still liable
+    // for social levies, but this app's TAXABLE/EXEMPT/DEFERRED model is
+    // deliberately country-agnostic, not a full French PFU breakdown) -
+    // showcases flexible per-account tax treatment against the CTO below,
+    // which stays TAXABLE (the schema default).
+    taxTreatment: "EXEMPT",
   }});
   const cto = await prisma.account.create({ data: {
     name: "CTO",
@@ -114,15 +135,28 @@ async function main() {
   // lastPriceCents = prix de seed réaliste (mis à jour ensuite par Yahoo Finance)
   // Tous les prix en €-cents (mid-2026)
   console.log("Creating holdings…");
+  // USD -> EUR rate "captured at entry time" for the two US stocks below,
+  // matching how upsertHolding actually stores fxRateToEur - not live, a
+  // fixed snapshot.
+  const usdToEur = 0.92;
   await prisma.holding.createMany({ data: [
-    // PEA - trackers monde
+    // PEA - trackers monde. targetPct set to showcase portfolio rebalancing:
+    // current weights (45×113=5 085€ / 20×618=12 360€ -> ~29%/71%) sit far
+    // from the 70%/30% target, so the account page shows a clear suggested
+    // trade in both directions rather than a "nothing to do" empty state.
     // IWDA.L (iShares MSCI World, LSE) ≈ 113 € · CSPX.L (S&P 500, LSE) ≈ 618 €
-    { accountId: pea.id, ticker: "IWDA.L", name: "iShares Core MSCI World ETF",  quantity: "45",   lastPriceCents: EUR(113),    costBasisCents: EUR(3_798) },
-    { accountId: pea.id, ticker: "CSPX.L", name: "iShares Core S&P 500 ETF",     quantity: "20",   lastPriceCents: EUR(618),    costBasisCents: EUR(10_240) },
-    // CTO - actions US (prix en EUR après change USD/EUR ≈ 0.92)
-    // AAPL ≈ 200 $ → 184 € · MSFT ≈ 470 $ → 432 €
-    { accountId: cto.id, ticker: "AAPL",   name: "Apple Inc.",                    quantity: "15",   lastPriceCents: EUR(184),    costBasisCents: EUR(2_370) },
-    { accountId: cto.id, ticker: "MSFT",   name: "Microsoft Corp.",               quantity: "10",   lastPriceCents: EUR(432),    costBasisCents: EUR(3_480) },
+    { accountId: pea.id, ticker: "IWDA.L", name: "iShares Core MSCI World ETF",  quantity: "45",   lastPriceCents: EUR(113),    costBasisCents: EUR(3_798), targetPct: 0.7 },
+    { accountId: pea.id, ticker: "CSPX.L", name: "iShares Core S&P 500 ETF",     quantity: "20",   lastPriceCents: EUR(618),    costBasisCents: EUR(10_240), targetPct: 0.3 },
+    // CTO - actions US, priced natively in USD (currency/native*/fxRateToEur
+    // set) to showcase multi-currency holdings - lastPriceCents/costBasisCents
+    // are still the EUR-converted values every other calculation reads.
+    // AAPL: $200/share now, bought at $172/share avg · MSFT: $470/share now, bought at $378.50/share avg
+    { accountId: cto.id, ticker: "AAPL",   name: "Apple Inc.",                    quantity: "15",
+      currency: "USD", nativePriceCents: EUR(200), nativeCostBasisCents: EUR(172 * 15), fxRateToEur: usdToEur,
+      lastPriceCents: EUR(200 * usdToEur), costBasisCents: EUR(172 * 15 * usdToEur) },
+    { accountId: cto.id, ticker: "MSFT",   name: "Microsoft Corp.",               quantity: "10",
+      currency: "USD", nativePriceCents: EUR(470), nativeCostBasisCents: EUR(378.5 * 10), fxRateToEur: usdToEur,
+      lastPriceCents: EUR(470 * usdToEur), costBasisCents: EUR(378.5 * 10 * usdToEur) },
     // Crypto - BTC ≈ 92 000 € · ETH ≈ 3 400 €
     { accountId: cryptoTR.id, ticker: "BTC-EUR", name: "Bitcoin",   quantity: "0.12", lastPriceCents: EUR(92_000), costBasisCents: EUR(5_400) },
     { accountId: cryptoTR.id, ticker: "ETH-EUR", name: "Ethereum",  quantity: "1.5",  lastPriceCents: EUR(3_400),  costBasisCents: EUR(4_200) },
@@ -289,6 +323,31 @@ async function main() {
     },
   ]});
 
+  // ── Income events (dividends & interest) ─────────────────────────────────
+  // Dates via inYear() - always land in the current calendar year so the
+  // Analytics "Passive income" YTD card and /income both show real, non-empty
+  // data regardless of when this script actually runs.
+  console.log("Creating income events…");
+  await prisma.incomeEvent.createMany({ data: [
+    // AAPL/MSFT dividends on the CTO - taxWithheldCents approximates the 15%
+    // US treaty withholding on the gross amount.
+    { accountId: cto.id, type: "DIVIDEND", ticker: "AAPL", amountCents: EUR(24), taxWithheldCents: EUR(3.6), date: inYear(1) },
+    { accountId: cto.id, type: "DIVIDEND", ticker: "AAPL", amountCents: EUR(24), taxWithheldCents: EUR(3.6), date: inYear(4) },
+    { accountId: cto.id, type: "DIVIDEND", ticker: "MSFT", amountCents: EUR(68), taxWithheldCents: EUR(10.2), date: inYear(2) },
+    // Livret A interest - income-tax-exempt in France, so no taxWithheldCents.
+    { accountId: livretA.id, type: "INTEREST", amountCents: EUR(45), date: inYear(0) },
+  ]});
+
+  // ── Sales (realized gains) ────────────────────────────────────────────────
+  // One this year (inYear - shows up in /tax-report's default year) and one
+  // last year (fixed past date - exercises the report's year picker with a
+  // second year that actually has data).
+  console.log("Creating sales…");
+  await prisma.sale.createMany({ data: [
+    { accountId: cto.id, ticker: "AAPL", quantity: "5", proceedsCents: EUR(920), costBasisCents: EUR(790), date: inYear(3, 10) },
+    { accountId: cryptoTR.id, ticker: "BTC-EUR", quantity: "0.03", proceedsCents: EUR(2_400), costBasisCents: EUR(1_100), date: new Date(currentYear - 1, 10, 5, 12, 0, 0) },
+  ]});
+
   // ── User settings ─────────────────────────────────────────────────────────
   console.log("Creating user settings…");
   await prisma.userSettings.upsert({
@@ -311,6 +370,9 @@ async function main() {
   console.log("Done - demo data seeded.");
   console.log("  4 categories (Alimentation over budget, Logement near limit, Loisirs ok, Abonnements no budget set)");
   console.log("  5 recurring transactions (4 active incl. 1 missed payment, 1 paused) + several detectable suggestions");
+  console.log("  PEA: EXEMPT tax treatment + 70/30 rebalancing target (vs ~29/71 actual - visible drift)");
+  console.log("  CTO: AAPL/MSFT priced natively in USD (multi-currency)");
+  console.log("  4 income events (3 dividends + 1 interest, this year) + 2 sales (1 this year, 1 last year for the tax-report year picker)");
   const peaVal    = 45 * 113 + 20 * 618;
   const ctoVal    = 15 * 184 + 10 * 432;
   const cryptoVal = 0.17 * 92_000 + 1.5 * 3_400;
