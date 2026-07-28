@@ -81,7 +81,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
       </aside>
 
       {/* ── Mobile bottom nav ── */}
-      <nav aria-label={t("ariaMobile")} className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex bg-[var(--surface)] border-t border-[var(--border)] pb-safe">
+      <nav aria-label={t("ariaMobile")} className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex gap-0.5 bg-[var(--surface)] border-t border-[var(--border)] pb-safe">
         {navItems.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname.startsWith(href);
           return (
@@ -89,14 +89,20 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 mx-1 rounded-xl transition active:scale-[0.93] active:opacity-80 focus-visible:outline-none focus-visible:bg-[var(--surface-elevated)] ${
+              // min-w-0: flex items default to min-width:auto, which refuses
+              // to shrink below the label's unwrapped text width - with 7
+              // items (since "income" was added) that overflows narrow
+              // phones instead of the row packing evenly. truncate on the
+              // label below is the other half of the fix, for the same
+              // reason.
+              className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-3 rounded-xl transition active:scale-[0.93] active:opacity-80 focus-visible:outline-none focus-visible:bg-[var(--surface-elevated)] ${
                 active
                   ? "text-[var(--accent-text)] bg-[var(--accent)]/10"
                   : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
               }`}
             >
               <Icon size={20} strokeWidth={active ? 2.5 : 1.8} aria-hidden="true" />
-              <span className="text-[12px] font-medium tracking-tight">{label}</span>
+              <span className="text-[12px] font-medium tracking-tight max-w-full truncate px-0.5">{label}</span>
             </Link>
           );
         })}
