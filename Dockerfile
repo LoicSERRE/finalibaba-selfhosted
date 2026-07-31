@@ -1,5 +1,5 @@
 # ── deps ───────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS deps
+FROM node:25-alpine AS deps
 RUN apk add --no-cache libc6-compat
 # corepack ships with Node 22 - this pulls the exact pnpm version pinned in
 # package.json's "packageManager" field, so every stage (and CI) resolves
@@ -13,7 +13,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── builder ────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM node:25-alpine AS builder
 RUN apk add --no-cache libc6-compat
 RUN corepack enable
 WORKDIR /app
@@ -26,7 +26,7 @@ ENV NODE_ENV=production
 RUN pnpm run build
 
 # ── runner ─────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS runner
+FROM node:25-alpine AS runner
 RUN corepack enable
 # postgresql16-client: matches the postgres:16-alpine server exactly - used by
 # app/api/backup/route.ts (pg_dump/psql) for in-app backup & restore
