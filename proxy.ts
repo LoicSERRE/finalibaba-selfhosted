@@ -1,7 +1,7 @@
-import { withAuth } from "next-auth/middleware";
-import { NextResponse } from "next/server";
+import { withAuth, type NextRequestWithAuth } from "next-auth/middleware";
+import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 
-export default withAuth(
+const authMiddleware = withAuth(
   function middleware(req) {
     // Demo mode - block all mutations (Server Actions use POST)
     if (process.env.DEMO_MODE === "true" && req.method !== "GET") {
@@ -22,8 +22,25 @@ export default withAuth(
   }
 );
 
+// next-auth's withAuth hard-codes a bypass for the sign-in page itself (to
+// avoid a redirect loop) - it never redirects *away* from /login, even when
+// auth is disabled. That leaves a stale bookmark/history entry from a time
+// AUTH_ENABLED was on (or was briefly, wrongly, turned on - see the prod
+// incident this was found from) stuck showing the password form forever,
+// with no way back except manually navigating elsewhere. Handle that one
+// case here as a real HTTP redirect, before withAuth ever sees the request -
+// calling redirect() from the /login page itself instead hits a Next.js
+// 16.2.11 client-router bug (React error #310, "rendered more hooks than
+// during the previous render") when the redirect fires mid-stream.
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  if (req.nextUrl.pathname === "/login" && process.env.AUTH_ENABLED !== "true") {
+    return NextResponse.redirect(new URL("/", req.url));
+  }
+  return authMiddleware(req as NextRequestWithAuth, event);
+}
+
 export const config = {
   matcher: [
-    "/((?!login|api/auth|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)",
+    "/((?!api/auth|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)",
   ],
 };

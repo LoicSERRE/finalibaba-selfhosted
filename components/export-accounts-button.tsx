@@ -114,6 +114,8 @@ type ExportStrings = {
   amountBorrowed: string;
   remaining: string;
   taeg: string;
+  duration: string;
+  months: string;
   currentPayment: string;
   totalCost: string;
   projectedEnd: string;
@@ -234,6 +236,7 @@ function buildMarkdown(
       lines.push(`- **${s.amountBorrowed}** : ${fmt(l.amountBorrowedCents)}`);
       lines.push(`- **${s.remaining}** : ${fmt(l.remainingCapitalCents)}`);
       lines.push(`- **${s.taeg}** : ${l.taeg.toFixed(2)}%`);
+      lines.push(`- **${s.duration}** : ${l.durationMonths} ${s.months}`);
       lines.push(`- **${s.currentPayment}** : ${fmt(l.currentPaymentCents)}`);
       lines.push(`- **${s.totalCost}** : ${fmt(l.totalCostCents)}`);
       lines.push(`- **${s.projectedEnd}** : ${l.projectedEnd}`);
@@ -367,6 +370,8 @@ export function ExportAccountsButton({
       amountBorrowed: t("mdAmountBorrowed"),
       remaining: t("mdRemaining"),
       taeg: t("mdTaeg"),
+      duration: t("mdDuration"),
+      months: t("mdMonths"),
       currentPayment: t("mdCurrentPayment"),
       totalCost: t("mdTotalCost"),
       projectedEnd: t("mdProjectedEnd"),

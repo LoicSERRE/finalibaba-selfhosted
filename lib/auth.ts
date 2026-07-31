@@ -2,19 +2,43 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
-// Simple in-memory rate limiter - max 5 attempts per 15 min per IP
-const attempts = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = attempts.get(ip);
-  if (!entry || now > entry.resetAt) {
-    attempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+// Simple in-memory rate limiter - max 5 attempts per 15 min per IP.
+// Wrapped in a factory (rather than one module-level Map) so tests can each
+// get a fresh, isolated limiter instead of sharing mutable state.
+export function createRateLimiter(maxAttempts = 5, windowMs = 15 * 60 * 1000) {
+  const attempts = new Map<string, { count: number; resetAt: number }>();
+  return function checkRateLimit(ip: string): boolean {
+    const now = Date.now();
+    const entry = attempts.get(ip);
+    if (!entry || now > entry.resetAt) {
+      attempts.set(ip, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    if (entry.count >= maxAttempts) return false;
+    entry.count++;
     return true;
+  };
+}
+
+const checkRateLimit = createRateLimiter();
+
+// x-forwarded-for/x-real-ip are only trustworthy behind a reverse proxy that
+// sets them itself (Nginx Proxy Manager, Caddy, Traefik, Cloudflare - see
+// README "Securing access"). Without one in front, a direct client can set
+// these headers to whatever it wants, same as it could previously spoof the
+// old client-supplied `ip` credential field - this is the same baseline
+// every self-hosted app without a trusted-proxy allowlist has, not a
+// regression. The fix here closes the much worse prior bug: the client
+// literally hardcoded a constant string, so every visitor shared one
+// rate-limit bucket and the limit couldn't distinguish anyone at all.
+export function getClientIp(headers: Record<string, unknown> | undefined): string {
+  const forwardedFor = headers?.["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
   }
-  if (entry.count >= 5) return false;
-  entry.count++;
-  return true;
+  const realIp = headers?.["x-real-ip"];
+  if (typeof realIp === "string" && realIp.trim()) return realIp.trim();
+  return "unknown";
 }
 
 export const authOptions: NextAuthOptions = {
@@ -23,10 +47,9 @@ export const authOptions: NextAuthOptions = {
       name: "credentials",
       credentials: {
         password: { label: "Mot de passe", type: "password" },
-        ip: { label: "ip", type: "text" },
       },
-      async authorize(credentials) {
-        const ip = (credentials?.ip as string) || "unknown";
+      async authorize(credentials, req) {
+        const ip = getClientIp(req?.headers);
         if (!checkRateLimit(ip)) return null;
 
         const password = credentials?.password as string;

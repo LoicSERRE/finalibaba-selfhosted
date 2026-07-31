@@ -18,6 +18,14 @@ import { getTranslations } from "next-intl/server";
 // only ever queries the current, still-uncategorized set on each render).
 const MAX_UNCATEGORIZED_GROUPS = 8;
 
+// Cap on how many uncategorized rows feed the grouping below (most recent
+// first) - without it this query has no `take` at all and re-loads every
+// still-uncategorized transaction across the account's entire lifetime on
+// every page render, just to keep the top 8 groups. 2000 is far beyond
+// anything a normally-used account accumulates (most transactions do get
+// categorized), so this is a safety cap, not a feature limit.
+const MAX_UNCATEGORIZED_ROWS = 2000;
+
 export default async function BudgetsPage() {
   const [t, tc] = await Promise.all([getTranslations("budgets"), getTranslations("common")]);
 
@@ -38,6 +46,8 @@ export default async function BudgetsPage() {
     prisma.transaction.findMany({
       where: { categoryId: null },
       select: { id: true, label: true, amountCents: true },
+      orderBy: { date: "desc" },
+      take: MAX_UNCATEGORIZED_ROWS,
     }),
   ]);
 

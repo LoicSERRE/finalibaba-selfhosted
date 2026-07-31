@@ -84,9 +84,15 @@ export type AnalyticsExportData = {
   investedPct: number;
   hasTaxData: boolean;
   savingsRate: number | null;
+  salaryNetCents: number;
+  monthlySavedCents: number;
+  momDeltaCents: number | null;
   runwayMonths: number | null;
+  savingsCents: number;
+  monthlyExpensesCents: number;
   goalCents: number;
   goalPct: number;
+  goalRemainingCents: number;
   allocationSlices: AllocationSliceExport[];
   investPerfRows: InvestPerfRowExport[];
   investTotalValueCents: number;
@@ -156,8 +162,14 @@ interface AnalyticsExportStrings {
   taxes: string;
   investedRate: string;
   savingsRate: string;
+  salary: string;
+  monthlySaved: string;
+  momDelta: string;
   runway: string;
+  savingsAvailable: string;
+  monthlyExpenses: string;
   goal: string;
+  goalRemaining: string;
   indicator: string;
   value: string;
   category: string;
@@ -249,10 +261,23 @@ function buildMarkdown(
         `| ${s.savingsRate} | ${sign(data.savingsRate)}${data.savingsRate.toFixed(1)}% |`
       );
     }
+    if (data.salaryNetCents > 0) {
+      lines.push(`| ${s.salary} | ${fmt(data.salaryNetCents)} |`);
+    }
+    if (data.monthlySavedCents > 0) {
+      lines.push(`| ${s.monthlySaved} | ${fmt(data.monthlySavedCents)} |`);
+    } else if (data.momDeltaCents !== null) {
+      lines.push(`| ${s.momDelta} | ${sign(data.momDeltaCents)}${fmt(data.momDeltaCents)} |`);
+    }
     if (data.runwayMonths !== null) {
       lines.push(`| ${s.runway} | ${Math.floor(data.runwayMonths)} ${s.months} |`);
+      lines.push(`| ${s.savingsAvailable} | ${fmt(data.savingsCents)} |`);
+      lines.push(`| ${s.monthlyExpenses} | ${fmt(data.monthlyExpensesCents)} |`);
     }
     lines.push(`| ${s.goal} | ${s.goalFmt(fmt(data.goalCents), data.goalPct)} |`);
+    if (data.goalRemainingCents > 0) {
+      lines.push(`| ${s.goalRemaining} | ${fmt(data.goalRemainingCents)} |`);
+    }
     lines.push("");
   }
 
@@ -478,8 +503,14 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
       taxes: t("mdTaxes"),
       investedRate: t("mdInvestedRate"),
       savingsRate: t("mdSavingsRate"),
+      salary: t("mdSalary"),
+      monthlySaved: t("mdMonthlySaved"),
+      momDelta: t("mdMomDelta"),
       runway: t("mdRunway"),
+      savingsAvailable: t("mdSavingsAvailable"),
+      monthlyExpenses: t("mdMonthlyExpenses"),
       goal: t("mdGoal"),
+      goalRemaining: t("mdGoalRemaining"),
       indicator: t("mdIndicator"),
       value: t("mdValue"),
       category: t("mdCategory"),
