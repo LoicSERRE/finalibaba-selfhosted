@@ -3,6 +3,23 @@ name: Publish Docker images
 on:
   release:
     types: [published]
+  # Validates changes to this file and the two Dockerfiles before they ever
+  # reach a release - added after v1.4.4's release pipeline built and pushed
+  # both images successfully, then silently never deployed because
+  # aquasecurity/trivy-action was pinned to a tag (`0.36.0`) that doesn't
+  # exist (the real tag is `v0.36.0`). No PR check exercised that line -
+  # ci.yml never touches Docker at all, and this file only ran on `release`.
+  # The validate-docker-* jobs below reuse the exact same actions
+  # (docker/build-push-action, aquasecurity/trivy-action) so a broken action
+  # reference or a Dockerfile that fails to build now fails on the PR,
+  # instead of silently succeeding at build-app/build-sync and only
+  # surfacing at trivy-scan on release day - by which point the images are
+  # already sitting in GHCR with nothing having reached prod/demo.
+  pull_request:
+    paths:
+      - ".github/workflows/docker.yml"
+      - "Dockerfile"
+      - "sync/Dockerfile"
 
 env:
   REGISTRY: ghcr.io
@@ -17,6 +34,7 @@ jobs:
   # without a green test run against that exact commit.
   test:
     name: Unit tests
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,6 +54,7 @@ jobs:
   # sync/ commit could still publish a new sync image with nothing to stop it.
   python-check:
     name: Python lint, tests & audit (sync service)
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,6 +72,7 @@ jobs:
 
   build-app:
     name: Build & push app image
+    if: github.event_name == 'release'
     needs: [test]
     runs-on: ubuntu-latest
     permissions:
@@ -90,6 +110,7 @@ jobs:
 
   build-sync:
     name: Build & push sync image
+    if: github.event_name == 'release'
     needs: [test, python-check]
     runs-on: ubuntu-latest
     permissions:
@@ -135,6 +156,7 @@ jobs:
   # the image itself is already sitting in GHCR by this point.
   trivy-scan:
     name: Trivy image scan (${{ matrix.image }})
+    if: github.event_name == 'release'
     needs: [build-app, build-sync]
     runs-on: ubuntu-latest
     permissions:
@@ -159,6 +181,7 @@ jobs:
 
   notify-deploy:
     name: Notify private deploy repo
+    if: github.event_name == 'release'
     needs: [build-app, build-sync, trivy-scan]
     runs-on: ubuntu-latest
     # This job never touches GITHUB_TOKEN - it authenticates to the private
@@ -181,3 +204,66 @@ jobs:
           repository: LoicSERRE/Finalibaba
           event-type: image-published
           client-payload: '{"release": "${{ github.event.release.tag_name }}"}'
+
+  # PR-only counterparts to build-app/trivy-scan above - build locally
+  # (push: false, load: true instead of push: true, single-platform since
+  # buildx can't `load` a multi-platform result) and scan that local image.
+  # Deliberately separate jobs, not a conditional branch inside build-app/
+  # trivy-scan themselves, so this can never accidentally change what
+  # happens on a real release - those jobs are untouched other than the
+  # `if: github.event_name == 'release'` guard above.
+  validate-docker-app:
+    name: Validate app image builds (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: finalibaba-app:pr-validate
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Informational only here (exit-code: 0) - a pre-existing base-image
+      # CVE unrelated to this PR shouldn't block merge, and the real gate is
+      # trivy-scan above on release. The point of running it at all on a PR
+      # is to catch a broken action reference (exactly what slipped through
+      # to v1.4.4 - aquasecurity/trivy-action pinned to a tag that doesn't
+      # exist) before it ever reaches a release, not to enforce CVE policy.
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: finalibaba-app:pr-validate
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 0
+
+  validate-docker-sync:
+    name: Validate sync image builds (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./sync
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: finalibaba-sync:pr-validate
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: finalibaba-sync:pr-validate
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 0
