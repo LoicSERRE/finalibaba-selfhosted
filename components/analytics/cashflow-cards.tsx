@@ -4,6 +4,11 @@ import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
+// Renders 2 independent multi-state cards (savings rate, runway) in one
+// component to keep their shared layout grid together - splitting further
+// would trade this file's complexity for prop-drilling between two
+// components that only ever render side by side.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function CashflowCards({
   t,
   hasSalary,

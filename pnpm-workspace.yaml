@@ -1,0 +1,39 @@
+# pnpm blocks a dependency's install/postinstall scripts by default unless
+# explicitly allowed here - a real security improvement over npm's "run
+# everything" default, but it means legitimate native-binary builds need an
+# explicit yes. All 6 below are well-known, expected parts of this stack
+# (Next.js's SWC compiler, Prisma's engine binaries, esbuild, file-watching)
+# with no native-build alternative - blocking any of them would break the
+# toolchain, not add safety.
+allowBuilds:
+  '@parcel/watcher': true
+  '@prisma/engines': true
+  '@swc/core': true
+  esbuild: true
+  prisma: true
+  unrs-resolver: true
+# pnpm 11 moved settings that used to live under package.json's "pnpm" key
+# (npm's "overrides" field too) here - see https://pnpm.io/settings.
+# Not an actual multi-package workspace; this file just holds config.
+overrides:
+  uuid: ">=11.1.1"
+  postcss: ">=8.5.23"
+  sharp: ">=0.35.0"
+  js-yaml: ">=4.3.0"
+  find-my-way: ">=9.7.0"
+  valibot: ">=1.4.2"
+  eslint-plugin-react-hooks: "7.0.1"
+  # pnpm's override selector only supports one level of "parent>dep" -
+  # 3-segment chains like npm's nested "eslint > minimatch > brace-expansion"
+  # override aren't valid syntax here. Scoping by minimatch's OWN version
+  # instead of by which package imported it achieves the same goal more
+  # directly: minimatch@10.x (pulled in by @typescript-eslint/typescript-estree)
+  # can safely take brace-expansion 5.x, while minimatch@3.x (eslint's own
+  # vendored copy, old API) needs to stay on the 1.x line - see the npm
+  # override history this replaced for the full GHSA-mh99-v99m-4gvg context.
+  # Bounded to each package's own major line, not open-ended - an unbounded
+  # ">=1.1.16" is numerically satisfied by 5.0.9 too, so the two ranges
+  # overlapped and pnpm resolved both scopes to the same (wrong, for
+  # minimatch@3.1.5's old API) version instead of respecting the parent scope.
+  "minimatch@10.2.6>brace-expansion": ">=5.0.8 <6.0.0"
+  "minimatch@3.1.5>brace-expansion": ">=1.1.16 <2.0.0"

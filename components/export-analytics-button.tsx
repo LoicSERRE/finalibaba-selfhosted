@@ -228,6 +228,10 @@ interface AnalyticsExportStrings {
 
 // ── Markdown generation ───────────────────────────────────────────────────────
 
+// Same rationale as export-accounts-button.tsx's buildMarkdown - one
+// function per every toggleable section keeps it directly, mechanically
+// checkable against __tests__/export-completeness.test.ts.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function buildMarkdown(
   data: AnalyticsExportData,
   sections: Set<Section>,

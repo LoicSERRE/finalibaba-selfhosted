@@ -2,6 +2,7 @@
   "name": "nextapp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "next dev",
@@ -48,25 +49,6 @@
     "react-dom": "19.2.4",
     "recharts": "^3.8.1"
   },
-  "overrides": {
-    "uuid": ">=11.1.1",
-    "postcss": ">=8.5.23",
-    "sharp": ">=0.35.0",
-    "js-yaml": ">=4.3.0",
-    "find-my-way": ">=9.7.0",
-    "valibot": ">=1.4.2",
-    "eslint-plugin-react-hooks": "7.0.1",
-    "@typescript-eslint/typescript-estree": {
-      "minimatch": {
-        "brace-expansion": ">=5.0.8"
-      }
-    },
-    "eslint": {
-      "minimatch": {
-        "brace-expansion": ">=1.1.16"
-      }
-    }
-  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -76,6 +58,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
+    "eslint-plugin-sonarjs": "^4.2.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5",

@@ -14,12 +14,13 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6.0.9
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
 
   typecheck:
     name: Type check & build
@@ -32,13 +33,14 @@ jobs:
       NEXTAUTH_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6.0.9
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx prisma generate
-      - run: NODE_ENV=production npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: NODE_ENV=production pnpm run build
 
   test:
     name: Unit tests
@@ -47,13 +49,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6.0.9
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npm test
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm test
 
   python-lint:
     name: Python lint (sync service)
@@ -68,19 +71,52 @@ jobs:
       - run: pip install ruff==0.16.0
       - run: ruff check sync/
 
-  security:
-    name: npm audit
+  python-test:
+    name: Python unit tests (sync service)
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r sync/requirements.txt -r sync/requirements-dev.txt
+      - run: cd sync && python -m pytest
+
+  security:
+    name: pnpm audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6.0.9
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level=high
+
+  python-security:
+    name: pip-audit (sync service)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # -r reads pinned versions straight from requirements.txt against the
+      # OSV/PyPI vulnerability DB - no need to actually install the (heavy,
+      # playwright/woob-carrying) package set just to audit it. pytr is a
+      # git dependency, not published to PyPI, so it's skipped rather than
+      # audited - a known pip-audit limitation for that one package, not
+      # worth extra tooling to work around.
+      - run: pip install pip-audit
+      - run: pip-audit -r sync/requirements.txt
 
   dependency-review:
     name: Dependency review

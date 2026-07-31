@@ -47,18 +47,21 @@ Same as upstream.
 
 ## Development commands
 
+This project uses **pnpm** (not npm/yarn) - the exact version is pinned in `package.json`'s `packageManager` field, and `corepack enable` (already run in the Dockerfile, and standard in Node 22+ environments) makes `pnpm` resolve to that exact version automatically.
+
 ```bash
-npm run dev      # Dev server (http://localhost:3000)
-NODE_ENV=production npm run build    # Prod build + type-check (NODE_ENV=production REQUIRED)
-npm run lint     # ESLint
+pnpm dev         # Dev server (http://localhost:3000)
+NODE_ENV=production pnpm run build    # Prod build + type-check (NODE_ENV=production REQUIRED)
+pnpm run lint    # ESLint
+pnpm test        # Vitest - see __tests__/
 ```
 
 Docker (local dev - DB only, credentials fixed in `docker-compose.dev.yml`):
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 # DATABASE_URL=postgresql://appuser:devpassword@localhost:5432/finalibaba
-npx prisma migrate deploy   # first time only - applies schema to the fresh DB
-npm run db:seed:demo        # optional - fills it with realistic fictional data to develop against
+pnpm exec prisma migrate deploy   # first time only - applies schema to the fresh DB
+pnpm run db:seed:demo             # optional - fills it with realistic fictional data to develop against
 ```
 
 Production (one-shot setup):
@@ -69,28 +72,30 @@ docker compose up -d   # builds and starts everything
 
 Prisma:
 ```bash
-npm run db:migrate -- --name <name>   # Create + apply migration
-npx prisma generate                    # Regenerate client after schema changes (also runs automatically via postinstall on `npm install`)
-npm run db:seed                        # Seed common institutions (reference data, no accounts)
-npm run db:seed:demo                   # WIPES all data, then seeds realistic fictional accounts/balances/holdings/transactions - for local dev/debugging
-npm run db:push                        # Sync schema to DB without a migration (dev only)
-npm run db:studio                      # Open Prisma Studio for DB inspection
+pnpm run db:migrate -- --name <name>   # Create + apply migration
+pnpm exec prisma generate               # Regenerate client after schema changes (also runs automatically via postinstall on `pnpm install`)
+pnpm run db:seed                        # Seed common institutions (reference data, no accounts)
+pnpm run db:seed:demo                   # WIPES all data, then seeds realistic fictional accounts/balances/holdings/transactions - for local dev/debugging
+pnpm run db:push                        # Sync schema to DB without a migration (dev only)
+pnpm run db:studio                      # Open Prisma Studio for DB inspection
 ```
 
-npm scripts for Docker - prefer the direct commands above, these are misleadingly named:
+npm-era scripts for Docker, kept for muscle memory - prefer the direct commands above, these are misleadingly named:
 ```bash
-npm run docker:dev        # docker compose up -d       (despite the name, this runs the default/production docker-compose.yml)
-npm run docker:dev:stop   # docker compose down
-npm run docker:prod       # BROKEN - references docker-compose.prod.yml, which does not exist in this repo
+pnpm run docker:dev        # docker compose up -d       (despite the name, this runs the default/production docker-compose.yml)
+pnpm run docker:dev:stop   # docker compose down
+pnpm run docker:prod       # BROKEN - references docker-compose.prod.yml, which does not exist in this repo
 ```
 
-No test suite (no jest/vitest/playwright).
+Vitest for unit tests - `pnpm test` runs everything under `__tests__/**`, covering the pure `lib/` functions (money math, tax, loans, recurring-transaction detection, CSV import, analytics/dashboard aggregation, export completeness). No component-rendering tests (no jest-dom/RTL/Playwright) - components stay thin wrappers around the tested `lib/` functions by design, see the God Component extraction pattern under Architecture below.
 
-### npm overrides
+### pnpm overrides
 
-`package.json` contains an `overrides` block that forces patched versions of transitive dependencies that can't be resolved by Dependabot alone (upstream packages pin older ranges). Do not remove these entries - they are security fixes:
+`pnpm-workspace.yaml`'s `overrides` key forces patched versions of transitive dependencies that can't be resolved by Dependabot alone (upstream packages pin older ranges). Do not remove these entries - they are security fixes. (This lived in `package.json`'s `overrides` field under npm, and briefly under a `package.json` `"pnpm"` key during the pnpm migration - pnpm 11 moved all such settings to `pnpm-workspace.yaml`, silently ignoring the `package.json` location instead of erroring, so double-check here first if an override ever seems to stop applying after a pnpm upgrade.)
 
-CI's `npm audit` step runs as `npm audit --omit=dev --audit-level=high` - deliberately excluding devDependencies (ESLint, TypeScript, etc.). Those never ship: the Docker `runner` stage installs with `npm ci --omit=dev`, so a devDependency-only advisory (e.g. through `eslint`'s vendored `minimatch`) can't reach production and isn't worth chasing at the cost of breaking the lint toolchain. `prisma` is a runtime `dependencies` entry (not dev) precisely because the `Dockerfile`'s `CMD` runs `npx prisma migrate deploy` inside the `runner` stage at container start - so `prisma`/`@prisma/dev`-rooted advisories (`find-my-way`, `valibot`, formerly `hono`/`@hono/node-server` before prisma 7.9 dropped that dependency) get installed by `npm ci --omit=dev` and stay in scope even though the specific vulnerable code path (`@prisma/dev`'s embedded-Postgres `prisma dev` subcommand) is never actually invoked here.
+CI's `pnpm audit` step runs as `pnpm audit --prod --audit-level=high` - deliberately excluding devDependencies (ESLint, TypeScript, etc.). Those never ship: the Docker `runner` stage installs with `pnpm install --frozen-lockfile --prod --ignore-scripts`, so a devDependency-only advisory (e.g. through `eslint`'s vendored `minimatch`) can't reach production and isn't worth chasing at the cost of breaking the lint toolchain. `prisma` is a runtime `dependencies` entry (not dev) precisely because the `Dockerfile`'s `CMD` runs `pnpm exec prisma migrate deploy` inside the `runner` stage at container start - so `prisma`/`@prisma/dev`-rooted advisories (`find-my-way`, `valibot`, formerly `hono`/`@hono/node-server` before prisma 7.9 dropped that dependency) get installed by that `--prod` install and stay in scope even though the specific vulnerable code path (`@prisma/dev`'s embedded-Postgres `prisma dev` subcommand) is never actually invoked here.
+
+pnpm also blocks a dependency's install/postinstall scripts by default unless explicitly allowed - `pnpm-workspace.yaml`'s `allowBuilds` list covers the packages in this project's tree that legitimately need one (Next's SWC compiler, Prisma's engine binaries, esbuild, file-watching). A `pnpm install` that reports `ERR_PNPM_IGNORED_BUILDS` for a package not already on that list means a new dependency needs the same explicit yes - don't add it blindly; check what the script actually does first.
 
 | Package | Reason |
 |---|---|
@@ -101,7 +106,7 @@ CI's `npm audit` step runs as `npm audit --omit=dev --audit-level=high` - delibe
 | `valibot >=1.4.2` | GHSA-5qjj-4xww-7phc - `flatten()` throws on inherited `Object` property names; exact-pinned at `1.2.0` by `@prisma/dev` |
 | `js-yaml >=4.3.0` | GHSA-52cp-r559-cp3m - quadratic-CPU DoS via merge-key chains; pulled in by `eslint`'s `@eslint/eslintrc` |
 | `eslint-plugin-react-hooks` pinned to `7.0.1` | Not a CVE fix - its `^7.0.0` range floats onto `7.1.1`, which enables new `react-hooks/purity`/`react-hooks/immutability` rules that fail on pre-existing code unrelated to any dependency bump. Pinned to avoid that scope creep; revisit separately if those rules are worth fixing for real. |
-| Nested `@typescript-eslint/typescript-estree` → `minimatch` → `brace-expansion >=5.0.8` and `eslint` → `minimatch` → `brace-expansion >=1.1.16` | GHSA-mh99-v99m-4gvg. A flat top-level `brace-expansion` override breaks `eslint`'s own vendored `minimatch@3.1.5`, which expects the old `brace-expansion` 1.x API (`expand is not a function` otherwise) - hence two scoped overrides instead of one, each keeping the major version its parent expects. |
+| `minimatch@10.2.6>brace-expansion >=5.0.8 <6.0.0` and `minimatch@3.1.5>brace-expansion >=1.1.16 <2.0.0` | GHSA-mh99-v99m-4gvg. Two different `minimatch` major lines resolve in this tree (10.x pulled in by `@typescript-eslint/typescript-estree`, 3.x vendored inside `eslint` itself, which expects the old `brace-expansion` 1.x API - `expand is not a function` otherwise) so they need different patched lines, not one shared version. pnpm's override selector only supports a single `parent>dep` level (no 3-segment chain like npm's old nested-object syntax), so this scopes by `minimatch`'s own resolved version instead of by which package imported it - and each range is bounded to its own major line (`<6.0.0`/`<2.0.0`), not left open-ended, because an unbounded `>=1.1.16` is numerically satisfied by `5.0.9` too, which silently defeated the 3.x-line scoping the first time this was written. |
 
 ## Architecture
 
@@ -214,7 +219,7 @@ Implementation notes (post-v1.2.0 audit fixes):
 
 - `buildConnectionString()` passes the *whole* `DATABASE_URL` (password stripped, everything else - including query params like `?sslmode=require` - intact) as a single positional arg to `pg_dump`/`psql`, with the password supplied separately via `PGPASSWORD`. Don't go back to manually extracting `host`/`port`/`user`/`database` into separate `-h`/`-p`/`-U`/`-d` flags - that approach silently drops any connection query params.
 - The `GET` handler's `ReadableStream` only closes successfully once **both** `gzip`'s `"end"` (all bytes flushed) and `pg_dump`'s `"close"` (exit code known) have fired, and only if the exit code was `0`. A pg_dump that dies mid-dump after already writing valid-looking output must **error**, not silently succeed - a truncated "successful" backup is far worse than a visibly failed download, since the corruption would otherwise only surface during an actual restore. The `settled` flag guards every controller call this can race with (`enqueue`, `close`, `error`) - including `cancel()`, which must also set it (a client aborting mid-download must not let a still-queued `gzip.on("data")` callback call `enqueue()` on an already-cancelled stream and crash the process).
-- After a successful restore, the process calls `process.exit(0)` (gated to `NODE_ENV === "production"`, so local `npm run dev` isn't killed) so the container's `restart: unless-stopped` policy hands the app a fresh Prisma connection pool - the restore just dropped and recreated the whole schema out from under any pooled connections' cached query plans, the same reason `scripts/restore.sh` stops the `app` container before restoring. `components/backup-restore-section.tsx` polls the current page with a `HEAD` request (never `/api/backup` - that would trigger another full `pg_dump`) until the app responds again before reloading.
+- After a successful restore, the process calls `process.exit(0)` (gated to `NODE_ENV === "production"`, so local `pnpm dev` isn't killed) so the container's `restart: unless-stopped` policy hands the app a fresh Prisma connection pool - the restore just dropped and recreated the whole schema out from under any pooled connections' cached query plans, the same reason `scripts/restore.sh` stops the `app` container before restoring. `components/backup-restore-section.tsx` polls the current page with a `HEAD` request (never `/api/backup` - that would trigger another full `pg_dump`) until the app responds again before reloading.
 
 ### CSV import (transactions & balance history)
 
@@ -332,7 +337,7 @@ Latent tax rate: per-account via `getAccountTaxRate()` - see "Tax treatment" abo
 
 This project uses **Prisma 7** with the `@prisma/adapter-pg` driver adapter (not the legacy built-in engine). `lib/prisma.ts` creates the client via a `pg.Pool` → `PrismaPg` adapter. Always import `prisma` from `@/lib/prisma` - never instantiate `PrismaClient` directly. The client is a module-level singleton (cached on `globalThis` in dev to survive HMR).
 
-The client is generated to `app/generated/prisma` (gitignored, never committed). `npm install` runs it automatically via the `postinstall` script; re-run `npx prisma generate` manually after editing `schema.prisma` without reinstalling. In `Dockerfile`, the `deps` and `runner` stages run `npm ci` with `--ignore-scripts` because `prisma/schema.prisma` isn't copied into those stages yet - the `builder` stage generates the client explicitly once the full source is present.
+The client is generated to `app/generated/prisma` (gitignored, never committed). `pnpm install` runs it automatically via the `postinstall` script; re-run `pnpm exec prisma generate` manually after editing `schema.prisma` without reinstalling. In `Dockerfile`, the `deps` and `runner` stages run `pnpm install --frozen-lockfile` with `--ignore-scripts` because `prisma/schema.prisma` isn't copied into those stages yet - the `builder` stage generates the client explicitly once the full source is present.
 
 ### Server vs Client boundary
 

@@ -50,6 +50,10 @@ function parseOptionalInt(val: FormDataEntryValue | null): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
+// One Server Action handling every account type's own required/optional
+// fields (fiat/investment/real estate/automobile/loan) - the branching is
+// inherent to the generic "Add account" form covering all of them at once.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export async function createAccount(formData: FormData) {
   const name = (formData.get("name") as string).trim();
   const type = formData.get("type") as AccountType;

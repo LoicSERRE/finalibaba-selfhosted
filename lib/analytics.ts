@@ -363,6 +363,13 @@ export interface AnalyticsResult {
 
 // ── computeAnalytics ─────────────────────────────────────────────────────────
 
+// Single-pass aggregation over every account, deliberately kept as one
+// function so each account is only iterated once (accumulating gross
+// assets, allocation, tax, dividends, top assets, debt in the same loop
+// rather than N separate passes). Covered by __tests__/analytics.test.ts;
+// splitting it would mean passing a lot of shared running state between
+// pieces for no behavioral benefit.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   const { accounts, allBalances, settings, yfData, incomeEventsYtd, intlLocale, now } = input;
   const nowMs = now.getTime();

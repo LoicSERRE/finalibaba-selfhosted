@@ -57,7 +57,7 @@ NEXTAUTH_SECRET=          # openssl rand -base64 32
 
 ```bash
 docker compose up -d
-docker compose exec app npx prisma db seed  # optional - pre-populates common banks
+docker compose exec app pnpm exec prisma db seed  # optional - pre-populates common banks
 ```
 
 Open [http://localhost:3000](http://localhost:3000). First boot takes a few minutes while the image builds.

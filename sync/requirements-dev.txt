@@ -1,0 +1,3 @@
+# Test-only deps - never installed into the runtime image (Dockerfile only
+# uses requirements.txt). CI installs both files to run the test suite.
+pytest>=8.0

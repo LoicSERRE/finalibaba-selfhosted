@@ -2,6 +2,10 @@
 
 import { prisma } from "@/lib/prisma";
 
+// Internal Docker Compose service-to-service traffic on a private bridge
+// network, never exposed externally - TLS here would need self-signed cert
+// management between two containers for no real security benefit.
+// eslint-disable-next-line sonarjs/no-clear-text-protocols
 const SYNC_URL = process.env.SYNC_SERVICE_URL ?? "http://sync:8000";
 
 // Explicit allowlist - prevents any user-controlled value from reaching the URL

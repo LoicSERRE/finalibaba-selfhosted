@@ -1,9 +1,9 @@
 # Local development - starts PostgreSQL only.
-# The Next.js app runs with `npm run dev` directly on your machine.
+# The Next.js app runs with `pnpm dev` directly on your machine.
 #
 # Usage:
 #   docker compose -f docker-compose.dev.yml up -d
-#   npm run dev
+#   pnpm dev
 
 services:
   db:

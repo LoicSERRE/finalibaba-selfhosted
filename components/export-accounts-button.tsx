@@ -125,6 +125,11 @@ type ExportStrings = {
 
 // ── Markdown generation ───────────────────────────────────────────────────────
 
+// Single-pass markdown builder covering every account-type section - see
+// __tests__/export-completeness.test.ts, which specifically depends on every
+// field being wired into this one function so a completeness check can find
+// it. Splitting per-section would scatter that guarantee across files.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function buildMarkdown(
   fiat: FiatAccountExport[],
   invest: InvestAccountExport[],
@@ -157,10 +162,11 @@ function buildMarkdown(
   if (invest.length > 0) {
     lines.push(`## ${s.investments}`, "");
     for (const a of invest) {
+      const subtypeSuffix = a.investmentSubtype ? ` · ${a.investmentSubtype}` : "";
       const typeLabel =
         a.type === "CRYPTO"
           ? s.typeLabels["CRYPTO"] ?? a.type
-          : `${s.typeLabels[a.type] ?? a.type}${a.investmentSubtype ? ` · ${a.investmentSubtype}` : ""}`;
+          : `${s.typeLabels[a.type] ?? a.type}${subtypeSuffix}`;
       lines.push(`### ${a.institutionName} · ${typeLabel} - ${a.name}`);
 
       const parts: string[] = [`**${s.total}** : ${fmt(a.totalCents)}`];
@@ -178,12 +184,11 @@ function buildMarkdown(
         );
         lines.push("|---|---|---|---|---|---|---|---|");
         for (const h of a.holdings) {
-          const gainStr =
-            h.gainCents !== null
-              ? `${sign(h.gainCents)}${fmt(h.gainCents)}${h.gainPct !== null ? ` (${sign(h.gainPct)}${h.gainPct.toFixed(1)}%)` : ""}`
-              : "-";
+          const gainPctSuffix = h.gainPct !== null ? ` (${sign(h.gainPct)}${h.gainPct.toFixed(1)}%)` : "";
+          const gainStr = h.gainCents !== null ? `${sign(h.gainCents)}${fmt(h.gainCents)}${gainPctSuffix}` : "-";
           const targetStr = h.targetPct !== null ? `${h.targetPct}%` : "-";
-          const nameStr = `${h.name ?? h.ticker}${h.currency !== "EUR" ? ` · ${h.currency}` : ""}`;
+          const currencySuffix = h.currency !== "EUR" ? ` · ${h.currency}` : "";
+          const nameStr = `${h.name ?? h.ticker}${currencySuffix}`;
           lines.push(
             `| ${nameStr} | ${h.ticker} | ${h.quantity} | ${fmt(h.lastPriceCents, 2)} | ${fmt(h.valueCents)} | ${h.pct}% | ${gainStr} | ${targetStr} |`
           );
@@ -232,7 +237,8 @@ function buildMarkdown(
   if (loans.length > 0) {
     lines.push(`## ${s.loans}`, "");
     for (const l of loans) {
-      lines.push(`### ${l.institutionName ? `${l.institutionName} · ` : ""}${l.name}`);
+      const institutionPrefix = l.institutionName ? `${l.institutionName} · ` : "";
+      lines.push(`### ${institutionPrefix}${l.name}`);
       lines.push(`- **${s.amountBorrowed}** : ${fmt(l.amountBorrowedCents)}`);
       lines.push(`- **${s.remaining}** : ${fmt(l.remainingCapitalCents)}`);
       lines.push(`- **${s.taeg}** : ${l.taeg.toFixed(2)}%`);

@@ -13,7 +13,12 @@ describe("getAccountTaxRate", () => {
   });
 
   it("returns the account's own rate for TAXABLE accounts", () => {
+    // getAccountTaxRate is a pure passthrough here (no arithmetic on
+    // taxRatePct), so this is an identity check on an unmodified literal,
+    // not the "a + b === c" style float-drift risk the rule guards against.
+    // eslint-disable-next-line sonarjs/no-floating-point-equality
     expect(getAccountTaxRate({ taxTreatment: "TAXABLE", taxRatePct: 0.172 })).toBe(0.172);
+    // eslint-disable-next-line sonarjs/no-floating-point-equality
     expect(getAccountTaxRate({ taxTreatment: "TAXABLE", taxRatePct: 0.314 })).toBe(0.314);
   });
 

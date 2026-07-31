@@ -7,225 +7,43 @@ import { AssetAllocationChart, type AllocationSlice } from "@/components/asset-a
 import { DashboardEmptyState } from "@/components/dashboard-empty-state";
 import { InstitutionLogo } from "@/components/institution-logo";
 import Link from "next/link";
-import Decimal from "decimal.js";
-import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
-import { getAccountTaxRate } from "@/lib/tax";
-import { getInstitutionLogoUrl } from "@/lib/institutions";
+import { computeDashboard } from "@/lib/dashboard";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/palette";
 import { getTranslations, getLocale } from "next-intl/server";
 
-async function getDashboardData() {
-  const intlLocale = localeToIntl(await getLocale());
-  const accounts = await prisma.account.findMany({
-    include: {
-      institution: true,
-      holdings: true,
-      history: {
-        orderBy: { recordedAt: "desc" },
-        take: 1,
+export default async function DashboardPage() {
+  const [accounts, allBalances, t, locale] = await Promise.all([
+    prisma.account.findMany({
+      include: {
+        institution: true,
+        holdings: true,
+        history: { orderBy: { recordedAt: "desc" }, take: 1 },
       },
-    },
-    orderBy: { name: "asc" },
-  });
+      orderBy: { name: "asc" },
+    }),
+    prisma.historicalBalance.findMany({ orderBy: { recordedAt: "asc" } }),
+    getTranslations(),
+    getLocale(),
+  ]);
 
-  let grossAssets = BigInt(0);
-  let totalLiabilities = BigInt(0);
-  let totalLatentTax = BigInt(0);
-
-  const allocation: Record<string, bigint> = {
-    cash: BigInt(0),
-    savings: BigInt(0),
-    investments: BigInt(0),
-    crypto: BigInt(0),
-    realEstate: BigInt(0),
-    auto: BigInt(0),
-  };
-
-  const now = new Date();
-
-  // Per-institution grouping
-  const instMap = new Map<
-    string,
-    {
-      name: string | null;
-      logoUrl: string | null;
-      total: bigint;
-      accounts: Array<{ id: string; name: string; value: bigint; type: string }>;
-    }
-  >();
-
-  for (const account of accounts) {
-    let value = BigInt(0);
-
-    if (account.type === "REAL_ESTATE" || account.type === "AUTOMOBILE") {
-      value = account.manualValueCents ?? BigInt(0);
-      const liability = account.liabilityCents ?? BigInt(0);
-      totalLiabilities += liability;
-      const equity = value - liability > BigInt(0) ? value - liability : BigInt(0);
-      allocation[account.type === "AUTOMOBILE" ? "auto" : "realEstate"] += equity;
-      grossAssets += value;
-    } else if (account.type === "INVESTMENT" || account.type === "CRYPTO") {
-      let accountGain = BigInt(0);
-      let hasBasis = false;
-      value = account.holdings.reduce((sum, h) => {
-        const mv = BigInt(
-          new Decimal(h.quantity.toString())
-            .mul(h.lastPriceCents.toString())
-            .round()
-            .toNumber()
-        );
-        if (h.costBasisCents != null) {
-          hasBasis = true;
-          accountGain += mv - h.costBasisCents;
-        }
-        return sum + mv;
-      }, BigInt(0));
-      // Latent tax on net gain
-      if (hasBasis) {
-        const taxRate = getAccountTaxRate(account);
-        if (taxRate !== null && accountGain > BigInt(0)) {
-          totalLatentTax += BigInt(Math.round(Number(accountGain) * taxRate));
-        }
-      }
-      allocation[account.type === "CRYPTO" ? "crypto" : "investments"] += value;
-      grossAssets += value;
-    } else if (account.type === "LOAN") {
-      // Loan: pure liability - no asset counterpart
-      const loanBalance = hasLoanParams(account)
-        ? calcCurrentCapital(
-            {
-              loanAmountCents: account.loanAmountCents,
-              loanTaeg: account.loanTaeg,
-              loanDurationMonths: account.loanDurationMonths,
-              loanDeferralMonths: account.loanDeferralMonths ?? 0,
-              loanStartDate: account.loanStartDate,
-            },
-            now
-          )
-        : (account.liabilityCents ?? BigInt(0));
-      totalLiabilities += loanBalance;
-      value = -loanBalance; // displayed as negative in the account list
-    } else {
-      value = account.history[0]?.balanceCents ?? BigInt(0);
-      if (account.type === "SAVINGS") allocation["savings"] += value;
-      else allocation["cash"] += value;
-      grossAssets += value;
-    }
-
-    const instId = account.institutionId ?? "__personal__";
-    if (!instMap.has(instId)) {
-      const instName = account.institution?.name ?? null;
-      instMap.set(instId, {
-        name: instName,
-        logoUrl: account.institution && instName
-          ? (account.institution.logoUrl ?? getInstitutionLogoUrl(instName))
-          : null,
-        total: BigInt(0),
-        accounts: [],
-      });
-    }
-    const inst = instMap.get(instId)!;
-    inst.total += value;
-    inst.accounts.push({ id: account.id, name: account.name, value, type: account.type });
-  }
-
-  const netWorth = grossAssets - totalLiabilities - totalLatentTax;
-  const totalPassif = totalLiabilities + totalLatentTax;
-
-  const institutions = [...instMap.values()].sort((a, b) => Number(b.total - a.total));
-
-  // Daily history
-  const allBalances = await prisma.historicalBalance.findMany({
-    orderBy: { recordedAt: "asc" },
-  });
-  const allAccounts = await prisma.account.findMany({
-    select: { id: true, liabilityCents: true },
-  });
-  const liabMap = new Map(allAccounts.map((a) => [a.id, a.liabilityCents ?? BigInt(0)]));
-
-  const dayMap = new Map<string, Map<string, bigint>>();
-  for (const b of allBalances) {
-    const day = b.recordedAt.toISOString().slice(0, 10);
-    if (!dayMap.has(day)) dayMap.set(day, new Map());
-    dayMap.get(day)!.set(b.accountId, b.balanceCents);
-  }
-
-  const sortedDays = [...dayMap.keys()].sort();
-  const running = new Map<string, bigint>();
-  const historyRaw: { day: string; netWorth: number }[] = [];
-
-  for (const day of sortedDays) {
-    for (const [id, v] of dayMap.get(day)!) running.set(id, v);
-    let gross = BigInt(0);
-    for (const v of running.values()) gross += v;
-    let liab = BigInt(0);
-    for (const [id, v] of liabMap) {
-      if (running.has(id)) liab += v;
-    }
-    historyRaw.push({ day, netWorth: Number(gross - liab) });
-  }
-
-  const history = historyRaw.map(({ day, netWorth }) => {
-    const [y, m, d] = day.split("-");
-    return {
-      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(
-        new Date(+y, +m - 1, +d)
-      ),
-      netWorth,
-    };
-  });
-
-  // 30-day delta across tracked accounts (fiat + real estate/auto via HistoricalBalance)
-  let delta30: { amount: number; percent: number | null } | null = null;
-  if (historyRaw.length >= 2) {
-    const last = historyRaw[historyRaw.length - 1].netWorth;
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
-    const refIdx = Math.max(
-      0,
-      sortedDays.findLastIndex((d) => d <= thirtyDaysAgo)
-    );
-    const ref = historyRaw[refIdx].netWorth;
-    const amount = last - ref;
-    const percent = ref !== 0 ? (amount / Math.abs(ref)) * 100 : null;
-    delta30 = { amount, percent };
-  }
-
-  const allocationRaw = {
-    cash: Number(allocation["cash"]),
-    savings: Number(allocation["savings"]),
-    investments: Number(allocation["investments"]),
-    crypto: Number(allocation["crypto"]),
-    realEstate: Number(allocation["realEstate"]),
-    auto: Number(allocation["auto"]),
-  };
-
-  return {
+  const {
+    hasAccounts,
     netWorth,
     grossAssets,
     totalPassif,
     totalLiabilities,
     totalLatentTax,
-    history,
     allocationRaw,
     institutions,
+    history,
     delta30,
-    hasAccounts: accounts.length > 0,
-  };
-}
-
-export default async function DashboardPage() {
-  const [
-    { netWorth, grossAssets, totalPassif, totalLiabilities, totalLatentTax, history, allocationRaw, institutions, delta30, hasAccounts },
-    t,
-  ] = await Promise.all([getDashboardData(), getTranslations()]);
+  } = computeDashboard({ accounts, allBalances, intlLocale: localeToIntl(locale), now: new Date() });
 
   // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
   // real payments) but zero gross assets by design (pure liability, no
-  // asset counterpart, see getDashboardData above). Gating on grossAssets
-  // showed the "add your first account" empty state to a user who'd
-  // already added one.
+  // asset counterpart, see lib/dashboard.ts). Gating on grossAssets showed
+  // the "add your first account" empty state to a user who'd already added
+  // one.
   const hasData = hasAccounts;
 
   const allocationSlices: AllocationSlice[] = [

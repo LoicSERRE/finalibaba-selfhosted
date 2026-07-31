@@ -8,9 +8,10 @@
 #   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d
 #
 #   # Seed demo data (run once after first boot, or any time to refresh it):
-#   # npx, not a bare `tsx` - tsx is a devDependency, so it isn't installed in
-#   # the production runner image (`npm ci --omit=dev`); npx fetches it on demand.
-#   docker compose -f docker-compose.demo.yml --env-file .env.demo exec app-demo npx tsx prisma/seed-demo.ts
+#   # `pnpm dlx`, not `pnpm exec` - tsx is a devDependency, so it isn't
+#   # installed in the production runner image (`pnpm install --prod`);
+#   # dlx fetches it on demand, same role npx played for npm.
+#   docker compose -f docker-compose.demo.yml --env-file .env.demo exec app-demo pnpm dlx tsx prisma/seed-demo.ts
 #
 #   # Force rebuild from source:
 #   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build

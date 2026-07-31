@@ -64,6 +64,78 @@ def _get_api(phone_no: str, pin: str, interactive: bool):
 
 # ── JWT / account discovery ───────────────────────────────────────────────────
 
+def _position_isin(pos: dict) -> str:
+    """A TR position's ISIN - the field is called "instrumentId" in newer API
+    responses, "isin" in older ones. Every call site needs both checked."""
+    return pos.get("instrumentId") or pos.get("isin") or ""
+
+
+def split_crypto_positions(positions: list) -> tuple[list, list]:
+    """TR crypto assets (XF000* ISINs) show up in the CTO portfolio but belong
+    to a separate crypto wallet - split them out. Returns (non_crypto, crypto)."""
+    non_crypto = [p for p in positions if not _position_isin(p).startswith("XF0")]
+    crypto = [p for p in positions if _position_isin(p).startswith("XF0")]
+    return non_crypto, crypto
+
+
+def resolve_position(pos: dict, prices: dict, neon_quantities: dict) -> dict | None:
+    """Resolve one TR position dict into the fields the DB layer needs
+    (price/quantity/cost-basis/value). Returns None if the position has no
+    ISIN (skip it).
+
+    Pure - given the same pos/prices/neon_quantities it always returns the
+    same result, no I/O. Extracted from _sync_positions so the price/quantity
+    resolution rules (which price source wins, which quantity source wins)
+    can be unit tested without a DB.
+    """
+    isin = _position_isin(pos)
+    if not isin:
+        return None
+
+    ticker_price, ticker_name = prices.get(isin, (0, None))
+    # Prefer neonPortfolio price (already resolved by the caller: neon >
+    # exchange ticker) over compactPortfolioByType's own currentPrice, which
+    # for illiquid PE/ELTIF funds returns averageBuyIn instead of current NAV.
+    raw_price = pos.get("currentPrice") or pos.get("lastPrice") or 0
+    compact_price_cents = int(Decimal(str(raw_price)) * 100)
+    price_cents = ticker_price or compact_price_cents
+    name = ticker_name or pos.get("name") or isin
+    # Quantity: prefer neon_quantities[isin] when available - it's the
+    # virtualSize neonPortfolio used as price divisor (netValue/virtualSize),
+    # so using the same value here ensures quantity × price = netValue
+    # exactly. Fixes PE/ELTIF where compactPortfolioByType may omit
+    # virtualSize and fall back to netSize, causing a ~20% undercount.
+    quantity = str(neon_quantities.get(isin) or pos.get("virtualSize") or pos.get("netSize") or pos.get("quantity", "0"))
+    avg_price = str(pos.get("averageBuyIn") or pos.get("avgCost") or 0)
+    cost_basis_cents = int((Decimal(quantity) * Decimal(avg_price) * 100).to_integral_value()) if float(avg_price) else None
+    value_cents = int(Decimal(quantity) * Decimal(str(price_cents)))
+
+    return {
+        "isin": isin,
+        "name": name,
+        "price_cents": price_cents,
+        "quantity": quantity,
+        "cost_basis_cents": cost_basis_cents,
+        "value_cents": value_cents,
+    }
+
+
+def _is_auth_error(exc: Exception) -> bool:
+    """True only for signals that specifically indicate the TR session itself
+    is invalid, not any transient network/timeout error. Narrower than
+    matching generic words ("session", "login", "expired"...) against the
+    full exception text - a transient WebSocket disconnect or timeout could
+    easily contain one of those words too, and wrongly deleting a still-valid
+    saved session forces the user through the OTP flow again for no reason.
+    """
+    from pytr.api import TradeRepublicError
+    from requests.exceptions import HTTPError
+
+    if isinstance(exc, HTTPError):
+        return exc.response is not None and exc.response.status_code == 401
+    return isinstance(exc, TradeRepublicError) and "3003" in str(exc.error)
+
+
 def _decode_jwt_payload(token: str) -> dict:
     try:
         parts = token.split(".")
@@ -285,12 +357,8 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
 
         # TR crypto assets (XF000* ISINs) are in the CTO portfolio but belong
         # to a separate crypto wallet - split them out to the CRYPTO account.
-        # New format uses "isin" field; old used "instrumentId" - check both.
         if acc_type == "default":
-            def _isin(p: dict) -> str:
-                return p.get("instrumentId") or p.get("isin") or ""
-            crypto_pos = [p for p in all_positions if _isin(p).startswith("XF0")]
-            all_positions = [p for p in all_positions if not _isin(p).startswith("XF0")]
+            all_positions, crypto_pos = split_crypto_positions(all_positions)
             if crypto_pos:
                 positions_by_type.setdefault("CRYPTO", []).extend(crypto_pos)
                 log.info("TR %d crypto position(s) (XF000*) split from CTO", len(crypto_pos))
@@ -305,10 +373,10 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
 
     # Collect unique ISINs
     all_isins = {
-        pos.get("instrumentId") or pos.get("isin", "")
+        _position_isin(pos)
         for positions in positions_by_type.values()
         for pos in positions
-        if pos.get("instrumentId") or pos.get("isin")
+        if _position_isin(pos)
     }
 
     # neonPortfolio gives accurate per-unit prices for all instruments including
@@ -335,11 +403,7 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
 
 def _sync_positions(cur, positions: list, account_id: str, acc_type_label: str, prices: dict, neon_quantities: dict) -> int:
     # Purge holdings no longer in TR portfolio (sold positions)
-    current_isins = {
-        pos.get("instrumentId") or pos.get("isin", "")
-        for pos in positions
-        if pos.get("instrumentId") or pos.get("isin")
-    }
+    current_isins = {_position_isin(pos) for pos in positions if _position_isin(pos)}
     if current_isins:
         cur.execute(
             f'DELETE FROM "Holding" WHERE "accountId" = %s AND ticker NOT IN ({",".join(["%s"] * len(current_isins))})',
@@ -350,42 +414,27 @@ def _sync_positions(cur, positions: list, account_id: str, acc_type_label: str, 
 
     total_cents = 0
     for pos in positions:
-        isin = pos.get("instrumentId") or pos.get("isin", "")
-        if not isin:
+        resolved = resolve_position(pos, prices, neon_quantities)
+        if resolved is None:
             continue
-        ticker_price, ticker_name = prices.get(isin, (0, None))
-        # Prefer neonPortfolio price (already resolved in _fetch_all: neon > exchange ticker).
-        # neonPortfolio derives price from netValue/virtualSize which matches exactly what TR
-        # displays - including current NAV for illiquid PE/ELTIF funds where compactPortfolio
-        # returns averageBuyIn as currentPrice instead of the actual current NAV.
-        raw_price = pos.get("currentPrice") or pos.get("lastPrice") or 0
-        compact_price_cents = int(Decimal(str(raw_price)) * 100)
-        price_cents = ticker_price or compact_price_cents
-        name = ticker_name or pos.get("name") or isin
-        # Quantity: prefer neon_quantities[isin] when available - it's the virtualSize neonPortfolio
-        # used as price divisor (netValue/virtualSize), so using the same value here ensures
-        # quantity × price = netValue exactly. This fixes PE/ELTIF where compactPortfolioByType
-        # may omit virtualSize and fall back to netSize, causing a ~20% undercount.
-        quantity = str(neon_quantities.get(isin) or pos.get("virtualSize") or pos.get("netSize") or pos.get("quantity", "0"))
-        # Average buy price (cost basis) if provided by TR
-        avg_price = str(pos.get("averageBuyIn") or pos.get("avgCost") or 0)
-        cost_basis_cents = int((Decimal(quantity) * Decimal(avg_price) * 100).to_integral_value()) if float(avg_price) else None
-        value_cents = int(Decimal(quantity) * Decimal(str(price_cents)))
-        total_cents += value_cents
+        total_cents += resolved["value_cents"]
         upsert_holding(
             cur,
             account_id=account_id,
-            ticker=isin,
-            name=name,
-            quantity=quantity,
-            last_price_cents=price_cents,
+            ticker=resolved["isin"],
+            name=resolved["name"],
+            quantity=resolved["quantity"],
+            last_price_cents=resolved["price_cents"],
         )
-        if cost_basis_cents:
+        if resolved["cost_basis_cents"]:
             cur.execute(
                 'UPDATE "Holding" SET "costBasisCents" = %s WHERE "accountId" = %s AND ticker = %s',
-                (cost_basis_cents, account_id, isin),
+                (resolved["cost_basis_cents"], account_id, resolved["isin"]),
             )
-        log.info("TR %s - %s (%s): qty %s @ %d cts", acc_type_label, name, isin, quantity, price_cents)
+        log.info(
+            "TR %s - %s (%s): qty %s @ %d cts",
+            acc_type_label, resolved["name"], resolved["isin"], resolved["quantity"], resolved["price_cents"],
+        )
     record_balance(cur, account_id, total_cents)
     return total_cents
 
@@ -455,8 +504,7 @@ def run(interactive: bool = False) -> dict:
     try:
         positions_by_type, cash_accounts, prices, neon_quantities = asyncio.run(_fetch_all(api, sec_accounts, has_crypto))
     except Exception as e:
-        err = str(e).lower()
-        if any(w in err for w in ["unauthorized", "401", "session", "expired", "login", "3003"]):
+        if _is_auth_error(e):
             api._cookies_file.unlink(missing_ok=True)
             conn.commit()
             _mark_auth_required("Session expirée - reconnecte depuis Paramètres → Trade Republic")

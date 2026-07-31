@@ -22,13 +22,34 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6.0.9
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npm test
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm test
+
+  # Same reasoning as `test` above, applied to the sync/ image specifically -
+  # build-sync used to depend only on the JS test suite, so a broken Python
+  # sync/ commit could still publish a new sync image with nothing to stop it.
+  python-check:
+    name: Python lint, tests & audit (sync service)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.16.0
+      - run: ruff check sync/
+      - run: pip install pip-audit
+      - run: pip-audit -r sync/requirements.txt
+      - run: pip install -r sync/requirements.txt -r sync/requirements-dev.txt
+      - run: cd sync && python -m pytest
 
   build-app:
     name: Build & push app image
@@ -69,7 +90,7 @@ jobs:
 
   build-sync:
     name: Build & push sync image
-    needs: [test]
+    needs: [test, python-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -104,9 +125,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Scans the images actually published above (registry pull, not a rebuild)
+  # for OS-package-level CVEs - npm audit/pip-audit only ever see what's
+  # declared in package.json/requirements.txt, never what's baked into the
+  # final image's base layer (node:22-alpine, python:3.12-slim + apk/apt
+  # packages). Findings go to the Security tab alongside CodeQL; a
+  # CRITICAL/HIGH finding also blocks notify-deploy below, so an unnoticed
+  # base-image CVE can't auto-deploy to prod on the next release even though
+  # the image itself is already sitting in GHCR by this point.
+  trivy-scan:
+    name: Trivy image scan (${{ matrix.image }})
+    needs: [build-app, build-sync]
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [app, sync]
+    steps:
+      - uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}:latest
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-${{ matrix.image }}
+
   notify-deploy:
     name: Notify private deploy repo
-    needs: [build-app, build-sync]
+    needs: [build-app, build-sync, trivy-scan]
     runs-on: ubuntu-latest
     # This job never touches GITHUB_TOKEN - it authenticates to the private
     # repo via the DEPLOY_DISPATCH_TOKEN secret instead - so it needs none of

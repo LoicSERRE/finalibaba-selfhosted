@@ -18,6 +18,13 @@ const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
 export async function GET() {
   const { connStr, password } = buildConnectionString(process.env.DATABASE_URL!);
 
+  // sonarjs flags resolving pg_dump via PATH rather than an absolute path.
+  // In production PATH is fixed by the Dockerfile (apk-installed
+  // postgresql16-client, not attacker-influenced without prior code
+  // execution in the container already); hardcoding an absolute path would
+  // instead break `pnpm dev` on every OS/package-manager combo where
+  // pg_dump isn't symlinked to the same location.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path
   const dump = spawn("pg_dump", ["--clean", "--if-exists", "--no-owner", connStr], {
     env: { ...process.env, PGPASSWORD: password },
   });
@@ -115,7 +122,9 @@ export async function POST(req: NextRequest) {
 
   try {
     await new Promise<void>((resolve, reject) => {
+      // Same PATH-resolution tradeoff as the pg_dump call above.
       const psql = spawn(
+        // eslint-disable-next-line sonarjs/no-os-command-from-path
         "psql",
         [connStr, "-v", "ON_ERROR_STOP=1", "--single-transaction"],
         { env: { ...process.env, PGPASSWORD: password } }

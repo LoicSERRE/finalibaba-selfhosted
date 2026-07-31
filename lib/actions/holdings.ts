@@ -9,6 +9,11 @@ import Decimal from "decimal.js";
 
 const FOREIGN_CURRENCIES = new Set(["USD", "GBP", "CHF"]);
 
+// Handles both create/edit and both EUR/foreign-currency paths (fetching +
+// caching an FX rate only when the native price actually changed) in one
+// place - see the "Multi-currency" section of CLAUDE.md for why the
+// re-fetch-only-on-change branching can't be simplified further.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export async function upsertHolding(formData: FormData) {
   const accountId = formData.get("accountId") as string;
   const ticker = (formData.get("ticker") as string).trim().toUpperCase();
