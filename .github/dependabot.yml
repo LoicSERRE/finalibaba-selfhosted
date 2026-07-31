@@ -1,0 +1,51 @@
+version: 2
+updates:
+  # Next.js app (pnpm-lock.yaml is auto-detected under the "npm" ecosystem -
+  # Dependabot has supported pnpm lockfiles natively for a while).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # Patch/minor bumps across a lockfile this size happen constantly and
+      # rarely need individual review - group them into one PR per week.
+      # Majors (the ones actually worth reading a changelog for) stay
+      # ungrouped, one PR each.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 10
+
+  # sync/ Python service
+  - package-ecosystem: "pip"
+    directory: "/sync"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    # pytr is intentionally pinned to a specific commit (see the comment in
+    # sync/requirements.txt) because the latest PyPI-published tag is stale
+    # relative to a TR API migration this project depends on - Dependabot
+    # can't safely auto-bump a git-commit pin the way it does version
+    # ranges, so leave it for a deliberate manual bump instead.
+    ignore:
+      - dependency-name: "pytr"
+
+  # Both Dockerfiles - base image tags (node:22-alpine, python:3.12-slim)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/sync"
+    schedule:
+      interval: "weekly"
+
+  # Reusable workflow/action versions in .github/workflows/*.yml
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]

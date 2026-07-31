@@ -1,5 +1,17 @@
 woob[lcl,swile]==3.7.*
-pytr @ git+https://github.com/pytr-org/pytr.git
+# Pinned to a commit, not just the bare repo URL: pytr has no PyPI release
+# (pip-audit can't check it either, see ci.yml), and an unpinned git
+# dependency means every fresh install silently resolves to whatever's on
+# master at that moment - not reproducible, and risky for a dependency that
+# handles real bank credentials. Pinned past the latest tag (v0.4.9, April
+# 2026) deliberately: sync_tr.py's own comments reference a June 2026 TR
+# API migration (compactPortfolio -> compactPortfolioByType) that landed in
+# a post-v0.4.9 commit, so the tag itself is stale for what this project
+# actually needs. Bump deliberately, not via automatic tooling - review
+# pytr's own changelog first, since a broken bump here fails silently
+# (sync_tr.py only surfaces get_conn/write_sync_log errors, not "the
+# upstream library's response shape changed").
+pytr @ git+https://github.com/pytr-org/pytr.git@d0b25c3bba10
 psycopg2-binary>=2.9
 fastapi>=0.115
 uvicorn>=0.30

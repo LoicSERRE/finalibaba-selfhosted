@@ -35,6 +35,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # wget is present on node:22-alpine (curl isn't) - see app/api/health/route.ts,
+      # excluded from proxy.ts's auth matcher so this works even with AUTH_ENABLED=true.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   sync:
@@ -52,6 +60,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # python:3.12-slim has neither curl nor wget - use the stdlib instead.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
 volumes:

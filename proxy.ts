@@ -41,6 +41,9 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)",
+    // api/health is excluded alongside api/auth - docker-compose's healthcheck
+    // hits this from inside the container and must never be blocked by
+    // AUTH_ENABLED or redirected through /login.
+    "/((?!api/auth|api/health|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)",
   ],
 };
