@@ -7,7 +7,7 @@ import {
   detectCandidates,
   projectDailyCumulative,
   type RecurringSeries,
-} from "@/lib/recurring";
+} from "@/lib/domain/recurring";
 
 function utc(y: number, m: number, d: number, h = 12): Date {
   return new Date(Date.UTC(y, m, d, h, 0, 0));

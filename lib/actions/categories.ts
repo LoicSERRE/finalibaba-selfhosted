@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
-import { parseCents } from "@/lib/format";
+import { prisma } from "@/lib/db/prisma";
+import { parseCents } from "@/lib/utils/format";
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 

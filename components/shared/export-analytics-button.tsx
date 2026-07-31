@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { fmt, sign, downloadFile } from "@/lib/markdown-export";
-import { localeToIntl } from "@/lib/format";
+import { fmt, sign, downloadFile } from "@/lib/utils/markdown-export";
+import { localeToIntl } from "@/lib/utils/format";
 import { useTranslations, useLocale } from "next-intl";
 
 // ── Serialized types (no BigInt) ──────────────────────────────────────────────

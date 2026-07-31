@@ -1,15 +1,15 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { PiggyBank, Tag } from "lucide-react";
 import Link from "next/link";
-import { AddCategoryDialog } from "@/components/add-category-dialog";
-import { DeleteButton } from "@/components/delete-button";
-import { EmptyState } from "@/components/empty-state";
-import { UncategorizedGroupCard } from "@/components/uncategorized-group-card";
+import { AddCategoryDialog } from "@/components/budgets/add-category-dialog";
+import { DeleteButton } from "@/components/shared/delete-button";
+import { EmptyState } from "@/components/shared/empty-state";
+import { UncategorizedGroupCard } from "@/components/budgets/uncategorized-group-card";
 import { deleteCategory } from "@/lib/actions/categories";
-import { formatCurrency, centsToEuro } from "@/lib/format";
-import { normalizeLabel } from "@/lib/recurring";
+import { formatCurrency, centsToEuro } from "@/lib/utils/format";
+import { normalizeLabel } from "@/lib/domain/recurring";
 import { getTranslations } from "next-intl/server";
 
 // How many of the most-frequent uncategorized label groups to surface at

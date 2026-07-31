@@ -1,6 +1,6 @@
-import { BalanceHistoryChart } from "@/components/balance-history-chart";
-import { ImportBalanceHistoryDialog } from "@/components/import-balance-history-dialog";
-import type { ChartPoint } from "@/lib/account-detail";
+import { BalanceHistoryChart } from "@/components/account-detail/balance-history-chart";
+import { ImportBalanceHistoryDialog } from "@/components/account-detail/import-balance-history-dialog";
+import type { ChartPoint } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

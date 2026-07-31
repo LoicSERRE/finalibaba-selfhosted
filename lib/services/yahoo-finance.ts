@@ -1,4 +1,4 @@
-import type { YFDividendInfo, PricePoint } from "@/lib/analytics";
+import type { YFDividendInfo, PricePoint } from "@/lib/domain/analytics";
 
 // Uses the unauthenticated chart endpoint to fetch dividend history.
 // Estimates the next ex-div date by extrapolating historical frequency.

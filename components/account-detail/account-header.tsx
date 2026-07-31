@@ -1,9 +1,9 @@
-import { formatCurrency } from "@/lib/format";
-import { InstitutionLogo } from "@/components/institution-logo";
-import { getInstitutionLogoUrl } from "@/lib/institutions";
-import { UpdateRealEstateDialog } from "@/components/update-real-estate-dialog";
-import { UpdateAutomobileDialog } from "@/components/update-automobile-dialog";
-import { DeleteAccountButton } from "@/components/delete-account-button";
+import { formatCurrency } from "@/lib/utils/format";
+import { InstitutionLogo } from "@/components/shared/institution-logo";
+import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
+import { UpdateRealEstateDialog } from "@/components/accounts/update-real-estate-dialog";
+import { UpdateAutomobileDialog } from "@/components/accounts/update-automobile-dialog";
+import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AVATAR_COLORS } from "@/lib/palette";
+import { AVATAR_COLORS } from "@/lib/utils/palette";
 
 function pickColor(name: string): string {
   let hash = 0;

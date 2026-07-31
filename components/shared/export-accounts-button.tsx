@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { fmt, sign, downloadFile } from "@/lib/markdown-export";
+import { fmt, sign, downloadFile } from "@/lib/utils/markdown-export";
 import { useTranslations } from "next-intl";
 
 // ── Serialized types (no BigInt) ──────────────────────────────────────────────

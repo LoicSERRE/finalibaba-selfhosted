@@ -1,8 +1,8 @@
 import Decimal from "decimal.js";
-import { getAccountTaxRate } from "@/lib/tax";
-import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
-import { holdingMarketValue } from "@/lib/analytics";
-import { getInstitutionLogoUrl } from "@/lib/institutions";
+import { getAccountTaxRate } from "@/lib/domain/tax";
+import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
+import { holdingMarketValue } from "@/lib/domain/analytics";
+import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 
 /**

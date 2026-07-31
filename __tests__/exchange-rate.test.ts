@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchExchangeRateToEur } from "@/lib/exchange-rate";
+import { fetchExchangeRateToEur } from "@/lib/services/exchange-rate";
 
 function mockYahooResponse(regularMarketPrice: number | undefined) {
   return {

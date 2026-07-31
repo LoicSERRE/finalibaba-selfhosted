@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
-import { computeAccountDetail, type AccountDetailAccount } from "@/lib/account-detail";
+import { computeAccountDetail, type AccountDetailAccount } from "@/lib/domain/account-detail";
 
 const NOW = new Date("2026-07-28T12:00:00.000Z");
 

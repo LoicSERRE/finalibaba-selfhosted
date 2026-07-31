@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
-import { getAccountBalances, pickBalance } from "@/lib/gocardless";
+import { prisma } from "@/lib/db/prisma";
+import { getAccountBalances, pickBalance } from "@/lib/services/gocardless";
 
 /** Refresh balances for all GoCardless-linked accounts of an institution */
 export async function syncGocardlessBalances(institutionId: string) {

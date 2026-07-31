@@ -1,8 +1,8 @@
 import Decimal from "decimal.js";
-import { formatCurrency } from "@/lib/format";
-import { AddHoldingDialog } from "@/components/add-holding-dialog";
-import { SellHoldingDialog } from "@/components/sell-holding-dialog";
-import type { HoldingWithTax } from "@/lib/account-detail";
+import { formatCurrency } from "@/lib/utils/format";
+import { AddHoldingDialog } from "@/components/account-detail/add-holding-dialog";
+import { SellHoldingDialog } from "@/components/account-detail/sell-holding-dialog";
+import type { HoldingWithTax } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

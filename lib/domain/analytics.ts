@@ -1,9 +1,9 @@
 import Decimal from "decimal.js";
-import { getAccountTaxRate } from "@/lib/tax";
-import { calcCurrentCapital, hasLoanParams } from "@/lib/loan";
-import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/palette";
+import { getAccountTaxRate } from "@/lib/domain/tax";
+import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
+import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
-import type { AnalyticsExportData } from "@/components/export-analytics-button";
+import type { AnalyticsExportData } from "@/components/shared/export-analytics-button";
 
 // ── Static config ────────────────────────────────────────────────────────────
 

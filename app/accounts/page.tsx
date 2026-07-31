@@ -1,10 +1,10 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
-import { formatCurrency, localeToIntl } from "@/lib/format";
+import { prisma } from "@/lib/db/prisma";
+import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import Link from "next/link";
-import { AddAccountDialog } from "@/components/add-account-dialog";
-import { ExportAccountsButton } from "@/components/export-accounts-button";
+import { AddAccountDialog } from "@/components/accounts/add-account-dialog";
+import { ExportAccountsButton } from "@/components/shared/export-accounts-button";
 import { FiatTab } from "@/components/accounts/fiat-tab";
 import { InvestmentTab } from "@/components/accounts/investment-tab";
 import { RealEstateTab } from "@/components/accounts/real-estate-tab";
@@ -23,7 +23,7 @@ import {
   toAutomobileExport,
   toLoanExport,
   type AccountsTabId,
-} from "@/lib/accounts-page";
+} from "@/lib/domain/accounts-page";
 import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function AccountsPage({

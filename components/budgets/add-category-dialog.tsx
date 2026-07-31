@@ -6,7 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createCategory, updateCategory } from "@/lib/actions/categories";
-import { CATEGORY_SWATCHES } from "@/lib/palette";
+import { CATEGORY_SWATCHES } from "@/lib/utils/palette";
 import { useTranslations } from "next-intl";
 
 // Existing category to edit, passed down as plain serializable fields only -

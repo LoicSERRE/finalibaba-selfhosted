@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localeToIntl, formatCurrency, formatPercent, parseCents, centsToEuro } from "@/lib/format";
+import { localeToIntl, formatCurrency, formatPercent, parseCents, centsToEuro } from "@/lib/utils/format";
 
 describe("localeToIntl", () => {
   it("maps 'en' to en-US and everything else to fr-FR", () => {

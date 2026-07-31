@@ -5,7 +5,7 @@ import {
   calcLoanStats,
   hasLoanParams,
   type LoanParams,
-} from "@/lib/loan";
+} from "@/lib/domain/loan";
 
 describe("calcCurrentCapital", () => {
   it("returns the full amount before the loan starts", () => {

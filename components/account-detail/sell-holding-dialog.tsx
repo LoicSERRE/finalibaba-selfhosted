@@ -6,7 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { recordSale } from "@/lib/actions/sales";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/lib/utils/format";
 import { useTranslations } from "next-intl";
 
 type Holding = {

@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 // Internal Docker Compose service-to-service traffic on a private bridge
 // network, never exposed externally - TLS here would need self-signed cert

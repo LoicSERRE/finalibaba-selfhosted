@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
-import { parseCents } from "@/lib/format";
-import { fetchExchangeRateToEur } from "@/lib/exchange-rate";
+import { prisma } from "@/lib/db/prisma";
+import { parseCents } from "@/lib/utils/format";
+import { fetchExchangeRateToEur } from "@/lib/services/exchange-rate";
 import { HoldingCurrency } from "@/app/generated/prisma/enums";
 import Decimal from "decimal.js";
 

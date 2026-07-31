@@ -1,5 +1,5 @@
-import { formatCurrency } from "@/lib/format";
-import type { RebalancingRow } from "@/lib/account-detail";
+import { formatCurrency } from "@/lib/utils/format";
+import type { RebalancingRow } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

@@ -6,8 +6,8 @@ import { History } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { importBalanceHistory } from "@/lib/actions/balances";
-import { parseCents, formatCurrency } from "@/lib/format";
-import { parseCsvDate, isFutureDate, looksNumeric, makeHeaderNormalizer } from "@/lib/csv-import";
+import { parseCents, formatCurrency } from "@/lib/utils/format";
+import { parseCsvDate, isFutureDate, looksNumeric, makeHeaderNormalizer } from "@/lib/domain/csv-import";
 import { useTranslations } from "next-intl";
 
 type ParsedRow = {

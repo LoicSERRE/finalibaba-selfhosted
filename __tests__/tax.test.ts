@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAccountTaxRate } from "@/lib/tax";
+import { getAccountTaxRate } from "@/lib/domain/tax";
 
 describe("getAccountTaxRate", () => {
   it("returns 0 for EXEMPT accounts regardless of taxRatePct", () => {

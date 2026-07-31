@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getRequisition, getAccountDetails, getAccountBalances, pickBalance, toAccountType } from "@/lib/gocardless";
+import { prisma } from "@/lib/db/prisma";
+import { getRequisition, getAccountDetails, getAccountBalances, pickBalance, toAccountType } from "@/lib/services/gocardless";
 
 export async function GET(req: NextRequest) {
   // GoCardless appends ?ref={reference} - we set reference = our institution DB id

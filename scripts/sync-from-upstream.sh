@@ -48,8 +48,8 @@ rsync -av --delete \
   --exclude='scripts/' \
   --exclude='.claude/' \
   --exclude='proxy.ts' \
-  --exclude='components/sidebar-wrapper.tsx' \
-  --exclude='components/sidebar-dynamic.tsx' \
+  --exclude='components/layout/sidebar-wrapper.tsx' \
+  --exclude='components/layout/sidebar-dynamic.tsx' \
   --exclude='node_modules/' \
   --exclude='.next/' \
   --exclude='*.log' \

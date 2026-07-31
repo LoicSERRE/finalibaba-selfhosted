@@ -1,6 +1,6 @@
-import { NetWorthChart } from "@/components/net-worth-chart";
-import { AssetAllocationChart, type AllocationSlice } from "@/components/asset-allocation-chart";
-import type { HistoryPoint } from "@/lib/analytics";
+import { NetWorthChart } from "@/components/shared/net-worth-chart";
+import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
+import type { HistoryPoint } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

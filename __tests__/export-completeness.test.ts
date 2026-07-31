@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Decimal from "decimal.js";
-import { computeAnalytics, type AnalyticsInput } from "@/lib/analytics";
+import { computeAnalytics, type AnalyticsInput } from "@/lib/domain/analytics";
 import type {
   FiatAccountExport,
   HoldingExport,
@@ -10,7 +10,7 @@ import type {
   RealEstateAccountExport,
   AutomobileAccountExport,
   LoanAccountExport,
-} from "@/components/export-accounts-button";
+} from "@/components/shared/export-accounts-button";
 
 /**
  * These tests don't check *values* - lib/analytics.test.ts and the manual
@@ -61,7 +61,7 @@ function assertAllFieldsReferenced(
 
 describe("analytics export completeness", () => {
   it("every AnalyticsResult field is either exported or explicitly excused", () => {
-    const analyticsSource = readFileSync(resolve(__dirname, "../lib/analytics.ts"), "utf-8");
+    const analyticsSource = readFileSync(resolve(__dirname, "../lib/domain/analytics.ts"), "utf-8");
     const buildAnalyticsExportSource = extractFunctionSource(
       analyticsSource,
       "export function buildAnalyticsExport("
@@ -162,7 +162,7 @@ describe("analytics export completeness", () => {
 });
 
 describe("accounts export completeness", () => {
-  const source = readFileSync(resolve(__dirname, "../components/export-accounts-button.tsx"), "utf-8");
+  const source = readFileSync(resolve(__dirname, "../components/shared/export-accounts-button.tsx"), "utf-8");
   const buildMarkdownSource = extractFunctionSource(source, "function buildMarkdown(");
 
   const idAllowlist: Record<string, string> = {

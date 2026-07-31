@@ -1,4 +1,4 @@
-import type { BenchmarkCAGRs } from "@/lib/analytics";
+import type { BenchmarkCAGRs } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

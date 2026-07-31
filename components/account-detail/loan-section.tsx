@@ -1,5 +1,5 @@
-import { formatCurrency } from "@/lib/format";
-import type { LoanStats } from "@/lib/loan";
+import { formatCurrency } from "@/lib/utils/format";
+import type { LoanStats } from "@/lib/domain/loan";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

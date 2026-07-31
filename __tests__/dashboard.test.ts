@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
-import { computeDashboard, clampedEquity, type DashboardAccount, type DashboardInput } from "@/lib/dashboard";
+import { computeDashboard, clampedEquity, type DashboardAccount, type DashboardInput } from "@/lib/domain/dashboard";
 
 const NOW = new Date("2026-07-28T12:00:00.000Z");
 

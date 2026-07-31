@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/lib/utils/format";
 import Link from "next/link";
 import type { getTranslations } from "next-intl/server";
 

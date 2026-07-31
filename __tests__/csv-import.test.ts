@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsvDate, isFutureDate, looksNumeric, makeHeaderNormalizer } from "@/lib/csv-import";
+import { parseCsvDate, isFutureDate, looksNumeric, makeHeaderNormalizer } from "@/lib/domain/csv-import";
 
 describe("parseCsvDate", () => {
   it("passes through a valid ISO date", () => {

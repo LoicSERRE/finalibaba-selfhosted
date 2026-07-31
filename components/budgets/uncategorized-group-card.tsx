@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { bulkAssignCategory } from "@/lib/actions/transactions";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/lib/utils/format";
 import { useTranslations } from "next-intl";
 
 const selectClass =

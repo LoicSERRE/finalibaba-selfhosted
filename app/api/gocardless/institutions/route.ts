@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchInstitutions } from "@/lib/gocardless";
+import { searchInstitutions } from "@/lib/services/gocardless";
 
 export async function GET(req: NextRequest) {
   const country = req.nextUrl.searchParams.get("country") ?? "FR";

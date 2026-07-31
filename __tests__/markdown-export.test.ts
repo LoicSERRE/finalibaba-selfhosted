@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmt, sign } from "@/lib/markdown-export";
+import { fmt, sign } from "@/lib/utils/markdown-export";
 
 describe("fmt", () => {
   it("formats cents as euros with 0 decimals by default", () => {

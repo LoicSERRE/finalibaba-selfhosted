@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { RecurringFrequency } from "@/app/generated/prisma/enums";
-import { parseCents } from "@/lib/format";
+import { parseCents } from "@/lib/utils/format";
 
 const FREQUENCIES = new Set(Object.values(RecurringFrequency));
 

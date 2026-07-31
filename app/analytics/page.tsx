@@ -1,19 +1,19 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
-import { localeToIntl } from "@/lib/format";
-import { AnalyticsEmptyState } from "@/components/analytics-empty-state";
+import { prisma } from "@/lib/db/prisma";
+import { localeToIntl } from "@/lib/utils/format";
+import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
 import {
   ExportAnalyticsButton,
-} from "@/components/export-analytics-button";
+} from "@/components/shared/export-analytics-button";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
   computeAnalytics,
   buildAnalyticsExport,
   ISIN_TO_YF_SYMBOL,
   BENCHMARK_SYMBOLS,
-} from "@/lib/analytics";
-import { fetchYFDividends, fetchYFPriceHistory } from "@/lib/yahoo-finance";
+} from "@/lib/domain/analytics";
+import { fetchYFDividends, fetchYFPriceHistory } from "@/lib/services/yahoo-finance";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { CashflowCards } from "@/components/analytics/cashflow-cards";
 import { GoalAndPassiveIncome } from "@/components/analytics/goal-and-passive-income";

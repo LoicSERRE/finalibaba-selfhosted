@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 const FIAT_TYPES = new Set(["CHECKING", "SAVINGS", "MEAL_VOUCHER"]);
 

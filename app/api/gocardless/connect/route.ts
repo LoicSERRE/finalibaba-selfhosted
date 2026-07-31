@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { createRequisition } from "@/lib/gocardless";
+import { prisma } from "@/lib/db/prisma";
+import { createRequisition } from "@/lib/services/gocardless";
 
 export async function GET(req: NextRequest) {
   const institutionId = req.nextUrl.searchParams.get("institutionId");

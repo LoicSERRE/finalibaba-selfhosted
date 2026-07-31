@@ -1,22 +1,22 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { Repeat, AlertTriangle, Bot } from "lucide-react";
-import { AddRecurringDialog } from "@/components/add-recurring-dialog";
-import { SuggestionCard } from "@/components/suggestion-card";
-import { ToggleRecurringButton } from "@/components/toggle-recurring-button";
-import { DeleteButton } from "@/components/delete-button";
-import { EmptyState } from "@/components/empty-state";
-import { CashflowChart } from "@/components/cashflow-chart";
+import { AddRecurringDialog } from "@/components/recurring/add-recurring-dialog";
+import { SuggestionCard } from "@/components/recurring/suggestion-card";
+import { ToggleRecurringButton } from "@/components/recurring/toggle-recurring-button";
+import { DeleteButton } from "@/components/shared/delete-button";
+import { EmptyState } from "@/components/shared/empty-state";
+import { CashflowChart } from "@/components/recurring/cashflow-chart";
 import { deleteRecurringTransaction } from "@/lib/actions/recurring";
-import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/format";
+import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
 import {
   detectCandidates,
   getOccurrencesInRange,
   isMissed,
   normalizeLabel,
   projectDailyCumulative,
-} from "@/lib/recurring";
+} from "@/lib/domain/recurring";
 import { getTranslations, getLocale } from "next-intl/server";
 
 const FIAT_TYPES = ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] as const;

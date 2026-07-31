@@ -1,4 +1,4 @@
-import { LoginForm } from "@/components/login-form";
+import { LoginForm } from "@/components/auth/login-form";
 
 // proxy.ts now redirects /login -> / itself when AUTH_ENABLED is off (before
 // this page ever renders), so this component doesn't need to duplicate that

@@ -2,7 +2,7 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useTranslations } from "next-intl";
-import { CHART_COLORS } from "@/lib/palette";
+import { CHART_COLORS } from "@/lib/utils/palette";
 
 export type AllocationSlice = {
   name: string;

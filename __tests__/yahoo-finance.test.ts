@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchYFDividendForSymbol, fetchYFDividends, fetchYFPriceHistory } from "@/lib/yahoo-finance";
+import { fetchYFDividendForSymbol, fetchYFDividends, fetchYFPriceHistory } from "@/lib/services/yahoo-finance";
 
 function divEventsFromTimestamps(timestamps: number[], amount: number) {
   const events: Record<string, { amount: number; date: number }> = {};

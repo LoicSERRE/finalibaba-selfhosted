@@ -1,7 +1,7 @@
-import { formatCurrency } from "@/lib/format";
-import { ImportBalanceHistoryDialog } from "@/components/import-balance-history-dialog";
-import { ImportTransactionsDialog } from "@/components/import-transactions-dialog";
-import type { HistoryRow } from "@/lib/account-detail";
+import { formatCurrency } from "@/lib/utils/format";
+import { ImportBalanceHistoryDialog } from "@/components/account-detail/import-balance-history-dialog";
+import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
+import type { HistoryRow } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

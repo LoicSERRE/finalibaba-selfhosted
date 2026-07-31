@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { formatCurrency } from "@/lib/format";
-import { InstitutionLogo } from "@/components/institution-logo";
-import { AddAutomobileDialog } from "@/components/add-automobile-dialog";
-import { UpdateAutomobileDialog } from "@/components/update-automobile-dialog";
-import type { AutomobileRow } from "@/lib/accounts-page";
+import { formatCurrency } from "@/lib/utils/format";
+import { InstitutionLogo } from "@/components/shared/institution-logo";
+import { AddAutomobileDialog } from "@/components/accounts/add-automobile-dialog";
+import { UpdateAutomobileDialog } from "@/components/accounts/update-automobile-dialog";
+import type { AutomobileRow } from "@/lib/domain/accounts-page";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

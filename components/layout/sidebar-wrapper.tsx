@@ -1,4 +1,4 @@
-import { SidebarDynamic } from "@/components/sidebar-dynamic";
+import { SidebarDynamic } from "@/components/layout/sidebar-dynamic";
 
 export function SidebarWrapper() {
   const showLogout = process.env.AUTH_ENABLED === "true";

@@ -1,5 +1,5 @@
-import { formatCurrency } from "@/lib/format";
-import type { AllocationSliceResult } from "@/lib/analytics";
+import { formatCurrency } from "@/lib/utils/format";
+import type { AllocationSliceResult } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

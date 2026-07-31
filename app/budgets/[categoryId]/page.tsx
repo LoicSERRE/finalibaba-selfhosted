@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { TransactionCategorySelect } from "@/components/transaction-category-select";
-import { formatCurrency, localeToIntl } from "@/lib/format";
+import { TransactionCategorySelect } from "@/components/shared/transaction-category-select";
+import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function CategoryDetailPage({

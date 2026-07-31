@@ -1,7 +1,7 @@
-import { formatCurrency } from "@/lib/format";
-import { ImportTransactionsDialog } from "@/components/import-transactions-dialog";
-import { TransactionCategorySelect } from "@/components/transaction-category-select";
-import type { AccountDetailTransaction } from "@/lib/account-detail";
+import { formatCurrency } from "@/lib/utils/format";
+import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
+import { TransactionCategorySelect } from "@/components/shared/transaction-category-select";
+import type { AccountDetailTransaction } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

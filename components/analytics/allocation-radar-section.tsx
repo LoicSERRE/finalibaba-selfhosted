@@ -1,5 +1,5 @@
-import { formatCurrency } from "@/lib/format";
-import { ALLOCATION_CATEGORY_COLORS } from "@/lib/palette";
+import { formatCurrency } from "@/lib/utils/format";
+import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

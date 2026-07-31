@@ -4,7 +4,7 @@ import {
   computeAnalytics,
   type AnalyticsAccount,
   type AnalyticsInput,
-} from "@/lib/analytics";
+} from "@/lib/domain/analytics";
 
 const NOW = new Date("2026-07-28T12:00:00.000Z");
 

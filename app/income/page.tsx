@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { Coins } from "lucide-react";
-import { AddIncomeDialog } from "@/components/add-income-dialog";
-import { DeleteButton } from "@/components/delete-button";
-import { EmptyState } from "@/components/empty-state";
+import { AddIncomeDialog } from "@/components/income/add-income-dialog";
+import { DeleteButton } from "@/components/shared/delete-button";
+import { EmptyState } from "@/components/shared/empty-state";
 import { deleteIncomeEvent } from "@/lib/actions/income";
-import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/format";
+import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT", "CRYPTO"] as const;

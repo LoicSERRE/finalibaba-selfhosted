@@ -1,14 +1,14 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
-import { formatCurrency, localeToIntl } from "@/lib/format";
-import { NetWorthChart } from "@/components/net-worth-chart";
-import { AssetAllocationChart, type AllocationSlice } from "@/components/asset-allocation-chart";
-import { DashboardEmptyState } from "@/components/dashboard-empty-state";
-import { InstitutionLogo } from "@/components/institution-logo";
+import { prisma } from "@/lib/db/prisma";
+import { formatCurrency, localeToIntl } from "@/lib/utils/format";
+import { NetWorthChart } from "@/components/shared/net-worth-chart";
+import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
+import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
+import { InstitutionLogo } from "@/components/shared/institution-logo";
 import Link from "next/link";
-import { computeDashboard } from "@/lib/dashboard";
-import { ALLOCATION_CATEGORY_COLORS } from "@/lib/palette";
+import { computeDashboard } from "@/lib/domain/dashboard";
+import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function DashboardPage() {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
 
 type ImportRow = { date: string; label: string; amountCents: number };

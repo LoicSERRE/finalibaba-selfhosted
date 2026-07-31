@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { formatCurrency } from "@/lib/format";
-import { InstitutionLogo } from "@/components/institution-logo";
-import { AddRealEstateDialog } from "@/components/add-real-estate-dialog";
-import { UpdateRealEstateDialog } from "@/components/update-real-estate-dialog";
-import type { RealEstateRow } from "@/lib/accounts-page";
+import { formatCurrency } from "@/lib/utils/format";
+import { InstitutionLogo } from "@/components/shared/institution-logo";
+import { AddRealEstateDialog } from "@/components/accounts/add-real-estate-dialog";
+import { UpdateRealEstateDialog } from "@/components/accounts/update-real-estate-dialog";
+import type { RealEstateRow } from "@/lib/domain/accounts-page";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { SidebarWrapper } from "@/components/sidebar-wrapper";
-import { AutoSync } from "@/components/auto-sync";
+import { SidebarWrapper } from "@/components/layout/sidebar-wrapper";
+import { AutoSync } from "@/components/layout/auto-sync";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({

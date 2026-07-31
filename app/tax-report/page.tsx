@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { EmptyState } from "@/components/empty-state";
-import { ExportTaxReportButton, type TaxReportExportData } from "@/components/export-tax-report-button";
-import { getAccountTaxRate } from "@/lib/tax";
-import { formatCurrency, localeToIntl } from "@/lib/format";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ExportTaxReportButton, type TaxReportExportData } from "@/components/shared/export-tax-report-button";
+import { getAccountTaxRate } from "@/lib/domain/tax";
+import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function TaxReportPage({

@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { IncomeType } from "@/app/generated/prisma/enums";
-import { parseCents } from "@/lib/format";
+import { parseCents } from "@/lib/utils/format";
 
 const INCOME_TYPES = new Set(Object.values(IncomeType));
 

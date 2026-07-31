@@ -1,26 +1,26 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
 import { Settings } from "lucide-react";
-import { AddInstitutionDialog } from "@/components/add-institution-dialog";
-import { DeleteButton } from "@/components/delete-button";
-import { EmptyState } from "@/components/empty-state";
+import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
+import { DeleteButton } from "@/components/shared/delete-button";
+import { EmptyState } from "@/components/shared/empty-state";
 import { deleteInstitution } from "@/lib/actions/institutions";
-import { InstitutionLogo } from "@/components/institution-logo";
-import { getInstitutionLogoUrl } from "@/lib/institutions";
-import { ConnectOpenBankingButton, SyncOpenBankingButton } from "@/components/open-banking-buttons";
-import { ConnectOpenBankingDialog } from "@/components/connect-open-banking-dialog";
-import { ConfigureWoobDialog } from "@/components/configure-woob-dialog";
-import { InstitutionSyncButton } from "@/components/institution-sync-button";
-import { SyncStatus } from "@/components/sync-status";
+import { InstitutionLogo } from "@/components/shared/institution-logo";
+import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
+import { ConnectOpenBankingButton, SyncOpenBankingButton } from "@/components/settings/open-banking-buttons";
+import { ConnectOpenBankingDialog } from "@/components/settings/connect-open-banking-dialog";
+import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog";
+import { InstitutionSyncButton } from "@/components/settings/institution-sync-button";
+import { SyncStatus } from "@/components/settings/sync-status";
 import { getSyncStatus } from "@/lib/actions/sync";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
-import { SaveSettingsButton } from "@/components/save-settings-button";
+import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { getTranslations } from "next-intl/server";
-import { LanguageSwitcher } from "@/components/language-switcher";
-import { BackupRestoreSection } from "@/components/backup-restore-section";
+import { LanguageSwitcher } from "@/components/settings/language-switcher";
+import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
 
 // Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
 const DEDICATED_SYNC_INSTITUTIONS = ["lcl", "trade republic"];

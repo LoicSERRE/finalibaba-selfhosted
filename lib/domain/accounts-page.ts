@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
-import { getAccountTaxRate } from "@/lib/tax";
-import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/loan";
-import { getInstitutionLogoUrl } from "@/lib/institutions";
+import { getAccountTaxRate } from "@/lib/domain/tax";
+import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/domain/loan";
+import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type {
   FiatAccountExport,
@@ -10,7 +10,7 @@ import type {
   RealEstateAccountExport,
   AutomobileAccountExport,
   LoanAccountExport,
-} from "@/components/export-accounts-button";
+} from "@/components/shared/export-accounts-button";
 
 export function holdingValue(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
   return BigInt(new Decimal(h.quantity.toString()).mul(h.lastPriceCents.toString()).round().toNumber());

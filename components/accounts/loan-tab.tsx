@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { formatCurrency } from "@/lib/format";
-import { InstitutionLogo } from "@/components/institution-logo";
-import { AddLoanDialog } from "@/components/add-loan-dialog";
-import { DeleteAccountButton } from "@/components/delete-account-button";
-import type { LoanRow } from "@/lib/accounts-page";
+import { formatCurrency } from "@/lib/utils/format";
+import { InstitutionLogo } from "@/components/shared/institution-logo";
+import { AddLoanDialog } from "@/components/accounts/add-loan-dialog";
+import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
+import type { LoanRow } from "@/lib/domain/accounts-page";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;

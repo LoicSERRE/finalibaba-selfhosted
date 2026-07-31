@@ -1,15 +1,15 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
-import { localeToIntl } from "@/lib/format";
+import { prisma } from "@/lib/db/prisma";
+import { localeToIntl } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload } from "lucide-react";
-import { EmptyState } from "@/components/empty-state";
-import { ImportBalanceHistoryDialog } from "@/components/import-balance-history-dialog";
-import { ImportTransactionsDialog } from "@/components/import-transactions-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ImportBalanceHistoryDialog } from "@/components/account-detail/import-balance-history-dialog";
+import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
 import { getTranslations, getLocale } from "next-intl/server";
-import { computeAccountDetail } from "@/lib/account-detail";
+import { computeAccountDetail } from "@/lib/domain/account-detail";
 import { AccountHeader } from "@/components/account-detail/account-header";
 import { BalanceChartSection } from "@/components/account-detail/balance-chart-section";
 import { HoldingsTable } from "@/components/account-detail/holdings-table";
@@ -21,7 +21,7 @@ import { AutomobileSection } from "@/components/account-detail/automobile-sectio
 import { LoanSection } from "@/components/account-detail/loan-section";
 import { TransactionsTable } from "@/components/account-detail/transactions-table";
 import { BalanceHistoryTable } from "@/components/account-detail/balance-history-table";
-import { hasLoanParams } from "@/lib/loan";
+import { hasLoanParams } from "@/lib/domain/loan";
 
 export default async function AccountDetailPage({
   params,

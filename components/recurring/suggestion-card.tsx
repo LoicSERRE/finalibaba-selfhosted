@@ -3,9 +3,9 @@
 import { useTransition } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AddRecurringDialog, type RecurringInitial } from "@/components/add-recurring-dialog";
+import { AddRecurringDialog, type RecurringInitial } from "@/components/recurring/add-recurring-dialog";
 import { dismissSuggestion } from "@/lib/actions/recurring";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/lib/utils/format";
 import { useTranslations } from "next-intl";
 
 type Frequency = "WEEKLY" | "MONTHLY" | "YEARLY";

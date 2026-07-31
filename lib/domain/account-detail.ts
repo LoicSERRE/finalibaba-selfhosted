@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
-import { getAccountTaxRate } from "@/lib/tax";
-import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/loan";
+import { getAccountTaxRate } from "@/lib/domain/tax";
+import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/domain/loan";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 
 export const TYPE_TO_TAB: Record<string, string> = {

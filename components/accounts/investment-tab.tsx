@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { formatCurrency } from "@/lib/format";
-import { InstitutionLogo } from "@/components/institution-logo";
-import type { InvestAccountRow } from "@/lib/accounts-page";
+import { formatCurrency } from "@/lib/utils/format";
+import { InstitutionLogo } from "@/components/shared/institution-logo";
+import type { InvestAccountRow } from "@/lib/domain/accounts-page";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
