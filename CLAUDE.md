@@ -20,7 +20,7 @@ The private repo is at `/mnt/c/Projets/Finalibaba` on the same machine (default 
 
 **Porting rule:** app-layer changes (features, bug fixes, schema changes) made in `Finalibaba/` should be ported here via `scripts/sync-from-upstream.sh`. Infra-layer changes (deploy pipeline, VPS config, personal credentials) are **never** ported.
 
-The script's `rsync --exclude` list is the source of truth for what never gets synced - it covers infra files (`.github/`, all `docker-compose*.yml`, `env.server.example`, `.env*`), selfhosted-only docs (`CLAUDE.md`, `README.md`, `AGENTS.md`, `ROADMAP.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE`), demo/mock seed files (`prisma/seed-demo.ts`, `prisma/seed-tr-mock.ts`), and `scripts/`, `.claude/` themselves. The files below additionally need protection because they *do* exist upstream but must keep selfhosted-specific content:
+The script's `rsync --exclude` list is the source of truth for what never gets synced - it covers infra files (`.github/`, all `docker-compose*.yml`, `env.server.example`, `.env*`), selfhosted-only docs (`CLAUDE.md`, `README.md`, `ROADMAP.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE`), demo/mock seed files (`prisma/seed-demo.ts`, `prisma/seed-tr-mock.ts`), and `scripts/`, `.claude/` themselves. The files below additionally need protection because they *do* exist upstream but must keep selfhosted-specific content:
 
 Files that must **never** be overwritten by the sync script:
 
@@ -54,6 +54,7 @@ pnpm dev         # Dev server (http://localhost:3000)
 NODE_ENV=production pnpm run build    # Prod build + type-check (NODE_ENV=production REQUIRED)
 pnpm run lint    # ESLint
 pnpm test        # Vitest - see __tests__/
+pnpm run test:coverage  # Vitest with coverage - see "Development commands" note below on the report
 ```
 
 Docker (local dev - DB only, credentials fixed in `docker-compose.dev.yml`):
@@ -87,7 +88,9 @@ pnpm run docker:dev:stop   # docker compose down
 pnpm run docker:prod       # BROKEN - references docker-compose.prod.yml, which does not exist in this repo
 ```
 
-Vitest for unit tests - `pnpm test` runs everything under `__tests__/**`, covering the pure `lib/` functions (money math, tax, loans, recurring-transaction detection, CSV import, analytics/dashboard aggregation, export completeness). No component-rendering tests (no jest-dom/RTL/Playwright) - components stay thin wrappers around the tested `lib/` functions by design, see the God Component extraction pattern under Architecture below.
+Vitest for unit tests - `pnpm test` runs everything under `__tests__/**`, covering `lib/domain/`, `lib/utils/`, `lib/services/` (all pure functions: money math, tax, loans, recurring-transaction detection, CSV import, analytics/dashboard aggregation, export completeness) and `lib/auth.ts` (rate limiter + the real `authorize()` credentials/bcrypt flow - see the comment on `provider.options.authorize` in `__tests__/auth.test.ts` for a real next-auth v4 footgun: `CredentialsProvider()`'s top-level `.authorize` is a hardcoded `() => null` stub, the real function only lives at `.options.authorize` until NextAuth's own request pipeline merges it). `pnpm run test:coverage` runs the same suite with a `text`+`json-summary` report - trust the JSON output over the terminal table, which has a rendering bug in this vitest version that silently drops some 100%-covered files from the printed table (their numbers are still folded into the overall summary).
+
+**Known, accepted coverage gaps**: `lib/actions/*` (all 14 Server Action files - every DB mutation in the app) and `lib/services/gocardless.ts` have zero tests; would need Prisma mocking or a real test DB, neither exists yet. `sync/` only tests the pure functions extracted from `sync_tr.py` - `sync_lcl.py`/`sync_woob.py`/`db.py`/`main.py` are untested. No component-rendering tests (no jest-dom/RTL/Playwright as committed dependencies) - components stay thin wrappers around the tested `lib/` functions by design, see the God Component extraction pattern under Architecture below.
 
 ### pnpm overrides
 
@@ -106,7 +109,7 @@ pnpm also blocks a dependency's install/postinstall scripts by default unless ex
 | `valibot >=1.4.2` | GHSA-5qjj-4xww-7phc - `flatten()` throws on inherited `Object` property names; exact-pinned at `1.2.0` by `@prisma/dev` |
 | `js-yaml >=4.3.0` | GHSA-52cp-r559-cp3m - quadratic-CPU DoS via merge-key chains; pulled in by `eslint`'s `@eslint/eslintrc` |
 | `eslint-plugin-react-hooks` pinned to `7.0.1` | Not a CVE fix - its `^7.0.0` range floats onto `7.1.1`, which enables new `react-hooks/purity`/`react-hooks/immutability` rules that fail on pre-existing code unrelated to any dependency bump. Pinned to avoid that scope creep; revisit separately if those rules are worth fixing for real. |
-| `minimatch@10.2.6>brace-expansion >=5.0.8 <6.0.0` and `minimatch@3.1.5>brace-expansion >=1.1.16 <2.0.0` | GHSA-mh99-v99m-4gvg. Two different `minimatch` major lines resolve in this tree (10.x pulled in by `@typescript-eslint/typescript-estree`, 3.x vendored inside `eslint` itself, which expects the old `brace-expansion` 1.x API - `expand is not a function` otherwise) so they need different patched lines, not one shared version. pnpm's override selector only supports a single `parent>dep` level (no 3-segment chain like npm's old nested-object syntax), so this scopes by `minimatch`'s own resolved version instead of by which package imported it - and each range is bounded to its own major line (`<6.0.0`/`<2.0.0`), not left open-ended, because an unbounded `>=1.1.16` is numerically satisfied by `5.0.9` too, which silently defeated the 3.x-line scoping the first time this was written. |
+| `minimatch@10.2.6>brace-expansion >=5.0.8 <6.0.0` and `minimatch@3.1.5>brace-expansion >=1.1.16 <2.0.0` | GHSA-mh99-v99m-4gvg. Two different `minimatch` major lines resolve in this tree (10.x pulled in by `@typescript-eslint/typescript-estree`, 3.x vendored inside `eslint` itself, which expects the old `brace-expansion` 1.x API - `expand is not a function` otherwise) so they need different patched lines, not one shared version. pnpm's override selector only supports a single `parent>dep` level (no 3-segment chain like npm's old nested-object syntax), so this scopes by `minimatch`'s own resolved version instead of by which package imported it - and each range is bounded to its own major line (`<6.0.0`/`<2.0.0`), not left open-ended, because an unbounded `>=1.1.16` is numerically satisfied by `5.0.9` too, which silently defeated the 3.x-line scoping the first time this was written. **Correction (2026-07)**: this GHSA ID was later updated with an unrelated new DoS class (CVE-2026-14257) patched only on the 5.x line - the 1.x line has no patch and never will (1.1.18 is the last 1.x release ever published), so the `minimatch@3.1.5` bound above does not actually carry a fix for that CVE, only for the unrelated API-crash. Accepted: lint-time only, never shipped, already outside the `--prod` audit gate below. Real fix is eslint 9→10 (drops minimatch 3.x entirely) - `dependabot.yml` will surface that as its own major-version PR. |
 
 ## Architecture
 
@@ -178,6 +181,12 @@ Enabled via `AUTH_ENABLED=true` + `AUTH_PASSWORD` (plaintext) or `AUTH_PASSWORD_
 Both files are selfhosted-specific and must never be overwritten by the sync script.
 
 For users who want security without built-in auth: document Nginx Proxy Manager, Caddy basicauth, Traefik + Authelia, Cloudflare Access, or VPN (Tailscale).
+
+### Security headers
+
+Set via `next.config.ts`'s `headers()` - CSP, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `poweredByHeader: false`. The CSP's `img-src` allows `google.com` **and** `*.gstatic.com` - `lib/domain/institutions.ts`'s favicon URLs are requested from `google.com/s2/favicons` but that endpoint actually serves the image via a redirect to `*.gstatic.com`, which only showed up testing with a real browser (Playwright), not by reading the URL. `script-src`/`style-src` need `'unsafe-inline'` for Next's own RSC hydration payload and CSS-in-JS - a nonce-based CSP would remove that but needs a per-request nonce threaded from `proxy.ts` through the root layout, not done here.
+
+**No `Strict-Transport-Security` header, deliberately.** This app is routinely reached over plain HTTP on a private LAN/VPN (see "Authentication" above - `AUTH_ENABLED` defaults to off because network-level trust is the expected setup). HSTS is browser-cached and self-reinforcing: a browser that ever received it over plain HTTP would refuse all future plain-HTTP connections to that host until manually cleared. Reverse proxies that terminate real TLS (Nginx Proxy Manager, Caddy, Traefik) should set HSTS themselves at that layer, where "this connection is actually HTTPS" is actually true.
 
 ### i18n
 

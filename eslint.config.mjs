@@ -33,6 +33,10 @@ const eslintConfig = defineConfig([
       // Test fixture addresses (e.g. rate-limiter test IPs), not real
       // hardcoded infrastructure.
       "sonarjs/no-hardcoded-ip": "off",
+      // auth.test.ts's "correct-horse" fixtures exercise the real
+      // authorize() password/bcrypt paths - required test data, not a
+      // leaked real credential.
+      "sonarjs/no-hardcoded-passwords": "off",
     },
   },
   // Override default ignores of eslint-config-next.

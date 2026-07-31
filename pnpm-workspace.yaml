@@ -35,5 +35,20 @@ overrides:
   # ">=1.1.16" is numerically satisfied by 5.0.9 too, so the two ranges
   # overlapped and pnpm resolved both scopes to the same (wrong, for
   # minimatch@3.1.5's old API) version instead of respecting the parent scope.
+  #
+  # IMPORTANT correction (2026-07): GHSA-mh99-v99m-4gvg was later updated with
+  # an unrelated new DoS class (CVE-2026-14257, unbounded expand() output
+  # size) that's patched ONLY on the 5.x line (5.0.8+) - there is no patched
+  # 1.x release and there will never be one (1.1.18, already the max we
+  # allow here, is the last 1.x version npm ever published). So the
+  # minimatch@3.1.5 line below does NOT actually carry a fix for that CVE -
+  # it only avoids the unrelated "expand is not a function" API-incompatibility
+  # crash described above. Accepted as-is: this path only ever runs at lint
+  # time (pnpm run lint / CI), never in the shipped app, and pnpm's
+  # --prod --audit-level=high CI gate (see CLAUDE.md's "pnpm overrides")
+  # already excludes it. The real fix is eslint 9 -> 10, which drops
+  # minimatch 3.x entirely in favor of 10.x everywhere - that's a major
+  # version bump so dependabot.yml will surface it as its own PR rather than
+  # silently grouping it with patch/minor bumps.
   "minimatch@10.2.6>brace-expansion": ">=5.0.8 <6.0.0"
   "minimatch@3.1.5>brace-expansion": ">=1.1.16 <2.0.0"
