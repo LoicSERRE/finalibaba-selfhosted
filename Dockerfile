@@ -50,6 +50,15 @@ COPY --from=builder /app/app/generated ./app/generated
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
+# node:22-alpine bundles npm (and its own vendored node_modules) even though
+# this project only ever uses pnpm (see corepack enable above) - npm/npx are
+# never invoked anywhere in this Dockerfile or its CMD. Trivy flags real
+# CVEs in npm's bundled deps (tar, brace-expansion, picomatch, sigstore) on
+# every release scan for code that's genuinely unreachable here, not just
+# unlikely to be reached - removing it outright is more honest than
+# suppressing the finding, and slightly shrinks the image too.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 EXPOSE 3000
 
 # Run migrations then start the app
