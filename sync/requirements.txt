@@ -12,7 +12,7 @@ woob[lcl,swile]==3.7.*
 # (sync_tr.py only surfaces get_conn/write_sync_log errors, not "the
 # upstream library's response shape changed").
 pytr @ git+https://github.com/pytr-org/pytr.git@d0b25c3bba10
-psycopg2-binary>=2.9
+psycopg2-binary>=2.9.12
 fastapi>=0.140.13
 uvicorn>=0.51.0
 apscheduler>=3.11.3
