@@ -39,7 +39,21 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # --ignore-scripts: same reason as the deps stage - schema isn't copied in yet,
 # and the generated client is copied in from the builder stage below anyway.
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+# pnpm's own content-addressable store (/root/.cache/pnpm) is a package-
+# resolution/dedup cache from installing - useful for a *repeated* local
+# install, meaningless once the packages are already unpacked into
+# node_modules below, and never read at runtime. Left in place it was 410MB
+# of npm-registry metadata JSON sitting in the production image - which
+# Trivy's secret scanner then has to read through on every release scan,
+# slow enough (several large multi-MB .jsonl files) to occasionally exceed
+# its 5-minute default timeout and abort the whole scan with a generic,
+# hard-to-diagnose "context deadline exceeded" failure that looks like a
+# real finding but isn't. Do NOT remove /root/.cache/node/corepack next to
+# it though - that one *is* needed at runtime (it's corepack's actual cached
+# pnpm binary, ~38MB; without it every container start would need a network
+# fetch from the npm registry just to run `pnpm start`).
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
+    rm -rf /root/.cache/pnpm /tmp/node-compile-cache
 
 # App runtime
 COPY --from=builder /app/.next ./.next
