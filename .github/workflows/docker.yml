@@ -217,6 +217,23 @@ jobs:
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
           exit-code: ${{ matrix.image == 'app' && '1' || '0' }}
+      # Temporary diagnostic - trivy-scan(app) has failed 3 times across
+      # v1.4.7-v1.4.9 for 3 different confirmed-real reasons (tag-propagation
+      # race, then a 410MB stale-cache timeout), each fixed. This most
+      # recent failure completed in ~18s (too fast to be a timeout) with 0
+      # SARIF results uploaded and the same digest scanning clean locally
+      # (0 findings, ~80s) - so something is failing that neither the
+      # console log tail nor code-scanning/alerts is surfacing. Remove once
+      # the actual cause is identified from this output.
+      - name: Debug trivy output
+        if: always()
+        run: |
+          echo "--- trivy-results.sarif ---"
+          cat trivy-results.sarif || echo "(no sarif file)"
+          echo "--- disk space ---"
+          df -h
+          echo "--- memory ---"
+          free -h
       - uses: github/codeql-action/upload-sarif@v4.37.3
         if: always()
         with:
