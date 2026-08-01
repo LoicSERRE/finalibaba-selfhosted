@@ -78,6 +78,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Exposes the exact digest just pushed so trivy-scan can pull it by
+    # digest instead of the mutable `:latest` tag - see the digest note on
+    # build-push-action below for why.
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
 
@@ -99,6 +104,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/build-push-action@v7
+        id: build
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -116,6 +122,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
 
@@ -137,6 +145,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/build-push-action@v7
+        id: build
         with:
           context: ./sync
           platforms: linux/amd64,linux/arm64
@@ -193,9 +202,17 @@ jobs:
       - name: Lowercase repository path
         id: repo
         run: echo "path=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      # Scans by the exact digest build-app/build-sync just pushed, not the
+      # mutable `:latest` tag - v1.4.7's first two attempts each failed
+      # trivy-scan(app) with 0 uploaded SARIF results despite exit code 1,
+      # yet the same image scanned cleanly (0 findings, confirmed 3
+      # independent ways) minutes later. GHCR's `:latest` tag pointer can lag
+      # briefly behind the manifest it was just repointed to; pulling by
+      # digest is immune to that since a digest resolves to exactly one
+      # immutable manifest, never a moving pointer.
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/${{ matrix.image }}:latest
+          image-ref: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/${{ matrix.image }}@${{ matrix.image == 'app' && needs.build-app.outputs.digest || needs.build-sync.outputs.digest }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
