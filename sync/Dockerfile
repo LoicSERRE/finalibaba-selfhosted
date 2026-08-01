@@ -14,9 +14,35 @@ COPY requirements.txt .
 # real Trivy CVE surface (linux-libc-dev alone accounted for 47 of the
 # CRITICAL/HIGH findings on this image before this line was added).
 # Verified the compiled extensions still import fine with the toolchain gone.
+#
+# git is only needed for the `pip install` above - requirements.txt pulls
+# pytr from a pinned git commit (no PyPI release), so pip needs git to clone
+# it once. Never used again after install. Removing it cascades (via
+# autoremove) to perl/liberror-perl/libcurl3t64-gnutls, which nothing else
+# here needs either - confirmed via `apt-get remove --dry-run git`.
+#
+# xvfb/xserver-common come bundled with `playwright install --with-deps
+# chromium`, which installs the union of headed- and headless-Chromium
+# system deps. This project only ever launches Chromium headless (see
+# setup_tr.py) and never starts an X server - grep confirms Xvfb/DISPLAY are
+# never referenced anywhere in sync/. Removing xvfb/xserver-common cascades
+# to the Mesa GL/Vulkan/X11-window-manager stack they alone pulled in
+# (chromium's own ldd output doesn't reference libGL/libEGL - it ships its
+# own software renderer for headless use).
+#
+# Verified all of the above together, not just individually: after removing
+# git+xvfb+xserver-common (and everything autoremove cascades from them),
+# headless Chromium still launches, executes JS, renders a canvas, and
+# produces a correct screenshot - cut CRITICAL/HIGH Trivy findings on this
+# image roughly in half (66 -> 33). The remaining ones are either genuine
+# Chromium runtime deps (libglib2.0, libblkid1/libmount1 - present in its
+# own ldd output) or Debian-essential base packages (perl-base: apt itself
+# refuses to remove it without --allow-remove-essential) - see #22 for the
+# full investigation and why those are left alone.
 RUN pip install --no-cache-dir -r requirements.txt && \
     playwright install --with-deps chromium && \
-    apt-get remove -y --purge gcc g++ libc6-dev linux-libc-dev cpp cpp-12 && \
+    apt-get remove -y --purge gcc g++ libc6-dev linux-libc-dev cpp cpp-12 \
+        git xvfb xserver-common && \
     apt-get autoremove -y --purge && \
     rm -rf /var/lib/apt/lists/*
 
