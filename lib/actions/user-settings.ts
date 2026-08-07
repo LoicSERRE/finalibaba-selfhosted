@@ -12,6 +12,18 @@ export async function getUserSettings() {
   });
 }
 
+// Deliberately a read-only findUnique, not the upsert-based getUserSettings()
+// above - this is called from the anonymous, unauthenticated /login page on
+// every page view, and that must never write to the DB. Defaults to false
+// when no row exists yet (fresh install, /settings never visited).
+export async function getTotpEnabled(): Promise<boolean> {
+  const row = await prisma.userSettings.findUnique({
+    where: { id: "singleton" },
+    select: { totpEnabled: true },
+  });
+  return row?.totpEnabled ?? false;
+}
+
 export async function updateUserSettings(formData: FormData) {
   const salary = parseCents((formData.get("salary") as string) || "0");
   const expenses = parseCents((formData.get("expenses") as string) || "0");

@@ -20,6 +20,7 @@ import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
+import { TwoFactorSection } from "@/components/settings/two-factor-section";
 
 // Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
 const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
@@ -370,6 +371,12 @@ export default async function SettingsPage() {
 
       {/* Backup & restore - hidden in demo mode (restore mutations are blocked anyway) */}
       {process.env.DEMO_MODE !== "true" && <BackupRestoreSection />}
+
+      {/* 2FA - meaningless without built-in auth active, and hidden in demo
+          mode (setup/disable mutations are blocked anyway) */}
+      {process.env.AUTH_ENABLED === "true" && process.env.DEMO_MODE !== "true" && (
+        <TwoFactorSection totpEnabled={userSettings.totpEnabled} />
+      )}
 
     </div>
   );

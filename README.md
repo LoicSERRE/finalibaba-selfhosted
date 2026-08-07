@@ -138,6 +138,19 @@ AUTH_ENABLED=true
 AUTH_PASSWORD_HASH=<generated hash>
 ```
 
+### Two-factor authentication (2FA)
+
+With `AUTH_ENABLED=true`, optionally enable TOTP-based 2FA from Settings → Two-factor authentication - scan the QR code with any authenticator app (Google Authenticator, Aegis, etc.), confirm with a code, and save the 8 one-time backup codes shown once. No extra env vars needed.
+
+**Locked out** (lost your authenticator device and all backup codes)? Connect directly to the database and clear it, then restart:
+
+```bash
+docker compose exec db psql -U appuser -d finalibaba -c \
+  "UPDATE \"UserSettings\" SET \"totpEnabled\" = false, \"totpSecret\" = NULL, \"totpBackupCodes\" = '{}' WHERE id = 'singleton';"
+```
+
+Same idea as resetting `AUTH_PASSWORD` - this app trusts whoever has shell access to your own server.
+
 ### Reverse proxy (recommended for internet-facing installs)
 
 Any of these work out of the box:

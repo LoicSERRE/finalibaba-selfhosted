@@ -1,6 +1,27 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import bcrypt from "bcryptjs";
+import { generate as generateTotpToken } from "otplib";
 import type { CredentialsConfig } from "next-auth/providers/credentials";
+import { generateTotpSecret, generateBackupCodes, hashBackupCodes } from "@/lib/domain/totp";
+
+// Hoisted so the vi.mock factory below can reference them (vi.mock calls are
+// hoisted above imports by vitest) - every pre-existing test in this file
+// gets the safe "2FA not enabled" default via the beforeEach reset below,
+// only the new describe block overrides it per-case.
+const { findUniqueMock, updateMock } = vi.hoisted(() => ({
+  findUniqueMock: vi.fn(),
+  updateMock: vi.fn(),
+}));
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    userSettings: {
+      findUnique: findUniqueMock,
+      update: updateMock,
+    },
+  },
+}));
+
 import { authOptions, createRateLimiter, getClientIp } from "@/lib/auth";
 
 // authOptions.providers[0] is the single CredentialsProvider() config - see
@@ -27,6 +48,13 @@ function nextIp(): string {
 function reqWithIp(ip: string) {
   return { headers: { "x-forwarded-for": ip } };
 }
+
+// Default: 2FA not enabled - keeps every pre-existing password-only test in
+// this file passing unchanged now that authorize() does a real DB read.
+beforeEach(() => {
+  findUniqueMock.mockReset().mockResolvedValue({ totpEnabled: false, totpSecret: null, totpBackupCodes: [] });
+  updateMock.mockReset().mockResolvedValue({});
+});
 
 describe("getClientIp", () => {
   it("reads the first hop of x-forwarded-for", () => {
@@ -169,5 +197,92 @@ describe("authOptions credentials provider - authorize()", () => {
       reqWithIp(ip)
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("authOptions credentials provider - authorize() with 2FA", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("skips the 2FA check when totpEnabled is false - regression, unchanged behavior", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: false, totpSecret: null, totpBackupCodes: [] });
+    const result = await provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp()));
+    expect(result).toEqual({ id: "owner", name: "owner" });
+  });
+
+  it("returns null when no UserSettings row exists yet (fresh install) - must not require a code", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    findUniqueMock.mockResolvedValueOnce(null);
+    const result = await provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp()));
+    expect(result).toEqual({ id: "owner", name: "owner" });
+  });
+
+  it("returns the owner user when the password and a correct TOTP code are both provided", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    const token = await generateTotpToken({ secret });
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    const result = await provider.authorize(
+      { password: "correct-horse", totpCode: token },
+      reqWithIp(nextIp())
+    );
+    expect(result).toEqual({ id: "owner", name: "owner" });
+  });
+
+  it("returns null when the password is correct but the TOTP code is wrong", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    const result = await provider.authorize(
+      { password: "correct-horse", totpCode: "000000" },
+      reqWithIp(nextIp())
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the password is correct but no TOTP code is provided", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    const result = await provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp()));
+    expect(result).toBeNull();
+  });
+
+  it("accepts a valid unused backup code and consumes it (removed from the stored array)", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    const backupCodes = generateBackupCodes();
+    const hashed = await hashBackupCodes(backupCodes);
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: hashed });
+
+    const result = await provider.authorize(
+      { password: "correct-horse", totpCode: backupCodes[0] },
+      reqWithIp(nextIp())
+    );
+
+    expect(result).toEqual({ id: "owner", name: "owner" });
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "singleton" },
+      data: { totpBackupCodes: hashed.filter((_, i) => i !== 0) },
+    });
+  });
+
+  it("rejects an already-consumed backup code (not present in the stored array)", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    const backupCodes = generateBackupCodes();
+    const hashed = await hashBackupCodes(backupCodes);
+    const remaining = hashed.slice(1); // codes[0] already consumed in a prior login
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: remaining });
+
+    const result = await provider.authorize(
+      { password: "correct-horse", totpCode: backupCodes[0] },
+      reqWithIp(nextIp())
+    );
+
+    expect(result).toBeNull();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

@@ -48,6 +48,9 @@
     "submit": "Se connecter",
     "loading": "Connexion…",
     "errorInvalid": "Mot de passe incorrect",
+    "totpLabel": "Code de vérification",
+    "totpHint": "Ouvre ton application d'authentification, ou utilise un code de secours",
+    "errorInvalidWithCode": "Mot de passe ou code incorrect",
     "footer": "Vos données restent sur votre serveur"
   },
   "accountTypes": {
@@ -510,6 +513,33 @@
       "restoring": "Restauration…",
       "restoreError": "La restauration a échoué. Vérifiez les logs du serveur.",
       "restarting": "Restauration terminée — redémarrage de l'application en cours…"
+    },
+    "twoFactor": {
+      "title": "Authentification à deux facteurs",
+      "subtitle": "Protège la connexion avec un code temporaire en plus du mot de passe",
+      "enabledStatus": "Activée",
+      "disabledStatus": "Désactivée",
+      "enable": "Activer",
+      "disable": "Désactiver",
+      "regenerate": "Régénérer les codes de secours",
+      "enableTitle": "Activer la 2FA",
+      "enableHint": "Tu vas scanner un QR code avec ton application d'authentification (Google Authenticator, Aegis, etc.), puis confirmer avec un code pour terminer.",
+      "start": "Commencer",
+      "generating": "Génération du secret…",
+      "scanQr": "Scanne ce QR code avec ton application d'authentification.",
+      "qrAlt": "QR code de configuration 2FA",
+      "manualEntryHint": "Ou saisis cette clé manuellement :",
+      "codeLabel": "Code de vérification",
+      "confirm": "Confirmer",
+      "validating": "Vérification…",
+      "backupCodesWarning": "Note ces codes de secours dans un endroit sûr — ils ne seront plus jamais affichés. Chacun ne fonctionne qu'une seule fois et permet de se connecter en cas de perte de ton appareil d'authentification.",
+      "backupCodesDone": "J'ai noté mes codes",
+      "disableTitle": "Désactiver la 2FA",
+      "disableHint": "Saisis un code de vérification actuel ou un code de secours pour confirmer.",
+      "disableConfirm": "Désactiver",
+      "regenerateTitle": "Régénérer les codes de secours",
+      "regenerateHint": "Les anciens codes de secours seront invalidés. Saisis un code de vérification actuel pour confirmer (les codes de secours ne sont pas acceptés ici).",
+      "unknownError": "Une erreur inattendue s'est produite."
     }
   },
   "deleteAccount": {

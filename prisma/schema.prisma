@@ -205,5 +205,17 @@ model UserSettings {
   taxRatePea           Float    @default(0.172)
   taxRateCto           Float    @default(0.314)
   taxRateCrypto        Float    @default(0.314)
+  // Base32 secret, plaintext - must stay reversible to keep generating
+  // codes (unlike a password, there's no way to hash a TOTP secret). Same
+  // no-field-level-encryption trust model as Institution.woobPassword.
+  // Recovery if a self-hoster loses both their authenticator app and every
+  // backup code: connect directly to the DB (psql/Prisma Studio) and set
+  // totpEnabled=false, totpSecret=NULL - same "you have shell access to
+  // your own server" recovery story as resetting AUTH_PASSWORD.
+  totpSecret           String?
+  totpEnabled          Boolean  @default(false)
+  // bcrypt hashes, one per unused backup code - a consumed code is removed
+  // from the array (not just flagged), so its length is also "codes remaining".
+  totpBackupCodes      String[] @default([])
   updatedAt            DateTime @updatedAt
 }

@@ -1,6 +1,8 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/db/prisma";
+import { verifyTotpCode, matchBackupCode } from "@/lib/domain/totp";
 
 // Simple in-memory rate limiter - max 5 attempts per 15 min per IP.
 // Wrapped in a factory (rather than one module-level Map) so tests can each
@@ -47,6 +49,7 @@ export const authOptions: NextAuthOptions = {
       name: "credentials",
       credentials: {
         password: { label: "Mot de passe", type: "password" },
+        totpCode: { label: "Code de vérification", type: "text" },
       },
       async authorize(credentials, req) {
         const ip = getClientIp(req?.headers);
@@ -62,6 +65,30 @@ export const authOptions: NextAuthOptions = {
         } else {
           const plain = process.env.AUTH_PASSWORD;
           if (!plain || password !== plain) return null;
+        }
+
+        // 2FA, if enabled - re-checked server-side (never trust the
+        // client's totpEnabled prop that just decided whether to render
+        // the code field). No UserSettings row yet, or 2FA never enabled:
+        // behavior is unchanged from before this feature existed.
+        const settings = await prisma.userSettings.findUnique({
+          where: { id: "singleton" },
+          select: { totpEnabled: true, totpSecret: true, totpBackupCodes: true },
+        });
+
+        if (settings?.totpEnabled && settings.totpSecret) {
+          const code = (credentials?.totpCode as string) || "";
+          const isValidTotp = await verifyTotpCode(settings.totpSecret, code);
+          if (!isValidTotp) {
+            const backupIndex = await matchBackupCode(code, settings.totpBackupCodes);
+            if (backupIndex === -1) return null;
+            // Consume the backup code so it can't be reused.
+            const remaining = settings.totpBackupCodes.filter((_, i) => i !== backupIndex);
+            await prisma.userSettings.update({
+              where: { id: "singleton" },
+              data: { totpBackupCodes: remaining },
+            });
+          }
         }
 
         return { id: "owner", name: process.env.AUTH_USER_NAME ?? "owner" };

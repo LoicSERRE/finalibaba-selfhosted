@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, TrendingUp } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-export function LoginForm() {
+export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,6 +22,7 @@ export function LoginForm() {
     const { signIn } = await import("next-auth/react");
     const result = await signIn("credentials", {
       password,
+      totpCode,
       redirect: false,
     });
 
@@ -30,8 +32,9 @@ export function LoginForm() {
       router.push("/");
       router.refresh();
     } else {
-      setError(t("errorInvalid"));
+      setError(totpEnabled ? t("errorInvalidWithCode") : t("errorInvalid"));
       setPassword("");
+      setTotpCode("");
     }
   }
 
@@ -79,6 +82,26 @@ export function LoginForm() {
                 </button>
               </div>
             </div>
+
+            {totpEnabled && (
+              <div className="space-y-1.5">
+                <label htmlFor="totpCode" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                  {t("totpLabel")}
+                </label>
+                <input
+                  id="totpCode"
+                  type="text"
+                  inputMode="text"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  placeholder="123456"
+                  autoComplete="one-time-code"
+                  maxLength={11}
+                  className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm text-[var(--foreground)] placeholder-[var(--muted)]/40 focus:outline-none focus:border-[var(--accent)] transition-colors"
+                />
+                <p className="text-xs text-[var(--muted)]">{t("totpHint")}</p>
+              </div>
+            )}
 
             {error && (
               <p role="alert" className="text-xs text-[var(--negative)] flex items-center gap-1.5">

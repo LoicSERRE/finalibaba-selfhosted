@@ -48,6 +48,9 @@
     "submit": "Sign in",
     "loading": "Signing in…",
     "errorInvalid": "Incorrect password",
+    "totpLabel": "Verification code",
+    "totpHint": "Open your authenticator app, or use a backup code",
+    "errorInvalidWithCode": "Incorrect password or code",
     "footer": "Your data stays on your server"
   },
   "accountTypes": {
@@ -510,6 +513,33 @@
       "restoring": "Restoring…",
       "restoreError": "Restore failed. Check the server logs for details.",
       "restarting": "Restore complete — restarting the app…"
+    },
+    "twoFactor": {
+      "title": "Two-factor authentication",
+      "subtitle": "Protects sign-in with a one-time code in addition to your password",
+      "enabledStatus": "Enabled",
+      "disabledStatus": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "regenerate": "Regenerate backup codes",
+      "enableTitle": "Enable 2FA",
+      "enableHint": "You'll scan a QR code with your authenticator app (Google Authenticator, Aegis, etc.), then confirm with a code to finish.",
+      "start": "Get started",
+      "generating": "Generating secret…",
+      "scanQr": "Scan this QR code with your authenticator app.",
+      "qrAlt": "2FA setup QR code",
+      "manualEntryHint": "Or enter this key manually:",
+      "codeLabel": "Verification code",
+      "confirm": "Confirm",
+      "validating": "Verifying…",
+      "backupCodesWarning": "Save these backup codes somewhere safe — they will never be shown again. Each one works once and lets you sign in if you lose your authenticator device.",
+      "backupCodesDone": "I've saved my codes",
+      "disableTitle": "Disable 2FA",
+      "disableHint": "Enter a current verification code or a backup code to confirm.",
+      "disableConfirm": "Disable",
+      "regenerateTitle": "Regenerate backup codes",
+      "regenerateHint": "Old backup codes will be invalidated. Enter a current verification code to confirm (backup codes aren't accepted here).",
+      "unknownError": "An unexpected error occurred."
     }
   },
   "deleteAccount": {
