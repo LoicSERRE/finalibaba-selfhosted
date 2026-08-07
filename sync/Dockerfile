@@ -61,4 +61,11 @@ VOLUME ["/root/.config/woob", "/root/.pytr"]
 EXPOSE 8000
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
+# See the FROM line above for why this container deliberately still runs as
+# root (same docker:S6471 exemption documented in sonar-project.properties) -
+# semgrep's dockerfile.security.missing-user rule flags the same thing.
+# A trailing comment on the CMD line itself (rather than here, on its own
+# line) confused SonarQube's docker analyzer into misreading this exec-form
+# instruction as shell-form (docker:S7019) - confirmed by testing.
+# nosemgrep: dockerfile.security.missing-user.missing-user
 CMD ["./entrypoint.sh"]

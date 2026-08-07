@@ -22,6 +22,15 @@ overrides:
   js-yaml: ">=4.3.0"
   find-my-way: ">=9.7.0"
   valibot: ">=1.4.2"
+  # GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority introducer.
+  # Same "reachable only through @prisma/dev's never-invoked embedded-Postgres
+  # subcommand" story as find-my-way/valibot above: pulled in via
+  # prisma>@prisma/dev>@prisma/streams-local>ajv>fast-uri, a chain that only
+  # matters if `prisma dev` is ever run, which this project never does - but
+  # prisma is a non-dev `dependencies` entry (Dockerfile's CMD runs `prisma
+  # migrate deploy`), so it's still installed by the `--prod` install and
+  # still in scope for CI's `pnpm audit --prod --audit-level=high` gate.
+  fast-uri: ">=3.1.5"
   eslint-plugin-react-hooks: "7.0.1"
   # pnpm's override selector only supports one level of "parent>dep" -
   # 3-segment chains like npm's nested "eslint > minimatch > brace-expansion"

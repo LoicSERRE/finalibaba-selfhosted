@@ -89,6 +89,35 @@ describe("computeAccountDetail - fiat accounts", () => {
   });
 });
 
+describe("computeAccountDetail - subtype label", () => {
+  it("shows the investmentSubtype for an INVESTMENT account", () => {
+    const result = computeAccountDetail({
+      account: account({ type: "INVESTMENT", investmentSubtype: "PEA" }),
+      intlLocale: "fr-FR",
+      now: NOW,
+    });
+    expect(result.subtypeLabel).toBe(" · PEA");
+  });
+
+  it("shows a flat-tax hint for a CRYPTO account regardless of investmentSubtype", () => {
+    const result = computeAccountDetail({
+      account: account({ type: "CRYPTO" }),
+      intlLocale: "fr-FR",
+      now: NOW,
+    });
+    expect(result.subtypeLabel).toBe(" · 31.4% flat tax");
+  });
+
+  it("shows no subtype label for a fiat account", () => {
+    const result = computeAccountDetail({
+      account: account({ type: "CHECKING" }),
+      intlLocale: "fr-FR",
+      now: NOW,
+    });
+    expect(result.subtypeLabel).toBe("");
+  });
+});
+
 describe("computeAccountDetail - investment tax treatment", () => {
   const holding = {
     id: "h1",

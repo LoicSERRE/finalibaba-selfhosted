@@ -139,7 +139,10 @@ def _iter_accounts(w, backend_name, institution_name):
             accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
     except CallErrors as e:
         for _backend, exc, tb in e.errors:
-            msg = (str(exc) + tb).lower()
+            # NOT redundant despite what python:S1110 claims - see
+            # setup_lcl.py's identical line for why (.lower() binds tighter
+            # than + in Python, so removing the parens changes behavior).
+            msg = (str(exc) + tb).lower()  # NOSONAR
             # Ignore sub-module errors for stock/bourse accounts (e.g. LCL bourse 410)
             if any(k in msg for k in ("bourse", "connectionreset", "connection aborted", "410")):
                 log.warning("%s: sub-module error ignored: %s", institution_name, str(exc)[:120])

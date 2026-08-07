@@ -6,6 +6,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # A newly-published package version is a real (if rare) supply-chain
+    # risk window - a compromised maintainer account can publish a
+    # malicious version that's still "the latest" for a few days before
+    # anyone notices. 7 days gives that window a chance to close before
+    # Dependabot proposes it here.
+    cooldown:
+      default-days: 7
     groups:
       # Patch/minor bumps across a lockfile this size happen constantly and
       # rarely need individual review - group them into one PR per week.
@@ -20,6 +27,9 @@ updates:
     directory: "/sync"
     schedule:
       interval: "weekly"
+    # See the npm block's cooldown comment above for why.
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
@@ -36,16 +46,25 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # See the npm block's cooldown comment above for why.
+    cooldown:
+      default-days: 7
   - package-ecosystem: "docker"
     directory: "/sync"
     schedule:
       interval: "weekly"
+    # See the npm block's cooldown comment above for why.
+    cooldown:
+      default-days: 7
 
   # Reusable workflow/action versions in .github/workflows/*.yml
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    # See the npm block's cooldown comment above for why.
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]

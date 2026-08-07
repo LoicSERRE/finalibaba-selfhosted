@@ -51,7 +51,11 @@ def _iter_accounts(w):
             accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
     except CallErrors as e:
         for backend, exc, tb in e.errors:
-            msg = (str(exc) + tb).lower()
+            # NOT redundant despite what python:S1110 claims: removing the
+            # parens changes behavior. `.lower()` binds tighter than `+` in
+            # Python, so str(exc) + tb.lower() would only lowercase `tb`,
+            # not the whole concatenation - verified empirically.
+            msg = (str(exc) + tb).lower()  # NOSONAR
             if "bourse" in msg or "connectionreset" in msg or "connection aborted" in msg:
                 log.info("LCL setup: bourse inaccessible (ignoré) : %s", exc)
             else:

@@ -233,6 +233,27 @@ describe("computeAnalytics", () => {
     expect(result.savingsRate).toBeCloseTo(30, 5);
   });
 
+  it("falls back to the month-over-month net worth delta for savings rate when no monthly amount is declared", () => {
+    const input = baseInput({
+      settings: {
+        ...BASE_SETTINGS,
+        salaryNetCents: BigInt(3000_00),
+        monthlySavedCents: BigInt(0), // no declared amount -> falls back to the MOM delta
+      },
+      accounts: [account({ id: "acc-1", history: [{ balanceCents: BigInt(1200_00) }] })],
+      allBalances: [
+        { accountId: "acc-1", recordedAt: new Date("2026-06-15T12:00:00.000Z"), balanceCents: BigInt(1000_00) },
+        { accountId: "acc-1", recordedAt: new Date("2026-07-15T12:00:00.000Z"), balanceCents: BigInt(1200_00) },
+      ],
+    });
+
+    const result = computeAnalytics(input);
+
+    expect(result.hasDeclaredSavings).toBe(false);
+    // momDelta = 1200€ - 1000€ = 200€
+    expect(result.savingsRate).toBeCloseTo((200_00 / 3000_00) * 100, 5);
+  });
+
   it("flags a dividend calendar row as isSoon only within a 30-day window and never both isPast and isSoon", () => {
     const soonDate = new Date(NOW.getTime() + 10 * 86_400_000);
     const input = baseInput({

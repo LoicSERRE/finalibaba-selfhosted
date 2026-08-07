@@ -99,7 +99,10 @@ def _iter_accounts(w):
             accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
     except CallErrors as e:
         for backend, exc, tb in e.errors:
-            msg = (str(exc) + tb).lower()
+            # NOT redundant despite what python:S1110 claims - see
+            # setup_lcl.py's identical line for why (.lower() binds tighter
+            # than + in Python, so removing the parens changes behavior).
+            msg = (str(exc) + tb).lower()  # NOSONAR
             if "bourse" in msg or "connectionreset" in msg or "connection aborted" in msg:
                 # Log full traceback so we can diagnose which URL is failing
                 log.warning(

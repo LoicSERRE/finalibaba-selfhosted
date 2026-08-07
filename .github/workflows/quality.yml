@@ -1,0 +1,314 @@
+name: Quality & security scans
+
+# Lightweight, stateless scanners - no server to host, no persistent infra:
+# every tool here is a single downloaded binary (or a `pip install`/`npx`)
+# that runs for the duration of the job and leaves nothing behind. Ported
+# from Neural-AI-Malta/.github's ci-security.yml/ci-quality.yml/
+# ci-workflows.yml/ci-sbom.yml, simplified: dropped the sticky PR-comment
+# mechanism (which needed pull-requests: write + a fair amount of Python
+# string-juggling duplicated per job) in favor of $GITHUB_STEP_SUMMARY only -
+# still visible on every run, just not a single persistently-updated comment.
+#
+# Tool versions are pinned in the `run:` lines below (curl/pip/npx), not via
+# `uses:`, so dependabot.yml's github-actions ecosystem entry won't auto-bump
+# them - same characteristic as the source repo this was ported from, bump
+# manually when there's a reason to (a new CVE class, a rule pack update).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  actionlint:
+    name: Lint workflow files (actionlint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # actionlint catches real bugs in the workflow YAML itself (bad
+      # expressions, undefined contexts, invalid job dependencies, broken
+      # shell in run: blocks via its shellcheck integration) - not a
+      # judgment call, so this blocks like any other lint step.
+      - name: Install actionlint
+        run: curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz | tar -xz actionlint
+      - name: Run actionlint
+        id: actionlint
+        continue-on-error: true
+        run: ./actionlint -no-color > actionlint-results.txt 2>&1
+      - name: Publish results and gate
+        if: always()
+        run: |
+          {
+            echo "## actionlint"
+            if [ -s actionlint-results.txt ]; then
+              echo '```'
+              cat actionlint-results.txt
+              echo '```'
+            else
+              echo "No findings."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.actionlint.outcome }}" = "failure" ]; then
+            echo "::error::actionlint found issues in the workflow files, see the job summary."
+            exit 1
+          fi
+
+  zizmor:
+    name: Workflow security posture (zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Non-blocking, deliberately: the dominant finding class on a repo
+      # that's never been scanned is unpinned `uses:` references (this repo
+      # pins actions by tag, not SHA - a real hardening step, just not one
+      # taken yet). Informational for now, revisit if/when that's decided.
+      - name: Install zizmor
+        run: curl -sSL https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-x86_64-unknown-linux-gnu.tar.gz | tar -xz zizmor
+      - name: Run zizmor
+        run: ./zizmor --format json .github/workflows/ > zizmor-results.json 2> zizmor.log || true
+      - name: Publish results
+        if: always()
+        run: |
+          python3 -c $'import json\nimport os\n\nwith open("zizmor-results.json") as f:\n    data = json.load(f)\n\nby_severity = {}\nfor finding in data:\n    sev = finding.get("determinations", {}).get("severity", "Unknown")\n    by_severity.setdefault(sev, []).append(finding)\n\nlines = ["## zizmor (GitHub Actions workflow security)", ""]\nif not data:\n    lines.append("No findings.")\nelse:\n    for sev in ("High", "Medium", "Low", "Informational", "Unknown"):\n        items = by_severity.get(sev, [])\n        if not items:\n            continue\n        lines.append(f"### {sev} ({len(items)})")\n        for finding in items[:20]:\n            ident = finding.get("ident")\n            desc = finding.get("desc")\n            locs = finding.get("locations", [])\n            path = "?"\n            line_no = "?"\n            if locs:\n                sym = locs[0].get("symbolic", {})\n                key = sym.get("key", {}).get("Local", {})\n                path = key.get("verbatim_path", "?")\n                concrete = locs[0].get("concrete", {}).get("location", {})\n                row = concrete.get("start_point", {}).get("row")\n                if row is not None:\n                    line_no = row + 1\n            lines.append(f"- `{path}:{line_no}` - {ident} ({desc})")\n        lines.append("")\n\nwith open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:\n    f.write("\\n".join(lines) + "\\n")\n'
+
+  secrets:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Not the gitleaks/gitleaks-action marketplace action: that one
+      # requires a paid org license on private repos. The CLI binary itself
+      # is MIT-licensed and free regardless of repo visibility.
+      - name: Install gitleaks
+        run: curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+      # A real secret sitting in the tree is urgent, not a heuristic
+      # finding, so this blocks. Scans the current working tree (--no-git),
+      # not full git history: "is there a secret in the code right now" is
+      # what a per-push/PR gate should act on.
+      - name: Scan for secrets
+        id: gitleaks
+        continue-on-error: true
+        run: ./gitleaks detect --source . --no-git -v --report-path gitleaks-report.json --report-format json
+      - name: Publish results and gate
+        if: always()
+        run: |
+          {
+            echo "## Gitleaks secret scan"
+            if [ -s gitleaks-report.json ] && [ "$(cat gitleaks-report.json)" != "[]" ]; then
+              python3 -c $'import json\n\nfindings = json.load(open("gitleaks-report.json"))\nfor f in findings:\n    print(f"- `{f.get(\'File\')}:{f.get(\'StartLine\')}` - {f.get(\'RuleID\')} (value redacted)")\n'
+            else
+              echo "No secrets found."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.gitleaks.outcome }}" = "failure" ]; then
+            echo "::error::Secrets found in the tree, see the job summary (values redacted there, check the gitleaks step log for exact matches if you have access)."
+            exit 1
+          fi
+
+  sast:
+    name: Static analysis (semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install semgrep==1.172.0
+      # yaml.github-actions.security.github-actions-mutable-action-tag is
+      # excluded: it's an exact duplicate of zizmor's unpinned-uses finding
+      # above, keeping both just reports the same issue twice.
+      - name: Run semgrep
+        continue-on-error: true
+        run: semgrep scan --config p/security-audit --config p/owasp-top-ten --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag --json -o semgrep-results.json .
+      # Only ERROR-severity findings block - WARNING/INFO on a repo scanned
+      # for the first time is expected noise, ERROR is what the
+      # OWASP/security-audit rulesets reserve for findings they're
+      # confident matter.
+      - name: Publish results and gate on error-severity findings
+        if: always()
+        run: |
+          python3 -c $'import json\nimport os\n\nwith open("semgrep-results.json") as f:\n    data = json.load(f)\n\nresults = data.get("results", [])\nby_severity = {}\nfor r in results:\n    sev = r.get("extra", {}).get("severity", "UNKNOWN")\n    by_severity.setdefault(sev, []).append(r)\n\nlines = ["## Semgrep static analysis", ""]\nif not results:\n    lines.append("No findings.")\nelse:\n    for sev in ("ERROR", "WARNING", "INFO"):\n        items = by_severity.get(sev, [])\n        if not items:\n            continue\n        lines.append(f"### {sev} ({len(items)})")\n        for r in items[:20]:\n            path = r.get("path")\n            line = r.get("start", {}).get("line")\n            check_id = r.get("check_id")\n            lines.append(f"- `{path}:{line}` - {check_id}")\n        lines.append("")\n\nwith open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:\n    f.write("\\n".join(lines) + "\\n")\n\nerror_count = len(by_severity.get("ERROR", []))\nif error_count:\n    print(f"::error::{error_count} error-severity semgrep finding(s), see the job summary.")\n    raise SystemExit(1)\n'
+
+  duplication:
+    name: Duplicate code (jscpd, ratchet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Needed to list/download the baseline artifact from a previous run
+      # on the base branch - see the ratchet steps below.
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Non-blocking on the absolute number: real pre-existing duplication
+      # is expected on a first pass. The ratchet below is what actually
+      # gates - never fails on pre-existing debt, only on this PR making it
+      # worse than its own base branch.
+      - name: Scan for duplicate code
+        continue-on-error: true
+        run: npx --yes jscpd@5.0.14 --reporters markdown,json --output jscpd-out .
+      - name: Publish results
+        if: always()
+        run: |
+          if [ -f jscpd-out/jscpd-report.md ]; then
+            cat jscpd-out/jscpd-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Copy/paste detection report"
+              echo "No report generated (nothing to compare, or the scan itself failed, check the step log)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload baseline
+        if: github.event_name == 'push' && hashFiles('jscpd-out/jscpd-report.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-duplication-baseline
+          path: jscpd-out/jscpd-report.json
+          retention-days: 90
+          overwrite: true
+      - name: Download baseline
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          BASE="$BASE_REF"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=quality-duplication-baseline&per_page=100" \
+            --jq "[.artifacts[] | select(.workflow_run.head_branch == \"$BASE\" and .expired == false)] | sort_by(.created_at) | last | .id")
+          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
+            echo "No baseline artifact found for $BASE yet."
+            exit 0
+          fi
+          mkdir -p baseline
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > baseline.zip
+          unzip -o -q baseline.zip -d baseline
+      # Fails only if this PR's duplication is worse than the base branch's
+      # last known state, never on pre-existing debt. 0.5pt tolerance to
+      # absorb measurement noise between runs.
+      - name: Compare against baseline and gate on regression
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 -c $'import json\nimport os\nimport sys\n\nbase_branch = os.environ["BASE_BRANCH"]\nbaseline_path = "baseline/jscpd-report.json"\ncurrent_path = "jscpd-out/jscpd-report.json"\ntolerance = 0.5\n\nif not os.path.exists(baseline_path):\n    print(f"No baseline found for {base_branch} yet (first run), nothing to compare against.")\n    sys.exit(0)\n\nbaseline_pct = json.load(open(baseline_path))["statistics"]["total"]["percentage"]\ncurrent_pct = json.load(open(current_path))["statistics"]["total"]["percentage"]\n\nregressed = current_pct > baseline_pct + tolerance\nverdict = "REGRESSION" if regressed else "no regression"\nsummary = f"Duplication: {current_pct:.1f}% (baseline on `{base_branch}`: {baseline_pct:.1f}%) - {verdict}\\n"\n\nwith open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:\n    f.write("\\n" + summary)\n\nif regressed:\n    print(f"::error::Duplication increased from {baseline_pct:.1f}% to {current_pct:.1f}% (base branch: {base_branch}), this PR made it worse.")\n    sys.exit(1)\n\nprint(f"No regression ({current_pct:.1f}% vs baseline {baseline_pct:.1f}%).")\n'
+
+  complexity:
+    name: Complexity & maintainability (lizard, ratchet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install lizard==1.23.0
+      # Default thresholds (CCN 15, function length 1000 lines) - flags a
+      # warning, doesn't fail the tool itself. Non-blocking on the absolute
+      # count, same reasoning as jscpd above - the ratchet below gates.
+      - name: Analyze complexity
+        continue-on-error: true
+        run: lizard -w . | tee lizard-warnings.txt
+      - name: Publish results
+        if: always()
+        run: |
+          {
+            echo "## Complexity & maintainability (lizard)"
+            echo ""
+            count=$(grep -c . lizard-warnings.txt || true)
+            echo "$count function(s) over the default complexity/length threshold:"
+            echo '```'
+            cat lizard-warnings.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "{\"over_threshold_count\": $(grep -c . lizard-warnings.txt || echo 0)}" > lizard-metrics.json
+      - name: Upload baseline
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-complexity-baseline
+          path: lizard-metrics.json
+          retention-days: 90
+          overwrite: true
+      - name: Download baseline
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          BASE="$BASE_REF"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=quality-complexity-baseline&per_page=100" \
+            --jq "[.artifacts[] | select(.workflow_run.head_branch == \"$BASE\" and .expired == false)] | sort_by(.created_at) | last | .id")
+          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
+            echo "No baseline artifact found for $BASE yet."
+            exit 0
+          fi
+          mkdir -p baseline
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > baseline.zip
+          unzip -o -q baseline.zip -d baseline
+      - name: Compare against baseline and gate on regression
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 -c $'import json\nimport os\nimport sys\n\nbase_branch = os.environ["BASE_BRANCH"]\nbaseline_path = "baseline/lizard-metrics.json"\ncurrent_path = "lizard-metrics.json"\n\nif not os.path.exists(baseline_path):\n    print(f"No baseline found for {base_branch} yet (first run), nothing to compare against.")\n    sys.exit(0)\n\nbaseline_count = json.load(open(baseline_path))["over_threshold_count"]\ncurrent_count = json.load(open(current_path))["over_threshold_count"]\n\nregressed = current_count > baseline_count\nverdict = "REGRESSION" if regressed else "no regression"\nsummary = f"Functions over the complexity/length threshold: {current_count} (baseline on `{base_branch}`: {baseline_count}) - {verdict}\\n"\n\nwith open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:\n    f.write("\\n" + summary)\n\nif regressed:\n    print(f"::error::{current_count} functions over threshold, up from {baseline_count} on {base_branch}, this PR made it worse.")\n    sys.exit(1)\n\nprint(f"No regression ({current_count} vs baseline {baseline_count}).")\n'
+
+  sbom:
+    name: Generate SBOM (syft)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install syft
+        run: curl -sSL https://github.com/anchore/syft/releases/download/v1.50.0/syft_1.50.0_linux_amd64.tar.gz | tar -xz syft
+      - name: Generate SBOM
+        run: |
+          ./syft . -o cyclonedx-json=sbom.cyclonedx.json -o table=sbom-table.txt
+          {
+            echo "## SBOM (CycloneDX)"
+            echo ""
+            COUNT=$(python3 -c "import json; print(len(json.load(open('sbom.cyclonedx.json')).get('components', [])))")
+            echo "$COUNT component(s) detected. Full SBOM attached as a workflow artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cyclonedx.json
+          retention-days: 90
+          overwrite: true

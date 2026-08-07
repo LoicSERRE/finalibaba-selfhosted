@@ -67,6 +67,32 @@ describe("fetchYFDividendForSymbol", () => {
     expect(info.annualYield).toBeCloseTo(2.0 / 20, 5); // annual rate / current price
   });
 
+  it("infers a semi-annual frequency and sums the last 2 payments for the annual rate", async () => {
+    const t0 = 1_600_000_000;
+    const dayInSec = 86_400;
+    // 2 gaps of 182 days -> median=182, which is >= 120 (past the quarterly
+    // cutoff) and < 270 (the semi-annual/annual cutoff), landing in the
+    // freqDays=182 branch specifically.
+    const timestamps = [t0, t0 + 182 * dayInSec, t0 + 364 * dayInSec];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          chart: {
+            result: [
+              {
+                meta: { regularMarketPrice: 15 },
+                events: { dividends: divEventsFromTimestamps(timestamps, 1) },
+              },
+            ],
+          },
+        })
+      )
+    );
+    const info = await fetchYFDividendForSymbol("XYZ");
+    expect(info.annualRatePerShare).toBeCloseTo(2.0, 5); // 2 payments x 1
+  });
+
   it("defaults to an annual frequency (perYear=1) with a single historical payment", async () => {
     vi.stubGlobal(
       "fetch",
