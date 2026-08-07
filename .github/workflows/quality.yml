@@ -199,14 +199,25 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           BASE="$BASE_REF"
+          # Both gh api calls below fail open: a transient GitHub API error
+          # (e.g. a 503) skips the ratchet comparison for this run rather
+          # than hard-failing the whole check - this is an informational
+          # quality signal, not something that should block a PR over
+          # GitHub's own infra hiccup unrelated to the code being reviewed.
           ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=quality-duplication-baseline&per_page=100" \
-            --jq "[.artifacts[] | select(.workflow_run.head_branch == \"$BASE\" and .expired == false)] | sort_by(.created_at) | last | .id")
+            --jq "[.artifacts[] | select(.workflow_run.head_branch == \"$BASE\" and .expired == false)] | sort_by(.created_at) | last | .id") || {
+            echo "Could not query artifacts (GitHub API issue) - skipping ratchet comparison for this run."
+            exit 0
+          }
           if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
             echo "No baseline artifact found for $BASE yet."
             exit 0
           fi
           mkdir -p baseline
-          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > baseline.zip
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > baseline.zip || {
+            echo "Could not download baseline artifact (GitHub API issue) - skipping ratchet comparison for this run."
+            exit 0
+          }
           unzip -o -q baseline.zip -d baseline
       # Fails only if this PR's duplication is worse than the base branch's
       # last known state, never on pre-existing debt. 0.5pt tolerance to
@@ -268,13 +279,19 @@ jobs:
         run: |
           BASE="$BASE_REF"
           ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=quality-complexity-baseline&per_page=100" \
-            --jq "[.artifacts[] | select(.workflow_run.head_branch == \"$BASE\" and .expired == false)] | sort_by(.created_at) | last | .id")
+            --jq "[.artifacts[] | select(.workflow_run.head_branch == \"$BASE\" and .expired == false)] | sort_by(.created_at) | last | .id") || {
+            echo "Could not query artifacts (GitHub API issue) - skipping ratchet comparison for this run."
+            exit 0
+          }
           if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
             echo "No baseline artifact found for $BASE yet."
             exit 0
           fi
           mkdir -p baseline
-          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > baseline.zip
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > baseline.zip || {
+            echo "Could not download baseline artifact (GitHub API issue) - skipping ratchet comparison for this run."
+            exit 0
+          }
           unzip -o -q baseline.zip -d baseline
       - name: Compare against baseline and gate on regression
         if: github.event_name == 'pull_request'
