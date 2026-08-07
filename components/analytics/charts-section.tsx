@@ -9,11 +9,11 @@ export function ChartsSection({
   t,
   dailyHistory,
   allocationSlices,
-}: {
+}: Readonly<{
   t: T;
   dailyHistory: HistoryPoint[];
   allocationSlices: AllocationSlice[];
-}) {
+}>) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       <div className="md:col-span-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">

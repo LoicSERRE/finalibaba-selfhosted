@@ -34,10 +34,10 @@ const normalizeHeader = makeHeaderNormalizer({
 export function ImportTransactionsDialog({
   accountId,
   existingFingerprints,
-}: {
+}: Readonly<{
   accountId: string;
   existingFingerprints: string[];
-}) {
+}>) {
   const t = useTranslations("importTransactions");
   const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
@@ -157,8 +157,11 @@ export function ImportTransactionsDialog({
               <table className="w-full text-xs">
                 <tbody>
                   {rows.map((r, i) => (
+                    // See import-balance-history-dialog.tsx: `i` is the
+                    // row's identity (selected.has(i)/toggle(i)), and `rows`
+                    // is parsed once and never reordered/filtered.
                     <tr
-                      key={i}
+                      key={i} // NOSONAR (typescript:S6479)
                       className={`border-b border-[var(--border)] last:border-0 ${r.error ? "opacity-50" : ""}`}
                     >
                       <td className="px-2 py-1.5">

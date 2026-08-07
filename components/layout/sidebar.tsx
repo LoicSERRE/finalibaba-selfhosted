@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 type SidebarProps = { showLogout?: boolean };
 
-export function Sidebar({ showLogout = false }: SidebarProps) {
+export function Sidebar({ showLogout = false }: Readonly<SidebarProps>) {
   const rawPathname = usePathname();
   const pathname = rawPathname ?? "/";
   const t = useTranslations("nav");
@@ -68,6 +68,7 @@ export function Sidebar({ showLogout = false }: SidebarProps) {
         {/* Logout - only shown when AUTH_ENABLED=true */}
         {showLogout && (
           <button
+            type="button"
             onClick={async () => {
               const { signOut } = await import("next-auth/react");
               signOut({ callbackUrl: "/login" });

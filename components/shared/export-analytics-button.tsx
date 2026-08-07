@@ -447,7 +447,7 @@ function buildMarkdown(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
+export function ExportAnalyticsButton({ data }: Readonly<{ data: AnalyticsExportData }>) {
   const t = useTranslations("exportAnalytics");
   const intlLocale = localeToIntl(useLocale());
 
@@ -569,7 +569,7 @@ export function ExportAnalyticsButton({ data }: { data: AnalyticsExportData }) {
       onOpenChange={setOpen}
       title={t("title")}
       trigger={
-        <button className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+        <button type="button" className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
           <Download size={14} aria-hidden="true" />
           {t("button")}
         </button>

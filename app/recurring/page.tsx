@@ -204,8 +204,8 @@ export default async function RecurringPage() {
                 <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("upcomingTitle")}</h2>
               </div>
               <div className="divide-y divide-[var(--border)]">
-                {upcoming.map((o, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 px-6 py-3">
+                {upcoming.map((o) => (
+                  <div key={`${o.date.toISOString()}-${o.label}`} className="flex items-center justify-between gap-3 px-6 py-3">
                     <div className="flex items-center gap-2 min-w-0">
                       {o.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: o.color }} aria-hidden="true" />}
                       <span className="text-sm text-[var(--foreground)] truncate">{o.label}</span>

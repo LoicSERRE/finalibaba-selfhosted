@@ -13,7 +13,7 @@ import { useTranslations } from "next-intl";
 // budgetEuro is pre-formatted server-side (e.g. "300.00"), never a BigInt.
 type EditableCategory = { id: string; name: string; color: string; budgetEuro: string | null };
 
-export function AddCategoryDialog({ category }: { category?: EditableCategory }) {
+export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCategory }>) {
   const isEdit = !!category;
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -21,7 +21,7 @@ export function AddCategoryDialog({ category }: { category?: EditableCategory })
   const t = useTranslations("categories");
   const tc = useTranslations("common");
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);

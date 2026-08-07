@@ -29,9 +29,10 @@ const sizeClasses: Record<Size, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "default", size = "md", className = "", ...props }, ref) => (
+  ({ variant = "default", size = "md", className = "", type = "button", ...props }, ref) => (
     <button
       ref={ref}
+      type={type}
       className={`inline-flex items-center gap-2 rounded-lg font-medium transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     />

@@ -10,13 +10,13 @@ export function AllocationRadarSection({
   risques,
   garantisPct,
   techPct,
-}: {
+}: Readonly<{
   t: T;
   garantis: bigint;
   risques: bigint;
   garantisPct: number;
   techPct: number;
-}) {
+}>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 space-y-6">
       <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
@@ -65,6 +65,10 @@ export function AllocationRadarSection({
           </div>
           <span className="text-xs tabular-nums font-medium text-[var(--foreground)]">{techPct}%</span>
         </div>
+        {/* Suppressed via sonar-project.properties (typescript:S6819) - see
+            automobile-section.tsx: native <progress> can't express this
+            threshold-based color-coded fill without vendor-prefixed
+            pseudo-elements; full ARIA is already present below. */}
         <div
           className="h-3 bg-[var(--surface-elevated)] rounded-full overflow-hidden"
           role="progressbar"

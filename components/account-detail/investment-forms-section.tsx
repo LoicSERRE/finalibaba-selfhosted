@@ -10,13 +10,13 @@ export function InvestmentFormsSection({
   investmentStartDate,
   taxTreatment,
   taxRatePct,
-}: {
+}: Readonly<{
   td: T;
   accountId: string;
   investmentStartDate: Date | null;
   taxTreatment: string;
   taxRatePct: number | null;
-}) {
+}>) {
   return (
     <>
       {/* Date de début d'investissement */}

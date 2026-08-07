@@ -25,8 +25,8 @@ export function formatPercent(ratio: number, decimals = 1): string {
 
 export function parseCents(euroString: string): bigint {
   const cleaned = euroString.replace(",", ".").replace(/\s/g, "");
-  const amount = parseFloat(cleaned);
-  if (isNaN(amount)) return BigInt(0);
+  const amount = Number.parseFloat(cleaned);
+  if (Number.isNaN(amount)) return BigInt(0);
   return BigInt(Math.round(amount * 100));
 }
 

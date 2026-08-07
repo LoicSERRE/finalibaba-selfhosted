@@ -10,13 +10,13 @@ export function FinancingSection({
   totalLiabilities,
   debtRatio,
   grossAssets,
-}: {
+}: Readonly<{
   t: T;
   debtAccounts: DebtAccountRow[];
   totalLiabilities: bigint;
   debtRatio: number;
   grossAssets: bigint;
-}) {
+}>) {
   if (debtAccounts.length === 0) return null;
 
   return (

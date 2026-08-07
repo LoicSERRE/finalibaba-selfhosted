@@ -345,4 +345,12 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    # Suppressed below (python:S8392) - 0.0.0.0 is required here, not a
+    # mistake: this is the actual production entrypoint (entrypoint.sh runs
+    # `exec python main.py`), running inside the sync container. Binding to 127.0.0.1
+    # would make it unreachable from the app container on the same Docker
+    # network - the whole point of this service. The real security boundary
+    # is that port 8000 is never published to the host in docker-compose.yml
+    # (only app's 3000 is) - see SECURITY.md: "Docker-network-only, never
+    # expose port 8000 publicly."
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")  # NOSONAR

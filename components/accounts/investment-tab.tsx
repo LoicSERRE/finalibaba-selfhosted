@@ -6,7 +6,7 @@ import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
-export function InvestmentTab({ t, ta, rows }: { t: T; ta: T; rows: InvestAccountRow[] }) {
+export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: InvestAccountRow[] }>) {
   if (rows.length === 0) {
     return (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-10 text-center text-sm text-[var(--muted)]">

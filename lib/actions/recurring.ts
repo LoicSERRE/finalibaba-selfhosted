@@ -42,7 +42,7 @@ export async function createRecurringTransaction(formData: FormData) {
 
   const amountCents = parseSignedAmount(formData);
   const frequency = parseFrequency(formData);
-  const intervalCount = Math.max(1, parseInt((formData.get("intervalCount") as string) || "1", 10) || 1);
+  const intervalCount = Math.max(1, Number.parseInt((formData.get("intervalCount") as string) || "1", 10) || 1);
   const anchorDate = parseAnchorDate(formData);
   const categoryId = (formData.get("categoryId") as string | null)?.trim() || null;
   const autoDetected = formData.get("autoDetected") === "true";
@@ -62,7 +62,7 @@ export async function updateRecurringTransaction(id: string, formData: FormData)
 
   const amountCents = parseSignedAmount(formData);
   const frequency = parseFrequency(formData);
-  const intervalCount = Math.max(1, parseInt((formData.get("intervalCount") as string) || "1", 10) || 1);
+  const intervalCount = Math.max(1, Number.parseInt((formData.get("intervalCount") as string) || "1", 10) || 1);
   const anchorDate = parseAnchorDate(formData);
   const categoryId = (formData.get("categoryId") as string | null)?.trim() || null;
 

@@ -27,10 +27,9 @@ RUN pnpm run build
 
 # ── runner ─────────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
-RUN corepack enable
 # postgresql16-client: matches the postgres:16-alpine server exactly - used by
 # app/api/backup/route.ts (pg_dump/psql) for in-app backup & restore
-RUN apk add --no-cache libc6-compat postgresql16-client
+RUN corepack enable && apk add --no-cache libc6-compat postgresql16-client
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -71,7 +70,13 @@ COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 # every release scan for code that's genuinely unreachable here, not just
 # unlikely to be reached - removing it outright is more honest than
 # suppressing the finding, and slightly shrinks the image too.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# Drop root before the app runs - node:22-alpine already ships a non-root
+# "node" user (uid 1000). chown -R covers everything above in a single pass,
+# including node_modules (produced by the `pnpm install` RUN step, not a
+# COPY, so a per-COPY --chown wouldn't reach it).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && \
+    chown -R node:node /app
+USER node
 
 EXPOSE 3000
 

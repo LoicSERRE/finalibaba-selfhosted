@@ -124,6 +124,11 @@ export default async function BudgetsPage() {
                 </div>
 
                 {budgetCents !== null && (
+                  // Suppressed via sonar-project.properties (typescript:S6819)
+                  // - see automobile-section.tsx: native <progress> can't
+                  // express this threshold-based color-coded fill without
+                  // vendor-prefixed pseudo-elements; full ARIA is already
+                  // present below.
                   <div
                     className="h-2 bg-[var(--surface-elevated)] rounded-full overflow-hidden"
                     role="progressbar"

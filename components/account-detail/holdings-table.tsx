@@ -14,14 +14,14 @@ export function HoldingsTable({
   accountName,
   holdingsWithTax,
   isSynced,
-}: {
+}: Readonly<{
   td: T;
   t: T;
   accountId: string;
   accountName: string;
   holdingsWithTax: HoldingWithTax[];
   isSynced: boolean;
-}) {
+}>) {
   return (
     <>
       <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">

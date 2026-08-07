@@ -7,10 +7,10 @@ type T = Awaited<ReturnType<typeof getTranslations>>;
 export function MonthlyPerformanceSection({
   t,
   performanceRows,
-}: {
+}: Readonly<{
   t: T;
   performanceRows: PerformanceRow[];
-}) {
+}>) {
   if (performanceRows.length <= 1) return null;
 
   return (

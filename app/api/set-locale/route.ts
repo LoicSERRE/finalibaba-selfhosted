@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
-const SUPPORTED = ["en", "fr"];
+const SUPPORTED = new Set(["en", "fr"]);
 
 export async function GET(request: Request) {
   const locale = new URL(request.url).searchParams.get("locale") ?? "";
-  if (!SUPPORTED.includes(locale)) {
+  if (!SUPPORTED.has(locale)) {
     return NextResponse.json({ error: "Invalid locale" }, { status: 400 });
   }
   const res = NextResponse.json({ ok: true });

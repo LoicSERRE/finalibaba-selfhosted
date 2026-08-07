@@ -61,6 +61,97 @@ def _configure_woob():
         log.warning("woob config update a échoué (non-fatal) : %s", result.stderr[:200])
 
 
+def _sync_account_transactions(w, account, account_db_id, cur):
+    """Fetch and upsert transaction history for one account (last ~90 days).
+    Errors here are non-fatal - the account balance above was already
+    recorded, so a failure just leaves that account's history stale until
+    the next run instead of aborting the whole sync."""
+    try:
+        from woob.core.bcall import CallErrors
+        tx_count = 0
+        try:
+            for tx in w.do("iter_history", account, backends="lcl"):
+                if tx.amount is None or tx.date is None:
+                    continue
+                amount_cents = int(Decimal(str(tx.amount)) * 100)
+                sync_id = f"lcl:{account.id}:{tx.id}" if tx.id else f"lcl:{account.id}:{tx.date.isoformat()}:{amount_cents}"
+                upsert_transaction(
+                    cur,
+                    account_id=account_db_id,
+                    sync_id=sync_id,
+                    date=tx.date,
+                    label=(tx.label or tx.raw or "").strip() or "—",
+                    amount_cents=amount_cents,
+                )
+                tx_count += 1
+        except CallErrors as e:
+            log.warning("LCL iter_history CallErrors (ignoré) : %s", str(e)[:120])
+        log.info("LCL - %s : %d transaction(s) importée(s)", account.label, tx_count)
+    except Exception as e:
+        log.warning("LCL transactions ignorées pour %s : %s", account.label, e)
+
+
+def _iter_accounts(w):
+    from woob.core.bcall import CallErrors
+    accounts = []
+    try:
+        for result in w.do("iter_accounts", backends="lcl"):
+            accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
+    except CallErrors as e:
+        for backend, exc, tb in e.errors:
+            msg = (str(exc) + tb).lower()
+            if "bourse" in msg or "connectionreset" in msg or "connection aborted" in msg:
+                # Log full traceback so we can diagnose which URL is failing
+                log.warning(
+                    "LCL bourse inaccessible (ignoré) : [%s] %s\n%s",
+                    getattr(backend, "name", backend), exc, tb.strip()
+                )
+            else:
+                raise
+    return accounts
+
+
+def _fetch_accounts(w, conn, cur, interactive: bool) -> list:
+    """Wraps _iter_accounts with the Certicode Plus 2FA flow: in interactive
+    (--setup) mode, prompt the user to validate in the LCL app and retry
+    once; in non-interactive mode, write auth_required and raise."""
+    from woob.exceptions import AppValidation, NeedInteractive, NeedInteractiveFor2FA
+    try:
+        return _iter_accounts(w)
+    except (AppValidation, NeedInteractiveFor2FA, NeedInteractive) as e:
+        if not interactive:
+            conn.rollback()
+            write_sync_log(cur, "lcl", "auth_required", "Certicode Plus requis - lance --setup")
+            conn.commit()
+            raise AuthRequiredError("LCL Certicode Plus requis")
+        # Interactive mode: wait for user to validate in LCL app
+        print("\n📱 Ouvre l'app LCL → 'Certicode Plus' et valide la connexion.")
+        print(f"   (Message woob : {e})")
+        input("\nAppuie sur Entrée une fois validé dans l'app LCL… ")
+        return _iter_accounts(w)
+
+
+def _sync_account(cur, institution_id, account) -> dict | None:
+    """Upsert one account's balance row. Returns the synced summary (with
+    the DB id, needed by the caller to then sync transactions), or None if
+    the account has no balance to record."""
+    if account.balance is None:
+        return None
+    balance_cents = int(Decimal(str(account.balance)) * 100)
+    sync_id = f"lcl:{account.id}"
+    account_type = _infer_account_type(account.label)
+    account_db_id = upsert_account(
+        cur,
+        sync_id=sync_id,
+        name=account.label,
+        account_type=account_type,
+        institution_id=institution_id,
+    )
+    record_balance(cur, account_db_id, balance_cents)
+    log.info("LCL - %s : %d cts", account.label, balance_cents)
+    return {"label": account.label, "balance_cents": balance_cents, "account_db_id": account_db_id}
+
+
 def run(interactive: bool = False) -> dict:
     _configure_woob()
 
@@ -79,41 +170,7 @@ def run(interactive: bool = False) -> dict:
     if not institution_id:
         raise RuntimeError("Institution 'LCL' introuvable en base. Lance npm run db:seed.")
 
-    synced = []
-    from woob.exceptions import AppValidation, NeedInteractive, NeedInteractiveFor2FA
-
-    def _iter_accounts():
-        from woob.core.bcall import CallErrors
-        accounts = []
-        try:
-            for result in w.do("iter_accounts", backends="lcl"):
-                accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
-        except CallErrors as e:
-            for backend, exc, tb in e.errors:
-                msg = (str(exc) + tb).lower()
-                if "bourse" in msg or "connectionreset" in msg or "connection aborted" in msg:
-                    # Log full traceback so we can diagnose which URL is failing
-                    log.warning(
-                        "LCL bourse inaccessible (ignoré) : [%s] %s\n%s",
-                        getattr(backend, "name", backend), exc, tb.strip()
-                    )
-                else:
-                    raise
-        return accounts
-
-    try:
-        accounts = _iter_accounts()
-    except (AppValidation, NeedInteractiveFor2FA, NeedInteractive) as e:
-        if not interactive:
-            conn.rollback()
-            write_sync_log(cur, "lcl", "auth_required", "Certicode Plus requis - lance --setup")
-            conn.commit()
-            raise AuthRequiredError("LCL Certicode Plus requis")
-        # Interactive mode: wait for user to validate in LCL app
-        print("\n📱 Ouvre l'app LCL → 'Certicode Plus' et valide la connexion.")
-        print(f"   (Message woob : {e})")
-        input("\nAppuie sur Entrée une fois validé dans l'app LCL… ")
-        accounts = _iter_accounts()
+    accounts = _fetch_accounts(w, conn, cur, interactive)
 
     if not accounts:
         # Woob returned no accounts without raising an explicit auth error.
@@ -129,49 +186,14 @@ def run(interactive: bool = False) -> dict:
         conn.close()
         raise AuthRequiredError(f"LCL: {msg}")
 
+    synced = []
     for account in accounts:
-        if account.balance is None:
+        summary = _sync_account(cur, institution_id, account)
+        if summary is None:
             continue
-
-        balance_cents = int(Decimal(str(account.balance)) * 100)
-        sync_id = f"lcl:{account.id}"
-        account_type = _infer_account_type(account.label)
-
-        account_db_id = upsert_account(
-            cur,
-            sync_id=sync_id,
-            name=account.label,
-            account_type=account_type,
-            institution_id=institution_id,
-        )
-        record_balance(cur, account_db_id, balance_cents)
-        synced.append({"label": account.label, "balance_cents": balance_cents})
-        log.info("LCL - %s : %d cts", account.label, balance_cents)
-
+        synced.append({"label": summary["label"], "balance_cents": summary["balance_cents"]})
         # Fetch transactions (last ~90 days)
-        try:
-            from woob.core.bcall import CallErrors
-            tx_count = 0
-            try:
-                for tx in w.do("iter_history", account, backends="lcl"):
-                    if tx.amount is None or tx.date is None:
-                        continue
-                    amount_cents = int(Decimal(str(tx.amount)) * 100)
-                    sync_id = f"lcl:{account.id}:{tx.id}" if tx.id else f"lcl:{account.id}:{tx.date.isoformat()}:{amount_cents}"
-                    upsert_transaction(
-                        cur,
-                        account_id=account_db_id,
-                        sync_id=sync_id,
-                        date=tx.date,
-                        label=(tx.label or tx.raw or "").strip() or "—",
-                        amount_cents=amount_cents,
-                    )
-                    tx_count += 1
-            except CallErrors as e:
-                log.warning("LCL iter_history CallErrors (ignoré) : %s", str(e)[:120])
-            log.info("LCL - %s : %d transaction(s) importée(s)", account.label, tx_count)
-        except Exception as e:
-            log.warning("LCL transactions ignorées pour %s : %s", account.label, e)
+        _sync_account_transactions(w, account, summary["account_db_id"], cur)
 
     write_sync_log(cur, "lcl", "success", f"{len(synced)} compte(s) synchronisé(s)")
     conn.commit()

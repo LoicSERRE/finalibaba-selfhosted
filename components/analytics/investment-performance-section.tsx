@@ -18,7 +18,7 @@ export function InvestmentPerformanceSection({
   investAllHaveDates,
   taxRatePea,
   taxRateCto,
-}: {
+}: Readonly<{
   t: T;
   intlLocale: string;
   investPerfRows: InvestPerfRow[];
@@ -32,7 +32,7 @@ export function InvestmentPerformanceSection({
   investAllHaveDates: boolean;
   taxRatePea: number;
   taxRateCto: number;
-}) {
+}>) {
   if (investPerfRows.length === 0 || investTotalCostBasis <= BigInt(0)) return null;
 
   return (

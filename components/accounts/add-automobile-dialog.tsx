@@ -10,13 +10,13 @@ import { useTranslations } from "next-intl";
 
 type Institution = { id: string; name: string };
 
-export function AddAutomobileDialog({ institutions }: { institutions: Institution[] }) {
+export function AddAutomobileDialog({ institutions }: Readonly<{ institutions: Institution[] }>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("addAutomobile");
   const tc = useTranslations("common");
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {

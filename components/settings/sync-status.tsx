@@ -19,7 +19,7 @@ interface Props {
   log: SyncLog | null;
 }
 
-function StatusIcon({ status }: { status: string }) {
+function StatusIcon({ status }: Readonly<{ status: string }>) {
   if (status === "success") return <CheckCircle size={14} className="text-[var(--positive)]" aria-hidden="true" />;
   if (status === "auth_required") return <AlertTriangle size={14} className="text-[var(--warning)]" aria-hidden="true" />;
   return <AlertTriangle size={14} className="text-[var(--negative)]" aria-hidden="true" />;
@@ -43,7 +43,7 @@ type SetupStep =
   | "awaiting_approval"
   | "completing";
 
-export function SyncStatus({ source, label, log }: Props) {
+export function SyncStatus({ source, label, log }: Readonly<Props>) {
   const [pending, startTransition] = useTransition();
   const [setupStep, setSetupStep] = useState<SetupStep>("idle");
   const [code, setCode] = useState("");
@@ -216,7 +216,10 @@ export function SyncStatus({ source, label, log }: Props) {
         <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
           <p className="text-xs text-[var(--muted)] mb-3">
             {t.rich("lclApprovalHint", {
-              strong: (chunks) => <strong className="text-[var(--foreground)]">{chunks}</strong>,
+              // See configure-woob-dialog.tsx: a next-intl t.rich() renderer
+              // callback, not a React component subject to the
+              // remount/state-loss risk this rule targets.
+              strong: (chunks) => <strong className="text-[var(--foreground)]">{chunks}</strong>, // NOSONAR (typescript:S6478)
             })}
           </p>
           <div className="flex items-center gap-2">

@@ -35,6 +35,13 @@ def _configure_woob():
     backends_file.chmod(0o600)
 
 
+def _safe_deinit(w):
+    try:
+        w.deinit()
+    except Exception as e:
+        log.debug("woob deinit failed (ignored): %s", e)
+
+
 def _iter_accounts(w):
     """Itère les comptes LCL en ignorant les erreurs bourse (410 Gone)."""
     from woob.core.bcall import CallErrors
@@ -72,17 +79,11 @@ def start_setup() -> dict:
         accounts = _iter_accounts(w)
         # Session encore valide - pas besoin de Certicode Plus
         log.info("LCL setup: session déjà valide (%d comptes)", len(accounts))
-        try:
-            w.deinit()
-        except Exception as e:
-            log.debug("woob deinit failed (ignored): %s", e)
+        _safe_deinit(w)
         return {"status": "already_connected", "accounts": len(accounts)}
 
     except AppValidationExpired:
-        try:
-            w.deinit()
-        except Exception as e:
-            log.debug("woob deinit failed (ignored): %s", e)
+        _safe_deinit(w)
         raise RuntimeError("Validation Certicode Plus expirée avant d'être approuvée - réessaie")
 
     except (AppValidation, NeedInteractiveFor2FA, NeedInteractive):
@@ -123,8 +124,5 @@ def _cleanup():
     global _pending
     if _pending is None:
         return
-    try:
-        _pending["w"].deinit()
-    except Exception as e:
-        log.debug("woob deinit failed (ignored): %s", e)
+    _safe_deinit(_pending["w"])
     _pending = None

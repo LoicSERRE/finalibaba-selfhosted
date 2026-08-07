@@ -12,11 +12,11 @@ export function AutomobileTab({
   t,
   institutions,
   rows,
-}: {
+}: Readonly<{
   t: T;
   institutions: { id: string; name: string }[];
   rows: AutomobileRow[];
-}) {
+}>) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">

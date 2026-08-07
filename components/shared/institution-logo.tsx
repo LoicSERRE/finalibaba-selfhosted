@@ -5,7 +5,7 @@ import { AVATAR_COLORS } from "@/lib/utils/palette";
 
 function pickColor(name: string): string {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < name.length; i++) hash = (name.codePointAt(i) ?? 0) + ((hash << 5) - hash);
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
@@ -15,7 +15,7 @@ type Props = {
   size?: number;
 };
 
-export function InstitutionLogo({ name, logoUrl, size = 28 }: Props) {
+export function InstitutionLogo({ name, logoUrl, size = 28 }: Readonly<Props>) {
   const [failed, setFailed] = useState(false);
   const letter = name.trim()[0]?.toUpperCase() ?? "?";
 

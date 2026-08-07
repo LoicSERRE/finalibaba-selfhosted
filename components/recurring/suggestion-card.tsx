@@ -24,11 +24,11 @@ export function SuggestionCard({
   candidate,
   accounts,
   categories,
-}: {
+}: Readonly<{
   candidate: Candidate;
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string; color: string }[];
-}) {
+}>) {
   const [pending, startTransition] = useTransition();
   const t = useTranslations("recurring");
 

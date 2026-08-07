@@ -14,7 +14,7 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents,
   realYtdDividendsNetCents,
   realYtdInterestNetCents,
-}: {
+}: Readonly<{
   t: T;
   tIncome: T;
   goalCents: bigint;
@@ -24,7 +24,7 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents: bigint;
   realYtdDividendsNetCents: bigint;
   realYtdInterestNetCents: bigint;
-}) {
+}>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 space-y-5">
       {/* Goal bar */}
@@ -48,6 +48,10 @@ export function GoalAndPassiveIncome({
             )}
           </div>
         </div>
+        {/* Suppressed via sonar-project.properties (typescript:S6819) - see
+            automobile-section.tsx: native <progress> can't express this
+            threshold-based color-coded fill without vendor-prefixed
+            pseudo-elements; full ARIA is already present below. */}
         <div
           className="h-3 bg-[var(--surface-elevated)] rounded-full overflow-hidden"
           role="progressbar"

@@ -9,6 +9,6 @@ const SidebarClient = dynamic(
   { ssr: false }
 );
 
-export function SidebarDynamic({ showLogout }: { showLogout: boolean }) {
+export function SidebarDynamic({ showLogout }: Readonly<{ showLogout: boolean }>) {
   return <SidebarClient showLogout={showLogout} />;
 }

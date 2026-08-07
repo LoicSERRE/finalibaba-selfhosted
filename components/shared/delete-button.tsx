@@ -10,11 +10,11 @@ export function DeleteButton({
   onDelete,
   label,
   description,
-}: {
+}: Readonly<{
   onDelete: () => Promise<void>;
   label?: string;
   description?: string;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("common");

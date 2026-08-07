@@ -177,7 +177,7 @@ def _get_securities_accounts(api) -> tuple[dict[str, list[str]], bool]:
         }
         features = [f.get("feature") for f in claims.get("featuresEnabled", [])]
         has_crypto = "crypto" in features
-        log.info("TR accounts: %s | crypto: %s", {k: v for k, v in sec_accounts.items()}, has_crypto)
+        log.info("TR accounts: %s | crypto: %s", dict(sec_accounts), has_crypto)
         return sec_accounts, has_crypto
     except Exception as e:
         log.warning("TR: failed to decode session JWT: %s", e)
@@ -236,6 +236,77 @@ async def _fetch_ticker_price(api, isin: str) -> tuple[int, str | None]:
         return 0, None
 
 
+def _resolve_isin(pos: dict) -> str:
+    return (
+        pos.get("instrumentId")
+        or pos.get("isin")
+        or (pos.get("instrument") or {}).get("isin")
+        or ""
+    )
+
+
+def _resolve_direct_price_val(pos: dict):
+    """Direct per-unit price field, checked in fallback order (still raw -
+    the caller converts to cents). None if no direct price field exists at
+    all, meaning only netValue/virtualSize (if available) can price this
+    position."""
+    price_val = (
+        pos.get("currentPrice")
+        or pos.get("lastPrice")
+        or (pos.get("instrument") or {}).get("currentPrice")
+    )
+    if price_val is not None:
+        return price_val
+    cpeur = pos.get("currentPriceEur")
+    return cpeur.get("value") if isinstance(cpeur, dict) else cpeur
+
+
+def _resolve_virtual_size(pos: dict) -> Decimal:
+    net_size_raw = pos.get("netSize") or pos.get("quantity") or 0
+    virtual_size_raw = pos.get("virtualSize") or net_size_raw
+    return Decimal(str(virtual_size_raw))
+
+
+def _resolve_net_value(pos: dict) -> Decimal:
+    net_value_raw = pos.get("netValue") or pos.get("netValueEur")
+    if isinstance(net_value_raw, dict):
+        net_value_raw = net_value_raw.get("value", 0)
+    return Decimal(str(net_value_raw or 0))
+
+
+def _resolve_neon_price(pos: dict) -> tuple[str, int | None, str | None] | None:
+    """Resolve one neonPortfolio position into (isin, price_cents, quantity).
+    `quantity` is only set when virtualSize/netSize is positive (used as
+    price divisor for PE/ELTIF - see _fetch_neon_portfolio_prices), `price_cents`
+    is None when neither netValue/virtualSize nor a direct price field is
+    available. Returns None if the position has no ISIN at all.
+
+    Pure - extracted from _fetch_neon_portfolio_prices's loop body so the
+    price-resolution rules (netValue/virtualSize wins over a direct price
+    field) live in one place, same pattern as resolve_position() above."""
+    isin = _resolve_isin(pos)
+    if not isin:
+        return None
+
+    virtual_size = _resolve_virtual_size(pos)
+    quantity = str(virtual_size) if virtual_size > 0 else None
+
+    # netValue is TR's authoritative total position value (what the app displays).
+    # For PE/ELTIF funds the exchange ticker currentPrice is stale while netValue
+    # reflects the current NAV - always prefer netValue/virtualSize over currentPrice.
+    net_value = _resolve_net_value(pos)
+    if net_value and virtual_size > 0:
+        price_cents = int((net_value / virtual_size * 100).to_integral_value())
+        log.info("TR neonPortfolio %s : netValue=%s virtualSize=%s → %d cts/unit",
+                 isin, net_value, virtual_size, price_cents)
+        return isin, price_cents, quantity
+
+    # Fallback: use direct per-unit price field (liquid instruments without netValue)
+    price_val = _resolve_direct_price_val(pos)
+    price_cents = int(Decimal(str(price_val)) * 100) if price_val else None
+    return isin, price_cents, quantity
+
+
 async def _fetch_neon_portfolio_prices(api) -> tuple[dict[str, int], dict[str, str]]:
     """Fetch per-unit prices from neonPortfolio subscription.
 
@@ -268,48 +339,14 @@ async def _fetch_neon_portfolio_prices(api) -> tuple[dict[str, int], dict[str, s
         prices: dict[str, int] = {}
         neon_quantities: dict[str, str] = {}
         for pos in positions:
-            isin = (
-                pos.get("instrumentId")
-                or pos.get("isin")
-                or (pos.get("instrument") or {}).get("isin")
-                or ""
-            )
-            if not isin:
+            resolved = _resolve_neon_price(pos)
+            if resolved is None:
                 continue
-
-            # Try direct per-unit price fields first
-            price_val = (
-                pos.get("currentPrice")
-                or pos.get("lastPrice")
-                or (pos.get("instrument") or {}).get("currentPrice")
-            )
-            if price_val is None:
-                cpeur = pos.get("currentPriceEur")
-                price_val = cpeur.get("value") if isinstance(cpeur, dict) else cpeur
-
-            net_size_raw = pos.get("netSize") or pos.get("quantity") or 0
-            virtual_size_raw = pos.get("virtualSize") or net_size_raw
-            virtual_size = Decimal(str(virtual_size_raw))
-            if virtual_size > 0:
-                neon_quantities[isin] = str(virtual_size)
-
-            # netValue is TR's authoritative total position value (what the app displays).
-            # For PE/ELTIF funds the exchange ticker currentPrice is stale while netValue
-            # reflects the current NAV - always prefer netValue/virtualSize over currentPrice.
-            net_value_raw = pos.get("netValue") or pos.get("netValueEur")
-            if isinstance(net_value_raw, dict):
-                net_value_raw = net_value_raw.get("value", 0)
-            net_value = Decimal(str(net_value_raw or 0))
-
-            if net_value and virtual_size > 0:
-                prices[isin] = int((net_value / virtual_size * 100).to_integral_value())
-                log.info("TR neonPortfolio %s : netValue=%s virtualSize=%s → %d cts/unit",
-                         isin, net_value, virtual_size, prices[isin])
-                continue
-
-            # Fallback: use direct per-unit price field (liquid instruments without netValue)
-            if price_val:
-                prices[isin] = int(Decimal(str(price_val)) * 100)
+            isin, price_cents, quantity = resolved
+            if quantity is not None:
+                neon_quantities[isin] = quantity
+            if price_cents is not None:
+                prices[isin] = price_cents
 
         log.info("TR neonPortfolio: %d prices loaded, %d PE/ELTIF quantities", len(prices), len(neon_quantities))
         return prices, neon_quantities
@@ -335,25 +372,31 @@ async def _fetch_cash(api) -> list:
     return data if isinstance(data, list) else []
 
 
-async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) -> tuple[dict, list, dict, dict]:
-    """
-    Returns:
-      positions_by_type: {"default": [...], "tax_wrapper_fr": [...], "CRYPTO": [...]}
-      cash_accounts: [{"currencyId": "EUR", "amount": 1700.63}, ...]
-      prices: {isin: (price_cents, name)} fetched via ticker subscription
-      neon_quantities: {isin: virtual_size_str} for PE/ELTIFs priced via netValue/virtualSize
-    """
+async def _fetch_positions_for_type(api, acc_type: str, sec_numbers: list[str]) -> list:
+    """Fetch and merge positions across every securities-account-number under
+    one TR account type (a type can have several sub-accounts) - a fetch
+    failure on one sub-account is logged and skipped rather than aborting
+    the others, same non-fatal-per-item pattern as _sync_account_transactions
+    in sync_lcl.py/sync_woob.py."""
+    all_positions = []
+    for sec_num in sec_numbers:
+        try:
+            positions = await _fetch_positions_for_account(api, sec_num)
+            all_positions.extend(positions)
+            log.info("TR %s (%s) : %d position(s)", acc_type, sec_num, len(positions))
+        except Exception as e:
+            log.warning("TR %s (%s) erreur : %s", acc_type, sec_num, e)
+    return all_positions
+
+
+async def _build_positions_by_type(api, sec_accounts: dict[str, list[str]], has_crypto: bool) -> dict:
+    """Fetch every account type's positions and group them, splitting TR's
+    crypto-in-CTO assets (XF000* ISINs) out to their own CRYPTO bucket and
+    merging in the dedicated cryptoPortfolio subscription when enabled."""
     positions_by_type: dict[str, list] = {}
 
     for acc_type, sec_numbers in sec_accounts.items():
-        all_positions = []
-        for sec_num in sec_numbers:
-            try:
-                positions = await _fetch_positions_for_account(api, sec_num)
-                all_positions.extend(positions)
-                log.info("TR %s (%s) : %d position(s)", acc_type, sec_num, len(positions))
-            except Exception as e:
-                log.warning("TR %s (%s) erreur : %s", acc_type, sec_num, e)
+        all_positions = await _fetch_positions_for_type(api, acc_type, sec_numbers)
 
         # TR crypto assets (XF000* ISINs) are in the CTO portfolio but belong
         # to a separate crypto wallet - split them out to the CRYPTO account.
@@ -371,7 +414,33 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
         if crypto_positions:
             positions_by_type["CRYPTO"] = crypto_positions
 
-    # Collect unique ISINs
+    return positions_by_type
+
+
+async def _resolve_ticker_prices(api, all_isins: set[str], neon_prices: dict[str, int]) -> dict[str, tuple[int, str | None]]:
+    """Ticker subscription for name resolution + fallback prices - always
+    prefers neonPortfolio's price (authoritative TR display value) over the
+    exchange ticker when both are available."""
+    prices: dict[str, tuple[int, str | None]] = {}
+    for isin in all_isins:
+        ticker_cents, name = await _fetch_ticker_price(api, isin)
+        price_cents = neon_prices.get(isin) or ticker_cents
+        prices[isin] = (price_cents, name)
+        log.debug("TR %s : neon=%s ticker=%d final=%d cts name=%s",
+                  isin, neon_prices.get(isin), ticker_cents, price_cents, name)
+    return prices
+
+
+async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) -> tuple[dict, list, dict, dict]:
+    """
+    Returns:
+      positions_by_type: {"default": [...], "tax_wrapper_fr": [...], "CRYPTO": [...]}
+      cash_accounts: [{"currencyId": "EUR", "amount": 1700.63}, ...]
+      prices: {isin: (price_cents, name)} fetched via ticker subscription
+      neon_quantities: {isin: virtual_size_str} for PE/ELTIFs priced via netValue/virtualSize
+    """
+    positions_by_type = await _build_positions_by_type(api, sec_accounts, has_crypto)
+
     all_isins = {
         _position_isin(pos)
         for positions in positions_by_type.values()
@@ -385,15 +454,7 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
     # be reused as holding quantity so that quantity × price = netValue exactly.
     neon_prices, neon_quantities = await _fetch_neon_portfolio_prices(api)
 
-    # Ticker subscription for name resolution + fallback prices
-    prices: dict[str, tuple[int, str | None]] = {}
-    for isin in all_isins:
-        ticker_cents, name = await _fetch_ticker_price(api, isin)
-        # Prefer neonPortfolio price (authoritative TR display value) over exchange ticker
-        price_cents = neon_prices.get(isin) or ticker_cents
-        prices[isin] = (price_cents, name)
-        log.debug("TR %s : neon=%s ticker=%d final=%d cts name=%s",
-                  isin, neon_prices.get(isin), ticker_cents, price_cents, name)
+    prices = await _resolve_ticker_prices(api, all_isins, neon_prices)
 
     cash_accounts = await _fetch_cash(api)
     return positions_by_type, cash_accounts, prices, neon_quantities

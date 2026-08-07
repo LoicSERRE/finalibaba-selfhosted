@@ -686,7 +686,10 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     monthMap.get(month)!.set(b.accountId, b.balanceCents);
   }
   const runningM = new Map<string, bigint>();
-  const monthlyHistory: MonthlyHistoryPoint[] = [...monthMap.keys()].sort().map((month) => {
+  // NOSONAR (typescript:S2871) - "YYYY-MM" keys (ISO 8601, from
+  // toISOString().slice(0,7) above): lexicographic order already equals
+  // chronological order by design, localeCompare adds nothing here.
+  const monthlyHistory: MonthlyHistoryPoint[] = [...monthMap.keys()].sort().map((month) => { // NOSONAR
     for (const [id, v] of monthMap.get(month)!) runningM.set(id, v);
     let gross = BigInt(0);
     for (const v of runningM.values()) gross += v;
@@ -708,7 +711,10 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     dayMap.get(day)!.set(b.accountId, b.balanceCents);
   }
   const runningD = new Map<string, bigint>();
-  const dailyHistory: HistoryPoint[] = [...dayMap.keys()].sort().map((day) => {
+  // NOSONAR (typescript:S2871) - "YYYY-MM-DD" keys (ISO 8601, from
+  // toISOString().slice(0,10) above): same reasoning as monthlyHistory
+  // above, lexicographic order already equals chronological order.
+  const dailyHistory: HistoryPoint[] = [...dayMap.keys()].sort().map((day) => { // NOSONAR
     for (const [id, v] of dayMap.get(day)!) runningD.set(id, v);
     let gross = BigInt(0);
     for (const v of runningD.values()) gross += v;
@@ -732,20 +738,21 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
 
   const momDelta =
     monthlyHistory.length >= 2
-      ? monthlyHistory[monthlyHistory.length - 1].netWorth -
-        monthlyHistory[monthlyHistory.length - 2].netWorth
+      ? monthlyHistory.at(-1)!.netWorth -
+        monthlyHistory.at(-2)!.netWorth
       : null;
 
   // Savings rate: declared monthly savings take priority (avoids MOM distortion from
   // inter-account transfers, market performance, and first-sync balance imports)
   const hasDeclaredSavings = settings.monthlySavedCents > BigInt(0);
-  const savingsRate = hasSalary
-    ? hasDeclaredSavings
-      ? (Number(settings.monthlySavedCents) / Number(settings.salaryNetCents)) * 100
-      : momDelta !== null
-      ? (momDelta / Number(settings.salaryNetCents)) * 100
-      : null
-    : null;
+  let savingsRate: number | null = null;
+  if (hasSalary) {
+    if (hasDeclaredSavings) {
+      savingsRate = (Number(settings.monthlySavedCents) / Number(settings.salaryNetCents)) * 100;
+    } else if (momDelta !== null) {
+      savingsRate = (momDelta / Number(settings.salaryNetCents)) * 100;
+    }
+  }
 
   // ── Top assets ──────────────────────────────────────────────────────────
   const topAssets: TopAssetRow[] = [...assetRows]

@@ -7,7 +7,7 @@ import { triggerInstitutionSync } from "@/lib/actions/sync";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-export function InstitutionSyncButton({ institutionId }: { institutionId: string }) {
+export function InstitutionSyncButton({ institutionId }: Readonly<{ institutionId: string }>) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const t = useTranslations("syncStatus");

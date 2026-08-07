@@ -21,7 +21,7 @@ export async function upsertHolding(formData: FormData) {
   const quantity = new Decimal(formData.get("quantity") as string);
   const costBasisStr = formData.get("costBasis") as string | null;
   const targetPctStr = formData.get("targetPct") as string | null;
-  const targetPct = targetPctStr && targetPctStr.trim() !== "" ? Math.min(1, Math.max(0, parseFloat(targetPctStr) / 100)) : null;
+  const targetPct = targetPctStr && targetPctStr.trim() !== "" ? Math.min(1, Math.max(0, Number.parseFloat(targetPctStr) / 100)) : null;
 
   const currencyRaw = (formData.get("currency") as string | null) || "EUR";
   const currency = (FOREIGN_CURRENCIES.has(currencyRaw) ? currencyRaw : "EUR") as HoldingCurrency;

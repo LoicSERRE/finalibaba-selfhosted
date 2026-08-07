@@ -29,11 +29,11 @@ export function AddIncomeDialog({
   initial,
   accounts,
   trigger,
-}: {
+}: Readonly<{
   initial?: IncomeInitial;
   accounts: { id: string; name: string; type: string }[];
   trigger?: React.ReactNode;
-}) {
+}>) {
   const isEdit = !!initial?.id;
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -45,7 +45,7 @@ export function AddIncomeDialog({
     (type === "DIVIDEND" ? DIVIDEND_ACCOUNT_TYPES : INTEREST_ACCOUNT_TYPES).has(a.type)
   );
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);

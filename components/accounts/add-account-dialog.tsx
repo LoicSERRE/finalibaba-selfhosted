@@ -13,10 +13,10 @@ type Institution = { id: string; name: string };
 export function AddAccountDialog({
   institutions,
   defaultType,
-}: {
+}: Readonly<{
   institutions: Institution[];
   defaultType?: string;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState(defaultType ?? "CHECKING");
   const [subtype, setSubtype] = useState("");
@@ -52,7 +52,7 @@ export function AddAccountDialog({
     { value: "AUTOMOBILE", label: t("typeAutomobile") },
   ];
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {

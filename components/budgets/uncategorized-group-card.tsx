@@ -15,13 +15,13 @@ export function UncategorizedGroupCard({
   totalCents,
   transactionIds,
   categories,
-}: {
+}: Readonly<{
   label: string;
   count: number;
   totalCents: number;
   transactionIds: string[];
   categories: { id: string; name: string; color: string }[];
-}) {
+}>) {
   const [categoryId, setCategoryId] = useState("");
   const [pending, startTransition] = useTransition();
   const [applied, setApplied] = useState(false);

@@ -146,12 +146,10 @@ export function computeInvestRow(account: InvestAccountInput): InvestAccountRow 
       gain !== null && h.costBasisCents != null && h.costBasisCents > BigInt(0)
         ? (Number(gain) / Number(h.costBasisCents)) * 100
         : null;
-    const tax =
-      gain !== null && rate !== null
-        ? gain > BigInt(0)
-          ? BigInt(Math.round(Number(gain) * rate))
-          : BigInt(0)
-        : null;
+    let tax: bigint | null = null;
+    if (gain !== null && rate !== null) {
+      tax = gain > BigInt(0) ? BigInt(Math.round(Number(gain) * rate)) : BigInt(0);
+    }
     return {
       id: h.id,
       ticker: h.ticker,

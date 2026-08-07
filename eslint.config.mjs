@@ -46,6 +46,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // vitest's coverage output (lcov-report/*.js is vendored third-party
+    // report-viewer JS, not our code) - .gitignore already excludes
+    // /coverage from version control, but ESLint's flat config doesn't
+    // read .gitignore, so it needs its own entry.
+    "coverage/**",
   ]),
 ]);
 

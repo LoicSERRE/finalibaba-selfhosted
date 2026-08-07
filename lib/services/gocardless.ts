@@ -126,7 +126,7 @@ export async function getAccountBalances(gcAccountId: string): Promise<GCBalance
 export function pickBalance(balances: GCBalance[]): bigint {
   const preferred = balances.find((b) => b.balanceType === "closingBooked") ?? balances[0];
   if (!preferred) return BigInt(0);
-  return BigInt(Math.round(parseFloat(preferred.balanceAmount.amount) * 100));
+  return BigInt(Math.round(Number.parseFloat(preferred.balanceAmount.amount) * 100));
 }
 
 /** Map GoCardless cashAccountType to our AccountType */

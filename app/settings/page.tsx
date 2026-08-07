@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -17,13 +17,12 @@ import { SyncStatus } from "@/components/settings/sync-status";
 import { getSyncStatus } from "@/lib/actions/sync";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
-import { CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
 
 // Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
-const DEDICATED_SYNC_INSTITUTIONS = ["lcl", "trade republic"];
+const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
 
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
@@ -103,19 +102,18 @@ export default async function SettingsPage() {
                   )}
                   {/* Woob sync */}
                   {(() => {
-                    if (DEDICATED_SYNC_INSTITUTIONS.includes(inst.name.toLowerCase())) return null;
+                    if (DEDICATED_SYNC_INSTITUTIONS.has(inst.name.toLowerCase())) return null;
 
                     const woobLog = syncStatus[`woob:${inst.id}`] ?? null;
                     return (
                       <>
                         {inst.woobModule && woobLog && (
-                          <span
+                          <output
                             className={`flex items-center gap-1 text-xs ${
                               woobLog.status === "success" ? "text-[var(--positive)]" :
                               woobLog.status === "auth_required" ? "text-[var(--warning)]" :
                               "text-[var(--negative)]"
                             }`}
-                            role="status"
                             aria-label={
                               woobLog.status === "success"
                                 ? t("syncStatus.success")
@@ -127,7 +125,7 @@ export default async function SettingsPage() {
                             {woobLog.status === "success"
                               ? <CheckCircle size={12} aria-hidden="true" />
                               : <AlertTriangle size={12} aria-hidden="true" />}
-                          </span>
+                          </output>
                         )}
                         {inst.woobModule && !woobLog && (
                           <Clock size={12} className="text-[var(--muted)]" role="status" aria-label={t("syncStatus.neverSynced")} />

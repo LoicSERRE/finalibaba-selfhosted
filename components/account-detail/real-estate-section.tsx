@@ -9,13 +9,13 @@ export function RealEstateSection({
   liability,
   equity,
   ltv,
-}: {
+}: Readonly<{
   t: T;
   value: bigint;
   liability: bigint;
   equity: bigint;
   ltv: number;
-}) {
+}>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-sm">
@@ -44,6 +44,10 @@ export function RealEstateSection({
             <span>LTV</span>
             <span>{ltv}%</span>
           </div>
+          {/* Suppressed via sonar-project.properties (typescript:S6819) - see
+              automobile-section.tsx: native <progress> can't express this
+              threshold-based color-coded fill without vendor-prefixed
+              pseudo-elements; full ARIA is already present below. */}
           <div
             className="h-2 bg-[var(--surface-elevated)] rounded-full overflow-hidden"
             role="progressbar"

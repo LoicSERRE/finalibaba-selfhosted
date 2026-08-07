@@ -6,6 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useTranslations } from "next-intl";
 
+async function waitForRestart() {
+  // The server exits after a successful restore so the container restart
+  // policy hands the process a fresh DB connection pool - poll a cheap
+  // page (never /api/backup - that would trigger another full pg_dump)
+  // until it responds again, instead of reloading straight into a
+  // connection-refused error.
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      await fetch(window.location.pathname, { method: "HEAD", cache: "no-store" });
+      break;
+    } catch {
+      // still restarting
+    }
+  }
+  window.location.reload();
+}
+
 export function BackupRestoreSection() {
   const t = useTranslations("settings.backup");
   const tc = useTranslations("common");
@@ -20,24 +38,6 @@ export function BackupRestoreSection() {
     setFile(null);
     setError(null);
     if (inputRef.current) inputRef.current.value = "";
-  }
-
-  async function waitForRestart() {
-    // The server exits after a successful restore so the container restart
-    // policy hands the process a fresh DB connection pool - poll a cheap
-    // page (never /api/backup - that would trigger another full pg_dump)
-    // until it responds again, instead of reloading straight into a
-    // connection-refused error.
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 1000));
-      try {
-        await fetch(window.location.pathname, { method: "HEAD", cache: "no-store" });
-        break;
-      } catch {
-        // still restarting
-      }
-    }
-    window.location.reload();
   }
 
   async function handleRestore() {

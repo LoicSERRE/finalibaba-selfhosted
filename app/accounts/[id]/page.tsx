@@ -25,9 +25,9 @@ import { hasLoanParams } from "@/lib/domain/loan";
 
 export default async function AccountDetailPage({
   params,
-}: {
+}: Readonly<{
   params: Promise<{ id: string }>;
-}) {
+}>) {
   const { id } = await params;
 
   const [td, ta, t, locale] = await Promise.all([

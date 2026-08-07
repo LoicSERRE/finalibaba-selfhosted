@@ -14,7 +14,7 @@ export function TransactionsTable({
   categories,
   canImportCsv,
   existingFingerprints,
-}: {
+}: Readonly<{
   td: T;
   intlLocale: string;
   accountId: string;
@@ -22,7 +22,7 @@ export function TransactionsTable({
   categories: { id: string; name: string; color: string }[];
   canImportCsv: boolean;
   existingFingerprints: string[];
-}) {
+}>) {
   if (transactions.length === 0) return null;
 
   return (

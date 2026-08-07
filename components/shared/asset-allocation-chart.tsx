@@ -1,6 +1,6 @@
 "use client";
 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Tooltip, ResponsiveContainer } from "recharts";
 import { useTranslations } from "next-intl";
 import { CHART_COLORS } from "@/lib/utils/palette";
 
@@ -19,11 +19,11 @@ function formatCurrency(cents: number) {
   }).format(cents / 100);
 }
 
-export function AssetAllocationChart({ data }: { data: AllocationSlice[] }) {
+export function AssetAllocationChart({ data }: Readonly<{ data: AllocationSlice[] }>) {
   const t = useTranslations("charts");
-  const nonEmpty = data.filter((d) => d.value > 0);
+  const nonEmptyRaw = data.filter((d) => d.value > 0);
 
-  if (!nonEmpty.length) {
+  if (!nonEmptyRaw.length) {
     return (
       <div className="h-48 flex items-center justify-center text-[var(--muted)] text-sm">
         {t("noData")}
@@ -31,7 +31,15 @@ export function AssetAllocationChart({ data }: { data: AllocationSlice[] }) {
     );
   }
 
-  const total = nonEmpty.reduce((s, d) => s + d.value, 0);
+  const total = nonEmptyRaw.reduce((s, d) => s + d.value, 0);
+  // Recharts reads `fill` directly off each data entry (same mechanism the
+  // now-deprecated <Cell> used internally) - putting it on the data itself
+  // is the officially recommended migration, see
+  // https://recharts.github.io/en-US/guide/cell/
+  const nonEmpty = nonEmptyRaw.map((entry, index) => ({
+    ...entry,
+    fill: entry.color ?? CHART_COLORS[index % CHART_COLORS.length],
+  }));
 
   return (
     <div>
@@ -46,14 +54,7 @@ export function AssetAllocationChart({ data }: { data: AllocationSlice[] }) {
             outerRadius={80}
             paddingAngle={2}
             dataKey="value"
-          >
-            {nonEmpty.map((entry, index) => (
-              <Cell
-                key={entry.name}
-                fill={entry.color ?? CHART_COLORS[index % CHART_COLORS.length]}
-              />
-            ))}
-          </Pie>
+          />
           <Tooltip
             contentStyle={{
               background: "var(--surface-elevated)",

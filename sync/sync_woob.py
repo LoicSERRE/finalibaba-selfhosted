@@ -86,6 +86,117 @@ def _configure_woob(backend_name: str, module: str, login: str, password: str):
         log.warning("woob config update failed (non-fatal): %s", result.stderr[:200])
 
 
+def _fail(cur, conn, sync_source: str, status: str, msg: str):
+    """Common cleanup for every early-exit error path below: log the sync
+    attempt, commit that log entry (not the rest of the transaction), and
+    release the connection before the caller raises."""
+    conn.rollback()
+    write_sync_log(cur, sync_source, status, msg)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def _sync_account_transactions(w, backend_name, institution_id, institution_name, account, account_db_id, cur):
+    """Fetch and upsert transaction history for one account. Errors here are
+    non-fatal to the overall sync - the account balance above was already
+    recorded, so a transactions-fetch failure just means that account's
+    history stays stale until the next run, not that the whole sync aborts."""
+    try:
+        from woob.core.bcall import CallErrors
+        tx_count = 0
+        try:
+            for tx in w.do("iter_history", account, backends=backend_name):
+                if tx.amount is None or tx.date is None:
+                    continue
+                amount_cents = int(Decimal(str(tx.amount)) * 100)
+                tx_sync_id = (
+                    f"woob:{institution_id}:{account.id}:{tx.id}"
+                    if tx.id
+                    else f"woob:{institution_id}:{account.id}:{tx.date.isoformat()}:{amount_cents}"
+                )
+                upsert_transaction(
+                    cur,
+                    account_id=account_db_id,
+                    sync_id=tx_sync_id,
+                    date=tx.date,
+                    label=(tx.label or tx.raw or "").strip() or "-",
+                    amount_cents=amount_cents,
+                )
+                tx_count += 1
+        except CallErrors as e:
+            log.warning("%s iter_history errors (ignored): %s", institution_name, str(e)[:120])
+        log.info("%s - %s: %d transaction(s) imported", institution_name, account.label, tx_count)
+    except Exception:
+        log.warning("%s transactions skipped for %s", institution_name, account.label, exc_info=True)
+
+
+def _iter_accounts(w, backend_name, institution_name):
+    from woob.core.bcall import CallErrors
+    accounts = []
+    try:
+        for result in w.do("iter_accounts", backends=backend_name):
+            accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
+    except CallErrors as e:
+        for _backend, exc, tb in e.errors:
+            msg = (str(exc) + tb).lower()
+            # Ignore sub-module errors for stock/bourse accounts (e.g. LCL bourse 410)
+            if any(k in msg for k in ("bourse", "connectionreset", "connection aborted", "410")):
+                log.warning("%s: sub-module error ignored: %s", institution_name, str(exc)[:120])
+            else:
+                raise exc
+    return accounts
+
+
+def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn, sync_source) -> list:
+    """Wraps _iter_accounts with the auth-vs-generic-error split every sync
+    module needs: 2FA/validation errors mean "run interactive setup", any
+    other exception is an unexpected Woob failure - both write a sync log
+    and clean up the connection via _fail before re-raising."""
+    from woob.exceptions import (
+        AppValidation,
+        AppValidationExpired,
+        NeedInteractive,
+        NeedInteractiveFor2FA,
+    )
+    try:
+        return _iter_accounts(w, backend_name, institution_name)
+    except (AppValidation, AppValidationExpired, NeedInteractiveFor2FA, NeedInteractive):
+        msg = f"2FA required - run setup manually in the container: docker exec -it finalibaba-sync-1 python sync_woob.py --setup {institution_id}"
+        _fail(cur, conn, sync_source, "auth_required", msg)
+        raise AuthRequiredError(msg)
+    except Exception as e:
+        msg = str(e)[:300]
+        # log.exception (not log.error(..., e)) so the traceback lands in
+        # docker compose logs - a bare message can't tell "Woob module raised
+        # something new" from "the account this ran against changed shape".
+        log.exception("%s: unexpected error during iter_accounts", institution_name)
+        _fail(cur, conn, sync_source, "error", msg)
+        raise
+
+
+def _sync_account(cur, institution_id, institution_name, account) -> dict | None:
+    """Upsert one account's balance row. Returns the synced summary (with
+    the DB id, needed by the caller to then sync transactions), or None if
+    the account has no balance to record (some Woob sub-accounts surface
+    with balance=None)."""
+    if account.balance is None:
+        return None
+    balance_cents = int(Decimal(str(account.balance)) * 100)
+    sync_id = f"woob:{institution_id}:{account.id}"
+    account_type = _infer_account_type(account.label)
+    account_db_id = upsert_account(
+        cur,
+        sync_id=sync_id,
+        name=account.label,
+        account_type=account_type,
+        institution_id=institution_id,
+    )
+    record_balance(cur, account_db_id, balance_cents)
+    log.info("%s - %s: %d cents", institution_name, account.label, balance_cents)
+    return {"label": account.label, "balance_cents": balance_cents, "account_db_id": account_db_id}
+
+
 def run(institution_id: str, institution_name: str, module: str, login: str, password: str) -> dict:
     # Use a sanitised version of the institution id as the Woob backend name
     backend_name = f"inst_{institution_id.replace('-', '_')[:20]}"
@@ -103,110 +214,21 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    synced = []
-
-    from woob.exceptions import (
-        AppValidation,
-        AppValidationExpired,
-        NeedInteractive,
-        NeedInteractiveFor2FA,
-    )
-
-    def _iter_accounts():
-        from woob.core.bcall import CallErrors
-        accounts = []
-        try:
-            for result in w.do("iter_accounts", backends=backend_name):
-                accounts.append(result)  # noqa: PERF402 - must keep partial results gathered before a mid-iteration CallErrors
-        except CallErrors as e:
-            for _backend, exc, tb in e.errors:
-                msg = (str(exc) + tb).lower()
-                # Ignore sub-module errors for stock/bourse accounts (e.g. LCL bourse 410)
-                if any(k in msg for k in ("bourse", "connectionreset", "connection aborted", "410")):
-                    log.warning("%s: sub-module error ignored: %s", institution_name, str(exc)[:120])
-                else:
-                    raise exc
-        return accounts
-
-    try:
-        accounts = _iter_accounts()
-    except (AppValidation, AppValidationExpired, NeedInteractiveFor2FA, NeedInteractive):
-        conn.rollback()
-        msg = f"2FA required - run setup manually in the container: docker exec -it finalibaba-sync-1 python sync_woob.py --setup {institution_id}"
-        write_sync_log(cur, sync_source, "auth_required", msg)
-        conn.commit()
-        cur.close()
-        conn.close()
-        raise AuthRequiredError(msg)
-    except Exception as e:
-        conn.rollback()
-        msg = str(e)[:300]
-        # log.exception (not log.error(..., e)) so the traceback lands in
-        # docker compose logs - a bare message can't tell "Woob module raised
-        # something new" from "the account this ran against changed shape".
-        log.exception("%s: unexpected error during iter_accounts", institution_name)
-        write_sync_log(cur, sync_source, "error", msg)
-        conn.commit()
-        cur.close()
-        conn.close()
-        raise
+    accounts = _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn, sync_source)
 
     if not accounts:
         msg = "No accounts returned - check credentials or run interactive setup"
         log.warning("%s: %s", institution_name, msg)
-        write_sync_log(cur, sync_source, "auth_required", msg)
-        conn.commit()
-        cur.close()
-        conn.close()
+        _fail(cur, conn, sync_source, "auth_required", msg)
         raise AuthRequiredError(msg)
 
+    synced = []
     for account in accounts:
-        if account.balance is None:
+        summary = _sync_account(cur, institution_id, institution_name, account)
+        if summary is None:
             continue
-
-        balance_cents = int(Decimal(str(account.balance)) * 100)
-        sync_id = f"woob:{institution_id}:{account.id}"
-        account_type = _infer_account_type(account.label)
-
-        account_db_id = upsert_account(
-            cur,
-            sync_id=sync_id,
-            name=account.label,
-            account_type=account_type,
-            institution_id=institution_id,
-        )
-        record_balance(cur, account_db_id, balance_cents)
-        synced.append({"label": account.label, "balance_cents": balance_cents})
-        log.info("%s - %s: %d cents", institution_name, account.label, balance_cents)
-
-        # Fetch transactions
-        try:
-            from woob.core.bcall import CallErrors
-            tx_count = 0
-            try:
-                for tx in w.do("iter_history", account, backends=backend_name):
-                    if tx.amount is None or tx.date is None:
-                        continue
-                    amount_cents = int(Decimal(str(tx.amount)) * 100)
-                    tx_sync_id = (
-                        f"woob:{institution_id}:{account.id}:{tx.id}"
-                        if tx.id
-                        else f"woob:{institution_id}:{account.id}:{tx.date.isoformat()}:{amount_cents}"
-                    )
-                    upsert_transaction(
-                        cur,
-                        account_id=account_db_id,
-                        sync_id=tx_sync_id,
-                        date=tx.date,
-                        label=(tx.label or tx.raw or "").strip() or "-",
-                        amount_cents=amount_cents,
-                    )
-                    tx_count += 1
-            except CallErrors as e:
-                log.warning("%s iter_history errors (ignored): %s", institution_name, str(e)[:120])
-            log.info("%s - %s: %d transaction(s) imported", institution_name, account.label, tx_count)
-        except Exception:
-            log.warning("%s transactions skipped for %s", institution_name, account.label, exc_info=True)
+        synced.append({"label": summary["label"], "balance_cents": summary["balance_cents"]})
+        _sync_account_transactions(w, backend_name, institution_id, institution_name, account, summary["account_db_id"], cur)
 
     write_sync_log(cur, sync_source, "success", f"{len(synced)} account(s) synced")
     conn.commit()

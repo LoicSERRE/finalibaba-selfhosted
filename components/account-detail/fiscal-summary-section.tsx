@@ -13,7 +13,7 @@ export function FiscalSummarySection({
   totalTax,
   netAfterTax,
   holdingsCount,
-}: {
+}: Readonly<{
   td: T;
   hasCostBasis: boolean;
   taxRate: number | null;
@@ -23,7 +23,7 @@ export function FiscalSummarySection({
   totalTax: bigint;
   netAfterTax: bigint;
   holdingsCount: number;
-}) {
+}>) {
   return (
     <>
       {hasCostBasis && taxRate !== null && (

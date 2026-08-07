@@ -9,12 +9,12 @@ export function DetailedAllocationSection({
   tAlloc,
   allocationSlices,
   totalAllocation,
-}: {
+}: Readonly<{
   t: T;
   tAlloc: T;
   allocationSlices: AllocationSliceResult[];
   totalAllocation: number;
-}) {
+}>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
       <div className="px-6 py-4 border-b border-[var(--border)]">

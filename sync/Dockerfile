@@ -1,3 +1,10 @@
+# This container intentionally still runs as root (see docker:S6471
+# exemption in sonar-project.properties for why: the woob/pytr session state
+# persisted below (VOLUME) is a named Docker volume mounted at a root-home
+# path, and every already-deployed self-hosted instance's existing volume
+# data is owned by root at that path already - switching user here needs a
+# one-time ownership migration for already-running deployments, out of scope
+# for a lint-driven cleanup pass).
 FROM python:3.14-slim
 
 # System deps for woob (lxml, etc.)

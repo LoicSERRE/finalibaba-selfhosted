@@ -28,9 +28,9 @@ import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function AccountsPage({
   searchParams,
-}: {
+}: Readonly<{
   searchParams: Promise<{ tab?: string }>;
-}) {
+}>) {
   const [t, ta, td, locale] = await Promise.all([
     getTranslations("accounts"),
     getTranslations("accountTypes"),

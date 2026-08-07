@@ -25,7 +25,7 @@ export type TaxReportExportData = {
   interest: { accountName: string; date: string; grossCents: number; netCents: number }[];
 };
 
-export function ExportTaxReportButton({ data }: { data: TaxReportExportData }) {
+export function ExportTaxReportButton({ data }: Readonly<{ data: TaxReportExportData }>) {
   const t = useTranslations("taxReport");
 
   function handleExport() {
@@ -79,6 +79,7 @@ export function ExportTaxReportButton({ data }: { data: TaxReportExportData }) {
 
   return (
     <button
+      type="button"
       onClick={handleExport}
       className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
     >

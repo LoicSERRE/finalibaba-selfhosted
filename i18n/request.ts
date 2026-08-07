@@ -2,17 +2,17 @@ import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
 
 const DEFAULT_LOCALE = process.env.DEFAULT_LOCALE ?? "fr";
-const SUPPORTED = ["en", "fr"];
+const SUPPORTED = new Set(["en", "fr"]);
 
 export default getRequestConfig(async () => {
   const cookieLocale = (await cookies()).get("NEXT_LOCALE")?.value ?? "";
   let locale: string;
-  if (SUPPORTED.includes(cookieLocale)) {
+  if (SUPPORTED.has(cookieLocale)) {
     locale = cookieLocale;
   } else {
     const acceptLang = (await headers()).get("Accept-Language") ?? "";
     const browserLang = acceptLang.split(",")[0]?.split(";")[0]?.trim().slice(0, 2).toLowerCase() ?? "";
-    locale = SUPPORTED.includes(browserLang) ? browserLang : DEFAULT_LOCALE;
+    locale = SUPPORTED.has(browserLang) ? browserLang : DEFAULT_LOCALE;
   }
 
   let messages;

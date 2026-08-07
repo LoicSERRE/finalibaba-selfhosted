@@ -26,7 +26,7 @@ export function AccountHeader({
   netAfterTax,
   value,
   liability,
-}: {
+}: Readonly<{
   td: T;
   ta: T;
   account: {
@@ -50,7 +50,7 @@ export function AccountHeader({
   netAfterTax: bigint;
   value: bigint;
   liability: bigint;
-}) {
+}>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
       <div className="flex items-start justify-between gap-3">

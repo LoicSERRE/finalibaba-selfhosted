@@ -10,13 +10,13 @@ export function DividendCalendarSection({
   dividendCalendar,
   annualDividendsNetCents,
   annualDividendsCents,
-}: {
+}: Readonly<{
   t: T;
   intlLocale: string;
   dividendCalendar: DividendCalendarRow[];
   annualDividendsNetCents: bigint;
   annualDividendsCents: bigint;
-}) {
+}>) {
   if (dividendCalendar.length === 0) return null;
 
   return (

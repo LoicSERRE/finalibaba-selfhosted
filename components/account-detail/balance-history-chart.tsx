@@ -23,7 +23,7 @@ const fmt = (cents: number) =>
     maximumFractionDigits: 0,
   }).format(cents / 100);
 
-export function BalanceHistoryChart({ data }: { data: BalancePoint[] }) {
+export function BalanceHistoryChart({ data }: Readonly<{ data: BalancePoint[] }>) {
   const t = useTranslations("charts");
 
   if (data.length < 2) {

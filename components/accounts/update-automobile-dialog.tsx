@@ -14,19 +14,19 @@ export function UpdateAutomobileDialog({
   valueCents,
   liabilityCents,
   insuranceMonthlyCents = BigInt(0),
-}: {
+}: Readonly<{
   id: string;
   name: string;
   valueCents: bigint;
   liabilityCents: bigint;
   insuranceMonthlyCents?: bigint;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("updateAutomobile");
   const tc = useTranslations("common");
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {

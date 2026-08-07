@@ -25,7 +25,7 @@ function formatCurrency(cents: number) {
   }).format(cents / 100);
 }
 
-export function CashflowChart({ data }: { data: DataPoint[] }) {
+export function CashflowChart({ data }: Readonly<{ data: DataPoint[] }>) {
   const t = useTranslations("recurring");
 
   if (!data.length) {

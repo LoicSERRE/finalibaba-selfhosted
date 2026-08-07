@@ -13,7 +13,7 @@ export function KpiCards({
   totalLatentTax,
   investedPct,
   momDelta,
-}: {
+}: Readonly<{
   t: T;
   hasTaxData: boolean;
   netWorth: bigint;
@@ -23,7 +23,7 @@ export function KpiCards({
   totalLatentTax: bigint;
   investedPct: number;
   momDelta: number | null;
-}) {
+}>) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">

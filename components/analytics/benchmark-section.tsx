@@ -7,11 +7,11 @@ export function BenchmarkSection({
   t,
   investCAGR,
   benchmarkCAGRs,
-}: {
+}: Readonly<{
   t: T;
   investCAGR: number | null;
   benchmarkCAGRs: BenchmarkCAGRs | null;
-}) {
+}>) {
   if (benchmarkCAGRs === null || investCAGR === null) return null;
 
   const rows = (

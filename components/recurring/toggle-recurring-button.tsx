@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toggleRecurringActive } from "@/lib/actions/recurring";
 import { useTranslations } from "next-intl";
 
-export function ToggleRecurringButton({ id, active }: { id: string; active: boolean }) {
+export function ToggleRecurringButton({ id, active }: Readonly<{ id: string; active: boolean }>) {
   const [pending, startTransition] = useTransition();
   const t = useTranslations("recurring");
 

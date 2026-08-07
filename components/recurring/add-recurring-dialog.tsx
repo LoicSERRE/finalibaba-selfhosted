@@ -31,12 +31,12 @@ export function AddRecurringDialog({
   accounts,
   categories,
   trigger,
-}: {
+}: Readonly<{
   initial?: RecurringInitial;
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string; color: string }[];
   trigger?: React.ReactNode;
-}) {
+}>) {
   const isEdit = !!initial?.id;
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -44,7 +44,7 @@ export function AddRecurringDialog({
   const t = useTranslations("recurring");
   const tc = useTranslations("common");
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);

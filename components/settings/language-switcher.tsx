@@ -25,6 +25,7 @@ export function LanguageSwitcher() {
         {(["fr", "en"] as const).map((l) => (
           <button
             key={l}
+            type="button"
             onClick={() => switchLocale(l)}
             aria-pressed={locale === l}
             className={`text-sm font-medium px-3 py-1.5 rounded-md min-h-[36px] min-w-[44px] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${

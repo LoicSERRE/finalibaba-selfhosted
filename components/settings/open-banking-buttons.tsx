@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { syncGocardlessBalances } from "@/lib/actions/gocardless";
 import { useTranslations } from "next-intl";
 
-export function ConnectOpenBankingButton({ institutionId }: { institutionId: string }) {
+export function ConnectOpenBankingButton({ institutionId }: Readonly<{ institutionId: string }>) {
   const t = useTranslations("openBanking");
   return (
     <a
@@ -19,7 +19,7 @@ export function ConnectOpenBankingButton({ institutionId }: { institutionId: str
   );
 }
 
-export function SyncOpenBankingButton({ institutionId }: { institutionId: string }) {
+export function SyncOpenBankingButton({ institutionId }: Readonly<{ institutionId: string }>) {
   const [pending, startTransition] = useTransition();
   const t = useTranslations("syncStatus");
 

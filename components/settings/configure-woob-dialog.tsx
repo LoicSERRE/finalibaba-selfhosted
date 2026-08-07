@@ -34,7 +34,7 @@ interface Props {
   currentModule?: string | null;
 }
 
-export function ConfigureWoobDialog({ institutionId, institutionName, currentModule }: Props) {
+export function ConfigureWoobDialog({ institutionId, institutionName, currentModule }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [module, setModule] = useState(currentModule ?? "");
@@ -46,7 +46,7 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
 
   const isConfigured = !!currentModule;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SubmitEvent) => {
     e.preventDefault();
     if (!module || !login || !password) return;
     setError(null);
@@ -109,7 +109,12 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
           )}
           <p className="text-xs text-[var(--muted)] opacity-70">
             {t.rich("listHint", {
-              code: (chunks) => <code className="text-[var(--foreground)]">{chunks}</code>,
+              // A next-intl t.rich() renderer callback, not a React
+              // component: it's invoked synchronously by t.rich to produce
+              // inline output, never referenced via JSX tag syntax, so
+              // there's no remount/state-loss risk the rule is meant to
+              // catch.
+              code: (chunks) => <code className="text-[var(--foreground)]">{chunks}</code>, // NOSONAR (typescript:S6478)
             })}
           </p>
         </div>

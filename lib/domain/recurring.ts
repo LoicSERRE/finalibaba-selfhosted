@@ -86,7 +86,7 @@ export function getMostRecentExpectedOccurrence(series: RecurringSeries, asOf: D
   const farPast = new Date(series.anchorDate);
   farPast.setUTCFullYear(farPast.getUTCFullYear() - 10);
   const occurrences = getOccurrencesInRange(series, farPast, asOf);
-  return occurrences.length > 0 ? occurrences[occurrences.length - 1] : null;
+  return occurrences.length > 0 ? occurrences.at(-1)! : null;
 }
 
 type TxLike = { accountId: string; label: string; amountCents: bigint; date: Date; categoryId?: string | null };
@@ -188,7 +188,7 @@ export function detectCandidates(transactions: TxLike[], existingKeys: Set<strin
     const band = GAP_BANDS.find((b) => medianGap >= b.min && medianGap <= b.max);
     if (!band) continue;
 
-    const latest = sorted[sorted.length - 1];
+    const latest = sorted.at(-1)!;
     candidates.push({
       accountId: latest.accountId,
       label: latest.label,

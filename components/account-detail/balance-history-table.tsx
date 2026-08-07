@@ -14,7 +14,7 @@ export function BalanceHistoryTable({
   canImportCsv,
   existingBalanceDates,
   existingFingerprints,
-}: {
+}: Readonly<{
   td: T;
   intlLocale: string;
   accountId: string;
@@ -22,7 +22,7 @@ export function BalanceHistoryTable({
   canImportCsv: boolean;
   existingBalanceDates: string[];
   existingFingerprints: string[];
-}) {
+}>) {
   if (historyRows.length === 0) return null;
 
   return (

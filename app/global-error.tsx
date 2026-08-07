@@ -13,16 +13,16 @@ import "./globals.css";
 
 export default function GlobalError({
   reset,
-}: {
-  error: Error & { digest?: string };
+}: Readonly<{
   reset: () => void;
-}) {
+}>) {
   return (
     <html lang="fr" className="h-full">
       <body className="h-full flex items-center justify-center bg-[var(--background)] text-[var(--foreground)] antialiased">
         <div className="text-center px-6">
           <p className="text-sm text-[var(--muted)] mb-4">Une erreur inattendue s&apos;est produite.</p>
           <button
+            type="button"
             onClick={reset}
             className="inline-flex items-center gap-2 rounded-lg font-medium transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] bg-[var(--accent-strong)] text-white hover:bg-[var(--accent-strong)]/85 active:scale-[0.97] active:opacity-90 px-4 py-2 text-sm min-h-[44px]"
           >

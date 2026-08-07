@@ -8,11 +8,11 @@ export function TopAssetsSection({
   t,
   ta,
   topAssets,
-}: {
+}: Readonly<{
   t: T;
   ta: T;
   topAssets: TopAssetRow[];
-}) {
+}>) {
   if (topAssets.length === 0) return null;
 
   return (

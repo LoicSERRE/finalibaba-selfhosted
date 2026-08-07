@@ -27,18 +27,18 @@ export function AddHoldingDialog({
   accountId,
   accountName,
   existing,
-}: {
+}: Readonly<{
   accountId: string;
   accountName: string;
   existing?: Holding;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("addHolding");
   const tc = useTranslations("common");
   const isEdit = !!existing;
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {

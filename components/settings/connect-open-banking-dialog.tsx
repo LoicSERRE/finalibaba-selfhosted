@@ -20,7 +20,7 @@ interface Props {
 
 const COUNTRY_CODES = ["FR", "DE", "ES", "IT", "BE", "NL", "PT", "AT", "PL", "GB", "IE", "SE", "DK", "FI", "NO"];
 
-export function ConnectOpenBankingDialog({ institutionId, institutionName }: Props) {
+export function ConnectOpenBankingDialog({ institutionId, institutionName }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [country, setCountry] = useState("FR");
   const [search, setSearch] = useState("");
@@ -97,9 +97,9 @@ export function ConnectOpenBankingDialog({ institutionId, institutionName }: Pro
 
         <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--border)] divide-y divide-[var(--border)]">
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-[var(--muted)]" role="status" aria-label={t("loading")}>
+            <output className="flex items-center justify-center py-10 text-[var(--muted)]" aria-label={t("loading")}>
               <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-            </div>
+            </output>
           ) : results.length === 0 ? (
             <p className="py-10 text-center text-sm text-[var(--muted)]">
               {search ? t("noBank") : t("loading")}
@@ -108,6 +108,7 @@ export function ConnectOpenBankingDialog({ institutionId, institutionName }: Pro
             results.map((inst) => (
               <button
                 key={inst.id}
+                type="button"
                 onClick={() => handleSelect(inst.id)}
                 disabled={pending}
                 className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-[var(--surface-elevated)] transition-colors text-left disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"

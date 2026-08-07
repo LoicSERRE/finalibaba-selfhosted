@@ -11,13 +11,13 @@ export function BalanceChartSection({
   chartData,
   canImportCsv,
   existingBalanceDates,
-}: {
+}: Readonly<{
   td: T;
   accountId: string;
   chartData: ChartPoint[];
   canImportCsv: boolean;
   existingBalanceDates: string[];
-}) {
+}>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
       <div className="flex items-center justify-between gap-3 mb-4">

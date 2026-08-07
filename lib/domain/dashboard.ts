@@ -204,7 +204,11 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
     dayMap.get(day)!.set(b.accountId, b.balanceCents);
   }
 
-  const sortedDays = [...dayMap.keys()].sort();
+  // NOSONAR (typescript:S2871) - these keys are ISO 8601 "YYYY-MM-DD"
+  // strings (from toISOString().slice(0,10) above), where lexicographic
+  // order already equals chronological order by design - localeCompare
+  // would add overhead for no behavior change.
+  const sortedDays = [...dayMap.keys()].sort(); // NOSONAR
   const running = new Map<string, bigint>();
   const historyRaw: { day: string; netWorth: number }[] = [];
 
@@ -230,7 +234,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
   // 30-day delta across tracked accounts (fiat + real estate/auto via HistoricalBalance)
   let delta30: DashboardDelta | null = null;
   if (historyRaw.length >= 2) {
-    const last = historyRaw[historyRaw.length - 1].netWorth;
+    const last = historyRaw.at(-1)!.netWorth;
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const refIdx = Math.max(0, sortedDays.findLastIndex((d) => d <= thirtyDaysAgo));
     const ref = historyRaw[refIdx].netWorth;

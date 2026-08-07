@@ -15,8 +15,8 @@ function parseTaxTreatment(formData: FormData): TaxTreatment {
 // Percent input (0-100) -> ratio (0-1), same convention as UserSettings.taxRateX.
 function parseTaxRatePct(val: FormDataEntryValue | null): number | undefined {
   if (!val || (val as string).trim() === "") return undefined;
-  const n = parseFloat(val as string);
-  return isNaN(n) ? undefined : Math.min(1, Math.max(0, n / 100));
+  const n = Number.parseFloat(val as string);
+  return Number.isNaN(n) ? undefined : Math.min(1, Math.max(0, n / 100));
 }
 
 const MANUAL_VALUE_TYPES = ["REAL_ESTATE", "AUTOMOBILE"] as const;
@@ -40,14 +40,14 @@ function parseOptionalCents(val: FormDataEntryValue | null): bigint | undefined 
 
 function parseOptionalFloat(val: FormDataEntryValue | null): number | undefined {
   if (!val || (val as string).trim() === "") return undefined;
-  const n = parseFloat(val as string);
-  return isNaN(n) ? undefined : n;
+  const n = Number.parseFloat(val as string);
+  return Number.isNaN(n) ? undefined : n;
 }
 
 function parseOptionalInt(val: FormDataEntryValue | null): number | undefined {
   if (!val || (val as string).trim() === "") return undefined;
-  const n = parseInt(val as string, 10);
-  return isNaN(n) ? undefined : n;
+  const n = Number.parseInt(val as string, 10);
+  return Number.isNaN(n) ? undefined : n;
 }
 
 // One Server Action handling every account type's own required/optional
@@ -83,17 +83,20 @@ export async function createAccount(formData: FormData) {
   const isLoan = type === "LOAN";
   const isInvestment = type === "INVESTMENT" || type === "CRYPTO";
 
+  let initialLiabilityCents: bigint | undefined;
+  if (isManualType(type)) {
+    initialLiabilityCents = liabilityCents ?? undefined;
+  } else if (isLoan) {
+    initialLiabilityCents = loanAmountCents; // initial capital = liability for loan accounts
+  }
+
   const account = await prisma.account.create({
     data: {
       name,
       type,
       institutionId,
       manualValueCents: isManualType(type) ? (balanceCents ?? undefined) : undefined,
-      liabilityCents: isManualType(type)
-        ? (liabilityCents ?? undefined)
-        : isLoan
-        ? loanAmountCents  // initial capital = liability for loan accounts
-        : undefined,
+      liabilityCents: initialLiabilityCents,
       purchasePriceCents: type === "AUTOMOBILE" ? (purchasePriceCents ?? undefined) : undefined,
       insuranceMonthlyCents: (type === "AUTOMOBILE" || isLoan) ? insuranceMonthlyCents : undefined,
       investmentSubtype: type === "INVESTMENT" ? investmentSubtype : undefined,

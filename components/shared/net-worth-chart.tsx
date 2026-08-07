@@ -24,7 +24,7 @@ function formatCurrency(cents: number) {
   }).format(cents / 100);
 }
 
-export function NetWorthChart({ data }: { data: DataPoint[] }) {
+export function NetWorthChart({ data }: Readonly<{ data: DataPoint[] }>) {
   const t = useTranslations("netWorthChart");
 
   if (!data.length) {

@@ -12,11 +12,11 @@ export function DeleteAccountButton({
   id,
   name,
   backHref,
-}: {
+}: Readonly<{
   id: string;
   name: string;
   backHref: string;
-}) {
+}>) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();

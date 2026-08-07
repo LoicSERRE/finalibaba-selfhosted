@@ -13,7 +13,7 @@ export function LoginForm() {
   const router = useRouter();
   const t = useTranslations("auth");
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);

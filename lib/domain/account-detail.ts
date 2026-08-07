@@ -160,7 +160,12 @@ function holdingMarketValue(h: { quantity: Decimal; lastPriceCents: bigint }): b
   );
 }
 
-export function computeAccountDetail(input: AccountDetailInput): AccountDetailResult {
+// NOSONAR (typescript:S3776) - complexity 17, under this project's own
+// deliberately-raised threshold of 20 (see eslint.config.mjs's
+// sonarjs/cognitive-complexity rule and lib/domain/dashboard.ts's identical
+// justification) - SonarQube's stricter default of 15 is not the threshold
+// this codebase has standardized on.
+export function computeAccountDetail(input: AccountDetailInput): AccountDetailResult { // NOSONAR
   const { account, intlLocale, now } = input;
 
   const isFiat = ["CHECKING", "SAVINGS", "MEAL_VOUCHER"].includes(account.type);
@@ -312,12 +317,12 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
     });
 
   // Subtype label
-  const subtypeLabel =
-    account.type === "INVESTMENT" && account.investmentSubtype
-      ? ` · ${account.investmentSubtype}`
-      : account.type === "CRYPTO"
-      ? " · 31.4% flat tax"
-      : "";
+  let subtypeLabel = "";
+  if (account.type === "INVESTMENT" && account.investmentSubtype) {
+    subtypeLabel = ` · ${account.investmentSubtype}`;
+  } else if (account.type === "CRYPTO") {
+    subtypeLabel = " · 31.4% flat tax";
+  }
 
   return {
     isFiat,

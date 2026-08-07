@@ -23,6 +23,6 @@ export function downloadFile(content: string, suffix: string) {
   a.download = `finalibaba-${suffix}-${new Date().toISOString().slice(0, 10)}.md`;
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
   URL.revokeObjectURL(url);
 }

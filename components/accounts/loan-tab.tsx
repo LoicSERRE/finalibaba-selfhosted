@@ -14,13 +14,13 @@ export function LoanTab({
   intlLocale,
   institutions,
   rows,
-}: {
+}: Readonly<{
   t: T;
   td: T;
   intlLocale: string;
   institutions: { id: string; name: string }[];
   rows: LoanRow[];
-}) {
+}>) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">

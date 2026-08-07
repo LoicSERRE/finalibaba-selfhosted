@@ -272,7 +272,7 @@ export function ExportAccountsButton({
   realEstateAccounts,
   automobileAccounts,
   loanAccounts,
-}: Props) {
+}: Readonly<Props>) {
   const t = useTranslations("exportAccounts");
   const ta = useTranslations("accountTypes");
 
@@ -409,7 +409,7 @@ export function ExportAccountsButton({
         onOpenChange={setOpen}
         title={t("title")}
         trigger={
-          <button className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+          <button type="button" className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
             <Download size={14} aria-hidden="true" />
             <span className="sr-only sm:not-sr-only">{t("button")}</span>
           </button>

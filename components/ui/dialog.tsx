@@ -11,7 +11,7 @@ export function Dialog({
   title,
   description,
   children,
-}: {
+}: Readonly<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: React.ReactNode;
@@ -21,7 +21,7 @@ export function Dialog({
   // without every call site needing to pass one.
   description?: string;
   children: React.ReactNode;
-}) {
+}>) {
   const t = useTranslations("common");
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>

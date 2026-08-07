@@ -50,7 +50,7 @@ export function AddInstitutionDialog() {
     setCustomName("");
   };
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     // Ensure name is set (auto from known bank or custom input)

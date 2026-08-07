@@ -11,15 +11,15 @@ import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function TaxReportPage({
   searchParams,
-}: {
+}: Readonly<{
   searchParams: Promise<{ year?: string }>;
-}) {
+}>) {
   const { year: yearParam } = await searchParams;
   const [t, tc, locale] = await Promise.all([getTranslations("taxReport"), getTranslations("common"), getLocale()]);
   const intlLocale = localeToIntl(locale);
 
   const now = new Date();
-  const year = yearParam ? parseInt(yearParam, 10) : now.getUTCFullYear();
+  const year = yearParam ? Number.parseInt(yearParam, 10) : now.getUTCFullYear();
   const startOfYear = new Date(Date.UTC(year, 0, 1));
   const startOfNextYear = new Date(Date.UTC(year + 1, 0, 1));
 

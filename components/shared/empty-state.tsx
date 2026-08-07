@@ -5,12 +5,12 @@ export function EmptyState({
   title,
   description,
   action,
-}: {
+}: Readonly<{
   icon: LucideIcon;
   title: string;
   description: string;
   action?: React.ReactNode;
-}) {
+}>) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="w-12 h-12 rounded-xl bg-[var(--surface-elevated)] flex items-center justify-center mb-4">

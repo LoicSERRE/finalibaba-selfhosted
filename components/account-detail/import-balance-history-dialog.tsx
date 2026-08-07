@@ -29,10 +29,10 @@ const normalizeHeader = makeHeaderNormalizer({
 export function ImportBalanceHistoryDialog({
   accountId,
   existingDates,
-}: {
+}: Readonly<{
   accountId: string;
   existingDates: string[];
-}) {
+}>) {
   const t = useTranslations("importBalanceHistory");
   const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
@@ -148,8 +148,13 @@ export function ImportBalanceHistoryDialog({
               <table className="w-full text-xs">
                 <tbody>
                   {rows.map((r, i) => (
+                    // `i` IS the row's identity here, not a stand-in for a
+                    // missing id: `selected` below is a Set<number> of row
+                    // indices (selected.has(i)/toggle(i)), and `rows` is
+                    // parsed once and never reordered/filtered after that,
+                    // so index-as-key matches the actual state model.
                     <tr
-                      key={i}
+                      key={i} // NOSONAR (typescript:S6479)
                       className={`border-b border-[var(--border)] last:border-0 ${r.error ? "opacity-50" : ""}`}
                     >
                       <td className="px-2 py-1.5">

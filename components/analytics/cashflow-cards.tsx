@@ -21,7 +21,7 @@ export function CashflowCards({
   runwayMonths,
   savingsCents,
   monthlyExpensesCents,
-}: {
+}: Readonly<{
   t: T;
   hasSalary: boolean;
   savingsRate: number | null;
@@ -33,7 +33,7 @@ export function CashflowCards({
   runwayMonths: number | null;
   savingsCents: bigint;
   monthlyExpensesCents: bigint;
-}) {
+}>) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* Taux d'épargne */}

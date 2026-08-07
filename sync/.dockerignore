@@ -3,3 +3,15 @@ requirements-dev.txt
 pytest.ini
 __pycache__/
 .pytest_cache/
+.ruff_cache/
+
+# Mirrors the root .dockerignore's safety bar - `COPY . .` below is
+# recursive (sync/Dockerfile), so anything not excluded here silently ends
+# up in the published image. None of these should ever exist in this
+# directory in normal use (credentials live in docker-compose env vars, not
+# files), but a stray local .env/.git from a misconfigured checkout
+# shouldn't get baked into a public image if one ever does.
+.git
+.env
+.env.local
+.env*.local

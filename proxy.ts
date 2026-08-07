@@ -44,6 +44,11 @@ export const config = {
     // api/health is excluded alongside api/auth - docker-compose's healthcheck
     // hits this from inside the container and must never be blocked by
     // AUTH_ENABLED or redirected through /login.
-    "/((?!api/auth|api/health|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)",
+    // NOSONAR (typescript:S7780) - this `config` export is statically parsed
+    // by Next.js's middleware build step (extractExportedConstValue), which
+    // requires a plain literal - a String.raw tagged-template expression here
+    // isn't statically evaluable and makes the build fail with "Invalid
+    // segment configuration export detected" (confirmed by testing it).
+    "/((?!api/auth|api/health|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };

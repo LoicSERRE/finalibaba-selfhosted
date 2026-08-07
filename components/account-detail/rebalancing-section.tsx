@@ -7,10 +7,10 @@ type T = Awaited<ReturnType<typeof getTranslations>>;
 export function RebalancingSection({
   td,
   rebalancingRows,
-}: {
+}: Readonly<{
   td: T;
   rebalancingRows: RebalancingRow[];
-}) {
+}>) {
   if (rebalancingRows.length === 0) return null;
 
   return (

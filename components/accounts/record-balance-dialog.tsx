@@ -12,17 +12,17 @@ export function RecordBalanceDialog({
   accountId,
   accountName,
   currentCents,
-}: {
+}: Readonly<{
   accountId: string;
   accountName: string;
   currentCents: bigint;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("recordBalance");
   const tc = useTranslations("common");
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {

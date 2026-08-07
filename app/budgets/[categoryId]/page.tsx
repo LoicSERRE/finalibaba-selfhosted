@@ -10,9 +10,9 @@ import { getTranslations, getLocale } from "next-intl/server";
 
 export default async function CategoryDetailPage({
   params,
-}: {
+}: Readonly<{
   params: Promise<{ categoryId: string }>;
-}) {
+}>) {
   const { categoryId } = await params;
   const [t, td, locale] = await Promise.all([getTranslations("budgets"), getTranslations("accountDetail"), getLocale()]);
   const intlLocale = localeToIntl(locale);

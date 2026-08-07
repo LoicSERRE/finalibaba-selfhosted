@@ -10,14 +10,14 @@ export function AutomobileSection({
   equity,
   ltv,
   purchasePrice,
-}: {
+}: Readonly<{
   t: T;
   value: bigint;
   liability: bigint;
   equity: bigint;
   ltv: number;
   purchasePrice: bigint;
-}) {
+}>) {
   const hasPurchasePrice = purchasePrice > BigInt(0);
   const depr = value - purchasePrice;
   const deprPct = hasPurchasePrice ? (Number(depr) / Number(purchasePrice)) * 100 : 0;
@@ -69,6 +69,13 @@ export function AutomobileSection({
             <span>{t("auto.financing")}</span>
             <span>{ltv}%</span>
           </div>
+          {/* Suppressed via sonar-project.properties (typescript:S6819) -
+              native <progress> can't express the threshold-based
+              color-coded fill or the rounded-full track without
+              vendor-prefixed ::-webkit-progress-value/::-moz-progress-bar
+              pseudo-elements (inconsistent cross-browser). Full ARIA
+              (aria-valuenow/min/max/label below) is already present, so
+              this is a style preference, not an accessibility gap. */}
           <div
             className="h-2 bg-[var(--surface-elevated)] rounded-full overflow-hidden"
             role="progressbar"

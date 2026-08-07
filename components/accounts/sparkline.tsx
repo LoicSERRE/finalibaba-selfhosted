@@ -4,7 +4,7 @@ interface SparklineProps {
   values: number[]; // balance values in cents, chronological order
 }
 
-export function Sparkline({ values }: SparklineProps) {
+export function Sparkline({ values }: Readonly<SparklineProps>) {
   if (values.length < 2) return <div className="w-20 h-7" />;
 
   const min = Math.min(...values);
@@ -21,7 +21,7 @@ export function Sparkline({ values }: SparklineProps) {
     })
     .join(" ");
 
-  const trend = values[values.length - 1] - values[0];
+  const trend = values.at(-1)! - values[0];
   const stroke =
     trend > 0
       ? "var(--positive)"

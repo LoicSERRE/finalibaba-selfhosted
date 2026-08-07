@@ -10,11 +10,11 @@ export function TransactionCategorySelect({
   transactionId,
   categoryId,
   categories,
-}: {
+}: Readonly<{
   transactionId: string;
   categoryId: string | null;
   categories: Category[];
-}) {
+}>) {
   const [pending, startTransition] = useTransition();
   const t = useTranslations("categories");
 

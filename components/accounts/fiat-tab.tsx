@@ -7,7 +7,7 @@ import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
-export function FiatTab({ t, ta, rows }: { t: T; ta: T; rows: FiatAccountRow[] }) {
+export function FiatTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: FiatAccountRow[] }>) {
   if (rows.length === 0) {
     return (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-10 text-center text-sm text-[var(--muted)]">

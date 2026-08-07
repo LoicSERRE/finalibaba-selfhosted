@@ -14,7 +14,7 @@ export function LoanSection({
   loanDeferralMonths,
   loanStartDate,
   insuranceMonthlyCents,
-}: {
+}: Readonly<{
   td: T;
   intlLocale: string;
   loanStats: LoanStats;
@@ -24,7 +24,7 @@ export function LoanSection({
   loanDeferralMonths: number | null;
   loanStartDate: Date;
   insuranceMonthlyCents: bigint | null;
-}) {
+}>) {
   const insurance = insuranceMonthlyCents ?? BigInt(0);
   const deferralMonths = loanDeferralMonths ?? 0;
 
@@ -127,6 +127,10 @@ export function LoanSection({
           </span>
           <span>{loanStats.progressPct}%</span>
         </div>
+        {/* Suppressed via sonar-project.properties (typescript:S6819) - see
+            automobile-section.tsx: native <progress> can't express this
+            threshold-based color-coded fill without vendor-prefixed
+            pseudo-elements; full ARIA is already present below. */}
         <div
           className="h-2 bg-[var(--surface-elevated)] rounded-full overflow-hidden"
           role="progressbar"
