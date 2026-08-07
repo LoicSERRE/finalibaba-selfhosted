@@ -3,15 +3,35 @@ woob[lcl,swile]==3.7.*
 # (pip-audit can't check it either, see ci.yml), and an unpinned git
 # dependency means every fresh install silently resolves to whatever's on
 # master at that moment - not reproducible, and risky for a dependency that
-# handles real bank credentials. Pinned past the latest tag (v0.4.9, April
-# 2026) deliberately: sync_tr.py's own comments reference a June 2026 TR
-# API migration (compactPortfolio -> compactPortfolioByType) that landed in
-# a post-v0.4.9 commit, so the tag itself is stale for what this project
-# actually needs. Bump deliberately, not via automatic tooling - review
-# pytr's own changelog first, since a broken bump here fails silently
-# (sync_tr.py only surfaces get_conn/write_sync_log errors, not "the
-# upstream library's response shape changed").
-pytr @ git+https://github.com/pytr-org/pytr.git@d0b25c3bba10
+# handles real bank credentials. Bump deliberately, not via automatic
+# tooling - review pytr's own changelog first, since a broken bump here
+# fails silently (sync_tr.py only surfaces get_conn/write_sync_log errors,
+# not "the upstream library's response shape changed").
+#
+# Bumped 2026-08-08 to master's tip (still no tag past v0.4.10 at this
+# date). Reviewed every commit in the range against what this project
+# actually calls (TradeRepublicApi.initiate_weblogin/complete_weblogin +
+# the low-level subscribe()/_recv_subscription() WebSocket API in
+# sync_tr.py) - most of the range (event/timeline/dl_docs parsing fixes)
+# touches code this project never calls, a no-op for us either way. Two
+# real changes in pytr/api.py, both opt-in and not adopted here (yet):
+#   - waf_token="awswaf": a pure-Python alternative to the Playwright-based
+#     WAF token fetch (would let sync/Dockerfile drop Playwright/Chromium
+#     entirely if it holds up) - pytr's own README still calls it
+#     "reported to no longer work reliably", so not worth risking against
+#     a real TR account without dedicated testing first.
+#   - use_v2_login=True: a newer login flow (push-notification confirm in
+#     the TR app instead of typing a 4-digit code) that also sidesteps the
+#     WAF token, but replaces setup_tr.py's synchronous start/complete
+#     pattern with an internal poll-until-confirmed wait (up to ~2min) -
+#     needs a different setup UI (a wait screen, not a code field), and
+#     the feature is one day old upstream. A real follow-up, not a
+#     drive-by pin bump.
+# Neither is used here - this bump only tracks master for currency and the
+# unrelated bugfixes; both stay on today's default behavior (v1 login,
+# waf_token="playwright", i.e. byte-for-byte how setup_tr.py already calls
+# TradeRepublicApi(...) with no extra kwargs).
+pytr @ git+https://github.com/pytr-org/pytr.git@1cff3d701e0db82e3425dae2194f2eb702914484
 psycopg2-binary>=2.9.12
 fastapi>=0.141.1
 uvicorn>=0.52.0
