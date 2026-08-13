@@ -63,6 +63,9 @@ model Account {
   loanDurationMonths  Int?                // LOAN: total duration in months
   loanDeferralMonths  Int?                // LOAN: deferral period in months (0 = none)
   loanStartDate       DateTime?           // LOAN: repayment start date
+  // LOAN: dedup flag for the "nearly paid off" alert - one-way, a loan only
+  // crosses the threshold once. See lib/domain/alerts.ts.
+  loanPaidOffAlertSent Boolean            @default(false)
   holdings            Holding[]
   history             HistoricalBalance[]
   transactions        Transaction[]
@@ -217,6 +220,32 @@ model UserSettings {
   // bcrypt hashes, one per unused backup code - a consumed code is removed
   // from the array (not just flagged), so its length is also "codes remaining".
   totpBackupCodes      String[] @default([])
+  // Alert channels - blank/null = that channel is disabled, same "leave
+  // blank to disable" convention as every optional integration in
+  // .env.example. smtpPassword is plaintext, same trust model as
+  // totpSecret above.
+  ntfyTopicUrl         String?
+  alertEmailTo         String?
+  smtpHost             String?
+  smtpPort             Int?
+  smtpUser             String?
+  smtpPassword         String?
+  smtpFrom             String?
+  // Net worth alert - blank threshold = disabled. netWorthAlertLastAbove is
+  // dedup state (null = never evaluated yet): the alert only fires when the
+  // crossing direction actually flips, not on every check while it stays
+  // above/below.
+  netWorthAlertThresholdCents BigInt?
+  netWorthAlertLastAbove      Boolean?
+  // Dedup marker for sync-failure alerts - only SyncLog error rows newer
+  // than this get alerted on the next check.
+  lastSyncFailureAlertCheckedAt DateTime?
+  // Per-trigger opt-out for the two triggers that don't already have one -
+  // net worth's off-switch is its blank threshold above. Default true so
+  // existing installs keep today's behavior (both were always-on before
+  // these fields existed).
+  loanAlertsEnabled        Boolean  @default(true)
+  syncFailureAlertsEnabled Boolean  @default(true)
   updatedAt            DateTime @updatedAt
 }
 

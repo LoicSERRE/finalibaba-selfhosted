@@ -566,6 +566,33 @@
       "copied": "Copié !",
       "revoke": "Révoquer",
       "revokeDescription": "Ce lien cessera immédiatement de fonctionner. Cette action est irréversible."
+    },
+    "alerts": {
+      "title": "Alertes",
+      "subtitle": "Reçois une notification quand ton patrimoine net franchit un seuil, qu'un prêt est presque remboursé, ou qu'une synchronisation échoue",
+      "netWorthThreshold": "Seuil de patrimoine net",
+      "netWorthThresholdPlaceholder": "Ex. 100000",
+      "netWorthThresholdHint": "Laisse vide pour désactiver. Alerte envoyée quand ton patrimoine net franchit ce seuil, dans un sens ou dans l'autre.",
+      "ntfy": "URL du sujet ntfy",
+      "ntfyGenerate": "Générer",
+      "ntfyCopy": "Copier",
+      "ntfyCopied": "Copié !",
+      "ntfyHint": "Laisse vide pour désactiver. Clique sur « Générer » pour créer une URL avec un identifiant aléatoire impossible à deviner — sur le serveur public ntfy.sh, c'est ce qui empêche quelqu'un d'autre de lire tes notifications. N'invente jamais un nom de sujet toi-même (« finalibaba-quelquechose ») : n'importe qui peut le deviner ou tomber dessus. Pour une confidentialité totale indépendante de ntfy.sh, héberge ton propre serveur ntfy.",
+      "emailTo": "Adresse email de notification",
+      "emailPreset": "Fournisseur",
+      "emailPresetCustom": "Personnalisé",
+      "smtpHost": "Serveur SMTP",
+      "smtpPort": "Port SMTP",
+      "smtpUser": "Utilisateur SMTP",
+      "smtpPassword": "Mot de passe SMTP",
+      "smtpPasswordPlaceholder": "Laisser vide pour ne pas changer",
+      "smtpPasswordHint": "Pour Gmail ou Outlook, utilise un mot de passe d'application (pas ton mot de passe principal) — ils l'exigent pour l'accès SMTP tiers.",
+      "smtpFrom": "Adresse d'expédition",
+      "smtpFromHint": "Pour Gmail ou Outlook, doit être la même adresse que l'utilisateur SMTP, sinon le message est rejeté ou modifié.",
+      "emailHint": "Laisse l'adresse ou le serveur SMTP vide pour désactiver les alertes par email.",
+      "triggersTitle": "Notifications à recevoir",
+      "triggerLoan": "Prêt bientôt remboursé",
+      "triggerSyncFailure": "Échec de synchronisation"
     }
   },
   "shared": {

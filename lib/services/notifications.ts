@@ -1,0 +1,85 @@
+import nodemailer from "nodemailer";
+
+type AlertChannelSettings = {
+  ntfyTopicUrl: string | null;
+  alertEmailTo: string | null;
+  smtpHost: string | null;
+  smtpPort: number | null;
+  smtpUser: string | null;
+  smtpPassword: string | null;
+  smtpFrom: string | null;
+};
+
+/**
+ * No Title header: HTTP header values must be Latin-1 (fetch/undici throws
+ * a ByteString conversion error otherwise), and alert text here is
+ * French/user-entered, so it can contain non-Latin-1 characters (accents).
+ * ntfy falls back to a generic title when none is set - the body carries
+ * the real message either way.
+ */
+export async function sendNtfyMessage(topicUrl: string, body: string): Promise<boolean> {
+  try {
+    const res = await fetch(topicUrl, { method: "POST", body });
+    return res.ok;
+  } catch (e) {
+    console.error("Failed to send ntfy alert", e);
+    return false;
+  }
+}
+
+export async function sendEmail(
+  config: { host: string; port: number; user: string | null; password: string | null; from: string; to: string },
+  subject: string,
+  text: string
+): Promise<boolean> {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      // 465 is the conventional implicit-TLS port; every other port (587,
+      // 25, custom relays) uses STARTTLS instead - nodemailer's own
+      // `secure` flag only controls the former.
+      secure: config.port === 465,
+      auth: config.user ? { user: config.user, pass: config.password ?? "" } : undefined,
+    });
+    await transporter.sendMail({ from: config.from, to: config.to, subject, text });
+    return true;
+  } catch (e) {
+    console.error("Failed to send alert email", e);
+    return false;
+  }
+}
+
+/**
+ * Fans out to every channel with non-blank config - "leave blank to
+ * disable", same convention as every other optional integration in this
+ * app. Each channel already catches its own errors (see above), so one
+ * failing never blocks the other; Promise.allSettled is extra insurance
+ * against an unexpected throw slipping through.
+ */
+export async function dispatchAlert(settings: AlertChannelSettings, title: string, body: string): Promise<void> {
+  const jobs: Promise<boolean>[] = [];
+
+  if (settings.ntfyTopicUrl) {
+    jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, `${title}\n\n${body}`));
+  }
+
+  if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom) {
+    jobs.push(
+      sendEmail(
+        {
+          host: settings.smtpHost,
+          port: settings.smtpPort,
+          user: settings.smtpUser,
+          password: settings.smtpPassword,
+          from: settings.smtpFrom,
+          to: settings.alertEmailTo,
+        },
+        title,
+        body
+      )
+    );
+  }
+
+  await Promise.allSettled(jobs);
+}

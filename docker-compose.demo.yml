@@ -65,6 +65,8 @@ services:
     environment:
       DATABASE_URL: postgresql://demo:${DEMO_POSTGRES_PASSWORD}@db-demo:5432/finalibaba_demo
       # No sync credentials - demo data is seeded only, no live sync
+      NEXTAUTH_SECRET: ${DEMO_NEXTAUTH_SECRET:?DEMO_NEXTAUTH_SECRET is required}
+      APP_SERVICE_URL: http://app-demo:3000
     volumes:
       - demo_woob:/root/.config/woob
       - demo_pytr:/root/.pytr

@@ -134,11 +134,41 @@ def _run_all_woob():
         _run_woob_institution(inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
 
 
+def _check_alerts():
+    # Scoped to this automatic 4h job only, not on-demand "Sync now" clicks -
+    # a manual sync's failure is already visible right there in the UI to
+    # whoever just clicked it; a push notification adds value for the
+    # unattended background job specifically. See CLAUDE.md's "Alerts &
+    # webhooks" for the full design (net worth threshold / loan nearly paid
+    # off / sync failures, all evaluated app-side to reuse its net-worth and
+    # loan math instead of re-implementing it here).
+    app_url = os.environ.get("APP_SERVICE_URL")
+    secret = os.environ.get("NEXTAUTH_SECRET")
+    if not app_url or not secret:
+        log.info("APP_SERVICE_URL or NEXTAUTH_SECRET not set - alert check skipped")
+        return
+    try:
+        import requests
+        resp = requests.post(
+            f"{app_url}/api/alerts/check",
+            headers={"Authorization": f"Bearer {secret}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        log.info("Alert check done: %s", resp.json())
+    except Exception:
+        # Broad on purpose, same reasoning as every other scheduled-job
+        # catch-all in this file - and never let this look like the sync
+        # itself failed, it runs after that work is already done and logged.
+        log.exception("Alert check failed")
+
+
 def _run_all():
     log.info("=== Daily sync started ===")
     _run_lcl()
     _run_tr()
     _run_all_woob()
+    _check_alerts()
     log.info("=== Daily sync done ===")
 
 

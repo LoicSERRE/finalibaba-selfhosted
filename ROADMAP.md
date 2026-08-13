@@ -53,7 +53,7 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 - [X] **2FA (TOTP)** - two-factor authentication for the built-in credentials provider (`AUTH_ENABLED=true`)
 - [X] **Read-only share link** - generate a token-protected view-only URL to share the dashboard with an advisor or spouse without giving write access
-- [ ] **Alerts & webhooks** - notify via Telegram, ntfy, or email when net worth crosses a threshold, a loan is nearly paid off, or a sync fails
+- [X] **Alerts & webhooks** - notify via ntfy or email when net worth crosses a threshold, a loan is nearly paid off, or a sync fails
 
 ---
 

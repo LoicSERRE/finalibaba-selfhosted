@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import { evaluateNetWorthAlert, isLoanNearlyPaidOff } from "@/lib/domain/alerts";
+
+describe("evaluateNetWorthAlert", () => {
+  it("never fires on the first evaluation (wasAbove=null), just records the baseline", () => {
+    expect(evaluateNetWorthAlert(BigInt(120_000_00), BigInt(100_000_00), null)).toEqual({
+      shouldFire: false,
+      isAbove: true,
+    });
+    expect(evaluateNetWorthAlert(BigInt(80_000_00), BigInt(100_000_00), null)).toEqual({
+      shouldFire: false,
+      isAbove: false,
+    });
+  });
+
+  it("fires when crossing from below to above", () => {
+    expect(evaluateNetWorthAlert(BigInt(110_000_00), BigInt(100_000_00), false)).toEqual({
+      shouldFire: true,
+      isAbove: true,
+    });
+  });
+
+  it("fires when crossing from above to below", () => {
+    expect(evaluateNetWorthAlert(BigInt(90_000_00), BigInt(100_000_00), true)).toEqual({
+      shouldFire: true,
+      isAbove: false,
+    });
+  });
+
+  it("does not fire when staying on the same side", () => {
+    expect(evaluateNetWorthAlert(BigInt(150_000_00), BigInt(100_000_00), true)).toEqual({
+      shouldFire: false,
+      isAbove: true,
+    });
+    expect(evaluateNetWorthAlert(BigInt(50_000_00), BigInt(100_000_00), false)).toEqual({
+      shouldFire: false,
+      isAbove: false,
+    });
+  });
+
+  it("treats exactly-at-threshold as above", () => {
+    expect(evaluateNetWorthAlert(BigInt(100_000_00), BigInt(100_000_00), false)).toEqual({
+      shouldFire: true,
+      isAbove: true,
+    });
+  });
+});
+
+describe("isLoanNearlyPaidOff", () => {
+  it("is true at exactly 5% remaining", () => {
+    expect(isLoanNearlyPaidOff(BigInt(5_000_00), BigInt(100_000_00))).toBe(true);
+  });
+
+  it("is true below 5% remaining", () => {
+    expect(isLoanNearlyPaidOff(BigInt(1_000_00), BigInt(100_000_00))).toBe(true);
+  });
+
+  it("is false above 5% remaining", () => {
+    expect(isLoanNearlyPaidOff(BigInt(10_000_00), BigInt(100_000_00))).toBe(false);
+  });
+
+  it("is false for a zero or negative original amount (guards a div-by-zero-shaped input)", () => {
+    expect(isLoanNearlyPaidOff(BigInt(0), BigInt(0))).toBe(false);
+    expect(isLoanNearlyPaidOff(BigInt(-100), BigInt(-1000))).toBe(false);
+  });
+
+  it("is true for a fully paid off loan (remaining 0)", () => {
+    expect(isLoanNearlyPaidOff(BigInt(0), BigInt(100_000_00))).toBe(true);
+  });
+});

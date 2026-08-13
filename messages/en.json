@@ -566,6 +566,33 @@
       "copied": "Copied!",
       "revoke": "Revoke",
       "revokeDescription": "This link will stop working immediately. This action is irreversible."
+    },
+    "alerts": {
+      "title": "Alerts",
+      "subtitle": "Get notified when your net worth crosses a threshold, a loan is nearly paid off, or a sync fails",
+      "netWorthThreshold": "Net worth threshold",
+      "netWorthThresholdPlaceholder": "e.g. 100000",
+      "netWorthThresholdHint": "Leave blank to disable. Alert sent when your net worth crosses this threshold, in either direction.",
+      "ntfy": "ntfy topic URL",
+      "ntfyGenerate": "Generate",
+      "ntfyCopy": "Copy",
+      "ntfyCopied": "Copied!",
+      "ntfyHint": "Leave blank to disable. Click \"Generate\" to create a URL with a random, unguessable identifier - on the public ntfy.sh server, that's what keeps anyone else from reading your notifications. Never invent a topic name yourself (\"finalibaba-something\") - anyone can guess it or stumble onto it. For privacy that doesn't depend on trusting ntfy.sh at all, self-host your own ntfy server.",
+      "emailTo": "Notification email address",
+      "emailPreset": "Provider",
+      "emailPresetCustom": "Custom",
+      "smtpHost": "SMTP host",
+      "smtpPort": "SMTP port",
+      "smtpUser": "SMTP user",
+      "smtpPassword": "SMTP password",
+      "smtpPasswordPlaceholder": "Leave blank to keep unchanged",
+      "smtpPasswordHint": "For Gmail or Outlook, use an app password (not your main account password) - they require one for third-party SMTP access.",
+      "smtpFrom": "From address",
+      "smtpFromHint": "For Gmail or Outlook, must match the SMTP user address, or the message gets rejected or rewritten.",
+      "emailHint": "Leave the address or SMTP host blank to disable email alerts.",
+      "triggersTitle": "Notifications to receive",
+      "triggerLoan": "Loan nearly paid off",
+      "triggerSyncFailure": "Sync failure"
     }
   },
   "shared": {

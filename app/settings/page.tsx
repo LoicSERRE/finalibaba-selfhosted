@@ -23,6 +23,7 @@ import { BackupRestoreSection } from "@/components/settings/backup-restore-secti
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { getShareLinks } from "@/lib/actions/share-links";
+import { AlertsSection } from "@/components/settings/alerts-section";
 
 // Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
 const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
@@ -387,6 +388,10 @@ export default async function SettingsPage() {
           off for the trusted private network). Hidden in demo mode only
           (create/revoke mutations are blocked anyway). */}
       {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
+
+      {/* Alerts - hidden in demo mode (mutations are blocked anyway, and a
+          demo instance shouldn't be sending real notifications). */}
+      {process.env.DEMO_MODE !== "true" && <AlertsSection settings={userSettings} />}
 
     </div>
   );
