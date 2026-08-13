@@ -104,6 +104,7 @@ pnpm also blocks a dependency's install/postinstall scripts by default unless ex
 |---|---|
 | `uuid >=11.1.1` | CVE-2026-41907 - buffer bounds check; pinned to `^8.3.2` by `next-auth` |
 | `postcss >=8.5.23` | GHSA-r28c-9q8g-f849 - path traversal via `sourceMappingURL`; vendored by `next` |
+| `nanoid >=3.3.17` | GHSA-2v37-7h3g-55p8 - a custom generator loops indefinitely when called with size 0; `postcss`'s own dependency (`next>postcss>nanoid`, same `next` re-exported by `next-auth`/`next-intl`) - real, shipped build-pipeline code, not one of the never-invoked-subcommand exemptions below |
 | `sharp >=0.35.0` | GHSA-f88m-g3jw-g9cj - libvips CVEs; vendored by `next`'s image optimizer |
 | `find-my-way >=9.7.0` | GHSA-c96f-x56v-gq3h - HTTP2 DDoS; exact-pinned at `9.6.0` by `@prisma/dev` (only reachable via the `prisma dev` embedded-Postgres subcommand, which this project never runs, but still installed as a non-dev `dependencies` entry) |
 | `valibot >=1.4.2` | GHSA-5qjj-4xww-7phc - `flatten()` throws on inherited `Object` property names; exact-pinned at `1.2.0` by `@prisma/dev` |

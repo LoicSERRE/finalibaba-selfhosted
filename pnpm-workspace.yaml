@@ -18,6 +18,12 @@ allowBuilds:
 overrides:
   uuid: ">=11.1.1"
   postcss: ">=8.5.23"
+  # GHSA-2v37-7h3g-55p8 - a custom nanoid generator can loop indefinitely
+  # when called with size 0. Pulled in transitively as postcss's own
+  # dependency (next>postcss>nanoid, and again via next-auth/next-intl's
+  # own next re-exports) - postcss is a real, shipped part of Next's build
+  # pipeline, not one of the never-invoked-subcommand exemptions below.
+  nanoid: ">=3.3.17"
   sharp: ">=0.35.0"
   js-yaml: ">=4.3.0"
   find-my-way: ">=9.7.0"
