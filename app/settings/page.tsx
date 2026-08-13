@@ -21,6 +21,8 @@ import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
+import { ShareLinksSection } from "@/components/settings/share-links-section";
+import { getShareLinks } from "@/lib/actions/share-links";
 
 // Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
 const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
@@ -28,7 +30,7 @@ const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
 
-  const [institutions, syncStatus, userSettings, t] = await Promise.all([
+  const [institutions, syncStatus, userSettings, shareLinks, t] = await Promise.all([
     prisma.institution.findMany({
       include: {
         _count: { select: { accounts: true } },
@@ -38,6 +40,7 @@ export default async function SettingsPage() {
     }),
     getSyncStatus(),
     getUserSettings(),
+    getShareLinks(),
     getTranslations(),
   ]);
 
@@ -377,6 +380,13 @@ export default async function SettingsPage() {
       {process.env.AUTH_ENABLED === "true" && process.env.DEMO_MODE !== "true" && (
         <TwoFactorSection totpEnabled={userSettings.totpEnabled} />
       )}
+
+      {/* Read-only share links - deliberately NOT gated by AUTH_ENABLED like
+          2FA above: this is meant to work independently of it (the primary
+          use case is sharing one view externally while AUTH_ENABLED stays
+          off for the trusted private network). Hidden in demo mode only
+          (create/revoke mutations are blocked anyway). */}
+      {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
 
     </div>
   );

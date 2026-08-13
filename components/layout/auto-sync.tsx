@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { autoTriggerSync, getSyncStatus } from "@/lib/actions/sync";
 import { useTranslations } from "next-intl";
 
@@ -12,12 +12,18 @@ import { useTranslations } from "next-intl";
  */
 export function AutoSync() {
   const router = useRouter();
+  const pathname = usePathname();
   const t = useTranslations("autoSync");
   const mountedAt = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(null);
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
+    // A share-link visitor is anonymous and must never be able to trigger a
+    // real bank sync just by opening the page - see components/layout/
+    // sidebar.tsx's identical guard and CLAUDE.md's "Read-only share links".
+    if (pathname?.startsWith("/shared/")) return;
+
     mountedAt.current = Date.now();
     autoTriggerSync().then(({ triggered }) => {
       if (triggered) setSyncing(true);
@@ -35,7 +41,7 @@ export function AutoSync() {
     }, 5000);
 
     return () => clearInterval(intervalRef.current!);
-  }, [router]);
+  }, [router, pathname]);
 
   if (!syncing) return null;
 

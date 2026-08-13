@@ -111,6 +111,22 @@ pnpm also blocks a dependency's install/postinstall scripts by default unless ex
 | `eslint-plugin-react-hooks` pinned to `7.0.1` | Not a CVE fix - its `^7.0.0` range floats onto `7.1.1`, which enables new `react-hooks/purity`/`react-hooks/immutability` rules that fail on pre-existing code unrelated to any dependency bump. Pinned to avoid that scope creep; revisit separately if those rules are worth fixing for real. |
 | `minimatch@10.2.6>brace-expansion >=5.0.8 <6.0.0` and `minimatch@3.1.5>brace-expansion >=1.1.16 <2.0.0` | GHSA-mh99-v99m-4gvg. Two different `minimatch` major lines resolve in this tree (10.x pulled in by `@typescript-eslint/typescript-estree`, 3.x vendored inside `eslint` itself, which expects the old `brace-expansion` 1.x API - `expand is not a function` otherwise) so they need different patched lines, not one shared version. pnpm's override selector only supports a single `parent>dep` level (no 3-segment chain like npm's old nested-object syntax), so this scopes by `minimatch`'s own resolved version instead of by which package imported it - and each range is bounded to its own major line (`<6.0.0`/`<2.0.0`), not left open-ended, because an unbounded `>=1.1.16` is numerically satisfied by `5.0.9` too, which silently defeated the 3.x-line scoping the first time this was written. **Correction (2026-07)**: this GHSA ID was later updated with an unrelated new DoS class (CVE-2026-14257) patched only on the 5.x line - the 1.x line has no patch and never will (1.1.18 is the last 1.x release ever published), so the `minimatch@3.1.5` bound above does not actually carry a fix for that CVE, only for the unrelated API-crash. Accepted: lint-time only, never shipped, already outside the `--prod` audit gate below. Real fix is eslint 9→10 (drops minimatch 3.x entirely) - `dependabot.yml` will surface that as its own major-version PR. |
 
+## Pre-commit verification pipeline
+
+Run this before proposing or making any commit - it exists so a commit never introduces something CI would have caught anyway (a broken build, a failing test, a new lint/audit finding), and so a SonarQube regression is caught locally before it shows up on the next scan. Order matters: cheapest/fastest checks first, so a trivial mistake (a lint error) fails in seconds instead of after a multi-minute build+test run.
+
+1. **Working tree sanity** - `git status` (nothing unexpected staged/unstaged) and, on any branch that was just merged or rebased, `git diff --check` (flags leftover `<<<<<<<`/`=======`/`>>>>>>>` conflict markers and trailing-whitespace issues that a manual conflict resolution can silently leave behind - this is the "no conflicts" gate).
+2. **Lint** - `pnpm run lint` (ESLint, includes `eslint-plugin-sonarjs`'s rules - the same static-analysis family SonarQube's own scan runs, so most Sonar code-smell findings already surface here for free).
+3. **Type-check & build** - `NODE_ENV=production pnpm run build` (Next.js's build IS the type-check in this project - there's no separate `tsc --noEmit` script; `NODE_ENV=production` is required, see "Development commands" above). This is the frontend/backend "no conflicts" gate: a broken import, a type mismatch between a Server Action and the component calling it, or a Server/Client boundary violation fails here.
+4. **Unit tests** - `pnpm run test:coverage` (not plain `pnpm test` - the coverage run is needed for step 6 anyway, and its `json-summary` report is the one to trust over the terminal table, see "Development commands" above).
+5. Steps 2-4 are bundled as **`pnpm run verify`** - run that one command for the common case (JS/TS-only change). Add the Python steps below whenever a commit touches `sync/`:
+   - `ruff check sync/` (lint)
+   - `cd sync && python -m pytest` (tests)
+6. **SonarQube** - local/on-demand only, not wired into CI (see `sonar-project.properties`'s header comment). After step 4 has produced fresh coverage, run your local `sonar-scanner` from the repo root (it auto-detects `sonar-project.properties`, including the `sonar.javascript.lcov.reportPaths=coverage/lcov.info` it just consumed) against your SonarQube instance, and confirm the quality gate is green with **zero new issues** - not just "no new CRITICAL/BLOCKER", since `sonar-project.properties`'s `sonar.issue.ignore.multicriteria` list already documents every accepted pre-existing exception explicitly; anything new outside that list is a real regression to fix, not to suppress.
+7. **Dependency audit** (only when `package.json`/`pnpm-lock.yaml` or `sync/requirements.txt` changed) - `pnpm audit --prod --audit-level=high` and, for Python, `pip-audit -r sync/requirements.txt`. Mirrors the `security`/`python-security` CI jobs; see "pnpm overrides" above before adding a new override in response to a finding here - check whether one already exists or is deliberately not applied.
+
+This pipeline mirrors `ci.yml`'s job list on purpose (`lint` → `typecheck` → `test` → `python-lint`/`python-test` → `security`/`python-security`) plus the SonarQube gate `quality.yml` doesn't cover (SonarQube itself isn't in CI - see "CI quality gates" below) - the goal is that `git push` never surprises CI with something `pnpm run verify` (plus the conditional steps) would already have caught locally.
+
 ## Architecture
 
 ### File layout
@@ -174,6 +190,8 @@ Selfhosted-specific points below.
 
 Enabled via `AUTH_ENABLED=true` + `AUTH_PASSWORD` (plaintext) or `AUTH_PASSWORD_HASH` (bcrypt). When enabled: NextAuth Credentials provider, JWT session 30d, rate-limit 5 attempts/15min/IP. Display name via `AUTH_USER_NAME` (defaults to `"owner"`).
 
+**Optional TOTP 2FA** on top of the password, toggled from Settings (`components/settings/two-factor-section.tsx` + `lib/actions/totp.ts`), never via env var - state lives on the `UserSettings` singleton (`totpEnabled`, `totpSecret`, `totpBackupCodes`). `lib/domain/totp.ts` holds the pure crypto (secret/URI generation via `otplib`, `verifyTotpCode` with 30s clock-drift tolerance, bcrypt-hashed one-time backup codes). `lib/auth.ts`'s `authorize()` checks `totpEnabled` after the password succeeds and accepts either a live 6-digit code or a backup code (consuming it from `totpBackupCodes` on use) - `components/auth/login-form.tsx` only renders the extra code field when a server-fetched `totpEnabled` prop says to. `regenerateBackupCodes`/`disableTotp` require a **live** TOTP code, never a backup code, so a single backup code can't mint itself replacements or turn off 2FA outright.
+
 `proxy.ts` is the Next.js middleware (at the repo root). It reads `process.env.AUTH_ENABLED` in the `authorized` callback and bypasses NextAuth when it isn't `"true"`. If the upstream `proxy.ts` ever diverges, do **not** blindly overwrite this file.
 
 `components/layout/sidebar-wrapper.tsx` is a **server component** (no `"use client"`) - reads `AUTH_ENABLED`, passes `showLogout` prop to `sidebar-dynamic.tsx`.
@@ -181,6 +199,45 @@ Enabled via `AUTH_ENABLED=true` + `AUTH_PASSWORD` (plaintext) or `AUTH_PASSWORD_
 Both files are selfhosted-specific and must never be overwritten by the sync script.
 
 For users who want security without built-in auth: document Nginx Proxy Manager, Caddy basicauth, Traefik + Authelia, Cloudflare Access, or VPN (Tailscale).
+
+### Read-only share links
+
+Settings → "Liens de partage" (`components/settings/share-links-section.tsx` +
+`lib/actions/share-links.ts`) generates a `/shared/[token]` URL that renders
+the net-worth dashboard read-only, to hand to an advisor or family member
+without giving them write access - or the app password at all. This is
+**deliberately independent of `AUTH_ENABLED`**: the primary use case is
+exposing one view externally (e.g. via a reverse proxy) while `AUTH_ENABLED`
+stays off for the trusted private network, matching "Authentication" above's
+default trust model. `ShareLink` (`prisma/schema.prisma`) stores the token in
+**plaintext** - same trust model as `UserSettings.totpSecret`/
+`Institution.woobPassword` (the DB isn't hardened against server compromise,
+so hashing this one field buys little), and unlike TOTP backup codes it needs
+to be re-copyable later, not shown once. Unguessability comes from entropy
+instead: `lib/domain/share-links.ts`'s `generateShareToken()` is 256 random
+bits (`randomBytes(32).toString("base64url")`) - no rate limiting needed,
+unlike the login password (low-entropy, human-memorable, why that path has
+one).
+
+`proxy.ts`'s middleware `matcher` excludes `shared` from ever reaching
+`withAuth`, the same category as `api/auth`/`api/health` - the token lookup
+inside `app/shared/[token]/page.tsx` is the page's own, independent gate
+(`notFound()` uniformly for "doesn't exist" and "expired", no signal to an
+anonymous visitor about which). That page sets `robots: { index: false,
+follow: false }` since the URL may be reachable from the public internet.
+
+The dashboard's JSX was extracted into `components/dashboard/dashboard-view.tsx`
+(a pure presentational component, `interactive` prop) so `app/page.tsx` and
+`app/shared/[token]/page.tsx` can't drift out of sync while rendering the same
+data two different ways - the only interactive element either page has is the
+per-account `Link` into `/accounts/[id]`, which the shared route must never
+expose. Beyond that, isolating a share-link visitor from the real app is
+handled inside the two client components that already call `usePathname()`
+for their own reasons, rather than a route-group restructure: `sidebar.tsx`
+returns `null` on `/shared/*` (no nav back into the editable app), and
+`auto-sync.tsx` skips calling `autoTriggerSync()` there (an anonymous visitor
+must never trigger a real bank sync just by opening the page - the one actual
+correctness bug a naive version of this feature would have shipped with).
 
 ### Security headers
 
@@ -341,6 +398,7 @@ Before this feature, selling a holding meant retyping a smaller `quantity`/`cost
 - `Sale` - a recorded disposal of part or all of a `Holding` position (`ticker`, `quantity` sold, `proceedsCents`, `costBasisCents` of the sold portion, `date`). See "Realized gains & annual tax report" below - realized gain is `proceedsCents - costBasisCents`, never stored.
 - `SyncLog` - per-run log entries: `source` ("lcl" | "trade_republic"), `status` ("success" | "error" | "auth_required"), optional `message`
 - `UserSettings` - singleton (`id = "singleton"`): salary, expenses, savings goal, monthly saved, `taxRatePea`/`taxRateCto`/`taxRateCrypto` (Float, defaults 0.172/0.314/0.314) - now only defaults suggested when creating a new account, see "Tax treatment" below
+- `ShareLink` - a token-gated read-only dashboard link (`token` unique, plaintext, optional `label`, optional `expiresAt`, `lastAccessedAt`). See "Read-only share links" above.
 
 ### Net worth calculation
 
@@ -360,6 +418,12 @@ Latent tax rate: per-account via `getAccountTaxRate()` - see "Tax treatment" abo
 **Known accepted risk**: the sync image still has ~33 CRITICAL/HIGH findings (`libglib2.0`, `perl-base`, the `util-linux`/`ncurses` family, a handful of single-count Debian base packages) - either genuine Chromium runtime dependencies (`libglib2.0`, `libblkid1`, `libmount1` are all in its own `ldd` output) or Debian-essential base packages nothing here installed on purpose. `trivy-scan` therefore runs **non-blocking** (`exit-code: 0`) for the `sync` matrix entry specifically, while staying fully blocking (`exit-code: 1`) for `app`, which is clean. This is deliberately narrower than the `find-my-way`/`valibot` exemptions under "pnpm overrides" below (those are unreachable *code paths* in an otherwise-used dependency; this is Chromium's own real runtime footprint) - it's accepted because `sync/`'s HTTP API is Docker-network-only per `SECURITY.md`, never internet-exposed, not because the CVEs don't matter. Findings still upload to the Security tab either way (`if: always()` on the SARIF upload), so they stay visible.
 
 **Three real, distinct bugs made `trivy-scan(app)` look broken across v1.4.4-v1.4.10, in order**: (1) `aquasecurity/trivy-action` pinned as `@0.36.0` instead of the real tag `@v0.36.0`, failing before any scan ran; (2) a raw `${{ github.repository }}`-built `image-ref` scanning `ghcr.io/LoicSERRE/...` (capitalized, matching this repo's real GitHub owner) instead of the required-lowercase GHCR path, also failing before any scan ran - fixed by lowercasing it explicitly, then hardened further by scanning `build-app`/`build-sync`'s own `digest` output instead of the mutable `:latest` tag (immune to any registry tag-propagation lag, a real but secondary bug this surfaced); (3) `/root/.cache/pnpm` (410MB of npm-registry metadata left over from `pnpm install --prod`, never read at runtime) made Trivy's secret scanner slow enough to occasionally exceed its 5-minute default timeout mid-scan - reproduced locally with the exact same timeout, fixed by removing that cache (keep `/root/.cache/node/corepack` though, that one **is** needed at runtime - see the `Dockerfile` comment). After all three were fixed, one real (if minor) finding was still failing the gate: a MEDIUM-severity `tar` DoS (`GHSA-r292-9mhp-454m`) vendored *inside* corepack's own cached pnpm single-executable build, not this project's dependency tree. It was slipping through a `severity: CRITICAL,HIGH` filter that should have excluded it, because `aquasecurity/trivy-action`'s `format: sarif` mode builds its report **"with all severities" regardless of the `severity` input** unless `limit-severities-for-sarif: true` is also set - a real trivy-action gotcha, not a workflow logic bug, and the actual root cause of most of this saga's apparent flakiness. All fixed; see the commit history around v1.4.4-v1.4.11 for the full trail if this class of "images build and push fine, but the gate after them behaves unpredictably" resurfaces.
+
+### CI quality gates
+
+`quality.yml` is a second, separate scanning workflow from `docker.yml`'s `trivy-scan` above - lightweight, stateless scanners (actionlint, zizmor, SonarQube, a duplication/complexity ratchet) ported from a shared `.github` template repo, ID'd in the workflow's own header comment. Tool versions are pinned inline in `run:` lines rather than via `uses:`, so Dependabot's `github-actions` ecosystem entry won't auto-bump them - bump manually on a new CVE class or rule-pack update. `zizmor` (workflow security posture) runs non-blocking by design: this repo pins actions by tag, not SHA, and that's its dominant finding class - informational until that's revisited.
+
+The duplication/complexity ratchet job compares each run against a baseline artifact from a prior run via `gh api`; a transient GitHub API error on that lookup used to hard-fail the whole job instead of just skipping the comparison. Both the "list artifacts" and "download artifact zip" calls now fail open (treated as "no baseline yet") - don't re-tighten this to fail closed, a flaky `gh api` call isn't a real quality regression.
 
 ### Prisma client
 

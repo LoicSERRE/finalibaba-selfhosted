@@ -540,7 +540,37 @@
       "regenerateTitle": "Regenerate backup codes",
       "regenerateHint": "Old backup codes will be invalidated. Enter a current verification code to confirm (backup codes aren't accepted here).",
       "unknownError": "An unexpected error occurred."
+    },
+    "shareLinks": {
+      "title": "Read-only share links",
+      "subtitle": "Generate a link to share the dashboard with an accountant or a family member, without giving write access",
+      "create": "Create a link",
+      "createTitle": "Create a share link",
+      "labelField": "Label (optional)",
+      "labelPlaceholder": "e.g. Accountant, Spouse…",
+      "expiryField": "Expiry",
+      "expiryNever": "Never",
+      "expiryDays": "{count} days",
+      "creating": "Creating…",
+      "confirm": "Create",
+      "emptyTitle": "No share links",
+      "emptyDescription": "Create a link to give read-only access to the dashboard.",
+      "unlabeled": "Unlabeled",
+      "statusActive": "Active",
+      "statusExpired": "Expired",
+      "createdOn": "Created {date}",
+      "expiresOn": "expires {date}",
+      "lastViewedOn": "last viewed {date}",
+      "neverViewed": "never viewed",
+      "copy": "Copy",
+      "copied": "Copied!",
+      "revoke": "Revoke",
+      "revokeDescription": "This link will stop working immediately. This action is irreversible."
     }
+  },
+  "shared": {
+    "readOnlyBanner": "Read-only view shared by the owner — no changes possible.",
+    "readOnlyBannerLabeled": "Read-only view shared by the owner ({label}) — no changes possible."
   },
   "deleteAccount": {
     "title": "Delete this account?",

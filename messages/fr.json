@@ -540,7 +540,37 @@
       "regenerateTitle": "Régénérer les codes de secours",
       "regenerateHint": "Les anciens codes de secours seront invalidés. Saisis un code de vérification actuel pour confirmer (les codes de secours ne sont pas acceptés ici).",
       "unknownError": "Une erreur inattendue s'est produite."
+    },
+    "shareLinks": {
+      "title": "Liens de partage en lecture seule",
+      "subtitle": "Génère un lien pour partager le tableau de bord avec un comptable ou un proche, sans lui donner d'accès en écriture",
+      "create": "Créer un lien",
+      "createTitle": "Créer un lien de partage",
+      "labelField": "Nom (optionnel)",
+      "labelPlaceholder": "Ex. Comptable, Conjoint…",
+      "expiryField": "Expiration",
+      "expiryNever": "Jamais",
+      "expiryDays": "{count} jours",
+      "creating": "Création…",
+      "confirm": "Créer",
+      "emptyTitle": "Aucun lien de partage",
+      "emptyDescription": "Crée un lien pour donner un accès en lecture seule au tableau de bord.",
+      "unlabeled": "Sans nom",
+      "statusActive": "Actif",
+      "statusExpired": "Expiré",
+      "createdOn": "Créé le {date}",
+      "expiresOn": "expire le {date}",
+      "lastViewedOn": "consulté le {date}",
+      "neverViewed": "jamais consulté",
+      "copy": "Copier",
+      "copied": "Copié !",
+      "revoke": "Révoquer",
+      "revokeDescription": "Ce lien cessera immédiatement de fonctionner. Cette action est irréversible."
     }
+  },
+  "shared": {
+    "readOnlyBanner": "Vue en lecture seule partagée par le propriétaire — aucune modification possible.",
+    "readOnlyBannerLabeled": "Vue en lecture seule partagée par le propriétaire ({label}) — aucune modification possible."
   },
   "deleteAccount": {
     "title": "Supprimer ce compte ?",

@@ -12,6 +12,12 @@ export function Sidebar({ showLogout = false }: Readonly<SidebarProps>) {
   const pathname = rawPathname ?? "/";
   const t = useTranslations("nav");
 
+  // A share-link visitor has no session and no business navigating into the
+  // real (editable) app - see app/shared/[token]/page.tsx and CLAUDE.md's
+  // "Read-only share links" section for why this has to be structural, not
+  // just "we didn't add a link to it".
+  if (pathname.startsWith("/shared/")) return null;
+
   const navItems = [
     { href: "/", label: t("dashboard"), icon: LayoutDashboard, exact: true },
     { href: "/accounts", label: t("accounts"), icon: Wallet, exact: false },

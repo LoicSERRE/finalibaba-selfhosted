@@ -219,3 +219,17 @@ model UserSettings {
   totpBackupCodes      String[] @default([])
   updatedAt            DateTime @updatedAt
 }
+
+// Plaintext token, same trust model as UserSettings.totpSecret above - the
+// point of a share link is being re-copied/re-shared later, so hashing it
+// would force a "copy now or lose it forever" UX. Unguessability comes from
+// entropy (32 random bytes, see lib/domain/share-links.ts), not from hiding
+// it server-side.
+model ShareLink {
+  id             String    @id @default(cuid())
+  token          String    @unique
+  label          String?
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime?
+  lastAccessedAt DateTime?
+}
