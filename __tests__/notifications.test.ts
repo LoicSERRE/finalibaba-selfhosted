@@ -42,6 +42,26 @@ describe("sendNtfyMessage", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
     expect(await sendNtfyMessage("https://ntfy.sh/x", "body")).toBe(false);
   });
+
+  it("sends an Authorization header when an auth token is given - for a self-hosted ntfy server with auth-default-access=deny-all", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendNtfyMessage("https://ntfy.example.com/x", "body", "tk_abc123");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers).toEqual({ Authorization: "Bearer tk_abc123" });
+  });
+
+  it("omits the Authorization header entirely when no token is given (the public ntfy.sh case)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendNtfyMessage("https://ntfy.sh/x", "body");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers).toBeUndefined();
+  });
 });
 
 describe("sendEmail", () => {
@@ -87,7 +107,7 @@ describe("dispatchAlert", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     await dispatchAlert(
-      { ntfyTopicUrl: null, alertEmailTo: null, smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
+      { ntfyTopicUrl: null, ntfyAuthToken: null, alertEmailTo: null, smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
       "title",
       "body"
     );
@@ -101,7 +121,7 @@ describe("dispatchAlert", () => {
     sendMailMock.mockResolvedValue({});
 
     await dispatchAlert(
-      { ntfyTopicUrl: "https://ntfy.sh/x", alertEmailTo: null, smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
+      { ntfyTopicUrl: "https://ntfy.sh/x", ntfyAuthToken: null, alertEmailTo: null, smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
       "title",
       "body"
     );
@@ -117,7 +137,7 @@ describe("dispatchAlert", () => {
 
     // Only alertEmailTo set, no SMTP host - must not attempt to send.
     await dispatchAlert(
-      { ntfyTopicUrl: null, alertEmailTo: "moi@example.com", smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
+      { ntfyTopicUrl: null, ntfyAuthToken: null, alertEmailTo: "moi@example.com", smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
       "title",
       "body"
     );
@@ -127,6 +147,7 @@ describe("dispatchAlert", () => {
     await dispatchAlert(
       {
         ntfyTopicUrl: null,
+        ntfyAuthToken: null,
         alertEmailTo: "moi@example.com",
         smtpHost: "smtp.example.com",
         smtpPort: 587,

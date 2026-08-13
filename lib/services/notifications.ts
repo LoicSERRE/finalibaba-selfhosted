@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 
 type AlertChannelSettings = {
   ntfyTopicUrl: string | null;
+  ntfyAuthToken: string | null;
   alertEmailTo: string | null;
   smtpHost: string | null;
   smtpPort: number | null;
@@ -15,11 +16,16 @@ type AlertChannelSettings = {
  * a ByteString conversion error otherwise), and alert text here is
  * French/user-entered, so it can contain non-Latin-1 characters (accents).
  * ntfy falls back to a generic title when none is set - the body carries
- * the real message either way.
+ * the real message either way. Authorization is fine as a header though -
+ * a bearer token is always ASCII, only the human-entered alert text has the
+ * Latin-1 problem. Only relevant for a self-hosted ntfy server with
+ * auth-default-access=deny-all (README's "Self-hosted alerts" section) -
+ * the public ntfy.sh has no auth to send, token stays unset there.
  */
-export async function sendNtfyMessage(topicUrl: string, body: string): Promise<boolean> {
+export async function sendNtfyMessage(topicUrl: string, body: string, authToken: string | null = null): Promise<boolean> {
   try {
-    const res = await fetch(topicUrl, { method: "POST", body });
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : undefined;
+    const res = await fetch(topicUrl, { method: "POST", body, headers });
     return res.ok;
   } catch (e) {
     console.error("Failed to send ntfy alert", e);
@@ -61,7 +67,7 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
   const jobs: Promise<boolean>[] = [];
 
   if (settings.ntfyTopicUrl) {
-    jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, `${title}\n\n${body}`));
+    jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, `${title}\n\n${body}`, settings.ntfyAuthToken));
   }
 
   if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom) {

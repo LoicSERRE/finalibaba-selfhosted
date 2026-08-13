@@ -225,6 +225,10 @@ model UserSettings {
   // .env.example. smtpPassword is plaintext, same trust model as
   // totpSecret above.
   ntfyTopicUrl         String?
+  // Bearer token for a self-hosted ntfy server with auth-default-access=deny-all
+  // (see README's "Self-hosted alerts" section) - blank when pointed at the
+  // public ntfy.sh anonymously, which has no auth to send.
+  ntfyAuthToken        String?
   alertEmailTo         String?
   smtpHost             String?
   smtpPort             Int?

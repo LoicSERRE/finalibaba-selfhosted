@@ -73,7 +73,86 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  # Optional - self-hosted push notifications for Settings → Alertes, instead
+  # of (or in addition to) the public ntfy.sh. Not started by a plain
+  # `docker compose up -d` - opt in with `docker compose --profile ntfy up -d`.
+  # See README's "Self-hosted alerts" section for the one-time `ntfy user
+  # add`/`ntfy token add` setup and how to point Settings at it.
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    command: serve
+    profiles: ["ntfy"]
+    environment:
+      # deny-all + a per-user token (created once via `ntfy user add`/`ntfy
+      # token add`, see README) is the whole point of self-hosting this
+      # instead of using the public server - real access control, not just
+      # an unguessable topic name.
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+    ports:
+      - "${NTFY_PORT:-8090}:80"
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+    restart: unless-stopped
+
+  # Optional - self-hosted outbound mail for Settings → Alertes → "Serveur
+  # mail auto-hébergé", instead of Gmail/Outlook or a third-party API. Not
+  # started by a plain `docker compose up -d` - opt in with
+  # `docker compose --profile mail up -d`. Requires a domain you control and
+  # DNS records only you can add (SPF/DKIM/DMARC) - see README's
+  # "Self-hosted alerts" section before enabling, including why this often
+  # doesn't work from a residential internet connection (ISP port-25
+  # blocking, IP reputation) regardless of how correctly this is configured.
+  #
+  # MAIL_DOMAIN is intentionally NOT a required (":?") variable here, unlike
+  # POSTGRES_PASSWORD/NEXTAUTH_SECRET above - Compose evaluates required-
+  # variable checks for every service in the file during interpolation,
+  # before profile filtering, so a ":?" here would break `docker compose up
+  # -d` for every installation that never touches the mail profile at all.
+  # Confirmed empirically. docker-mailserver's own startup fails loudly if
+  # MAIL_DOMAIN is blank when this profile is actually used instead.
+  mail:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    profiles: ["mail"]
+    hostname: mail
+    domainname: ${MAIL_DOMAIN:-}
+    environment:
+      # Outbound sending only - no IMAP/POP3/mailboxes, this project only
+      # ever needs to send its own alert emails, never receive or host any.
+      SMTP_ONLY: 1
+      ENABLE_OPENDKIM: 1
+      ENABLE_OPENDMARC: 0
+      ENABLE_SPAMASSASSIN: 0
+      ENABLE_CLAMAV: 0
+      ONE_DIR: 1
+      # SMTP_ONLY disables Dovecot entirely, which is also where Postfix's
+      # SASL auth backend normally comes from - confirmed empirically that
+      # authenticated submission (port 587) simply doesn't work in this
+      # mode, `smtpd_sasl_auth_enable` stays "no" regardless of any user
+      # created via `setup email add`. PERMIT_DOCKER trusts the Docker
+      # network's own subnet instead (added to Postfix's mynetworks) - same
+      # "same Docker network = trusted, no credentials" model already used
+      # for app<->sync, and why alerts-section.tsx's self-hosted preset
+      # points at port 25, not 587. OpenDKIM's own TrustedHosts (a separate
+      # file from Postfix's mynetworks) does NOT need the same treatment -
+      # confirmed it auto-detects the container's Docker network correctly
+      # on its own.
+      PERMIT_DOCKER: connected-networks
+    volumes:
+      # mail_config is the important one to never lose - it holds the
+      # generated OpenDKIM keypair. Losing it means generating a new key,
+      # which then no longer matches the DKIM DNS record already published.
+      - mail_data:/var/mail-state
+      - mail_config:/tmp/docker-mailserver
+      - mail_logs:/var/log/mail
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   woob_session:
   pytr_session:
+  ntfy_data:
+  mail_data:
+  mail_config:
+  mail_logs:

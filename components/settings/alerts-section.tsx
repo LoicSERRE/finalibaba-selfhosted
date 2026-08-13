@@ -24,6 +24,18 @@ function generateNtfyTopic(): string {
 const EMAIL_PRESETS: Record<string, { host: string; port: string }> = {
   gmail: { host: "smtp.gmail.com", port: "587" },
   outlook: { host: "smtp.office365.com", port: "587" },
+  // Points at this project's own optional `mail` service (README's
+  // "Self-hosted alerts" section, docker-mailserver behind the `mail`
+  // Compose profile) - the Docker service name doubles as its hostname on
+  // the internal network, same as `sync:8000` for the sync service
+  // (docker-compose.yml's SYNC_SERVICE_URL). Port 25, not 587 - confirmed
+  // empirically that docker-mailserver's SMTP_ONLY mode disables SASL/
+  // Dovecot entirely, so authenticated submission on 587 doesn't work at
+  // all. Port 25 relies on trusted-network relay instead (PERMIT_DOCKER in
+  // docker-compose.yml, no smtpUser/smtpPassword needed) - same "same
+  // Docker network = trusted, no credentials" model this project already
+  // uses for app<->sync.
+  selfhosted: { host: "mail", port: "25" },
 };
 
 const inputClass =
@@ -34,6 +46,7 @@ export function AlertsSection({
 }: Readonly<{
   settings: {
     ntfyTopicUrl: string | null;
+    ntfyAuthToken: string | null;
     alertEmailTo: string | null;
     smtpHost: string | null;
     smtpPort: number | null;
@@ -130,6 +143,22 @@ export function AlertsSection({
             </div>
           </div>
           <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyHint")}</p>
+
+          <div className="space-y-1.5">
+            <label htmlFor="ntfyAuthToken" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+              {t("ntfyAuthToken")}
+            </label>
+            <input
+              id="ntfyAuthToken"
+              name="ntfyAuthToken"
+              type="text"
+              autoComplete="off"
+              defaultValue={settings.ntfyAuthToken ?? ""}
+              placeholder="tk_..."
+              className={inputClass}
+            />
+            <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyAuthTokenHint")}</p>
+          </div>
         </div>
 
         <div className="pt-2 border-t border-[var(--border)] space-y-4">
@@ -161,6 +190,7 @@ export function AlertsSection({
               <option value="custom">{t("emailPresetCustom")}</option>
               <option value="gmail">Gmail</option>
               <option value="outlook">Outlook / Office 365</option>
+              <option value="selfhosted">{t("emailPresetSelfhosted")}</option>
             </select>
           </div>
 

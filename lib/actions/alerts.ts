@@ -13,6 +13,7 @@ export async function updateAlertSettings(formData: FormData) {
   const str = (name: string) => ((formData.get(name) as string) || "").trim() || null;
 
   const ntfyTopicUrl = str("ntfyTopicUrl");
+  const ntfyAuthToken = str("ntfyAuthToken");
   const alertEmailTo = str("alertEmailTo");
   const smtpHost = str("smtpHost");
   const smtpPortRaw = str("smtpPort");
@@ -48,6 +49,7 @@ export async function updateAlertSettings(formData: FormData) {
 
   const data = {
     ntfyTopicUrl,
+    ntfyAuthToken,
     alertEmailTo,
     smtpHost,
     smtpPort,

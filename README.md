@@ -103,6 +103,72 @@ Configure credentials per institution directly from **Settings → Institutions*
 
 ---
 
+## Self-hosted alerts (optional)
+
+Settings → Alertes can notify you (net worth threshold crossed, a loan nearly paid off, a sync failure) via push notification and email. By default that means the public [ntfy.sh](https://ntfy.sh) and your own Gmail/Outlook/other SMTP account - nothing below is required. If you'd rather run both yourself, this project ships two more **optional** Compose services, off by default:
+
+```bash
+docker compose --profile ntfy --profile mail up -d
+```
+
+### Push notifications (ntfy)
+
+```bash
+docker compose --profile ntfy up -d ntfy
+```
+
+Starts a private ntfy server on port `${NTFY_PORT:-8090}` with `auth-default-access: deny-all` - unlike the public server, nobody can read or publish to any topic without a token. One-time setup:
+
+```bash
+docker compose exec ntfy ntfy user add --role=admin youruser
+docker compose exec ntfy ntfy token add youruser
+# prints: token tk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx created for user youruser, never expires
+```
+
+In Settings → Alertes, set **URL du sujet ntfy** to `http://your-server:8090/<any-topic-name>` (or through your reverse proxy's HTTPS URL) and **Jeton d'authentification ntfy** to the `tk_...` token above. Point your phone's ntfy app at the same server + topic + token to receive them.
+
+### Email (self-hosted mail server)
+
+Requires a domain you control (for the DNS records below) and works best from a real server, not a residential connection - see the caveat at the end of this section.
+
+```bash
+docker compose --profile mail up -d mail
+docker compose exec mail setup email add alerts@yourdomain.com <a-password>
+docker compose exec mail setup config dkim domain yourdomain.com
+```
+
+Then **recreate** the container (not just restart it - a plain restart doesn't reliably reload the new DKIM config, confirmed while building this):
+
+```bash
+docker compose --profile mail up -d --force-recreate mail
+```
+
+Get the DNS TXT record value to publish:
+
+```bash
+docker compose exec mail cat /tmp/docker-mailserver/opendkim/keys/yourdomain.com/mail.txt
+```
+
+Add these DNS records at your registrar (values are templates - `<server-ip>` is your server's public IP, the DKIM value is the exact output of the command above):
+
+| Type | Name | Value |
+|---|---|---|
+| TXT | `yourdomain.com` | `v=spf1 a:mail.yourdomain.com -all` (use `a:`, not `ip4:`, if your IP isn't static - see caveat below) |
+| TXT | `mail._domainkey.yourdomain.com` | the `p=...` value from the command above |
+| TXT | `_dmarc.yourdomain.com` | `v=DMARC1; p=none; rua=mailto:you@yourdomain.com` (monitoring only to start - tighten to `p=quarantine`/`p=reject` once you've confirmed mail actually arrives) |
+
+In Settings → Alertes, choose **Serveur mail auto-hébergé** from the Fournisseur dropdown (fills in `mail`/port `25`) and leave **Utilisateur SMTP**/**Mot de passe SMTP** blank - the `app` container relays through `mail` via the trusted Docker network, not credentials (`PERMIT_DOCKER` in `docker-compose.yml`). Set **Adresse d'expédition** to the address you created above.
+
+**Before relying on this**: residential ISPs very commonly block outbound port 25 (anti-spambot policy), and even where it's open, residential IP ranges sit on Spamhaus's PBL - Gmail/Outlook may spam-bin or drop mail from them regardless of correct DNS. Test first:
+
+```bash
+docker compose exec mail nc -zv smtp.gmail.com 25
+```
+
+If that fails to connect, your ISP is blocking outbound port 25 and this won't work no matter how correct the DNS is - use the Gmail/Outlook preset or a free transactional API instead. If it succeeds, publish the DNS records above and check your setup with [mail-tester.com](https://www.mail-tester.com) before trusting it for real alerts. Also check whether your ISP lets you set reverse-DNS (PTR) for your assigned IP to `mail.yourdomain.com` - it matters for deliverability and is usually configured through your ISP's account panel or support, not your domain's own DNS zone.
+
+---
+
 ## CSV import
 
 For checking/savings/meal-voucher accounts not covered by auto-sync (foreign banks, cash accounts, migrating from Excel or Finary…), open the account and use one of the two import buttons. Both preview rows before import - likely duplicates are flagged and unchecked by default, but you can still select them.
