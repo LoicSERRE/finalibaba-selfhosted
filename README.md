@@ -125,7 +125,16 @@ docker compose exec ntfy ntfy token add youruser
 # prints: token tk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx created for user youruser, never expires
 ```
 
-In Settings → Alertes, set **URL du sujet ntfy** to `http://your-server:8090/<any-topic-name>` (or through your reverse proxy's HTTPS URL) and **Jeton d'authentification ntfy** to the `tk_...` token above. Point your phone's ntfy app at the same server + topic + token to receive them.
+In Settings → Alertes, set **URL du sujet ntfy** to `http://your-server:8090/<any-topic-name>` (or through your reverse proxy's HTTPS URL, see below) and **Jeton d'authentification ntfy** to the `tk_...` token above. Point your phone's ntfy app at the same server + topic + token to receive them.
+
+#### Exposing ntfy to the internet
+
+Your phone needs to reach `ntfy` from outside your home network to get notifications away from home - `mail` doesn't (it only makes outbound connections, no port forwarding needed for it at all). Two ways to do that, pick one:
+
+- **Reverse proxy + port forward** (public exposure) - point a subdomain (e.g. `ntfy.yourdomain.com`) at this container's port through whichever reverse proxy you already use for the main app (Nginx Proxy Manager, Caddy, Traefik - see "Securing access" above), with a real TLS cert, and forward that port on your Freebox to your server. Once this is up, use the HTTPS URL (not `http://your-server:8090`) in both Settings and the phone app.
+- **Tailscale/WireGuard instead of public exposure** (recommended if you already have one, or are willing to set one up) - add `ntfy` to your tailnet and use its Tailscale address/hostname. Your phone reaches it from anywhere exactly like the reverse-proxy option, but the container is never reachable from the public internet at all, which sidesteps everything below.
+
+**If you go the public-exposure route, know what `deny-all` does and doesn't cover.** It stops anyone without a valid token from reading or publishing to any topic - that was the actual privacy problem with the public ntfy.sh (an easily-guessed topic name), and it's fixed. It does **not** make the server invisible: it's still a real internet-facing service, so ordinary hygiene applies - keep the image updated (`docker compose --profile ntfy pull ntfy && docker compose --profile ntfy up -d ntfy` periodically), always use the HTTPS URL through your reverse proxy rather than the bare `http://` port, and treat the admin account you created (`ntfy user add --role=admin`) like any other admin credential - it has full read/write access to every topic, the same way `AUTH_PASSWORD` gates this app itself. If you don't need it reachable by anyone but your own devices, the Tailscale option above removes this whole category of risk instead of mitigating it.
 
 ### Email (self-hosted mail server)
 
@@ -149,11 +158,11 @@ Get the DNS TXT record value to publish:
 docker compose exec mail cat /tmp/docker-mailserver/opendkim/keys/yourdomain.com/mail.txt
 ```
 
-Add these DNS records at your registrar (values are templates - `<server-ip>` is your server's public IP, the DKIM value is the exact output of the command above):
+Add these DNS records at your registrar (`yourdomain.com` is a placeholder throughout - the DKIM value is the exact output of the command above):
 
 | Type | Name | Value |
 |---|---|---|
-| TXT | `yourdomain.com` | `v=spf1 a:mail.yourdomain.com -all` (use `a:`, not `ip4:`, if your IP isn't static - see caveat below) |
+| TXT | `yourdomain.com` | `v=spf1 a:mail.yourdomain.com -all` - uses `a:` (resolve the hostname each time) rather than a hardcoded `ip4:<address>`, since a homelab's assigned IP commonly isn't static; point `mail.yourdomain.com` at your current IP with the same dynamic DNS mechanism you likely already use to reach this server at all |
 | TXT | `mail._domainkey.yourdomain.com` | the `p=...` value from the command above |
 | TXT | `_dmarc.yourdomain.com` | `v=DMARC1; p=none; rua=mailto:you@yourdomain.com` (monitoring only to start - tighten to `p=quarantine`/`p=reject` once you've confirmed mail actually arrives) |
 
