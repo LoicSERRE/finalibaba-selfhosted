@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const sendMailMock = vi.fn();
-const createTransportMock = vi.fn(() => ({ sendMail: sendMailMock }));
+const createTransportMock = vi.fn((..._args: unknown[]) => ({ sendMail: sendMailMock }));
 vi.mock("nodemailer", () => ({
   default: { createTransport: (...args: unknown[]) => createTransportMock(...args) },
 }));
@@ -77,7 +77,7 @@ describe("sendEmail", () => {
   it("omits auth entirely when no user is configured, rather than sending an empty-string user", async () => {
     sendMailMock.mockResolvedValue({});
     await sendEmail({ host: "h", port: 587, user: null, password: null, from: "a@b.com", to: "c@d.com" }, "s", "t");
-    expect(createTransportMock.mock.calls[0][0].auth).toBeUndefined();
+    expect((createTransportMock.mock.calls[0][0] as Record<string, unknown>).auth).toBeUndefined();
   });
 
   it("passes from/to/subject/text through to sendMail", async () => {
