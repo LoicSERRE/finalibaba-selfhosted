@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime
 from decimal import Decimal
 
@@ -156,57 +157,105 @@ def _decode_jwt_payload(token: str) -> dict:
         return {}
 
 
+# Shared retry knobs for every TR network call below that's been observed to
+# fail transiently on a real account (a single handshake/request hiccup, not
+# a real auth or data problem) - the whole point is that a sync run doesn't
+# silently under-report the portfolio just because one attempt hit a blip.
+POSITIONS_FETCH_RETRIES = 2  # extra attempts after the first, not counting it
+POSITIONS_FETCH_RETRY_DELAY_S = 2
+
+
 def _get_securities_accounts(api) -> tuple[dict[str, list[str]], bool]:
     """
     Refresh web session and decode tr_session JWT.
     Returns:
       sec_accounts: {"default": ["0405756002"], "tax_wrapper_fr": ["0405756003"]}
       has_crypto: True if "crypto" feature is enabled
-    """
-    try:
-        r = api._websession.get(f"{BASE_URL}/api/v1/auth/web/session", timeout=10)
-        r.raise_for_status()
-        # Response cookies (RequestsCookieJar) have .get(); session jar may be a
-        # MozillaCookieJar (no .get()) - check response first, then iterate.
-        tr_session = r.cookies.get("tr_session") or next(
-            (c.value for c in api._websession.cookies if c.name == "tr_session"),
-            None,
-        )
-        if not tr_session:
-            log.warning("TR: tr_session cookie not found after refresh")
-            return {}, False
 
-        claims = _decode_jwt_payload(tr_session)
-        # JWT: act.acc.owner = {"default": {"sec": [...], "cash": [...]}, "tax_wrapper_fr": {...}}
-        owner = claims.get("act", {}).get("acc", {}).get("owner", {})
-        sec_accounts = {
-            acc_type: acc_data.get("sec", [])
-            for acc_type, acc_data in owner.items()
-            if acc_type in ACC_TYPE_MAP and acc_data.get("sec")
-        }
-        features = [f.get("feature") for f in claims.get("featuresEnabled", [])]
-        has_crypto = "crypto" in features
-        log.info("TR accounts: %s | crypto: %s", dict(sec_accounts), has_crypto)
-        return sec_accounts, has_crypto
-    except Exception as e:
-        log.warning("TR: failed to decode session JWT: %s", e)
-        return {}, False
+    Retries on a transient failure - this call gates whether *any*
+    investment account gets synced at all (a failure here degrades to "only
+    cash will be synced", losing the whole portfolio for the run, not just
+    one account type) so it's worth retrying even more than the per-type
+    WebSocket fetches below.
+    """
+    last_error: Exception | None = None
+    for attempt in range(POSITIONS_FETCH_RETRIES + 1):
+        try:
+            r = api._websession.get(f"{BASE_URL}/api/v1/auth/web/session", timeout=10)
+            r.raise_for_status()
+            # Response cookies (RequestsCookieJar) have .get(); session jar may be a
+            # MozillaCookieJar (no .get()) - check response first, then iterate.
+            tr_session = r.cookies.get("tr_session") or next(
+                (c.value for c in api._websession.cookies if c.name == "tr_session"),
+                None,
+            )
+            if not tr_session:
+                log.warning("TR: tr_session cookie not found after refresh")
+                return {}, False
+
+            claims = _decode_jwt_payload(tr_session)
+            # JWT: act.acc.owner = {"default": {"sec": [...], "cash": [...]}, "tax_wrapper_fr": {...}}
+            owner = claims.get("act", {}).get("acc", {}).get("owner", {})
+            sec_accounts = {
+                acc_type: acc_data.get("sec", [])
+                for acc_type, acc_data in owner.items()
+                if acc_type in ACC_TYPE_MAP and acc_data.get("sec")
+            }
+            features = [f.get("feature") for f in claims.get("featuresEnabled", [])]
+            has_crypto = "crypto" in features
+            log.info("TR accounts: %s | crypto: %s", dict(sec_accounts), has_crypto)
+            return sec_accounts, has_crypto
+        except Exception as e:
+            last_error = e
+            if attempt < POSITIONS_FETCH_RETRIES:
+                log.warning(
+                    "TR: session JWT fetch attempt %d/%d failed, retrying in %ds: %s",
+                    attempt + 1, POSITIONS_FETCH_RETRIES + 1, POSITIONS_FETCH_RETRY_DELAY_S, e,
+                )
+                time.sleep(POSITIONS_FETCH_RETRY_DELAY_S)
+    log.warning("TR: failed to decode session JWT after %d attempts: %s", POSITIONS_FETCH_RETRIES + 1, last_error)
+    return {}, False
 
 
 # ── WebSocket fetchers ────────────────────────────────────────────────────────
+
 
 async def _fetch_positions_for_account(api, sec_number: str) -> list:
     # TR deprecated compactPortfolio for web sessions (connect_id=31) in June 2026.
     # compactPortfolioByType is the replacement - same secAccNo param, positions are
     # grouped in categories[].positions instead of a flat positions list.
-    sub = await api.subscribe({"type": "compactPortfolioByType", "secAccNo": sec_number})
-    data = await asyncio.wait_for(api._recv_subscription(sub), timeout=15)
-    if not isinstance(data, dict):
-        return []
-    categories = data.get("categories") or []
-    if categories:
-        return [pos for cat in categories for pos in cat.get("positions", [])]
-    return data.get("positions", [])  # fallback if old flat format ever returns
+    #
+    # Retries on a transient WebSocket handshake timeout - confirmed the hard
+    # way against a real account that a single "timed out during opening
+    # handshake" on the very first connection attempt of a sync run used to
+    # silently drop an entire account type (e.g. the whole CTO, ~15k€ of
+    # positions) with no retry: _fetch_positions_for_type's per-sec-number
+    # try/except (by design, so one bad sub-account doesn't abort the
+    # others) logged a warning and moved on, and the overall sync still
+    # reported "OK" since a fully-successful PEA fetch right after made the
+    # run look complete. A transient hiccup on the first handshake of a
+    # session is common enough that giving up after exactly one attempt
+    # isn't an acceptable trade-off for how much data silently vanishes.
+    last_error: Exception | None = None
+    for attempt in range(POSITIONS_FETCH_RETRIES + 1):
+        try:
+            sub = await api.subscribe({"type": "compactPortfolioByType", "secAccNo": sec_number})
+            data = await asyncio.wait_for(api._recv_subscription(sub), timeout=15)
+            if not isinstance(data, dict):
+                return []
+            categories = data.get("categories") or []
+            if categories:
+                return [pos for cat in categories for pos in cat.get("positions", [])]
+            return data.get("positions", [])  # fallback if old flat format ever returns
+        except Exception as e:
+            last_error = e
+            if attempt < POSITIONS_FETCH_RETRIES:
+                log.warning(
+                    "TR positions fetch (%s) attempt %d/%d failed, retrying in %ds: %s",
+                    sec_number, attempt + 1, POSITIONS_FETCH_RETRIES + 1, POSITIONS_FETCH_RETRY_DELAY_S, e,
+                )
+                await asyncio.sleep(POSITIONS_FETCH_RETRY_DELAY_S)
+    raise last_error
 
 
 async def _fetch_ticker_price(api, isin: str) -> tuple[int, str | None]:
@@ -365,14 +414,26 @@ async def _fetch_neon_portfolio_prices(api) -> tuple[dict[str, int], dict[str, s
 
 
 async def _fetch_crypto_positions(api) -> list:
-    """Crypto uses a dedicated subscription (no securitiesAccountNumber)."""
-    try:
-        sub = await api.subscribe({"type": "cryptoPortfolio"})
-        data = await asyncio.wait_for(api._recv_subscription(sub), timeout=15)
-        return data.get("positions", []) if isinstance(data, dict) else []
-    except Exception as e:
-        log.warning("TR cryptoPortfolio erreur : %s", e)
-        return []
+    """Crypto uses a dedicated subscription (no securitiesAccountNumber).
+    Same retry-on-transient-failure reasoning as _fetch_positions_for_account
+    - a single handshake hiccup shouldn't silently zero out the whole crypto
+    wallet for a sync run."""
+    last_error: Exception | None = None
+    for attempt in range(POSITIONS_FETCH_RETRIES + 1):
+        try:
+            sub = await api.subscribe({"type": "cryptoPortfolio"})
+            data = await asyncio.wait_for(api._recv_subscription(sub), timeout=15)
+            return data.get("positions", []) if isinstance(data, dict) else []
+        except Exception as e:
+            last_error = e
+            if attempt < POSITIONS_FETCH_RETRIES:
+                log.warning(
+                    "TR cryptoPortfolio attempt %d/%d failed, retrying in %ds: %s",
+                    attempt + 1, POSITIONS_FETCH_RETRIES + 1, POSITIONS_FETCH_RETRY_DELAY_S, e,
+                )
+                await asyncio.sleep(POSITIONS_FETCH_RETRY_DELAY_S)
+    log.warning("TR cryptoPortfolio erreur après %d tentatives : %s", POSITIONS_FETCH_RETRIES + 1, last_error)
+    return []
 
 
 async def _fetch_cash(api) -> list:

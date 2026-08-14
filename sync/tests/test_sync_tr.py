@@ -5,12 +5,27 @@ these functions always return the same output. sync_tr.run()/keepalive()/
 _get_api() (the actual network+DB orchestration) are intentionally not
 covered - testing those would mean mocking a real broker's WebSocket API,
 which would test the mock more than the code.
+
+The retry-loop tests near the bottom (_fetch_positions_for_account /
+_fetch_crypto_positions) are a deliberate, narrow exception to that rule:
+they use a minimal fake `api` object, but only to assert our own control
+flow (does it retry the right number of times, does it eventually give up)
+- never anything about what TR actually returns. There's no way to
+automatically test "does this match TR's real live prices" the way the
+resolve_position()/value-rounding tests above test our own arithmetic -
+that would need a live session against a real account with numbers that
+change every second, so it stays a manual, one-off check instead (see the
+real-account comparison done directly with the user for the rounding fix).
 """
+
+import asyncio
 
 import requests
 
 from sync_tr import (
     _decode_jwt_payload,
+    _fetch_crypto_positions,
+    _fetch_positions_for_account,
     _is_auth_error,
     _parse_tr_timestamp,
     _position_isin,
@@ -260,3 +275,79 @@ def test_timeline_item_to_transaction_returns_none_when_amount_value_is_zero():
 def test_timeline_item_to_transaction_preserves_positive_amounts_as_credits():
     resolved = _timeline_item_to_transaction(_tl_item(title="Jean Dupont", subtitle="Virement", amount={"value": 150, "currency": "EUR"}))
     assert resolved["amount_cents"] == 15000
+
+
+# ── retry loops - control flow only, never TR's actual data (see module docstring) ──
+
+class _FlakyApi:
+    """Minimal fake standing in for pytr's TradeRepublicApi - subscribe()
+    always "succeeds" (returns a fake subscription id), _recv_subscription()
+    raises for the first `fail_times` calls then returns `payload`."""
+
+    def __init__(self, fail_times: int, payload):
+        self.fail_times = fail_times
+        self.payload = payload
+        self.attempts = 0
+
+    async def subscribe(self, _msg):
+        return "sub-1"
+
+    async def _recv_subscription(self, _sub_id):
+        self.attempts += 1
+        if self.attempts <= self.fail_times:
+            raise TimeoutError("timed out during opening handshake")
+        return self.payload
+
+
+def test_fetch_positions_for_account_retries_then_recovers(monkeypatch):
+    import sync_tr
+
+    monkeypatch.setattr(sync_tr, "POSITIONS_FETCH_RETRY_DELAY_S", 0)
+    api = _FlakyApi(fail_times=2, payload={"categories": [{"positions": [{"instrumentId": "US1"}]}]})
+
+    result = asyncio.run(_fetch_positions_for_account(api, "sec-123"))
+
+    assert result == [{"instrumentId": "US1"}]
+    assert api.attempts == 3  # 1 initial + 2 retries before the 3rd call succeeds
+
+
+def test_fetch_positions_for_account_gives_up_after_exhausting_retries(monkeypatch):
+    import sync_tr
+
+    monkeypatch.setattr(sync_tr, "POSITIONS_FETCH_RETRY_DELAY_S", 0)
+    api = _FlakyApi(fail_times=99, payload={})
+
+    try:
+        asyncio.run(_fetch_positions_for_account(api, "sec-123"))
+        assert False, "expected the persistent failure to propagate"
+    except TimeoutError:
+        pass
+
+    assert api.attempts == sync_tr.POSITIONS_FETCH_RETRIES + 1  # no more, no fewer
+
+
+def test_fetch_crypto_positions_retries_then_recovers(monkeypatch):
+    import sync_tr
+
+    monkeypatch.setattr(sync_tr, "POSITIONS_FETCH_RETRY_DELAY_S", 0)
+    api = _FlakyApi(fail_times=1, payload={"positions": [{"instrumentId": "XF000BTC0017"}]})
+
+    result = asyncio.run(_fetch_crypto_positions(api))
+
+    assert result == [{"instrumentId": "XF000BTC0017"}]
+    assert api.attempts == 2
+
+
+def test_fetch_crypto_positions_returns_empty_list_after_exhausting_retries(monkeypatch):
+    # Unlike _fetch_positions_for_account, this one swallows the final
+    # failure and returns [] rather than raising - matches its existing
+    # non-fatal "crypto just won't sync this run" behavior.
+    import sync_tr
+
+    monkeypatch.setattr(sync_tr, "POSITIONS_FETCH_RETRY_DELAY_S", 0)
+    api = _FlakyApi(fail_times=99, payload={})
+
+    result = asyncio.run(_fetch_crypto_positions(api))
+
+    assert result == []
+    assert api.attempts == sync_tr.POSITIONS_FETCH_RETRIES + 1
