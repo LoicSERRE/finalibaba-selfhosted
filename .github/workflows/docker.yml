@@ -74,19 +74,38 @@ jobs:
       - run: pip install -r sync/requirements.txt -r sync/requirements-dev.txt
       - run: cd sync && python -m pytest
 
+  # linux/arm64 used to be built via QEMU emulation on an amd64 runner, but
+  # that turned out to be unreliable for this image's mix of native/WASM
+  # dependencies - confirmed with two different failure modes on the same
+  # v1.5.1 release build in a row: the runner's baked-in QEMU first crashed
+  # outright on @tailwindcss/oxide-wasm32-wasi ("uncaught target signal 4",
+  # then hung for 67+ minutes instead of failing), and after pinning a
+  # newer QEMU (tonistiigi/binfmt) fixed that, Prisma's schema-engine WASM
+  # binary then produced silently *corrupted* JSON output under the same
+  # emulation instead of crashing. Two distinct emulation bugs on two
+  # different native deps in a row means QEMU itself isn't trustworthy here,
+  # not that any one package needed a workaround - so each platform now
+  # builds natively on its own real architecture instead (ubuntu-24.04-arm
+  # is a GitHub-hosted native arm64 runner, free for public repos), and the
+  # two single-arch images are combined into one multi-arch manifest by the
+  # merge-app/merge-sync jobs below. See Docker's own "multi-platform image
+  # with digests" pattern - this is that pattern, not a bespoke one.
   build-app:
-    name: Build & push app image
+    name: Build & push app image (${{ matrix.platform }})
     if: github.event_name == 'release'
     needs: [test]
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
-    # Exposes the exact digest just pushed so trivy-scan can pull it by
-    # digest instead of the mutable `:latest` tag - see the digest note on
-    # build-push-action below for why.
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -98,48 +117,122 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR paths must be all-lowercase - this repo's real GitHub owner
+      # login is "LoicSERRE" (capitalized), so a raw ${{ github.repository }}
+      # interpolation would break the push. Same fix as trivy-scan below.
+      - name: Lowercase repository path
+        id: repo
+        run: echo "path=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - uses: docker/metadata-action@v6
         id: meta
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/app
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
-
-      # linux/arm64 is emulated via QEMU on this amd64 runner. The
-      # binfmt_misc QEMU baked into the runner image crashes with
-      # "uncaught target signal 4 (Illegal instruction)" on some native
-      # Rust/WASM packages (@tailwindcss/oxide-wasm32-wasi confirmed) and
-      # then hangs forever instead of failing - confirmed the hard way on
-      # the v1.5.1 release build (67+ minutes stuck with zero output after
-      # the crash, until manually cancelled). tonistiigi/binfmt's QEMU
-      # build is more actively maintained than the runner's baked-in one.
-      - uses: docker/setup-qemu-action@v3
+          images: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/app
 
       - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/build-push-action@v7
+      - name: Build and push by digest
         id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/app,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=app-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=app-${{ matrix.platform }}
 
-  build-sync:
-    name: Build & push sync image
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Slugify platform for artifact name
+        id: slug
+        run: echo "slug=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-app-${{ steps.slug.outputs.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-app:
+    name: Merge app image manifest
     if: github.event_name == 'release'
-    needs: [test, python-check]
+    needs: [build-app]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    # Exposes the exact multi-arch manifest digest just pushed so trivy-scan
+    # can pull it by digest instead of the mutable `:latest` tag - GHCR's
+    # `:latest` pointer can lag briefly behind the manifest it was just
+    # repointed to (see the note on trivy-scan below).
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
+      digest: ${{ steps.merge.outputs.digest }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: digests-app-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - uses: docker/login-action@v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repository path
+        id: repo
+        run: echo "path=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/app
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          # shellcheck disable=SC2046 # word-splitting is the point here: both
+          # $(...) below expand to several space-separated CLI args (-t tag1
+          # -t tag2, and one image@digest per downloaded platform digest
+          # file), not a single string - quoting would break both expansions.
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/app@sha256:%s ' *)
+
+      - name: Capture manifest digest
+        id: merge
+        run: |
+          digest=$(docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/app:${{ steps.meta.outputs.version }} --format '{{.Manifest.Digest}}')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+  build-sync:
+    name: Build & push sync image (${{ matrix.platform }})
+    if: github.event_name == 'release'
+    needs: [test, python-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -151,30 +244,98 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase repository path
+        id: repo
+        run: echo "path=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - uses: docker/metadata-action@v6
         id: meta
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/sync
+          images: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/sync
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ./sync
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/sync,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=sync-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=sync-${{ matrix.platform }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Slugify platform for artifact name
+        id: slug
+        run: echo "slug=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-sync-${{ steps.slug.outputs.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-sync:
+    name: Merge sync image manifest
+    if: github.event_name == 'release'
+    needs: [build-sync]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.merge.outputs.digest }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: digests-sync-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - uses: docker/login-action@v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repository path
+        id: repo
+        run: echo "path=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/sync
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
-      # See the same step in build-app above for why this is needed.
-      - uses: docker/setup-qemu-action@v3
-
       - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/build-push-action@v7
-        id: build
-        with:
-          context: ./sync
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          # shellcheck disable=SC2046 # word-splitting is the point here: both
+          # $(...) below expand to several space-separated CLI args (-t tag1
+          # -t tag2, and one image@digest per downloaded platform digest
+          # file), not a single string - quoting would break both expansions.
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/sync@sha256:%s ' *)
+
+      - name: Capture manifest digest
+        id: merge
+        run: |
+          digest=$(docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/sync:${{ steps.meta.outputs.version }} --format '{{.Manifest.Digest}}')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   # Scans the images actually published above (registry pull, not a rebuild)
   # for OS-package-level CVEs - npm audit/pip-audit only ever see what's
@@ -202,7 +363,7 @@ jobs:
   trivy-scan:
     name: Trivy image scan (${{ matrix.image }})
     if: github.event_name == 'release'
-    needs: [build-app, build-sync]
+    needs: [merge-app, merge-sync]
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -246,7 +407,7 @@ jobs:
       # Dockerfile) that a CRITICAL/HIGH-only gate was never meant to catch.
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/${{ matrix.image }}@${{ matrix.image == 'app' && needs.build-app.outputs.digest || needs.build-sync.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ steps.repo.outputs.path }}/${{ matrix.image }}@${{ matrix.image == 'app' && needs.merge-app.outputs.digest || needs.merge-sync.outputs.digest }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -261,7 +422,7 @@ jobs:
   notify-deploy:
     name: Notify private deploy repo
     if: github.event_name == 'release'
-    needs: [build-app, build-sync, trivy-scan]
+    needs: [merge-app, merge-sync, trivy-scan]
     runs-on: ubuntu-latest
     # This job never touches GITHUB_TOKEN - it authenticates to the private
     # repo via the DEPLOY_DISPATCH_TOKEN secret instead - so it needs none of
