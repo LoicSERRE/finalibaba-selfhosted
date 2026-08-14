@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime
 from decimal import Decimal
 
 import psycopg2.extras
@@ -25,6 +26,7 @@ from db import (
     record_balance,
     upsert_account,
     upsert_holding,
+    upsert_transaction,
     write_sync_log,
 )
 
@@ -372,6 +374,135 @@ async def _fetch_cash(api) -> list:
     return data if isinstance(data, list) else []
 
 
+# ── Transaction history (timeline) ────────────────────────────────────────────
+
+# TR's own app activity feed is split across two subscription types that
+# together cover everything money-related: timelineTransactions (trades,
+# dividends, interest, transfers) and timelineActivityLog (card payments,
+# deposits, and a few event types timelineTransactions omits) - pytr's own
+# Timeline class fetches and merges both for the exact same reason. Both are
+# cursor-paginated and return newest-first.
+TIMELINE_FEEDS = ("timelineTransactions", "timelineActivityLog")
+
+
+def _parse_tr_timestamp(ts: str) -> datetime:
+    """TR's timeline timestamps look like '...+0200' (no colon in the UTC
+    offset), which Python's datetime.fromisoformat rejects on older
+    versions - same fix pytr's own Event.from_dict applies before parsing."""
+    if len(ts) >= 5 and ts[-5] in "+-" and ts[-3] != ":":
+        ts = ts[:-2] + ":" + ts[-2:]
+    return datetime.fromisoformat(ts)
+
+
+async def _fetch_timeline_feed(api, feed_type: str, known_ids: set[str], max_pages: int = 200) -> list[dict]:
+    """Paginate one timeline feed (newest-first) until either the API runs
+    out of pages, or an entire page is already-known (syncId already in DB)
+    - since the feed is strictly newest-first, that means everything further
+    back is guaranteed already synced too, so it's safe to stop there. This
+    is what keeps every sync after the first one fast: the very first run
+    (empty known_ids) paginates the full available history, every run after
+    that stops within a page or two of the most recent already-synced item.
+    max_pages is a hard safety cap so a bug in the stop condition, or an API
+    response shape TR changes later, can't paginate forever.
+    """
+    items = []
+    after = None
+    for _ in range(max_pages):
+        try:
+            sub = await api.subscribe({"type": feed_type, "after": after})
+            page = await asyncio.wait_for(api._recv_subscription(sub), timeout=15)
+        except Exception as e:
+            log.warning("TR %s page fetch error (stopping this feed here): %s", feed_type, e)
+            break
+        if not isinstance(page, dict):
+            break
+        page_items = page.get("items") or []
+        if not page_items:
+            break
+        items.extend(page_items)
+        if all(item.get("id") in known_ids for item in page_items):
+            break
+        after = (page.get("cursors") or {}).get("after")
+        if not after:
+            break
+    return items
+
+
+def _timeline_item_to_transaction(item: dict) -> dict | None:
+    """Resolve one raw timeline item into the fields upsert_transaction()
+    needs. Returns None for items that don't represent a real money movement
+    (no amount, cancelled) - informational-only timeline entries (address
+    changes, document notifications, etc.) have no "amount" field at all.
+
+    Pure - no I/O, so the mapping logic can be unit tested without a live
+    TR session, same reasoning as resolve_position() above.
+    """
+    if item.get("status", "").lower() == "canceled":
+        return None
+    amount = item.get("amount")
+    value = amount.get("value") if isinstance(amount, dict) else None
+    if not value:
+        return None
+
+    title = (item.get("title") or "").strip()
+    subtitle = (item.get("subtitle") or "").strip()
+    label = f"{title} - {subtitle}" if subtitle and subtitle != title else (title or subtitle or "—")
+
+    return {
+        "id": item["id"],
+        "date": _parse_tr_timestamp(item["timestamp"]),
+        "label": label,
+        "amount_cents": int(Decimal(str(value)) * 100),
+    }
+
+
+async def _fetch_all_timeline_items(api, known_ids: set[str]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for feed_type in TIMELINE_FEEDS:
+        for item in await _fetch_timeline_feed(api, feed_type, known_ids):
+            merged[item["id"]] = item  # both feeds can report the same event id
+    return list(merged.values())
+
+
+def _sync_transactions(cur, account_id: str, items: list[dict]) -> int:
+    """Upsert TR's cash-relevant activity history (card payments, transfers,
+    trades, dividends, interest) into the same account transaction history
+    LCL/Woob already populate for their accounts, so budget categorization
+    and recurring-transaction detection work the same way for Trade
+    Republic's cash account as for a regular bank account.
+
+    `items` is already fetched (see _fetch_all's docstring for why that
+    fetch has to happen inside the same asyncio.run() call as the
+    positions/cash fetch, not a separate one here) - this function is pure
+    DB writing, no I/O to TR at all.
+
+    Errors here are non-fatal - the position/cash sync above already
+    committed, so a failure here just leaves the transaction history stale
+    until the next run instead of failing the whole TR sync, same pattern
+    as _sync_account_transactions in sync_lcl.py/sync_woob.py.
+    """
+    try:
+        count = 0
+        for item in items:
+            resolved = _timeline_item_to_transaction(item)
+            if resolved is None:
+                continue
+            upsert_transaction(
+                cur,
+                account_id=account_id,
+                sync_id=f"tr:{resolved['id']}",
+                date=resolved["date"],
+                label=resolved["label"],
+                amount_cents=resolved["amount_cents"],
+            )
+            count += 1
+        log.info("TR transactions - %d nouvelle(s) sur %d élément(s) reçus", count, len(items))
+        return count
+    except Exception as e:
+        log.warning("TR transactions ignorées : %s", e)
+        return 0
+
+
 async def _fetch_positions_for_type(api, acc_type: str, sec_numbers: list[str]) -> list:
     """Fetch and merge positions across every securities-account-number under
     one TR account type (a type can have several sub-accounts) - a fetch
@@ -431,13 +562,24 @@ async def _resolve_ticker_prices(api, all_isins: set[str], neon_prices: dict[str
     return prices
 
 
-async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) -> tuple[dict, list, dict, dict]:
+async def _fetch_all(
+    api, sec_accounts: dict[str, list[str]], has_crypto: bool, known_tx_ids: set[str]
+) -> tuple[dict, list, dict, dict, list]:
     """
     Returns:
       positions_by_type: {"default": [...], "tax_wrapper_fr": [...], "CRYPTO": [...]}
       cash_accounts: [{"currencyId": "EUR", "amount": 1700.63}, ...]
       prices: {isin: (price_cents, name)} fetched via ticker subscription
       neon_quantities: {isin: virtual_size_str} for PE/ELTIFs priced via netValue/virtualSize
+      timeline_items: raw timelineTransactions/timelineActivityLog items, deduplicated
+
+    Transaction history is fetched here, in the same event loop as everything
+    else, deliberately - api's websocket connection is bound to whichever
+    asyncio event loop created it (via the one asyncio.run() call in run()),
+    and calling asyncio.run() a second time for a separate fetch creates a
+    *different* loop, which fails hard trying to reuse that same connection
+    ("Future ... attached to a different loop"). Confirmed the hard way
+    testing against a real account before this was folded in here.
     """
     positions_by_type = await _build_positions_by_type(api, sec_accounts, has_crypto)
 
@@ -457,7 +599,8 @@ async def _fetch_all(api, sec_accounts: dict[str, list[str]], has_crypto: bool) 
     prices = await _resolve_ticker_prices(api, all_isins, neon_prices)
 
     cash_accounts = await _fetch_cash(api)
-    return positions_by_type, cash_accounts, prices, neon_quantities
+    timeline_items = await _fetch_all_timeline_items(api, known_tx_ids)
+    return positions_by_type, cash_accounts, prices, neon_quantities, timeline_items
 
 
 # ── DB sync ───────────────────────────────────────────────────────────────────
@@ -562,8 +705,23 @@ def run(interactive: bool = False) -> dict:
     if not sec_accounts:
         log.warning("TR: JWT decode failed - no portfolio accounts found, only cash will be synced")
 
+    # Created here (not after the fetch, where the cash balance itself is
+    # recorded) so its already-synced transaction ids can be loaded before
+    # the timeline fetch below - upsert_account is idempotent either way.
+    cash_account_id = upsert_account(
+        cur,
+        sync_id="tr:cash",
+        name="Compte espèces",
+        account_type="CHECKING",
+        institution_id=institution_id,
+    )
+    cur.execute('SELECT "syncId" FROM "Transaction" WHERE "accountId" = %s', (cash_account_id,))
+    known_tx_ids = {row["syncId"].split(":", 1)[1] for row in cur.fetchall() if row["syncId"]}
+
     try:
-        positions_by_type, cash_accounts, prices, neon_quantities = asyncio.run(_fetch_all(api, sec_accounts, has_crypto))
+        positions_by_type, cash_accounts, prices, neon_quantities, timeline_items = asyncio.run(
+            _fetch_all(api, sec_accounts, has_crypto, known_tx_ids)
+        )
     except Exception as e:
         if _is_auth_error(e):
             api._cookies_file.unlink(missing_ok=True)
@@ -581,19 +739,16 @@ def run(interactive: bool = False) -> dict:
         total_positions += len(positions)
         summary_parts.append(f"{acc_type}: {len(positions)} pos ({count_cents/100:.0f}€)")
 
-    # Cash account (always present)
-    cash_account_id = upsert_account(
-        cur,
-        sync_id="tr:cash",
-        name="Compte espèces",
-        account_type="CHECKING",
-        institution_id=institution_id,
-    )
+    # Cash balance (account itself already created above, before the fetch)
     cash_eur = sum(a.get("amount", 0) for a in cash_accounts if a.get("currencyId") == "EUR")
     cash_cents = int(Decimal(str(cash_eur)) * 100)
     record_balance(cur, cash_account_id, cash_cents)
     summary_parts.append(f"cash: {cash_eur:.2f}€")
     log.info("TR cash - %d cts", cash_cents)
+
+    tx_count = _sync_transactions(cur, cash_account_id, timeline_items)
+    if tx_count:
+        summary_parts.append(f"{tx_count} transaction(s)")
 
     # XF000* ISINs (TR crypto) always belong in the CRYPTO account, never in CTO.
     # Purge unconditionally so stale entries from previous syncs are removed.

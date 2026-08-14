@@ -12,7 +12,9 @@ import requests
 from sync_tr import (
     _decode_jwt_payload,
     _is_auth_error,
+    _parse_tr_timestamp,
     _position_isin,
+    _timeline_item_to_transaction,
     resolve_position,
     split_crypto_positions,
 )
@@ -161,3 +163,84 @@ def test_is_auth_error_false_for_a_transient_error_that_happens_to_mention_sessi
 
 def test_is_auth_error_false_for_a_generic_exception():
     assert _is_auth_error(ValueError("something else entirely")) is False
+
+
+# ── _parse_tr_timestamp ────────────────────────────────────────────────────────
+
+def test_parse_tr_timestamp_handles_missing_colon_in_offset():
+    # TR's raw format - no colon in the UTC offset, which Python's
+    # datetime.fromisoformat rejects on some versions without the fixup.
+    dt = _parse_tr_timestamp("2026-01-15T10:30:00.123+0200")
+    assert dt.year == 2026 and dt.month == 1 and dt.day == 15
+    assert dt.hour == 10 and dt.minute == 30
+    assert dt.utcoffset().total_seconds() == 2 * 3600
+
+
+def test_parse_tr_timestamp_passes_through_a_well_formed_offset():
+    dt = _parse_tr_timestamp("2026-01-15T10:30:00.123+02:00")
+    assert dt.utcoffset().total_seconds() == 2 * 3600
+
+
+def test_parse_tr_timestamp_handles_utc_z_suffix():
+    dt = _parse_tr_timestamp("2026-01-15T10:30:00.123Z".replace("Z", "+00:00"))
+    assert dt.utcoffset().total_seconds() == 0
+
+
+# ── _timeline_item_to_transaction ──────────────────────────────────────────────
+
+def _tl_item(**overrides):
+    item = {
+        "id": "evt-1",
+        "title": "Amazon",
+        "subtitle": "Kartenzahlung",
+        "timestamp": "2026-01-15T10:30:00.123+0200",
+        "amount": {"value": -42.5, "currency": "EUR"},
+        "status": "executed",
+    }
+    item.update(overrides)
+    return item
+
+
+def test_timeline_item_to_transaction_builds_label_from_title_and_subtitle():
+    resolved = _timeline_item_to_transaction(_tl_item())
+    assert resolved["id"] == "evt-1"
+    assert resolved["label"] == "Amazon - Kartenzahlung"
+    assert resolved["amount_cents"] == -4250
+
+
+def test_timeline_item_to_transaction_omits_subtitle_when_identical_to_title():
+    resolved = _timeline_item_to_transaction(_tl_item(title="Zinsen", subtitle="Zinsen"))
+    assert resolved["label"] == "Zinsen"
+
+
+def test_timeline_item_to_transaction_omits_subtitle_when_absent():
+    resolved = _timeline_item_to_transaction(_tl_item(subtitle=""))
+    assert resolved["label"] == "Amazon"
+
+
+def test_timeline_item_to_transaction_falls_back_to_placeholder_when_no_title_or_subtitle():
+    resolved = _timeline_item_to_transaction(_tl_item(title="", subtitle=""))
+    assert resolved["label"] == "—"
+
+
+def test_timeline_item_to_transaction_returns_none_for_cancelled_items():
+    assert _timeline_item_to_transaction(_tl_item(status="canceled")) is None
+    assert _timeline_item_to_transaction(_tl_item(status="CANCELED")) is None
+
+
+def test_timeline_item_to_transaction_returns_none_when_amount_is_missing():
+    # Informational-only timeline entries (address changes, document
+    # notifications, etc.) have no "amount" field at all - must not crash,
+    # and must not be imported as a €0 transaction.
+    item = _tl_item()
+    del item["amount"]
+    assert _timeline_item_to_transaction(item) is None
+
+
+def test_timeline_item_to_transaction_returns_none_when_amount_value_is_zero():
+    assert _timeline_item_to_transaction(_tl_item(amount={"value": 0, "currency": "EUR"})) is None
+
+
+def test_timeline_item_to_transaction_preserves_positive_amounts_as_credits():
+    resolved = _timeline_item_to_transaction(_tl_item(title="Jean Dupont", subtitle="Virement", amount={"value": 150, "currency": "EUR"}))
+    assert resolved["amount_cents"] == 15000

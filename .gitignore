@@ -54,3 +54,6 @@ __pycache__/
 # Claude Code
 .claude/skills/**/__pycache__/
 .claude/skills/**/*.pyc
+
+# Local-only scratch notes (manual QA checklists etc.) - never pushed
+/TEST_PROTOCOL.md
