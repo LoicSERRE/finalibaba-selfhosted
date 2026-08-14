@@ -62,8 +62,15 @@ def _configure_woob():
 
 
 def _sync_account_transactions(w, account, account_db_id, cur):
-    """Fetch and upsert transaction history for one account (last ~90 days).
-    Errors here are non-fatal - the account balance above was already
+    """Fetch and upsert transaction history for one account. Not capped at
+    ~90 days despite an earlier version of this comment claiming that - the
+    LCL woob module's iter_history paginates up to 5000 transactions itself
+    (see modules/lcl/browser.py upstream) with no artificial cutoff on our
+    side either. Confirmed against a real account: some accounts (Livret A,
+    LEP, Livret Jeune) came back close to 2 years deep, others (the checking
+    account) only ~3 months - the real limiting factor is what LCL's own
+    site exposes per account type, not this code. Errors here are non-fatal
+    - the account balance above was already
     recorded, so a failure just leaves that account's history stale until
     the next run instead of aborting the whole sync."""
     try:
@@ -195,7 +202,8 @@ def run(interactive: bool = False) -> dict:
         if summary is None:
             continue
         synced.append({"label": summary["label"], "balance_cents": summary["balance_cents"]})
-        # Fetch transactions (last ~90 days)
+        # Fetch transaction history - see _sync_account_transactions'
+        # docstring for how far back this actually goes.
         _sync_account_transactions(w, account, summary["account_db_id"], cur)
 
     write_sync_log(cur, "lcl", "success", f"{len(synced)} compte(s) synchronisé(s)")
