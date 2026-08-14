@@ -107,6 +107,16 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
+      # linux/arm64 is emulated via QEMU on this amd64 runner. The
+      # binfmt_misc QEMU baked into the runner image crashes with
+      # "uncaught target signal 4 (Illegal instruction)" on some native
+      # Rust/WASM packages (@tailwindcss/oxide-wasm32-wasi confirmed) and
+      # then hangs forever instead of failing - confirmed the hard way on
+      # the v1.5.1 release build (67+ minutes stuck with zero output after
+      # the crash, until manually cancelled). tonistiigi/binfmt's QEMU
+      # build is more actively maintained than the runner's baked-in one.
+      - uses: docker/setup-qemu-action@v3
+
       - uses: docker/setup-buildx-action@v4
 
       - uses: docker/build-push-action@v7
@@ -149,6 +159,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
+
+      # See the same step in build-app above for why this is needed.
+      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v4
 
