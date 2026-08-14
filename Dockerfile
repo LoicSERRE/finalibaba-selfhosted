@@ -1,10 +1,12 @@
 # ── deps ───────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS deps
+FROM node:26-alpine AS deps
 RUN apk add --no-cache libc6-compat
-# corepack ships with Node 22 - this pulls the exact pnpm version pinned in
-# package.json's "packageManager" field, so every stage (and CI) resolves
-# packages identically.
-RUN corepack enable
+# Node 26 dropped bundling corepack by default (Node 22 shipped it out of the
+# box) - install it explicitly via npm first. corepack's own version doesn't
+# affect reproducibility, it's just the installer for the exact pnpm version
+# pinned in package.json's "packageManager" field, so every stage (and CI)
+# resolves packages identically regardless of which corepack fetched it.
+RUN npm install -g corepack@latest && corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # --ignore-scripts: prisma/schema.prisma isn't copied into this stage, so the
@@ -13,9 +15,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── builder ────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 RUN apk add --no-cache libc6-compat
-RUN corepack enable
+RUN npm install -g corepack@latest && corepack enable
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -26,10 +28,10 @@ ENV NODE_ENV=production
 RUN pnpm run build
 
 # ── runner ─────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 # postgresql16-client: matches the postgres:16-alpine server exactly - used by
 # app/api/backup/route.ts (pg_dump/psql) for in-app backup & restore
-RUN corepack enable && apk add --no-cache libc6-compat postgresql16-client
+RUN npm install -g corepack@latest && corepack enable && apk add --no-cache libc6-compat postgresql16-client
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -63,14 +65,16 @@ COPY --from=builder /app/app/generated ./app/generated
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
-# node:22-alpine bundles npm (and its own vendored node_modules) even though
-# this project only ever uses pnpm (see corepack enable above) - npm/npx are
-# never invoked anywhere in this Dockerfile or its CMD. Trivy flags real
-# CVEs in npm's bundled deps (tar, brace-expansion, picomatch, sigstore) on
-# every release scan for code that's genuinely unreachable here, not just
-# unlikely to be reached - removing it outright is more honest than
-# suppressing the finding, and slightly shrinks the image too.
-# Drop root before the app runs - node:22-alpine already ships a non-root
+# node:26-alpine bundles npm (and its own vendored node_modules) even though
+# this project only ever uses pnpm - npm's only real use anywhere in this
+# Dockerfile is the one-shot `npm install -g corepack` above (Node 26 no
+# longer bundles corepack itself, unlike Node 22), never invoked again after
+# that. Trivy flags real CVEs in npm's bundled deps (tar, brace-expansion,
+# picomatch, sigstore) on every release scan for code that's genuinely
+# unreachable at runtime, not just unlikely to be reached - removing it
+# outright once corepack has already pulled the pinned pnpm version is more
+# honest than suppressing the finding, and slightly shrinks the image too.
+# Drop root before the app runs - node:26-alpine already ships a non-root
 # "node" user (uid 1000). chown -R covers everything above in a single pass,
 # including node_modules (produced by the `pnpm install` RUN step, not a
 # COPY, so a per-COPY --chown wouldn't reach it).
