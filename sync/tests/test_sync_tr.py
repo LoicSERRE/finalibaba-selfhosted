@@ -103,6 +103,19 @@ def test_resolve_position_computes_value_as_quantity_times_price():
     assert resolved["value_cents"] == 3 * 50_00
 
 
+def test_resolve_position_rounds_fractional_cents_instead_of_truncating():
+    # Fractional shares (TR supports buying fractional positions) times an
+    # integer price_cents can land exactly on a fractional cent: 10.01 *
+    # 999 = 9999.99. A plain int() truncation would silently drop to 9999,
+    # undercounting the position (and the account's recorded balance
+    # snapshot) by a cent versus what the UI's Decimal .round() shows for
+    # the same quantity/price. Must round to 10000.
+    prices = {"IE1": (999, "MSCI World")}
+    pos = {"instrumentId": "IE1", "quantity": "10.01"}
+    resolved = resolve_position(pos, prices, {})
+    assert resolved["value_cents"] == 10000
+
+
 # ── _decode_jwt_payload ────────────────────────────────────────────────────────
 
 def test_decode_jwt_payload_decodes_a_well_formed_token():
@@ -171,8 +184,11 @@ def test_parse_tr_timestamp_handles_missing_colon_in_offset():
     # TR's raw format - no colon in the UTC offset, which Python's
     # datetime.fromisoformat rejects on some versions without the fixup.
     dt = _parse_tr_timestamp("2026-01-15T10:30:00.123+0200")
-    assert dt.year == 2026 and dt.month == 1 and dt.day == 15
-    assert dt.hour == 10 and dt.minute == 30
+    assert dt.year == 2026
+    assert dt.month == 1
+    assert dt.day == 15
+    assert dt.hour == 10
+    assert dt.minute == 30
     assert dt.utcoffset().total_seconds() == 2 * 3600
 
 

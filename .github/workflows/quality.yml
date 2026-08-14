@@ -2,17 +2,17 @@ name: Quality & security scans
 
 # Lightweight, stateless scanners - no server to host, no persistent infra:
 # every tool here is a single downloaded binary (or a `pip install`/`npx`)
-# that runs for the duration of the job and leaves nothing behind. Ported
-# from Neural-AI-Malta/.github's ci-security.yml/ci-quality.yml/
-# ci-workflows.yml/ci-sbom.yml, simplified: dropped the sticky PR-comment
-# mechanism (which needed pull-requests: write + a fair amount of Python
-# string-juggling duplicated per job) in favor of $GITHUB_STEP_SUMMARY only -
-# still visible on every run, just not a single persistently-updated comment.
+# that runs for the duration of the job and leaves nothing behind. Adapted
+# from an internal template workflow set, simplified: dropped the sticky
+# PR-comment mechanism (which needed pull-requests: write + a fair amount of
+# Python string-juggling duplicated per job) in favor of $GITHUB_STEP_SUMMARY
+# only - still visible on every run, just not a single persistently-updated
+# comment.
 #
 # Tool versions are pinned in the `run:` lines below (curl/pip/npx), not via
 # `uses:`, so dependabot.yml's github-actions ecosystem entry won't auto-bump
-# them - same characteristic as the source repo this was ported from, bump
-# manually when there's a reason to (a new CVE class, a rule pack update).
+# them - bump manually when there's a reason to (a new CVE class, a rule
+# pack update).
 
 on:
   push:

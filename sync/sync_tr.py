@@ -110,7 +110,14 @@ def resolve_position(pos: dict, prices: dict, neon_quantities: dict) -> dict | N
     quantity = str(neon_quantities.get(isin) or pos.get("virtualSize") or pos.get("netSize") or pos.get("quantity", "0"))
     avg_price = str(pos.get("averageBuyIn") or pos.get("avgCost") or 0)
     cost_basis_cents = int((Decimal(quantity) * Decimal(avg_price) * 100).to_integral_value()) if float(avg_price) else None
-    value_cents = int(Decimal(quantity) * Decimal(str(price_cents)))
+    # .to_integral_value() (rounds, ROUND_HALF_EVEN) not int() (truncates) -
+    # matches cost_basis_cents above and the TS display layer's
+    # Decimal(...).round() in lib/domain/account-detail.ts's
+    # holdingMarketValue(). A plain int() here silently dropped sub-cent
+    # fractions instead of rounding them, nudging the account's recorded
+    # balance snapshot (sum of every position's value_cents) away from what
+    # the UI displays (sum of each individually-rounded holding).
+    value_cents = int((Decimal(quantity) * Decimal(str(price_cents))).to_integral_value())
 
     return {
         "isin": isin,

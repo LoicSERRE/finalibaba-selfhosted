@@ -31,6 +31,11 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
 }
 
 export async function setTransactionCategory(transactionId: string, categoryId: string | null) {
+  const before = await prisma.transaction.findUnique({
+    where: { id: transactionId },
+    select: { categoryId: true },
+  });
+
   const tx = await prisma.transaction.update({
     where: { id: transactionId },
     data: { categoryId },
@@ -39,6 +44,13 @@ export async function setTransactionCategory(transactionId: string, categoryId: 
 
   revalidatePath(`/accounts/${tx.accountId}`);
   revalidatePath("/budgets");
+  // TransactionCategorySelect is also used on the /budgets/[categoryId]
+  // drill-down page (recategorizing a transaction away from there should
+  // make it disappear from that list without a manual refresh) - revalidate
+  // both the category it's leaving and the one it's joining, since either
+  // could be the page currently being viewed.
+  if (before?.categoryId) revalidatePath(`/budgets/${before.categoryId}`);
+  if (categoryId) revalidatePath(`/budgets/${categoryId}`);
 }
 
 // Assigns one category to a batch of transactions at once - the ids come

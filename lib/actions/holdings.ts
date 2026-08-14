@@ -96,6 +96,7 @@ export async function upsertHolding(formData: FormData) {
 
   await refreshAccountBalance(accountId);
 
+  revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/accounts");
   revalidatePath("/analytics");
   revalidatePath("/");
@@ -104,6 +105,7 @@ export async function upsertHolding(formData: FormData) {
 export async function deleteHolding(id: string, accountId: string) {
   await prisma.holding.delete({ where: { id } });
   await refreshAccountBalance(accountId);
+  revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/accounts");
   revalidatePath("/analytics");
   revalidatePath("/");

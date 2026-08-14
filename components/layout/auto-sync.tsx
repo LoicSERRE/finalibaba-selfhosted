@@ -25,20 +25,37 @@ export function AutoSync() {
     if (pathname?.startsWith("/shared/")) return;
 
     mountedAt.current = Date.now();
-    autoTriggerSync().then(({ triggered }) => {
-      if (triggered) setSyncing(true);
-    });
+    let attempts = 0;
+    // Safety cap (~2min at 5s/attempt) - without it, a sync that never
+    // completes (crashed, network failure) would poll forever for as long
+    // as the page stays open, same bug class as the missing `triggered`
+    // gate below, just for the failure path instead of the no-op path.
+    const MAX_ATTEMPTS = 24;
 
-    intervalRef.current = setInterval(async () => {
-      const status = await getSyncStatus();
-      const tr = status["trade_republic"];
-      const trTime = tr ? new Date(tr.createdAt).getTime() : 0;
-      if (trTime > mountedAt.current) {
-        clearInterval(intervalRef.current!);
-        setSyncing(false);
-        router.refresh();
-      }
-    }, 5000);
+    autoTriggerSync().then(({ triggered }) => {
+      // Only poll when a sync was actually triggered - previously this
+      // setInterval ran unconditionally on every mount, and only ever
+      // stopped once it saw a *new* trade_republic SyncLog row newer than
+      // mount time. When nothing was triggered (data wasn't stale), that
+      // condition can never become true, so it polled every 5s forever for
+      // as long as the page stayed open - confirmed empirically via a
+      // devtools network capture showing dozens of accumulated requests to
+      // the current route from a single page left open a couple of minutes.
+      if (!triggered) return;
+      setSyncing(true);
+
+      intervalRef.current = setInterval(async () => {
+        attempts += 1;
+        const status = await getSyncStatus();
+        const tr = status["trade_republic"];
+        const trTime = tr ? new Date(tr.createdAt).getTime() : 0;
+        if (trTime > mountedAt.current || attempts >= MAX_ATTEMPTS) {
+          clearInterval(intervalRef.current!);
+          setSyncing(false);
+          router.refresh();
+        }
+      }, 5000);
+    });
 
     return () => clearInterval(intervalRef.current!);
   }, [router, pathname]);

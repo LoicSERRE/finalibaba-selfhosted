@@ -154,6 +154,7 @@ export async function updateRealEstateAccount(formData: FormData) {
     data: { accountId: id, balanceCents: valueCents },
   });
 
+  revalidatePath(`/accounts/${id}`);
   revalidateAll();
 }
 
@@ -209,5 +210,6 @@ export async function updateAutomobileAccount(formData: FormData) {
     data: { accountId: id, balanceCents: valueCents },
   });
 
+  revalidatePath(`/accounts/${id}`);
   revalidateAll();
 }

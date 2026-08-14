@@ -465,7 +465,7 @@ Latent tax rate: per-account via `getAccountTaxRate()` - see "Tax treatment" abo
 
 ### CI quality gates
 
-`quality.yml` is a second, separate scanning workflow from `docker.yml`'s `trivy-scan` above - lightweight, stateless scanners (actionlint, zizmor, SonarQube, a duplication/complexity ratchet) ported from a shared `.github` template repo, ID'd in the workflow's own header comment. Tool versions are pinned inline in `run:` lines rather than via `uses:`, so Dependabot's `github-actions` ecosystem entry won't auto-bump them - bump manually on a new CVE class or rule-pack update. `zizmor` (workflow security posture) runs non-blocking by design: this repo pins actions by tag, not SHA, and that's its dominant finding class - informational until that's revisited.
+`quality.yml` is a second, separate scanning workflow from `docker.yml`'s `trivy-scan` above - lightweight, stateless scanners (actionlint, zizmor, SonarQube, a duplication/complexity ratchet) adapted from an internal template workflow set. Tool versions are pinned inline in `run:` lines rather than via `uses:`, so Dependabot's `github-actions` ecosystem entry won't auto-bump them - bump manually on a new CVE class or rule-pack update. `zizmor` (workflow security posture) runs non-blocking by design: this repo pins actions by tag, not SHA, and that's its dominant finding class - informational until that's revisited.
 
 The duplication/complexity ratchet job compares each run against a baseline artifact from a prior run via `gh api`; a transient GitHub API error on that lookup used to hard-fail the whole job instead of just skipping the comparison. Both the "list artifacts" and "download artifact zip" calls now fail open (treated as "no baseline yet") - don't re-tighten this to fail closed, a flaky `gh api` call isn't a real quality regression.
 
@@ -501,3 +501,13 @@ Defined in `globals.css`. Never use raw Tailwind colour classes for brand colour
 ## Next.js version note
 
 This project uses Next.js 16+, which has breaking changes from training data. Before writing Next.js-specific code, check `node_modules/next/dist/docs/` for current APIs and conventions. Heed deprecation notices.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

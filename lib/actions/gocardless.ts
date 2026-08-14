@@ -23,5 +23,6 @@ export async function syncGocardlessBalances(institutionId: string) {
   );
 
   revalidatePath("/accounts");
+  revalidatePath("/settings");
   revalidatePath("/");
 }
