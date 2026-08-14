@@ -67,6 +67,8 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 - [ ] **PWA / mobile-optimised** - installable progressive web app with swipe-friendly views for phones
 - [ ] **Light theme** - optional light colour scheme (currently dark only)
 - [ ] **Plaid integration** - US and Canadian banks (only if there is clear community demand)
+- [ ] **Richer read-only share view** - `/shared/<token>` currently mirrors the main dashboard 1:1 (net worth, allocation); consider more detail for the advisor/family use case (per-account breakdown, holdings, recent transactions) - flagged after real usage, scope not decided yet
+- [ ] **Custom alert rules** - the 3 v1.5 triggers (net worth threshold, loan nearly paid off, sync failure) are fixed and non-editable in content; consider user-defined conditions (per-account balance thresholds, budget overrun, custom message text) instead of only the 3 built-in cases - flagged after real usage, scope not decided yet
 
 ---
 
