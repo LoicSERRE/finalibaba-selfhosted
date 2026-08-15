@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { renderAlertEmailHtml } from "@/lib/services/email-template";
 
 type AlertChannelSettings = {
   ntfyTopicUrl: string | null;
@@ -36,7 +37,8 @@ export async function sendNtfyMessage(topicUrl: string, body: string, authToken:
 export async function sendEmail(
   config: { host: string; port: number; user: string | null; password: string | null; from: string; to: string },
   subject: string,
-  text: string
+  text: string,
+  html?: string
 ): Promise<boolean> {
   try {
     const transporter = nodemailer.createTransport({
@@ -48,7 +50,9 @@ export async function sendEmail(
       secure: config.port === 465,
       auth: config.user ? { user: config.user, pass: config.password ?? "" } : undefined,
     });
-    await transporter.sendMail({ from: config.from, to: config.to, subject, text });
+    // html is optional so existing/direct callers keep sending plain text
+    // unchanged - only dispatchAlert below opts into the styled version.
+    await transporter.sendMail({ from: config.from, to: config.to, subject, text, ...(html ? { html } : {}) });
     return true;
   } catch (e) {
     console.error("Failed to send alert email", e);
@@ -82,7 +86,8 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
           to: settings.alertEmailTo,
         },
         title,
-        body
+        body,
+        renderAlertEmailHtml(title, body)
       )
     );
   }

@@ -102,34 +102,64 @@ function formatSyncFailureBody(source: string, message: string | null): string {
   return `La synchronisation "${source}" a échoué${suffix}`;
 }
 
+const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Edge-triggered, not level-triggered: alerts once when a source transitions
+ * into a broken streak (SyncFailureState row created), then at most one
+ * reminder per REMINDER_INTERVAL_MS while it stays broken, and clears the
+ * moment the source succeeds again so the next failure (if any) is treated
+ * as a brand new streak. Replaces a version that alerted once per failed
+ * SyncLog row regardless of whether it was already known-broken - confirmed
+ * the hard way that sends hundreds of emails within minutes once a source
+ * has been broken for a while (every automatic-cron and AutoSync-triggered
+ * retry wrote its own row, all alerted on the first check after being
+ * unblocked). See CLAUDE.md's "Alerts & webhooks" / SyncFailureState comment
+ * in schema.prisma for the full incident writeup.
+ */
 async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]> {
   if (!settings.syncFailureAlertsEnabled) return [];
 
-  const since = settings.lastSyncFailureAlertCheckedAt ?? new Date(0);
-  // "auth_required" (an expired TR/LCL session - needs the user to actively
-  // reconnect from Settings) is just as much a real sync failure as "error"
-  // (an unhandled exception) - it's arguably the more important one to
-  // surface, since it won't self-resolve on the next automatic retry the
-  // way a transient "error" sometimes does. Confirmed the hard way: a real
-  // expired TR session produced zero notification because this query only
-  // ever matched "error", never "auth_required".
-  const failures = await prisma.syncLog.findMany({
-    where: { status: { in: ["error", "auth_required"] }, createdAt: { gt: since } },
-    orderBy: { createdAt: "asc" },
+  // Only ever looks at each source's single most recent SyncLog row - older
+  // rows are irrelevant to "is it broken right now".
+  const latestPerSource = await prisma.syncLog.groupBy({
+    by: ["source"],
+    _max: { createdAt: true },
   });
 
-  for (const failure of failures) {
-    await dispatchAlert(settings, "Échec de synchronisation", formatSyncFailureBody(failure.source, failure.message));
-  }
+  const fired: string[] = [];
 
-  if (failures.length > 0) {
-    await prisma.userSettings.update({
-      where: { id: "singleton" },
-      data: { lastSyncFailureAlertCheckedAt: new Date() },
+  for (const { source, _max } of latestPerSource) {
+    if (!_max.createdAt) continue;
+    const latest = await prisma.syncLog.findFirst({
+      where: { source, createdAt: _max.createdAt },
+      orderBy: { id: "desc" },
     });
+    if (!latest) continue;
+
+    const state = await prisma.syncFailureState.findUnique({ where: { source } });
+
+    if (latest.status === "success") {
+      if (state) await prisma.syncFailureState.delete({ where: { source } });
+      continue;
+    }
+
+    if (!state) {
+      await prisma.syncFailureState.create({ data: { source } });
+      await dispatchAlert(settings, "Échec de synchronisation", formatSyncFailureBody(source, latest.message));
+      fired.push(source);
+    } else if (Date.now() - state.lastAlertedAt.getTime() >= REMINDER_INTERVAL_MS) {
+      await prisma.syncFailureState.update({ where: { source }, data: { lastAlertedAt: new Date() } });
+      await dispatchAlert(
+        settings,
+        "Échec de synchronisation (toujours en cours)",
+        formatSyncFailureBody(source, latest.message)
+      );
+      fired.push(source);
+    }
   }
 
-  return failures.map((f) => f.source);
+  return fired;
 }
 
 export async function POST(req: NextRequest) {

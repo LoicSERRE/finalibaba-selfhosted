@@ -104,6 +104,26 @@ model SyncLog {
   status    String   // "success" | "error" | "auth_required"
   message   String?
   createdAt DateTime @default(now())
+
+  @@index([source, createdAt])
+}
+
+// Tracks, per sync source, whether it's currently in an unresolved broken
+// streak - one row means "source has been failing since brokenSince, last
+// alerted about it at lastAlertedAt". Deleted the moment that source syncs
+// successfully again, so the *next* failure (if any) starts a brand new
+// streak and alerts immediately rather than staying silently suppressed
+// forever. Exists so checkSyncFailures() alerts once per streak (plus a
+// reminder every REMINDER_INTERVAL_MS while it's still broken) instead of
+// once per failed sync attempt - confirmed the hard way that the latter
+// sends hundreds of emails within minutes once a source has been broken for
+// a while (every failed attempt, whether from the 4h cron or repeated
+// AutoSync-triggered retries, used to write its own SyncLog row that all
+// got alerted on the very first check after being unblocked).
+model SyncFailureState {
+  source        String   @id
+  brokenSince   DateTime @default(now())
+  lastAlertedAt DateTime @default(now())
 }
 
 model HistoricalBalance {
@@ -241,9 +261,6 @@ model UserSettings {
   // above/below.
   netWorthAlertThresholdCents BigInt?
   netWorthAlertLastAbove      Boolean?
-  // Dedup marker for sync-failure alerts - only SyncLog error rows newer
-  // than this get alerted on the next check.
-  lastSyncFailureAlertCheckedAt DateTime?
   // Per-trigger opt-out for the two triggers that don't already have one -
   // net worth's off-switch is its blank threshold above. Default true so
   // existing installs keep today's behavior (both were always-on before
