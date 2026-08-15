@@ -21,7 +21,7 @@
 - **Analytics** - savings rate, survival runway, sector exposure, passive income, CAGR per account, benchmark comparison (MSCI World / S&P 500 / CAC 40), portfolio rebalancing suggestions
 - **Annual tax report** - realized gains, dividend income, and taxable events for the year, exportable
 - **CSV import & backup/restore** - bulk-import transactions/balance history for accounts without auto-sync; one-command database export and restore
-- **Automatic sync** (optional) - Trade Republic (18 EU countries) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
+- **Automatic sync** (optional) - Trade Republic (18 EU countries, positions + full transaction history with real labels) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
 - **English & French UI** - language auto-detected from browser, switchable in Settings
 - **100% self-hosted** - your data stays on your server
 
@@ -70,7 +70,7 @@ All types can be added and updated manually from the UI. Auto-sync is optional.
 
 | Type | Description | Auto-sync |
 |---|---|---|
-| Checking / Savings | Bank accounts with balance history | Woob (FR banks) |
+| Checking / Savings | Bank accounts with balance history | Woob (FR banks) · Trade Republic (cash account) |
 | Investment - PEA / CTO | Stock and ETF portfolios with live prices | Trade Republic |
 | Crypto | Cryptocurrency wallets with live prices | Trade Republic |
 | Real estate | Property with optional mortgage liability | - |
@@ -96,6 +96,8 @@ docker compose exec -it sync python setup_tr.py
 ```
 
 The session persists in a Docker volume. Renew it when it expires (every few weeks).
+
+Syncs positions, cash balance, **and** the cash account's full transaction history (card payments, transfers, trades, dividends, interest - real merchant/description labels, not just amounts) - so budget categorization and recurring-transaction detection work for Trade Republic the same way they do for a Woob-synced bank. The first sync after connecting pulls your full available history; every sync after that only fetches what's new.
 
 ### French banks via Woob
 

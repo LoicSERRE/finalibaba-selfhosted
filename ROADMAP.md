@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.4.3**
+Current stable release: **v1.5.4**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -47,7 +47,7 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.5 - Security & sharing
+## v1.5 - Security & sharing - Released ✓
 
 *Hardening the built-in auth and enabling controlled access for advisors or family.*
 

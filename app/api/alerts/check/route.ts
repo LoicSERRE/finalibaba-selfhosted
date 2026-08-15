@@ -106,8 +106,15 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
   if (!settings.syncFailureAlertsEnabled) return [];
 
   const since = settings.lastSyncFailureAlertCheckedAt ?? new Date(0);
+  // "auth_required" (an expired TR/LCL session - needs the user to actively
+  // reconnect from Settings) is just as much a real sync failure as "error"
+  // (an unhandled exception) - it's arguably the more important one to
+  // surface, since it won't self-resolve on the next automatic retry the
+  // way a transient "error" sometimes does. Confirmed the hard way: a real
+  // expired TR session produced zero notification because this query only
+  // ever matched "error", never "auth_required".
   const failures = await prisma.syncLog.findMany({
-    where: { status: "error", createdAt: { gt: since } },
+    where: { status: { in: ["error", "auth_required"] }, createdAt: { gt: since } },
     orderBy: { createdAt: "asc" },
   });
 
