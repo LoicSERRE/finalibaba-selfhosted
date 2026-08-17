@@ -30,3 +30,38 @@ export function isLoanNearlyPaidOff(remainingCents: bigint, originalCents: bigin
   if (originalCents <= BigInt(0)) return false;
   return remainingCents * BigInt(100) <= originalCents * BigInt(LOAN_NEARLY_PAID_OFF_RATIO_PCT);
 }
+
+/**
+ * Same edge-triggered "fires only when the crossing direction flips"
+ * semantics as evaluateNetWorthAlert above, but kept as a separate function
+ * (not a shared call) so the built-in net-worth trigger stays untouched -
+ * this one backs the user-defined AlertRule mechanism instead of
+ * UserSettings' fixed field. See AlertRule.balanceLastAbove.
+ */
+export function evaluateAccountBalanceAlert(
+  current: bigint,
+  thresholdCents: bigint,
+  wasAbove: boolean | null
+): { shouldFire: boolean; isAbove: boolean } {
+  const isAbove = current >= thresholdCents;
+  const shouldFire = wasAbove !== null && isAbove !== wasAbove;
+  return { shouldFire, isAbove };
+}
+
+/**
+ * Budget overrun re-arms every calendar month, unlike the edge-triggered
+ * rule above - a category that overran its budget in July should alert
+ * again in August even though spend never "un-overran" in between (it just
+ * resets at the month boundary). `period` is "YYYY-MM" (UTC, computed by
+ * the caller) so this stays pure/testable without mocking Date.
+ * Level-triggered within a period: exceeding the budget at all during the
+ * period fires once for that period.
+ */
+export function evaluateBudgetOverrunAlert(
+  spentCents: bigint,
+  budgetCents: bigint,
+  period: string,
+  lastFiredPeriod: string | null
+): { shouldFire: boolean } {
+  return { shouldFire: spentCents > budgetCents && lastFiredPeriod !== period };
+}

@@ -54,6 +54,8 @@ pnpm dev         # Dev server (http://localhost:3000)
 NODE_ENV=production pnpm run build    # Prod build + type-check (NODE_ENV=production REQUIRED)
 pnpm run lint    # ESLint
 pnpm test        # Vitest - see __tests__/
+pnpm test __tests__/alerts.test.ts     # Single test file
+pnpm test -- -t "name substring"       # Filter by test name across the suite
 pnpm run test:coverage  # Vitest with coverage - see "Development commands" note below on the report
 ```
 
@@ -309,6 +311,13 @@ Both entirely optional, Compose-profile-gated (`profiles: ["ntfy"]`/`["mail"]` i
 
 **Auth for the sync→app call**: unlike `app→sync` (port 8000, never published, Docker-network-only per `SECURITY.md`), `app`'s port is published to the host and potentially reverse-proxied to the internet, so `/api/alerts/check` can't assume "reachable = internal" the way sync's endpoints do. It's excluded from `proxy.ts`'s NextAuth matcher (same category as `api/auth` - no browser session exists on this call path) and gates itself instead: `NEXTAUTH_SECRET`, passed into the `sync`/`sync-demo` containers' environment in `docker-compose.yml`/`docker-compose.demo.yml`, doubles as the shared bearer token (`Authorization: Bearer <secret>`). Reusing it avoids a new required env var - it's already mandatory, and its leak is already maximally severe (session forgery), so reusing it here doesn't meaningfully raise the blast radius. `APP_SERVICE_URL` (`http://app:3000` / `http://app-demo:3000`) is the fixed-hostname counterpart to `SYNC_SERVICE_URL` above, same pattern.
 
+**Custom alert rules** (`AlertRule` model, Settings → "Règles d'alerte personnalisées") - a parallel, user-defined mechanism alongside the 3 fixed triggers above, which stay untouched. One polymorphic table, `kind: ACCOUNT_BALANCE | BUDGET_OVERRUN`, mirroring the same type-conditional-nullable-fields convention `Account` already uses for its LOAN/INVESTMENT-only fields, rather than two separate tables - both kinds share the same on/off toggle, optional custom message, and Settings UI list shape. `checkCustomAlertRules` (`app/api/alerts/check/route.ts`) is a fourth check called from the same `POST` handler, after the other 3.
+
+- `ACCOUNT_BALANCE` rules are scoped to fiat accounts (CHECKING/SAVINGS/MEAL_VOUCHER, the ones with a meaningful `HistoricalBalance`-derived current balance) and use `evaluateAccountBalanceAlert` (`lib/domain/alerts.ts`) - a separate function from, not a shared call with, `evaluateNetWorthAlert`, even though the edge-triggered "fires only when the crossing direction flips" logic is identical, so the built-in net-worth trigger's own code path stays untouched by this feature. Dedup state (`AlertRule.balanceLastAbove`) is per-rule, same null-means-never-evaluated convention as `UserSettings.netWorthAlertLastAbove`; changing the threshold on an existing rule resets it to `null`, same as `updateAlertSettings` already does for net worth.
+- `BUDGET_OVERRUN` rules key off `Category.budgetCents` directly (no separate threshold field) and re-arm every calendar month instead of being edge-triggered - a category that overran its budget in July should be able to alert again in August even though spend never "un-overran" in between, it just resets at the month boundary. `AlertRule.budgetOverrunLastFiredPeriod` stores the last `"YYYY-MM"` (UTC) period the rule fired for; `evaluateBudgetOverrunAlert` fires once per period the moment current-month spend (computed the same way `/budgets` does, `Transaction` rows with `amountCents < 0` in `[startOfMonth, startOfNextMonth)`) exceeds the budget.
+- No per-rule channel routing - both kinds call the same `dispatchAlert` every built-in trigger uses, same reasoning as the loan/sync-failure toggles' own "broader than what was asked" note above.
+- `accountId`/`categoryId` are `onDelete: Cascade` (not `Transaction`'s `SetNull`-on-`Category` convention) - a rule whose account or category was deleted has no purpose left, and a nulled-out rule would sit dead in the Settings list instead of just disappearing with it.
+
 ### Sync service - optional modules
 
 The `sync/` service has two dedicated sync modules plus a generic Woob runner:
@@ -443,6 +452,7 @@ Before this feature, selling a holding meant retyping a smaller `quantity`/`cost
 - `SyncLog` - per-run log entries: `source` ("lcl" | "trade_republic"), `status` ("success" | "error" | "auth_required"), optional `message`
 - `UserSettings` - singleton (`id = "singleton"`): salary, expenses, savings goal, monthly saved, `taxRatePea`/`taxRateCto`/`taxRateCrypto` (Float, defaults 0.172/0.314/0.314) - now only defaults suggested when creating a new account, see "Tax treatment" below. Also holds the alert channel config, dedup state, and per-trigger toggles (`ntfyTopicUrl`, `alertEmailTo`/`smtp*`, `netWorthAlertThresholdCents`/`netWorthAlertLastAbove`, `lastSyncFailureAlertCheckedAt`, `loanAlertsEnabled`/`syncFailureAlertsEnabled`) - see "Alerts & webhooks" above.
 - `ShareLink` - a token-gated read-only dashboard link (`token` unique, plaintext, optional `label`, optional `expiresAt`, `lastAccessedAt`). See "Read-only share links" above.
+- `AlertRule` - a user-defined alert (`kind: ACCOUNT_BALANCE | BUDGET_OVERRUN`, `active`, optional `message`), parallel to the 3 fixed triggers on `UserSettings`. See "Custom alert rules" above.
 
 ### Net worth calculation
 

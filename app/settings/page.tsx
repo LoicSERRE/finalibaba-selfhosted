@@ -24,6 +24,8 @@ import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { getShareLinks } from "@/lib/actions/share-links";
 import { AlertsSection } from "@/components/settings/alerts-section";
+import { AlertRulesSection } from "@/components/settings/alert-rules-section";
+import { getAlertRules } from "@/lib/actions/alert-rules";
 
 // Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
 const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
@@ -31,19 +33,31 @@ const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
 
-  const [institutions, syncStatus, userSettings, shareLinks, t] = await Promise.all([
-    prisma.institution.findMany({
-      include: {
-        _count: { select: { accounts: true } },
-        accounts: { where: { gocardlessAccountId: { not: null } }, select: { id: true } },
-      },
-      orderBy: { name: "asc" },
-    }),
-    getSyncStatus(),
-    getUserSettings(),
-    getShareLinks(),
-    getTranslations(),
-  ]);
+  const [institutions, syncStatus, userSettings, shareLinks, alertRules, fiatAccounts, budgetCategories, t] =
+    await Promise.all([
+      prisma.institution.findMany({
+        include: {
+          _count: { select: { accounts: true } },
+          accounts: { where: { gocardlessAccountId: { not: null } }, select: { id: true } },
+        },
+        orderBy: { name: "asc" },
+      }),
+      getSyncStatus(),
+      getUserSettings(),
+      getShareLinks(),
+      getAlertRules(),
+      prisma.account.findMany({
+        where: { type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.category.findMany({
+        where: { budgetCents: { not: null } },
+        select: { id: true, name: true, budgetCents: true },
+        orderBy: { name: "asc" },
+      }),
+      getTranslations(),
+    ]);
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -392,6 +406,11 @@ export default async function SettingsPage() {
       {/* Alerts - hidden in demo mode (mutations are blocked anyway, and a
           demo instance shouldn't be sending real notifications). */}
       {process.env.DEMO_MODE !== "true" && <AlertsSection settings={userSettings} />}
+
+      {/* Custom alert rules - same demo-mode gating as AlertsSection above. */}
+      {process.env.DEMO_MODE !== "true" && (
+        <AlertRulesSection rules={alertRules} accounts={fiatAccounts} categories={budgetCategories} />
+      )}
 
     </div>
   );

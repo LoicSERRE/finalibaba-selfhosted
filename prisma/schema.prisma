@@ -72,6 +72,7 @@ model Account {
   recurringTransactions RecurringTransaction[]
   incomeEvents        IncomeEvent[]
   sales               Sale[]
+  alertRules          AlertRule[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   gocardlessAccountId String?             @unique
@@ -126,6 +127,52 @@ model SyncFailureState {
   lastAlertedAt DateTime @default(now())
 }
 
+enum AlertRuleKind {
+  ACCOUNT_BALANCE
+  BUDGET_OVERRUN
+}
+
+// User-defined alert rules - a parallel mechanism alongside the 3 fixed
+// v1.5 triggers on UserSettings (netWorthAlertThresholdCents et al.), which
+// stay untouched - see CLAUDE.md's "Alerts & webhooks". One row per rule;
+// `kind` decides which of the two field groups below is meaningful, same
+// type-conditional-nullable-fields convention Account already uses for its
+// LOAN/INVESTMENT-only fields.
+model AlertRule {
+  id      String        @id @default(cuid())
+  kind    AlertRuleKind
+  active  Boolean       @default(true)
+  // Optional text appended to the generated alert body - null means just
+  // the auto-generated sentence.
+  message String?
+
+  // ACCOUNT_BALANCE only. onDelete: Cascade (not Transaction/
+  // RecurringTransaction's SetNull-on-Category convention) - a rule whose
+  // account or category was deleted has no purpose left; a nulled-out rule
+  // would sit dead in the list instead of just disappearing.
+  accountId             String?
+  account               Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  balanceThresholdCents BigInt?
+  // Edge-triggered dedup, same semantics as UserSettings.netWorthAlertLastAbove
+  // (null = never evaluated, fires only when the crossing direction flips).
+  balanceLastAbove      Boolean?
+
+  // BUDGET_OVERRUN only. Threshold comes from Category.budgetCents itself,
+  // not duplicated here.
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  // Re-arms every calendar month, unlike the one-way loan flag or the
+  // two-way balance/net-worth flip - stores which period ("YYYY-MM", UTC)
+  // this rule last fired for, so a rule that fired in July can fire again
+  // in August even though spend never "un-overran" in between.
+  budgetOverrunLastFiredPeriod String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}
+
 model HistoricalBalance {
   id           String   @id @default(cuid())
   accountId    String
@@ -159,6 +206,7 @@ model Category {
   budgetCents           BigInt?                // monthly envelope - null means no budget set
   transactions          Transaction[]
   recurringTransactions RecurringTransaction[]
+  alertRules            AlertRule[]
   createdAt             DateTime               @default(now())
 }
 

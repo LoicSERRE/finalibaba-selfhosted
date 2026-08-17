@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { evaluateNetWorthAlert, isLoanNearlyPaidOff } from "@/lib/domain/alerts";
+import {
+  evaluateNetWorthAlert,
+  isLoanNearlyPaidOff,
+  evaluateAccountBalanceAlert,
+  evaluateBudgetOverrunAlert,
+} from "@/lib/domain/alerts";
 
 describe("evaluateNetWorthAlert", () => {
   it("never fires on the first evaluation (wasAbove=null), just records the baseline", () => {
@@ -66,5 +71,72 @@ describe("isLoanNearlyPaidOff", () => {
 
   it("is true for a fully paid off loan (remaining 0)", () => {
     expect(isLoanNearlyPaidOff(BigInt(0), BigInt(100_000_00))).toBe(true);
+  });
+});
+
+describe("evaluateAccountBalanceAlert", () => {
+  it("never fires on the first evaluation (wasAbove=null), just records the baseline", () => {
+    expect(evaluateAccountBalanceAlert(BigInt(1_500_00), BigInt(1_000_00), null)).toEqual({
+      shouldFire: false,
+      isAbove: true,
+    });
+    expect(evaluateAccountBalanceAlert(BigInt(500_00), BigInt(1_000_00), null)).toEqual({
+      shouldFire: false,
+      isAbove: false,
+    });
+  });
+
+  it("fires when crossing from below to above", () => {
+    expect(evaluateAccountBalanceAlert(BigInt(1_100_00), BigInt(1_000_00), false)).toEqual({
+      shouldFire: true,
+      isAbove: true,
+    });
+  });
+
+  it("fires when crossing from above to below", () => {
+    expect(evaluateAccountBalanceAlert(BigInt(900_00), BigInt(1_000_00), true)).toEqual({
+      shouldFire: true,
+      isAbove: false,
+    });
+  });
+
+  it("does not fire when staying on the same side", () => {
+    expect(evaluateAccountBalanceAlert(BigInt(1_500_00), BigInt(1_000_00), true)).toEqual({
+      shouldFire: false,
+      isAbove: true,
+    });
+    expect(evaluateAccountBalanceAlert(BigInt(500_00), BigInt(1_000_00), false)).toEqual({
+      shouldFire: false,
+      isAbove: false,
+    });
+  });
+});
+
+describe("evaluateBudgetOverrunAlert", () => {
+  it("does not fire when under or at budget", () => {
+    expect(evaluateBudgetOverrunAlert(BigInt(50_00), BigInt(100_00), "2026-08", null)).toEqual({
+      shouldFire: false,
+    });
+    expect(evaluateBudgetOverrunAlert(BigInt(100_00), BigInt(100_00), "2026-08", null)).toEqual({
+      shouldFire: false,
+    });
+  });
+
+  it("fires the first time it goes over budget in a period", () => {
+    expect(evaluateBudgetOverrunAlert(BigInt(150_00), BigInt(100_00), "2026-08", null)).toEqual({
+      shouldFire: true,
+    });
+  });
+
+  it("does not re-fire within the same period once already fired", () => {
+    expect(evaluateBudgetOverrunAlert(BigInt(200_00), BigInt(100_00), "2026-08", "2026-08")).toEqual({
+      shouldFire: false,
+    });
+  });
+
+  it("re-arms in a new period even if it fired in the previous one", () => {
+    expect(evaluateBudgetOverrunAlert(BigInt(150_00), BigInt(100_00), "2026-09", "2026-08")).toEqual({
+      shouldFire: true,
+    });
   });
 });

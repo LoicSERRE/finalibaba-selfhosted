@@ -4,7 +4,12 @@ import type { UserSettingsModel } from "@/app/generated/prisma/models";
 import { localeToIntl } from "@/lib/utils/format";
 import { computeDashboard } from "@/lib/domain/dashboard";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
-import { evaluateNetWorthAlert, isLoanNearlyPaidOff } from "@/lib/domain/alerts";
+import {
+  evaluateNetWorthAlert,
+  isLoanNearlyPaidOff,
+  evaluateAccountBalanceAlert,
+  evaluateBudgetOverrunAlert,
+} from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
 
 /**
@@ -162,6 +167,102 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
   return fired;
 }
 
+type CustomAlertRule = Awaited<ReturnType<typeof findActiveAlertRules>>[number];
+
+function findActiveAlertRules() {
+  return prisma.alertRule.findMany({
+    where: { active: true },
+    include: {
+      account: { include: { history: { orderBy: { recordedAt: "desc" }, take: 1 } } },
+      category: true,
+    },
+  });
+}
+
+// ACCOUNT_BALANCE: edge-triggered (fires only when the crossing direction
+// flips), mirroring checkNetWorthAlert but kept as its own code path so the
+// built-in net-worth trigger stays untouched - see evaluateAccountBalanceAlert.
+async function checkAccountBalanceRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+  if (!rule.account || rule.balanceThresholdCents === null) return null; // malformed row guard
+
+  const current = rule.account.history[0]?.balanceCents ?? BigInt(0);
+  const { shouldFire, isAbove } = evaluateAccountBalanceAlert(current, rule.balanceThresholdCents, rule.balanceLastAbove);
+
+  if (shouldFire) {
+    const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
+    const currentEuros = Number(current) / 100;
+    const base = `Le solde de "${rule.account.name}" est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
+    await dispatchAlert(settings, "Alerte solde de compte", rule.message ? `${base}\n\n${rule.message}` : base);
+  }
+  if (isAbove !== rule.balanceLastAbove) {
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { balanceLastAbove: isAbove } });
+  }
+
+  return shouldFire ? `account_balance_rule:${rule.id}` : null;
+}
+
+// BUDGET_OVERRUN: re-arms every calendar month instead of edge-triggering -
+// a category that overran its budget in July can alert again in August even
+// though spend never "un-overran" in between, it just resets at the month
+// boundary. See evaluateBudgetOverrunAlert.
+async function checkBudgetOverrunRule(
+  rule: CustomAlertRule,
+  settings: UserSettingsModel,
+  period: string,
+  monthRange: { start: Date; end: Date }
+): Promise<string | null> {
+  if (rule.category?.budgetCents == null) return null;
+
+  const spend = await prisma.transaction.aggregate({
+    where: {
+      categoryId: rule.category.id,
+      amountCents: { lt: BigInt(0) },
+      date: { gte: monthRange.start, lt: monthRange.end },
+    },
+    _sum: { amountCents: true },
+  });
+  const spentCents = BigInt(0) - (spend._sum.amountCents ?? BigInt(0));
+  const { shouldFire } = evaluateBudgetOverrunAlert(spentCents, rule.category.budgetCents, period, rule.budgetOverrunLastFiredPeriod);
+
+  if (shouldFire) {
+    const base = `Le budget de la catégorie "${rule.category.name}" est dépassé (${(Number(spentCents) / 100).toLocaleString("fr-FR")} € dépensés sur ${(Number(rule.category.budgetCents) / 100).toLocaleString("fr-FR")} € ce mois-ci).`;
+    await dispatchAlert(settings, "Budget dépassé", rule.message ? `${base}\n\n${rule.message}` : base);
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { budgetOverrunLastFiredPeriod: period } });
+    return `budget_overrun_rule:${rule.id}`;
+  }
+  return null;
+}
+
+/**
+ * User-defined rules (Settings → "Règles d'alerte personnalisées"), a
+ * parallel mechanism alongside the 3 fixed triggers above - see
+ * CLAUDE.md's "Alerts & webhooks" and AlertRule in schema.prisma. Dispatches
+ * each rule to its own per-kind checker (kept separate, not inlined here,
+ * to stay under the sonarjs cognitive-complexity gate - see CLAUDE.md's
+ * pre-commit pipeline notes).
+ */
+async function checkCustomAlertRules(settings: UserSettingsModel): Promise<string[]> {
+  const rules = await findActiveAlertRules();
+  if (rules.length === 0) return [];
+
+  const now = new Date();
+  const period = now.toISOString().slice(0, 7);
+  const monthRange = {
+    start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+    end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
+  };
+
+  const results = await Promise.all(
+    rules.map((rule) =>
+      rule.kind === "ACCOUNT_BALANCE"
+        ? checkAccountBalanceRule(rule, settings)
+        : checkBudgetOverrunRule(rule, settings, period, monthRange)
+    )
+  );
+
+  return results.filter((id): id is string => id !== null);
+}
+
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -176,11 +277,13 @@ export async function POST(req: NextRequest) {
   const netWorthFired = await checkNetWorthAlert(settings);
   const loansFired = await checkLoanAlerts(settings);
   const syncFailuresFired = await checkSyncFailures(settings);
+  const customRulesFired = await checkCustomAlertRules(settings);
 
   const fired = [
     ...(netWorthFired ? ["net_worth_threshold"] : []),
     ...loansFired.map((id) => `loan_nearly_paid_off:${id}`),
     ...syncFailuresFired.map((source) => `sync_failure:${source}`),
+    ...customRulesFired,
   ];
 
   return NextResponse.json({ ok: true, fired });

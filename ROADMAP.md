@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.5.4**
+Current stable release: **v1.6.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -57,7 +57,15 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.6 - Integrations & platform
+## v1.6 - Custom alert rules - Released ✓
+
+*Extends v1.5's alerts with user-defined conditions on top of the 3 fixed triggers, which stay non-editable in content.*
+
+- [X] **Custom alert rules** - per-account balance thresholds (edge-triggered, same dedup logic as the net-worth alert) and per-category budget overruns (re-arms every calendar month); each rule supports an optional custom message, configurable in Settings
+
+---
+
+## v1.7 - Integrations & platform
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 
@@ -68,7 +76,6 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 - [ ] **Light theme** - optional light colour scheme (currently dark only)
 - [ ] **Plaid integration** - US and Canadian banks (only if there is clear community demand)
 - [ ] **Richer read-only share view** - `/shared/<token>` currently mirrors the main dashboard 1:1 (net worth, allocation); consider more detail for the advisor/family use case (per-account breakdown, holdings, recent transactions) - flagged after real usage, scope not decided yet
-- [ ] **Custom alert rules** - the 3 v1.5 triggers (net worth threshold, loan nearly paid off, sync failure) are fixed and non-editable in content; consider user-defined conditions (per-account balance thresholds, budget overrun, custom message text) instead of only the 3 built-in cases - flagged after real usage, scope not decided yet
 
 ---
 

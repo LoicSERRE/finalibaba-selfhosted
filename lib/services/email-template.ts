@@ -6,11 +6,11 @@ const LOGO_BASE64 =
 
 function escapeHtml(input: string): string {
   return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 // Table-based layout with inlined styles - the only markup that survives
@@ -22,7 +22,7 @@ export function renderAlertEmailHtml(title: string, body: string): string {
   const safeTitle = escapeHtml(title);
   // Preserve line breaks from the plain-text body (e.g. multi-line sync
   // failure messages) without treating user/bank-provided text as HTML.
-  const safeBody = escapeHtml(body).replace(/\n/g, "<br>");
+  const safeBody = escapeHtml(body).replaceAll("\n", "<br>");
 
   return `<!DOCTYPE html>
 <html lang="fr">
