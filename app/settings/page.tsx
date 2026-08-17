@@ -23,7 +23,8 @@ import { BackupRestoreSection } from "@/components/settings/backup-restore-secti
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { getShareLinks } from "@/lib/actions/share-links";
-import { AlertsSection } from "@/components/settings/alerts-section";
+import { AlertChannelsSection } from "@/components/settings/alert-channels-section";
+import { AlertTriggersSection } from "@/components/settings/alert-triggers-section";
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
 import { getAlertRules } from "@/lib/actions/alert-rules";
 
@@ -33,7 +34,7 @@ const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
 
-  const [institutions, syncStatus, userSettings, shareLinks, alertRules, fiatAccounts, budgetCategories, t] =
+  const [institutions, syncStatus, userSettings, shareLinks, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
     await Promise.all([
       prisma.institution.findMany({
         include: {
@@ -49,6 +50,14 @@ export default async function SettingsPage() {
       prisma.account.findMany({
         where: { type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
         select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      // INVESTMENT_VALUE + UNREALIZED_GAIN's account picker, and
+      // HOLDING_PRICE's holding picker (flattened from these accounts'
+      // holdings in the component) - see components/settings/alert-rules-section.tsx.
+      prisma.account.findMany({
+        where: { type: { in: ["INVESTMENT", "CRYPTO"] } },
+        select: { id: true, name: true, holdings: { select: { id: true, ticker: true }, orderBy: { ticker: "asc" } } },
         orderBy: { name: "asc" },
       }),
       prisma.category.findMany({
@@ -403,13 +412,21 @@ export default async function SettingsPage() {
           (create/revoke mutations are blocked anyway). */}
       {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
 
-      {/* Alerts - hidden in demo mode (mutations are blocked anyway, and a
-          demo instance shouldn't be sending real notifications). */}
-      {process.env.DEMO_MODE !== "true" && <AlertsSection settings={userSettings} />}
+      {/* Alerts - split into "how" (channels) and "what" (triggers) so each
+          concern gets its own card and Save button, instead of one long
+          mixed form. Hidden in demo mode (mutations are blocked anyway, and
+          a demo instance shouldn't be sending real notifications). */}
+      {process.env.DEMO_MODE !== "true" && <AlertChannelsSection settings={userSettings} />}
+      {process.env.DEMO_MODE !== "true" && <AlertTriggersSection settings={userSettings} />}
 
-      {/* Custom alert rules - same demo-mode gating as AlertsSection above. */}
+      {/* Custom alert rules - same demo-mode gating as the two sections above. */}
       {process.env.DEMO_MODE !== "true" && (
-        <AlertRulesSection rules={alertRules} accounts={fiatAccounts} categories={budgetCategories} />
+        <AlertRulesSection
+          rules={alertRules}
+          fiatAccounts={fiatAccounts}
+          investmentAccounts={investmentAccounts}
+          categories={budgetCategories}
+        />
       )}
 
     </div>

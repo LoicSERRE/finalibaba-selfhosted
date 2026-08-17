@@ -9,7 +9,12 @@ import { parseCents } from "@/lib/utils/format";
 // field, alert-related or not, so the Settings page reuses that instead of
 // a second near-identical upsert-fetch.
 
-export async function updateAlertSettings(formData: FormData) {
+// Split in two (channels vs triggers) so the Settings UI can present "how
+// you're notified" and "what triggers a notification" as separate cards
+// with their own Save button, instead of one long mixed form - see
+// CLAUDE.md's "Alerts & webhooks" for the UX rationale.
+
+export async function updateAlertChannels(formData: FormData) {
   const str = (name: string) => ((formData.get(name) as string) || "").trim() || null;
 
   const ntfyTopicUrl = str("ntfyTopicUrl");
@@ -20,7 +25,27 @@ export async function updateAlertSettings(formData: FormData) {
   const smtpPort = smtpPortRaw ? Number.parseInt(smtpPortRaw, 10) : null;
   const smtpUser = str("smtpUser");
   const smtpFrom = str("smtpFrom");
-  const netWorthAlertThresholdRaw = str("netWorthAlertThreshold");
+
+  // Blank means "leave unchanged", not "clear it" - unlike every other
+  // field here, this one is never pre-filled with the real stored value in
+  // the form (a plaintext password shouldn't round-trip back into the
+  // browser on every page load), so a blank submit almost always means "I
+  // didn't touch this field", not "remove my password".
+  const smtpPasswordInput = (formData.get("smtpPassword") as string) || "";
+
+  const data = { ntfyTopicUrl, ntfyAuthToken, alertEmailTo, smtpHost, smtpPort, smtpUser, smtpFrom };
+
+  await prisma.userSettings.upsert({
+    where: { id: "singleton" },
+    create: { ...data, smtpPassword: smtpPasswordInput || null },
+    update: smtpPasswordInput ? { ...data, smtpPassword: smtpPasswordInput } : data,
+  });
+
+  revalidatePath("/settings");
+}
+
+export async function updateAlertTriggers(formData: FormData) {
+  const netWorthAlertThresholdRaw = ((formData.get("netWorthAlertThreshold") as string) || "").trim();
   const netWorthAlertThresholdCents = netWorthAlertThresholdRaw ? parseCents(netWorthAlertThresholdRaw) : null;
   // Standard HTML checkbox semantics - a checked box is present in FormData
   // (value "on" unless it has its own name/value pair), an unchecked one is
@@ -29,13 +54,6 @@ export async function updateAlertSettings(formData: FormData) {
   // they need an explicit boolean.
   const loanAlertsEnabled = formData.get("loanAlertsEnabled") === "on";
   const syncFailureAlertsEnabled = formData.get("syncFailureAlertsEnabled") === "on";
-
-  // Blank means "leave unchanged", not "clear it" - unlike every other
-  // field here, this one is never pre-filled with the real stored value in
-  // the form (a plaintext password shouldn't round-trip back into the
-  // browser on every page load), so a blank submit almost always means "I
-  // didn't touch this field", not "remove my password".
-  const smtpPasswordInput = (formData.get("smtpPassword") as string) || "";
 
   const current = await prisma.userSettings.findUnique({
     where: { id: "singleton" },
@@ -48,13 +66,6 @@ export async function updateAlertSettings(formData: FormData) {
   const thresholdChanged = current?.netWorthAlertThresholdCents !== netWorthAlertThresholdCents;
 
   const data = {
-    ntfyTopicUrl,
-    ntfyAuthToken,
-    alertEmailTo,
-    smtpHost,
-    smtpPort,
-    smtpUser,
-    smtpFrom,
     netWorthAlertThresholdCents,
     loanAlertsEnabled,
     syncFailureAlertsEnabled,
@@ -63,8 +74,8 @@ export async function updateAlertSettings(formData: FormData) {
 
   await prisma.userSettings.upsert({
     where: { id: "singleton" },
-    create: { ...data, smtpPassword: smtpPasswordInput || null },
-    update: smtpPasswordInput ? { ...data, smtpPassword: smtpPasswordInput } : data,
+    create: data,
+    update: data,
   });
 
   revalidatePath("/settings");

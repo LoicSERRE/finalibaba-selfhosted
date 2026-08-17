@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 // Loan is "nearly paid off" once its remaining capital drops to 5% or less
 // of the original borrowed amount - a fixed constant rather than a
 // per-account/per-user setting, to keep the Settings UI lean (see
@@ -64,4 +66,57 @@ export function evaluateBudgetOverrunAlert(
   lastFiredPeriod: string | null
 ): { shouldFire: boolean } {
   return { shouldFire: spentCents > budgetCents && lastFiredPeriod !== period };
+}
+
+/**
+ * Same isolated-duplicate as lib/domain/accounts-page.ts's `holdingValue` /
+ * lib/domain/account-detail.ts's `holdingMarketValue` - kept local to this
+ * file rather than imported, matching how those two already don't share a
+ * copy with each other either (each feature area's alert/page logic stays
+ * self-contained, see CLAUDE.md's per-feature isolation notes elsewhere in
+ * this file).
+ */
+export function holdingMarketValueCents(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
+  return BigInt(new Decimal(h.quantity.toString()).mul(h.lastPriceCents.toString()).round().toNumber());
+}
+
+/**
+ * Sums market value and cost basis across a set of holdings (one account's,
+ * or every investment/crypto account's combined for the "all accounts"
+ * UNREALIZED_GAIN mode), skipping any holding with unknown cost basis
+ * (costBasisCents === null) - same convention accounts-page.ts's per-account
+ * gain sum already uses, since an unknown-cost-basis holding can't
+ * contribute a meaningful gain figure. gainPct is null when every
+ * considered holding had a zero or unknown cost basis, since a percentage
+ * gain isn't meaningful without a real cost-basis denominator.
+ */
+export function computeUnrealizedGain(
+  holdings: { quantity: Decimal; lastPriceCents: bigint; costBasisCents: bigint | null }[]
+): { gainCents: bigint; gainPct: number | null } {
+  let totalCostBasis = BigInt(0);
+  let gainCents = BigInt(0);
+  for (const h of holdings) {
+    if (h.costBasisCents === null) continue;
+    gainCents += holdingMarketValueCents(h) - h.costBasisCents;
+    totalCostBasis += h.costBasisCents;
+  }
+  const gainPct = totalCostBasis > BigInt(0) ? (Number(gainCents) / Number(totalCostBasis)) * 100 : null;
+  return { gainCents, gainPct };
+}
+
+/**
+ * Same edge-triggered shape as evaluateAccountBalanceAlert, but over a plain
+ * float percentage instead of bigint cents - UNREALIZED_GAIN's gainUnit =
+ * PERCENT case. Kept separate rather than coercing percent into cents,
+ * since a stored threshold's unit must never be ambiguous (see
+ * AlertRule.gainThresholdPct in schema.prisma).
+ */
+export function evaluatePercentAlert(
+  currentPct: number,
+  thresholdPct: number,
+  wasAbove: boolean | null
+): { shouldFire: boolean; isAbove: boolean } {
+  const isAbove = currentPct >= thresholdPct;
+  const shouldFire = wasAbove !== null && isAbove !== wasAbove;
+  return { shouldFire, isAbove };
 }

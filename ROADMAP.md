@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.6.0**
+Current stable release: **v1.6.2**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -61,7 +61,7 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 *Extends v1.5's alerts with user-defined conditions on top of the 3 fixed triggers, which stay non-editable in content.*
 
-- [X] **Custom alert rules** - per-account balance thresholds (edge-triggered, same dedup logic as the net-worth alert) and per-category budget overruns (re-arms every calendar month); each rule supports an optional custom message, configurable in Settings
+- [X] **Custom alert rules** - six rule kinds: account balance threshold, account overdraft, investment/crypto account value threshold, a specific holding's price threshold, unrealized gain (percentage or amount, one account or the whole portfolio), and per-category budget overruns (re-arms every calendar month); each rule supports an optional custom message, configurable in Settings
 
 ---
 

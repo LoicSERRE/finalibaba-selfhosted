@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import Decimal from "decimal.js";
 import {
   evaluateNetWorthAlert,
   isLoanNearlyPaidOff,
   evaluateAccountBalanceAlert,
   evaluateBudgetOverrunAlert,
+  holdingMarketValueCents,
+  computeUnrealizedGain,
+  evaluatePercentAlert,
 } from "@/lib/domain/alerts";
 
 describe("evaluateNetWorthAlert", () => {
@@ -138,5 +142,57 @@ describe("evaluateBudgetOverrunAlert", () => {
     expect(evaluateBudgetOverrunAlert(BigInt(150_00), BigInt(100_00), "2026-09", "2026-08")).toEqual({
       shouldFire: true,
     });
+  });
+});
+
+describe("holdingMarketValueCents", () => {
+  it("multiplies quantity by lastPriceCents", () => {
+    expect(holdingMarketValueCents({ quantity: new Decimal(10), lastPriceCents: BigInt(150_00) })).toBe(BigInt(1_500_00));
+  });
+
+  it("rounds fractional quantities to the nearest cent", () => {
+    expect(holdingMarketValueCents({ quantity: new Decimal("2.5"), lastPriceCents: BigInt(100_00) })).toBe(BigInt(250_00));
+  });
+});
+
+describe("computeUnrealizedGain", () => {
+  it("sums gain and cost basis across holdings, skipping unknown cost basis", () => {
+    const holdings = [
+      { quantity: new Decimal(10), lastPriceCents: BigInt(150_00), costBasisCents: BigInt(1_000_00) }, // value 1500, gain +500
+      { quantity: new Decimal(5), lastPriceCents: BigInt(20_00), costBasisCents: BigInt(150_00) }, // value 100, gain -50
+      { quantity: new Decimal(1), lastPriceCents: BigInt(50_00), costBasisCents: null }, // unknown cost basis, skipped entirely
+    ];
+    expect(computeUnrealizedGain(holdings)).toEqual({
+      gainCents: BigInt(450_00),
+      gainPct: (450_00 / 1_150_00) * 100,
+    });
+  });
+
+  it("returns a zero gain and null percentage for an empty holdings list", () => {
+    expect(computeUnrealizedGain([])).toEqual({ gainCents: BigInt(0), gainPct: null });
+  });
+
+  it("returns null percentage when every considered holding has unknown cost basis", () => {
+    const holdings = [{ quantity: new Decimal(1), lastPriceCents: BigInt(100_00), costBasisCents: null }];
+    expect(computeUnrealizedGain(holdings)).toEqual({ gainCents: BigInt(0), gainPct: null });
+  });
+});
+
+describe("evaluatePercentAlert", () => {
+  it("never fires on the first evaluation (wasAbove=null), just records the baseline", () => {
+    expect(evaluatePercentAlert(25, 20, null)).toEqual({ shouldFire: false, isAbove: true });
+    expect(evaluatePercentAlert(15, 20, null)).toEqual({ shouldFire: false, isAbove: false });
+  });
+
+  it("fires when crossing from below to above", () => {
+    expect(evaluatePercentAlert(21, 20, false)).toEqual({ shouldFire: true, isAbove: true });
+  });
+
+  it("fires when crossing from above to below", () => {
+    expect(evaluatePercentAlert(19, 20, true)).toEqual({ shouldFire: true, isAbove: false });
+  });
+
+  it("does not fire when staying on the same side", () => {
+    expect(evaluatePercentAlert(30, 20, true)).toEqual({ shouldFire: false, isAbove: true });
   });
 });

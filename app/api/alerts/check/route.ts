@@ -9,6 +9,9 @@ import {
   isLoanNearlyPaidOff,
   evaluateAccountBalanceAlert,
   evaluateBudgetOverrunAlert,
+  computeUnrealizedGain,
+  evaluatePercentAlert,
+  holdingMarketValueCents,
 } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
 
@@ -173,15 +176,49 @@ function findActiveAlertRules() {
   return prisma.alertRule.findMany({
     where: { active: true },
     include: {
-      account: { include: { history: { orderBy: { recordedAt: "desc" }, take: 1 } } },
+      account: {
+        include: {
+          history: { orderBy: { recordedAt: "desc" }, take: 1 },
+          holdings: true,
+        },
+      },
+      holding: { include: { account: true } },
       category: true,
     },
   });
 }
 
-// ACCOUNT_BALANCE: edge-triggered (fires only when the crossing direction
-// flips), mirroring checkNetWorthAlert but kept as its own code path so the
-// built-in net-worth trigger stays untouched - see evaluateAccountBalanceAlert.
+// Message text differs between ACCOUNT_BALANCE and ACCOUNT_OVERDRAFT, kept
+// out of checkAccountBalanceRule below (a nested ternary there tripped both
+// sonarjs/no-nested-conditional and its own cognitive-complexity budget).
+function buildAccountBalanceAlert(
+  rule: CustomAlertRule,
+  isAbove: boolean,
+  currentEuros: number
+): { title: string; base: string } {
+  if (rule.kind === "ACCOUNT_OVERDRAFT") {
+    const state = isAbove ? "repassé au-dessus de 0 €" : "passé à découvert";
+    return {
+      title: "Alerte découvert",
+      base: `Le compte "${rule.account!.name}" est ${state} (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`,
+    };
+  }
+  const direction = isAbove ? "passé au-dessus" : "passé en dessous";
+  const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
+  return {
+    title: "Alerte solde de compte",
+    base: `Le solde de "${rule.account!.name}" est ${direction} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`,
+  };
+}
+
+// ACCOUNT_BALANCE and ACCOUNT_OVERDRAFT share this checker - both are the
+// exact same "fiat account balance crosses balanceThresholdCents"
+// edge-triggered comparison (evaluateAccountBalanceAlert), mirroring
+// checkNetWorthAlert but kept as its own code path so the built-in
+// net-worth trigger stays untouched. ACCOUNT_OVERDRAFT differs only in
+// eligible-account scope (enforced client-side/in the create action, not
+// here) and threshold (always 0, set at creation, never user-edited) - see
+// createAlertRule in lib/actions/alert-rules.ts.
 async function checkAccountBalanceRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
   if (!rule.account || rule.balanceThresholdCents === null) return null; // malformed row guard
 
@@ -189,16 +226,125 @@ async function checkAccountBalanceRule(rule: CustomAlertRule, settings: UserSett
   const { shouldFire, isAbove } = evaluateAccountBalanceAlert(current, rule.balanceThresholdCents, rule.balanceLastAbove);
 
   if (shouldFire) {
-    const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
-    const currentEuros = Number(current) / 100;
-    const base = `Le solde de "${rule.account.name}" est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
-    await dispatchAlert(settings, "Alerte solde de compte", rule.message ? `${base}\n\n${rule.message}` : base);
+    const { title, base } = buildAccountBalanceAlert(rule, isAbove, Number(current) / 100);
+    await dispatchAlert(settings, title, rule.message ? `${base}\n\n${rule.message}` : base);
   }
   if (isAbove !== rule.balanceLastAbove) {
     await prisma.alertRule.update({ where: { id: rule.id }, data: { balanceLastAbove: isAbove } });
   }
 
-  return shouldFire ? `account_balance_rule:${rule.id}` : null;
+  const tag = rule.kind === "ACCOUNT_OVERDRAFT" ? "account_overdraft_rule" : "account_balance_rule";
+  return shouldFire ? `${tag}:${rule.id}` : null;
+}
+
+// INVESTMENT_VALUE: same edge-triggered comparison as checkAccountBalanceRule
+// above, but "current" is the account's holdings market value (no
+// HistoricalBalance for investment/crypto accounts) instead of a fiat
+// balance - see holdingMarketValueCents.
+async function checkInvestmentValueRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+  if (!rule.account || rule.balanceThresholdCents === null) return null;
+
+  const current = rule.account.holdings.reduce((sum, h) => sum + holdingMarketValueCents(h), BigInt(0));
+  const { shouldFire, isAbove } = evaluateAccountBalanceAlert(current, rule.balanceThresholdCents, rule.balanceLastAbove);
+
+  if (shouldFire) {
+    const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
+    const currentEuros = Number(current) / 100;
+    const base = `La valeur du compte "${rule.account.name}" est ${isAbove ? "passée au-dessus" : "passée en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
+    await dispatchAlert(settings, "Alerte valeur d'investissement", rule.message ? `${base}\n\n${rule.message}` : base);
+  }
+  if (isAbove !== rule.balanceLastAbove) {
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { balanceLastAbove: isAbove } });
+  }
+
+  return shouldFire ? `investment_value_rule:${rule.id}` : null;
+}
+
+// HOLDING_PRICE: same edge-triggered comparison again, over a single
+// position's lastPriceCents (already EUR-converted at entry time for
+// foreign-currency holdings, see Holding.fxRateToEur - no extra FX handling
+// needed here).
+async function checkHoldingPriceRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+  if (!rule.holding || rule.balanceThresholdCents === null) return null;
+
+  const current = rule.holding.lastPriceCents;
+  const { shouldFire, isAbove } = evaluateAccountBalanceAlert(current, rule.balanceThresholdCents, rule.balanceLastAbove);
+
+  if (shouldFire) {
+    const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
+    const currentEuros = Number(current) / 100;
+    const base = `Le prix de "${rule.holding.ticker}" (${rule.holding.account.name}) est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
+    await dispatchAlert(settings, "Alerte prix d'une position", rule.message ? `${base}\n\n${rule.message}` : base);
+  }
+  if (isAbove !== rule.balanceLastAbove) {
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { balanceLastAbove: isAbove } });
+  }
+
+  return shouldFire ? `holding_price_rule:${rule.id}` : null;
+}
+
+async function checkUnrealizedGainPercent(
+  rule: CustomAlertRule,
+  settings: UserSettingsModel,
+  gainPct: number | null,
+  scopeLabel: string
+): Promise<string | null> {
+  if (rule.gainThresholdPct === null || gainPct === null) return null;
+  const { shouldFire, isAbove } = evaluatePercentAlert(gainPct, rule.gainThresholdPct, rule.balanceLastAbove);
+  if (shouldFire) {
+    const base = `La plus-value latente ${scopeLabel} est ${isAbove ? "passée au-dessus" : "passée en dessous"} de ${rule.gainThresholdPct.toLocaleString("fr-FR")} % (actuellement ${gainPct.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %).`;
+    await dispatchAlert(settings, "Alerte plus-value latente", rule.message ? `${base}\n\n${rule.message}` : base);
+  }
+  if (isAbove !== rule.balanceLastAbove) {
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { balanceLastAbove: isAbove } });
+  }
+  return shouldFire ? `unrealized_gain_rule:${rule.id}` : null;
+}
+
+async function checkUnrealizedGainAmount(
+  rule: CustomAlertRule,
+  settings: UserSettingsModel,
+  gainCents: bigint,
+  scopeLabel: string
+): Promise<string | null> {
+  if (rule.balanceThresholdCents === null) return null;
+  const { shouldFire, isAbove } = evaluateAccountBalanceAlert(gainCents, rule.balanceThresholdCents, rule.balanceLastAbove);
+  if (shouldFire) {
+    const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
+    const gainEuros = Number(gainCents) / 100;
+    const base = `La plus-value latente ${scopeLabel} est ${isAbove ? "passée au-dessus" : "passée en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${gainEuros.toLocaleString("fr-FR")} €).`;
+    await dispatchAlert(settings, "Alerte plus-value latente", rule.message ? `${base}\n\n${rule.message}` : base);
+  }
+  if (isAbove !== rule.balanceLastAbove) {
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { balanceLastAbove: isAbove } });
+  }
+  return shouldFire ? `unrealized_gain_rule:${rule.id}` : null;
+}
+
+// UNREALIZED_GAIN: accountId set = that account's own holdings; accountId
+// null = every investment/crypto account combined (a second query, since
+// findActiveAlertRules only preloads the rule's own account - see
+// CLAUDE.md's "Custom alert rules" for why null accountId is this kind's
+// only valid null-account case). gainUnit picks which of the two
+// dispatch-and-dedup checkers above applies - a rule stores exactly one
+// threshold field, never both, so only one branch is ever reachable per
+// rule. Split into the two functions above (rather than inlined here) to
+// stay under the sonarjs cognitive-complexity gate - both branches share
+// the same "compute gain, evaluate, dispatch, dedup" shape but over a
+// different unit, so folding them into one function double-counts that
+// shape's branching twice over.
+async function checkUnrealizedGainRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+  if (rule.gainUnit === null) return null;
+
+  const holdings = rule.account
+    ? rule.account.holdings
+    : await prisma.holding.findMany({ where: { account: { type: { in: ["INVESTMENT", "CRYPTO"] } } } });
+  const { gainCents, gainPct } = computeUnrealizedGain(holdings);
+  const scopeLabel = rule.account ? `du compte "${rule.account.name}"` : "de l'ensemble du portefeuille";
+
+  return rule.gainUnit === "PERCENT"
+    ? checkUnrealizedGainPercent(rule, settings, gainPct, scopeLabel)
+    : checkUnrealizedGainAmount(rule, settings, gainCents, scopeLabel);
 }
 
 // BUDGET_OVERRUN: re-arms every calendar month instead of edge-triggering -
@@ -233,13 +379,38 @@ async function checkBudgetOverrunRule(
   return null;
 }
 
+// One dispatch function per rule, kept separate from checkCustomAlertRules
+// below to stay under the sonarjs cognitive-complexity gate (see CLAUDE.md's
+// pre-commit pipeline notes) - a single combined switch inlined into the
+// Promise.all map already tripped it once before this kind count grew.
+function dispatchAlertRuleCheck(
+  rule: CustomAlertRule,
+  settings: UserSettingsModel,
+  period: string,
+  monthRange: { start: Date; end: Date }
+): Promise<string | null> {
+  switch (rule.kind) {
+    case "ACCOUNT_BALANCE":
+    case "ACCOUNT_OVERDRAFT":
+      return checkAccountBalanceRule(rule, settings);
+    case "INVESTMENT_VALUE":
+      return checkInvestmentValueRule(rule, settings);
+    case "HOLDING_PRICE":
+      return checkHoldingPriceRule(rule, settings);
+    case "UNREALIZED_GAIN":
+      return checkUnrealizedGainRule(rule, settings);
+    case "BUDGET_OVERRUN":
+      return checkBudgetOverrunRule(rule, settings, period, monthRange);
+    default:
+      return Promise.resolve(null);
+  }
+}
+
 /**
  * User-defined rules (Settings → "Règles d'alerte personnalisées"), a
  * parallel mechanism alongside the 3 fixed triggers above - see
  * CLAUDE.md's "Alerts & webhooks" and AlertRule in schema.prisma. Dispatches
- * each rule to its own per-kind checker (kept separate, not inlined here,
- * to stay under the sonarjs cognitive-complexity gate - see CLAUDE.md's
- * pre-commit pipeline notes).
+ * each rule to its own per-kind checker via dispatchAlertRuleCheck above.
  */
 async function checkCustomAlertRules(settings: UserSettingsModel): Promise<string[]> {
   const rules = await findActiveAlertRules();
@@ -252,13 +423,7 @@ async function checkCustomAlertRules(settings: UserSettingsModel): Promise<strin
     end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
   };
 
-  const results = await Promise.all(
-    rules.map((rule) =>
-      rule.kind === "ACCOUNT_BALANCE"
-        ? checkAccountBalanceRule(rule, settings)
-        : checkBudgetOverrunRule(rule, settings, period, monthRange)
-    )
-  );
+  const results = await Promise.all(rules.map((rule) => dispatchAlertRuleCheck(rule, settings, period, monthRange)));
 
   return results.filter((id): id is string => id !== null);
 }

@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { Shuffle, Copy, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { updateAlertSettings } from "@/lib/actions/alerts";
+import { updateAlertChannels } from "@/lib/actions/alerts";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { Button } from "@/components/ui/button";
 
 // Client-side only - a pure "fill the field" convenience, not persisted
-// until the form's own Save button runs updateAlertSettings. 192 bits from
+// until the form's own Save button runs updateAlertChannels. 192 bits from
 // the Web Crypto API: same "unguessability from entropy, not from asking a
 // human to invent a secret" reasoning as ShareLink's token
 // (lib/domain/share-links.ts) - ntfy.sh's free tier has no access control
@@ -41,7 +41,7 @@ const EMAIL_PRESETS: Record<string, { host: string; port: string }> = {
 const inputClass =
   "w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30";
 
-export function AlertsSection({
+export function AlertChannelsSection({
   settings,
 }: Readonly<{
   settings: {
@@ -52,12 +52,9 @@ export function AlertsSection({
     smtpPort: number | null;
     smtpUser: string | null;
     smtpFrom: string | null;
-    netWorthAlertThresholdCents: bigint | null;
-    loanAlertsEnabled: boolean;
-    syncFailureAlertsEnabled: boolean;
   };
 }>) {
-  const t = useTranslations("settings.alerts");
+  const t = useTranslations("settings.alertChannels");
 
   const [ntfyTopicUrl, setNtfyTopicUrl] = useState(settings.ntfyTopicUrl ?? "");
   const [copied, setCopied] = useState(false);
@@ -91,31 +88,10 @@ export function AlertsSection({
         <h2 className="text-base font-semibold text-[var(--foreground)]">{t("title")}</h2>
         <p className="text-xs text-[var(--muted)] mt-0.5">{t("subtitle")}</p>
       </div>
-      <form action={updateAlertSettings} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-5">
+      <form action={updateAlertChannels} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-5">
         <div className="space-y-1.5">
-          <label htmlFor="netWorthAlertThreshold" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-            {t("netWorthThreshold")}
-          </label>
-          <div className="relative">
-            <input
-              id="netWorthAlertThreshold"
-              name="netWorthAlertThreshold"
-              type="number"
-              inputMode="decimal"
-              autoComplete="off"
-              min="0"
-              step="1"
-              defaultValue={settings.netWorthAlertThresholdCents !== null ? Number(settings.netWorthAlertThresholdCents) / 100 : ""}
-              placeholder={t("netWorthThresholdPlaceholder")}
-              className={`${inputClass} pr-8 tabular-nums`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
-          </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("netWorthThresholdHint")}</p>
-        </div>
-
-        <div className="pt-2 border-t border-[var(--border)] space-y-1.5">
-          <label htmlFor="ntfyTopicUrl" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("ntfySectionTitle")}</p>
+          <label htmlFor="ntfyTopicUrl" className="sr-only">
             {t("ntfy")}
           </label>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -144,7 +120,7 @@ export function AlertsSection({
           </div>
           <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyHint")}</p>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 pt-1">
             <label htmlFor="ntfyAuthToken" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
               {t("ntfyAuthToken")}
             </label>
@@ -161,7 +137,9 @@ export function AlertsSection({
           </div>
         </div>
 
-        <div className="pt-2 border-t border-[var(--border)] space-y-4">
+        <div className="pt-4 border-t border-[var(--border)] space-y-4">
+          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("emailSectionTitle")}</p>
+
           <div className="space-y-1.5">
             <label htmlFor="alertEmailTo" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
               {t("emailTo")}
@@ -273,28 +251,6 @@ export function AlertsSection({
             <p className="text-xs text-[var(--muted)] opacity-70">{t("smtpFromHint")}</p>
           </div>
           <p className="text-xs text-[var(--muted)] opacity-70">{t("emailHint")}</p>
-        </div>
-
-        <div className="pt-2 border-t border-[var(--border)] space-y-3">
-          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("triggersTitle")}</p>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              name="loanAlertsEnabled"
-              defaultChecked={settings.loanAlertsEnabled}
-              className="w-4 h-4 rounded accent-[var(--accent)]"
-            />
-            <span className="text-sm text-[var(--foreground)]">{t("triggerLoan")}</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              name="syncFailureAlertsEnabled"
-              defaultChecked={settings.syncFailureAlertsEnabled}
-              className="w-4 h-4 rounded accent-[var(--accent)]"
-            />
-            <span className="text-sm text-[var(--foreground)]">{t("triggerSyncFailure")}</span>
-          </label>
         </div>
 
         <div className="flex justify-end pt-2">

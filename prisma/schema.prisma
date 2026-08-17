@@ -93,6 +93,7 @@ model Holding {
   nativePriceCents     BigInt?         // price as entered, in `currency` - null when currency = EUR (lastPriceCents IS the native price)
   nativeCostBasisCents BigInt?         // cost basis as entered, in `currency` - same null convention
   fxRateToEur          Float?          // EUR per 1 unit of `currency`, captured at entry time - null when currency = EUR
+  alertRules     AlertRule[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -130,14 +131,23 @@ model SyncFailureState {
 enum AlertRuleKind {
   ACCOUNT_BALANCE
   BUDGET_OVERRUN
+  ACCOUNT_OVERDRAFT
+  INVESTMENT_VALUE
+  HOLDING_PRICE
+  UNREALIZED_GAIN
+}
+
+enum GainUnit {
+  PERCENT
+  AMOUNT
 }
 
 // User-defined alert rules - a parallel mechanism alongside the 3 fixed
 // v1.5 triggers on UserSettings (netWorthAlertThresholdCents et al.), which
 // stay untouched - see CLAUDE.md's "Alerts & webhooks". One row per rule;
-// `kind` decides which of the two field groups below is meaningful, same
+// `kind` decides which field group below is meaningful, same
 // type-conditional-nullable-fields convention Account already uses for its
-// LOAN/INVESTMENT-only fields.
+// LOAN/INVESTMENT-only fields - just shared across more than two kinds here.
 model AlertRule {
   id      String        @id @default(cuid())
   kind    AlertRuleKind
@@ -146,16 +156,44 @@ model AlertRule {
   // the auto-generated sentence.
   message String?
 
-  // ACCOUNT_BALANCE only. onDelete: Cascade (not Transaction/
-  // RecurringTransaction's SetNull-on-Category convention) - a rule whose
-  // account or category was deleted has no purpose left; a nulled-out rule
-  // would sit dead in the list instead of just disappearing.
+  // Shared by ACCOUNT_BALANCE, ACCOUNT_OVERDRAFT, INVESTMENT_VALUE, and
+  // HOLDING_PRICE, plus UNREALIZED_GAIN when gainUnit = AMOUNT - all the
+  // exact same "current cents value crosses balanceThresholdCents"
+  // edge-triggered shape (evaluateAccountBalanceAlert), just a different
+  // source for "current" per kind (fiat balance, investment/crypto market
+  // value, a single holding's price, or a computed gain) - kept as shared
+  // columns rather than one pair per kind to avoid schema bloat for what's
+  // mathematically the same comparison every time. The "balance"-flavored
+  // names predate this reuse (ACCOUNT_BALANCE was the only kind that had
+  // them) and were kept as-is rather than renamed, to avoid a risky
+  // column-rename migration against already-deployed self-hosted installs'
+  // real rule data. accountId is only ever null for UNREALIZED_GAIN (null =
+  // aggregate across every investment/crypto account); every other kind
+  // above requires a specific account, enforced in the create/update
+  // action. onDelete: Cascade (not Transaction/RecurringTransaction's
+  // SetNull-on-Category convention) - a rule whose account/holding/category
+  // was deleted has no purpose left; a nulled-out rule would sit dead in
+  // the list instead of just disappearing with it.
   accountId             String?
   account               Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   balanceThresholdCents BigInt?
   // Edge-triggered dedup, same semantics as UserSettings.netWorthAlertLastAbove
   // (null = never evaluated, fires only when the crossing direction flips).
   balanceLastAbove      Boolean?
+
+  // HOLDING_PRICE only - a specific position's lastPriceCents (already
+  // EUR-converted at entry time for foreign-currency holdings, see
+  // Holding.fxRateToEur) crosses balanceThresholdCents, reusing the two
+  // fields above for the actual comparison/dedup.
+  holdingId String?
+  holding   Holding? @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  // UNREALIZED_GAIN only, when gainUnit = PERCENT - gain/costBasis*100
+  // crosses this instead of balanceThresholdCents. A separate field rather
+  // than overloading balanceThresholdCents as "either cents or a raw
+  // percent number", so a stored value's unit is never ambiguous.
+  gainUnit         GainUnit?
+  gainThresholdPct Float?
 
   // BUDGET_OVERRUN only. Threshold comes from Category.budgetCents itself,
   // not duplicated here.
