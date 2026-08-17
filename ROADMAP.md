@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.6.3**
+Current stable release: **v1.7.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -65,7 +65,19 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.7 - Integrations & platform
+## v1.7 - Automatic transaction categorization - Released ✓
+
+*The main remaining friction in budgeting: manually picking a category for every transaction.*
+
+- [X] **Self-learning categorization** - learns a per-account `label -> category` mapping from the user's own categorization history, and applies it automatically to future transactions with the same label (min. 2 prior occurrences, 70% category consistency)
+- [X] **Merchant Category Code (MCC) matching** - for GoCardless-synced accounts whose bank populates the PSD2 `merchantCategoryCode` field, maps the card network's own merchant classification to a default category
+- [X] **Curated merchant dictionary** - ~180 well-known French/international brand patterns (supermarkets, restaurants, transport, streaming, telecom, gyms, insurance, shopping, leisure) mapped to 7 broad default categories, grouped by payment nature (e.g. gym memberships and streaming subscriptions both fall under "Abonnements") rather than by life domain
+- [X] **GoCardless transaction sync** - `Transaction` rows (not just balances) are now synced from GoCardless-linked accounts, feeding both budgets and the MCC signal above
+- [X] **"Auto-catégoriser" button** on `/budgets` for an on-demand backfill, plus automatic runs after every CSV import, GoCardless sync, and scheduled sync cycle
+
+---
+
+## v1.8 - Integrations & platform
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 

@@ -231,6 +231,15 @@ model Transaction {
   amountCents BigInt    // positive = credit, negative = debit
   categoryId  String?
   category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // GoCardless-only (PSD2's Berlin Group schema) - the card network's own
+  // 4-digit merchant classification, when the account's bank actually
+  // populates it (optional per the spec, so this is null for most
+  // transactions - Woob/Trade Republic/CSV import never set it, they have
+  // no equivalent field at all). See "Automatic categorization" in
+  // CLAUDE.md: a more authoritative signal than free-text label matching
+  // when present, since it's assigned by the card network at merchant
+  // registration time rather than guessed from a label substring.
+  merchantCategoryCode String?
   createdAt   DateTime  @default(now())
 
   @@index([accountId, date])

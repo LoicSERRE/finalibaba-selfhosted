@@ -75,6 +75,31 @@ export interface GCBalances {
   balances: GCBalance[];
 }
 
+// Berlin Group / PSD2 transaction schema, as returned by GoCardless. Only
+// `transactionAmount` is guaranteed - everything else, including
+// `transactionId` and `merchantCategoryCode`, is optional and populated
+// entirely at the discretion of the account's own bank. Pending
+// transactions in particular routinely lack a stable `transactionId`,
+// which is why syncGocardlessTransactions (lib/actions/gocardless.ts) only
+// ever processes the `booked` array below, never `pending`.
+export interface GCTransaction {
+  transactionId?: string;
+  bookingDate?: string;
+  valueDate?: string;
+  transactionAmount: { amount: string; currency: string };
+  remittanceInformationUnstructured?: string;
+  creditorName?: string;
+  debtorName?: string;
+  merchantCategoryCode?: string;
+}
+
+export interface GCTransactions {
+  transactions: {
+    booked: GCTransaction[];
+    pending: GCTransaction[];
+  };
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface GCInstitution {
@@ -118,6 +143,18 @@ export async function getAccountDetails(gcAccountId: string): Promise<GCAccountD
 
 export async function getAccountBalances(gcAccountId: string): Promise<GCBalances> {
   return gcFetch(`/accounts/${gcAccountId}/balances/`);
+}
+
+// No date_from param - relies on syncId-based dedup (skipDuplicates) to
+// make repeat syncs cheap, same "always refetch, let dedup handle it"
+// simplicity getAccountBalances above already has, rather than tracking a
+// per-account watermark. The transactions endpoint has its own rate-limit
+// quota separate from balances/details (GoCardless: up to 4-10 requests/
+// day per account per endpoint), so calling this alongside
+// getAccountBalances on every manual sync doesn't compete with or reduce
+// the balance-sync quota.
+export async function getTransactions(gcAccountId: string): Promise<GCTransactions> {
+  return gcFetch(`/accounts/${gcAccountId}/transactions/`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

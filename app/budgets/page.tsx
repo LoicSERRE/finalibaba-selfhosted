@@ -7,6 +7,7 @@ import { AddCategoryDialog } from "@/components/budgets/add-category-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { UncategorizedGroupCard } from "@/components/budgets/uncategorized-group-card";
+import { AutoCategorizeButton } from "@/components/budgets/auto-categorize-button";
 import { deleteCategory } from "@/lib/actions/categories";
 import { formatCurrency, centsToEuro } from "@/lib/utils/format";
 import { normalizeLabel } from "@/lib/domain/recurring";
@@ -160,7 +161,10 @@ export default async function BudgetsPage() {
 
       {uncategorizedGroups.length > 0 && categories.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("uncategorizedGroupsTitle")}</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("uncategorizedGroupsTitle")}</h2>
+            <AutoCategorizeButton />
+          </div>
           {uncategorizedGroups.map((g) => (
             <UncategorizedGroupCard
               key={g.label}

@@ -163,11 +163,39 @@ def _check_alerts():
         log.exception("Alert check failed")
 
 
+def _auto_categorize():
+    # Same call shape as _check_alerts() below, and called first - a
+    # transaction that gets auto-categorized here can immediately make a
+    # BUDGET_OVERRUN custom alert rule fire in the same cycle instead of
+    # lagging a cycle behind. See lib/domain/auto-categorize.ts for the
+    # self-learning label -> category matching itself; this just triggers
+    # it after every automatic 4h sync run, same as CLAUDE.md's "Alerts &
+    # webhooks" reasoning for why the alert check lives here rather than
+    # only on-demand.
+    app_url = os.environ.get("APP_SERVICE_URL")
+    secret = os.environ.get("NEXTAUTH_SECRET")
+    if not app_url or not secret:
+        log.info("APP_SERVICE_URL or NEXTAUTH_SECRET not set - auto-categorize skipped")
+        return
+    try:
+        import requests
+        resp = requests.post(
+            f"{app_url}/api/transactions/auto-categorize",
+            headers={"Authorization": f"Bearer {secret}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        log.info("Auto-categorize done: %s", resp.json())
+    except Exception:
+        log.exception("Auto-categorize failed")
+
+
 def _run_all():
     log.info("=== Daily sync started ===")
     _run_lcl()
     _run_tr()
     _run_all_woob()
+    _auto_categorize()
     _check_alerts()
     log.info("=== Daily sync done ===")
 

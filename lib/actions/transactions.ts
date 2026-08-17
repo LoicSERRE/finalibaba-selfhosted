@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
+import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 
 type ImportRow = { date: string; label: string; amountCents: number };
 
@@ -23,9 +24,17 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
 
   const result = await prisma.transaction.createMany({ data });
 
+  // Best-effort: a fresh import has no categorized history of its own yet
+  // for genuinely new labels, but re-sweeping the account here still picks
+  // up any label this account has already learned from earlier imports or
+  // manual categorization - and it means the very next look at /budgets
+  // doesn't show already-familiar merchants sitting in "uncategorized".
+  await autoCategorizeTransactions(accountId);
+
   revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/accounts");
   revalidatePath("/");
+  revalidatePath("/budgets");
 
   return { imported: result.count };
 }

@@ -49,16 +49,17 @@ export const config = {
     // link) that must work the same whether AUTH_ENABLED is on or off - the
     // token check inside the page is its own, independent gate. See
     // CLAUDE.md's "Read-only share links" section.
-    // api/alerts is excluded for the same "no browser session on this call
-    // path" reason as api/auth/api/health: sync/main.py calls
-    // api/alerts/check directly, container-to-container, with no cookie to
-    // present - it gates itself via a NEXTAUTH_SECRET bearer token instead.
-    // See CLAUDE.md's "Alerts & webhooks" section.
+    // api/alerts and api/transactions (specifically auto-categorize) are
+    // excluded for the same "no browser session on this call path" reason
+    // as api/auth/api/health: sync/main.py calls both directly,
+    // container-to-container, with no cookie to present - each gates
+    // itself via a NEXTAUTH_SECRET bearer token instead. See CLAUDE.md's
+    // "Alerts & webhooks" section.
     // NOSONAR (typescript:S7780) - this `config` export is statically parsed
     // by Next.js's middleware build step (extractExportedConstValue), which
     // requires a plain literal - a String.raw tagged-template expression here
     // isn't statically evaluable and makes the build fail with "Invalid
     // segment configuration export detected" (confirmed by testing it).
-    "/((?!api/auth|api/health|api/alerts|shared|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    "/((?!api/auth|api/health|api/alerts|api/transactions|shared|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };

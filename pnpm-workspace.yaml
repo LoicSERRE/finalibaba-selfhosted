@@ -28,6 +28,23 @@ overrides:
   js-yaml: ">=4.3.0"
   find-my-way: ">=9.7.0"
   valibot: ">=1.4.2"
+  # GHSA-ggr8-5vv4-36mx - stack exhaustion merging a crafted recursive
+  # (self-referential) object graph. Unlike find-my-way/valibot above, this
+  # one IS on a live code path: @prisma/config uses deepmerge-ts (exact-
+  # pinned at 7.1.5 in its own package.json) to merge this project's own
+  # prisma.config.ts against c12's defaults, on every `prisma generate`/
+  # `prisma migrate deploy` - including the Dockerfile CMD that runs on
+  # every container start. But the input to that merge is never
+  # attacker-controlled: it's this repo's own checked-in config file plus
+  # Prisma's internal defaults, never JSON parsed from a request body (and
+  # JSON itself can't express the circular self-reference the PoC needs -
+  # only a literal `obj.self = obj` in JS can). Overridden rather than left
+  # as a documented-only exemption because v8's breaking changes (deep Map-
+  # value merging, some renamed type exports) don't touch the plain
+  # `deepmerge(a, b)` function signature @prisma/config actually calls -
+  # confirmed empirically: `prisma generate` and `prisma migrate deploy`
+  # both still succeed against this override, see the commit this landed in.
+  deepmerge-ts: ">=8.0.0"
   # GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority introducer.
   # Same "reachable only through @prisma/dev's never-invoked embedded-Postgres
   # subcommand" story as find-my-way/valibot above: pulled in via

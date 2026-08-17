@@ -230,6 +230,10 @@
     "noBudgetSet": "Aucun budget défini",
     "uncategorizedSpend": "{amount} de dépenses non catégorisées ce mois-ci",
     "uncategorizedGroupsTitle": "À catégoriser",
+    "autoCategorizeNow": "Auto-catégoriser",
+    "autoCategorizing": "Catégorisation…",
+    "autoCategorizeResultNone": "Rien de nouveau à catégoriser",
+    "autoCategorizeResult": "{count} transaction{suffix} catégorisée{suffix}",
     "account": "Compte",
     "noTransactions": "Aucune transaction dans cette catégorie"
   },

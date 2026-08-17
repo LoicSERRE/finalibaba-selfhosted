@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { RefreshCw, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { syncGocardlessBalances } from "@/lib/actions/gocardless";
+import { syncGocardlessAccount } from "@/lib/actions/gocardless";
 import { useTranslations } from "next-intl";
 
 export function ConnectOpenBankingButton({ institutionId }: Readonly<{ institutionId: string }>) {
@@ -27,7 +27,11 @@ export function SyncOpenBankingButton({ institutionId }: Readonly<{ institutionI
     <Button
       variant="outline"
       size="sm"
-      onClick={() => startTransition(() => syncGocardlessBalances(institutionId))}
+      onClick={() =>
+        startTransition(async () => {
+          await syncGocardlessAccount(institutionId);
+        })
+      }
       disabled={pending}
     >
       <RefreshCw size={12} className={pending ? "animate-spin" : ""} aria-hidden="true" />

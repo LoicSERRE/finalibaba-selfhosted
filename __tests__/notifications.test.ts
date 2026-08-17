@@ -16,57 +16,78 @@ const { sendNtfyMessage, sendEmail, dispatchAlert } = await import("@/lib/servic
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   sendMailMock.mockReset();
   createTransportMock.mockClear();
 });
 
 describe("sendNtfyMessage", () => {
-  it("POSTs the message as the raw body, no Title header", async () => {
-    // No header at all - not even an ASCII-safe attempt - because alert
-    // text is French/user-entered (accents), and fetch() throws a
-    // ByteString conversion error for non-Latin-1 header values. Confirmed
-    // the hard way while building this.
+  it("POSTs JSON to the server root, with topic/title/message as body fields", async () => {
+    // Not the simple API (POST straight to the topic URL, title as a
+    // `Title` header) - that header approach breaks for accented titles,
+    // since HTTP header values must be Latin-1 and alert titles are
+    // French/user-entered. The JSON API's fields are plain JSON strings,
+    // UTF-8-safe with no encoding workaround needed. Confirmed the hard way
+    // while building this.
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
-    const ok = await sendNtfyMessage("https://ntfy.sh/mon-sujet", "Patrimoine net : seuil dépassé");
+    const ok = await sendNtfyMessage("https://ntfy.sh/mon-sujet", "Patrimoine net : seuil dépassé", "Passé au-dessus de 100 000 €.");
 
     expect(ok).toBe(true);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://ntfy.sh/mon-sujet");
+    expect(url).toBe("https://ntfy.sh");
     expect(init.method).toBe("POST");
-    expect(init.body).toBe("Patrimoine net : seuil dépassé");
-    expect(init.headers).toBeUndefined();
+    expect(JSON.parse(init.body)).toEqual({
+      topic: "mon-sujet",
+      title: "Patrimoine net : seuil dépassé",
+      message: "Passé au-dessus de 100 000 €.",
+    });
   });
 
   it("returns false (not throw) on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
-    expect(await sendNtfyMessage("https://ntfy.sh/x", "body")).toBe(false);
+    expect(await sendNtfyMessage("https://ntfy.sh/x", "title", "body")).toBe(false);
   });
 
   it("returns false (not throw) when fetch itself rejects", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
-    expect(await sendNtfyMessage("https://ntfy.sh/x", "body")).toBe(false);
+    expect(await sendNtfyMessage("https://ntfy.sh/x", "title", "body")).toBe(false);
   });
 
   it("sends an Authorization header when an auth token is given - for a self-hosted ntfy server with auth-default-access=deny-all", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
-    await sendNtfyMessage("https://ntfy.example.com/x", "body", "tk_abc123");
+    await sendNtfyMessage("https://ntfy.example.com/x", "title", "body", "tk_abc123");
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers).toEqual({ Authorization: "Bearer tk_abc123" });
+    expect(init.headers).toEqual({ "Content-Type": "application/json", Authorization: "Bearer tk_abc123" });
   });
 
   it("omits the Authorization header entirely when no token is given (the public ntfy.sh case)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
-    await sendNtfyMessage("https://ntfy.sh/x", "body");
+    await sendNtfyMessage("https://ntfy.sh/x", "title", "body");
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers).toBeUndefined();
+    expect(init.headers).toEqual({ "Content-Type": "application/json" });
+  });
+
+  it("includes icon and click only when APP_URL is configured - both need a URL ntfy can actually fetch", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendNtfyMessage("https://ntfy.sh/x", "title", "body");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty("icon");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty("click");
+
+    vi.stubEnv("APP_URL", "https://finalibaba.example.com/");
+    await sendNtfyMessage("https://ntfy.sh/x", "title", "body");
+    const payload = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(payload.icon).toBe("https://finalibaba.example.com/icon");
+    expect(payload.click).toBe("https://finalibaba.example.com");
   });
 });
 

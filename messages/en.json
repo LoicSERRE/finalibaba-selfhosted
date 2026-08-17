@@ -230,6 +230,10 @@
     "noBudgetSet": "No budget set",
     "uncategorizedSpend": "{amount} of uncategorized spending this month",
     "uncategorizedGroupsTitle": "To categorize",
+    "autoCategorizeNow": "Auto-categorize",
+    "autoCategorizing": "Categorizing…",
+    "autoCategorizeResultNone": "Nothing new to categorize",
+    "autoCategorizeResult": "{count} transaction{suffix} categorized",
     "account": "Account",
     "noTransactions": "No transactions in this category"
   },

@@ -13,20 +13,43 @@ type AlertChannelSettings = {
 };
 
 /**
- * No Title header: HTTP header values must be Latin-1 (fetch/undici throws
- * a ByteString conversion error otherwise), and alert text here is
- * French/user-entered, so it can contain non-Latin-1 characters (accents).
- * ntfy falls back to a generic title when none is set - the body carries
- * the real message either way. Authorization is fine as a header though -
- * a bearer token is always ASCII, only the human-entered alert text has the
- * Latin-1 problem. Only relevant for a self-hosted ntfy server with
- * auth-default-access=deny-all (README's "Self-hosted alerts" section) -
- * the public ntfy.sh has no auth to send, token stays unset there.
+ * Uses ntfy's JSON publish API (POST to the server root with `topic` as a
+ * body field) instead of the simple API (POST straight to the topic URL,
+ * message as a raw body, title as a `Title` header). The simple API's
+ * `Title` header doesn't work here - HTTP header values must be Latin-1
+ * (fetch/undici throws a ByteString conversion error otherwise), and alert
+ * titles are French/user-entered, so they routinely contain accents.
+ * Confirmed the hard way while first building this - titles used to get
+ * folded into the body instead, with ntfy showing its own generic fallback
+ * title. The JSON API's `title`/`message` are plain JSON string values, not
+ * header values, so they're UTF-8-safe with no encoding workaround needed -
+ * this is the actual fix, not a smarter Latin-1 workaround. Authorization
+ * stays a header (a bearer token is always ASCII, no Latin-1 issue there) -
+ * only relevant for a self-hosted ntfy server with auth-default-access=
+ * deny-all (README's "Self-hosted alerts" section), the public ntfy.sh has
+ * no auth to send.
+ *
+ * `icon`/`click` (a notification icon and a tap-to-open URL) only get set
+ * when APP_URL is configured - both need a URL ntfy's own servers/client can
+ * fetch, which only holds when the instance is confirmed publicly reachable
+ * (same "leave blank for localhost use" convention APP_URL already has for
+ * GoCardless's OAuth callback). `/icon` is Next's own file-route
+ * (app/icon.tsx, a generated 32x32 PNG) - ntfy only accepts JPEG/PNG icons,
+ * not SVG, which is why this doesn't point at public/icon.svg instead.
  */
-export async function sendNtfyMessage(topicUrl: string, body: string, authToken: string | null = null): Promise<boolean> {
+export async function sendNtfyMessage(topicUrl: string, title: string, body: string, authToken: string | null = null): Promise<boolean> {
   try {
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : undefined;
-    const res = await fetch(topicUrl, { method: "POST", body, headers });
+    const parsed = new URL(topicUrl);
+    const topic = parsed.pathname.replace(/^\//, "");
+    const appUrl = process.env.APP_URL?.replace(/\/$/, "");
+    const payload: Record<string, unknown> = { topic, title, message: body };
+    if (appUrl) {
+      payload.icon = `${appUrl}/icon`;
+      payload.click = appUrl;
+    }
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+    const res = await fetch(parsed.origin, { method: "POST", body: JSON.stringify(payload), headers });
     return res.ok;
   } catch (e) {
     console.error("Failed to send ntfy alert", e);
@@ -71,7 +94,7 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
   const jobs: Promise<boolean>[] = [];
 
   if (settings.ntfyTopicUrl) {
-    jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, `${title}\n\n${body}`, settings.ntfyAuthToken));
+    jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, title, body, settings.ntfyAuthToken));
   }
 
   if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom) {
