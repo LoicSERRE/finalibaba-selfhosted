@@ -67,6 +67,11 @@ export function BackupRestoreSection() {
         <p className="text-xs text-[var(--muted)] mt-0.5">{t("subtitle")}</p>
       </div>
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 flex flex-wrap gap-3">
+        {/* Not a Next.js page - /api/backup streams a gzip DB dump for the
+            browser to download, so a real navigation (not the client
+            router) is required for its Content-Disposition header to take
+            effect. */}
+        {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
         <Button variant="outline" onClick={() => { window.location.href = "/api/backup"; }}>
           <Download size={14} aria-hidden="true" />
           {t("download")}

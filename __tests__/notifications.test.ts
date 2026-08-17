@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const sendMailMock = vi.fn();
-const createTransportMock = vi.fn((..._args: unknown[]) => ({ sendMail: sendMailMock }));
+// Typed explicitly via vi.fn's generic (rather than inferred from the
+// implementation's own parameter list) so createTransportMock.mock.calls
+// still indexes as accepting arbitrary args below, without needing an
+// unused parameter in the implementation itself just to carry that type.
+const createTransportMock = vi.fn<(...args: unknown[]) => { sendMail: typeof sendMailMock }>(() => ({
+  sendMail: sendMailMock,
+}));
 vi.mock("nodemailer", () => ({
   default: { createTransport: (...args: unknown[]) => createTransportMock(...args) },
 }));

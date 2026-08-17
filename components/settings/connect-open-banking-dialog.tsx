@@ -53,6 +53,10 @@ export function ConnectOpenBankingDialog({ institutionId, institutionName }: Rea
     startTransition(async () => {
       await setGocardlessInstitutionId(institutionId, gcId);
       setOpen(false);
+      // Not a Next.js page - this route issues a server-side redirect to
+      // the bank's real GoCardless OAuth consent page, so a real
+      // navigation (not the client router) is required to leave the SPA.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = `/api/gocardless/connect?institutionId=${institutionId}`;
     });
   }
