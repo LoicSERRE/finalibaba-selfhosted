@@ -37,9 +37,15 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Production-only deps (excludes TypeScript, ESLint, Tailwind, @types/* - ~half the size)
-# --ignore-scripts: same reason as the deps stage - schema isn't copied in yet,
-# and the generated client is copied in from the builder stage below anyway.
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+# Copied here, before the install below, for two reasons: this project's
+# own package.json has a root "postinstall": "prisma generate" script that
+# pnpm runs on every install unless scripts are ignored, which needs
+# schema.prisma to exist to succeed - and prisma/prisma.config.ts are also
+# needed at container startup for `prisma migrate deploy` regardless, so
+# there's no reason to copy them a second time later in this stage.
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 # Run this install as the "node" user, not root - confirmed the hard way
 # that running it as root breaks the container at every single startup, not
 # just at build time. `pnpm install` invokes corepack, which fetches and
@@ -67,17 +73,32 @@ USER node
 # .jsonl files) to occasionally exceed its 5-minute default timeout and
 # abort the whole scan with a generic, hard-to-diagnose "context deadline
 # exceeded" failure that looks like a real finding but isn't.
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+#
+# No --ignore-scripts here (unlike deps/builder, where it's needed because
+# schema.prisma isn't copied in yet): this install must run @prisma/engines'
+# own postinstall (pnpm-workspace.yaml's allowBuilds already allow-lists it),
+# which downloads and chmod +x's the schema-engine binary `prisma migrate
+# deploy` needs at container startup - that binary is separate from the
+# query engine bundled into app/generated/prisma by the builder stage's own
+# `prisma generate`, so copying the generated client here does NOT cover it.
+# Skipping this postinstall left every release silently depending on `prisma
+# migrate deploy` re-downloading schema-engine over the network on every
+# single container start instead of it being baked into the image - fine
+# until one such download raced or got interrupted, which surfaced as
+# `spawn schema-engine-linux-musl-openssl-3.0.x EACCES` on an otherwise
+# healthy deploy (confirmed empirically: the binary was completely absent
+# from a published image, and manually re-running @prisma/engines' own
+# scripts/postinstall.js on that same image produced a correctly
+# permissioned -rwxr-xr-x file).
+RUN pnpm install --frozen-lockfile --prod
 USER root
 
 # App runtime
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/app/generated ./app/generated
-
-# Prisma migrations (needed at startup)
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+# prisma/ and prisma.config.ts (needed at startup for `prisma migrate
+# deploy`) were already copied in above, ahead of the pnpm install step.
 
 # node:26-alpine bundles npm (and its own vendored node_modules) even though
 # this project only ever uses pnpm - npm's only real use anywhere in this
