@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.10.0**
+Current stable release: **v1.10.1**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -105,6 +105,15 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 - [X] **Category type (Dépense/Revenu)**, chosen explicitly at creation - `/budgets` now only ever lists expense categories (a "budget" cap has no meaning for income); income categories (salary, or anything else pointed at real income) get their own section on `/income` instead, with a real year-to-date total
 - [X] **"Reste à vivre"** summary on `/budgets` - total income minus total spending for the current month, internal transfers excluded, independent of how completely things are categorized
 - [X] Considered and rejected: auto-detecting a category's type from that month's transactions (income vs expense framing would silently flip month to month) - an explicit, stable choice is the correct UX, not an inferred one
+
+---
+
+## v1.10.1 - Categorization & export fixes - Released ✓
+
+*Two real issues found while validating v1.10.0 against production data.*
+
+- [X] **Fix: internal-transfer matching now assigns pairs by global date-priority** instead of one credit at a time in arbitrary order - fixes a real case where an unrelated same-amount transaction could permanently claim the debit that was the true same-day match for a different transfer
+- [X] **Fix: tax report export now shows 2 decimals per line** (dividends, interest, sale proceeds/gain/tax), matching what the page itself already shows - the export was rounding every line to the nearest euro, so a real 0,46€ dividend displayed as "0 €" in the downloaded file
 
 ---
 
