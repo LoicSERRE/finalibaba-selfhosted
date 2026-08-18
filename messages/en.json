@@ -724,12 +724,6 @@
   "woob": {
     "configure": "Configure Woob"
   },
-  "recordBalance": {
-    "title": "Update — {name}",
-    "balance": "New balance (€)",
-    "submit": "Save",
-    "update": "Update"
-  },
   "importTransactions": {
     "trigger": "Import CSV",
     "title": "Import transactions",

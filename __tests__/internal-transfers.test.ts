@@ -65,6 +65,22 @@ describe("detectInternalTransferPairs", () => {
     expect(result.has("debit1")).toBe(true);
   });
 
+  it("prefers the globally closest-dated pair over whichever credit happens to be listed first", () => {
+    // Real production bug: an unrelated same-amount credit a few days off
+    // must not be allowed to claim the debit that an exact same-day credit
+    // (listed later in the array) was the true match for. Order in the
+    // input array must never affect which pair wins - only date closeness
+    // should.
+    const result = detectInternalTransferPairs([
+      { id: "creditFewDaysOff", accountId: "a2", amountCents: BigInt(50000), date: new Date("2026-06-27") },
+      { id: "debitShared", accountId: "a1", amountCents: BigInt(-50000), date: new Date("2026-06-30") },
+      { id: "creditSameDay", accountId: "a3", amountCents: BigInt(50000), date: new Date("2026-06-30") },
+    ]);
+    expect(result.has("creditSameDay")).toBe(true);
+    expect(result.has("debitShared")).toBe(true);
+    expect(result.has("creditFewDaysOff")).toBe(false);
+  });
+
   it("real-world example: LCL's generic 'VIREMENT SEPA' label reused for both an internal transfer and unrelated payments", () => {
     // Mirrors data seen in production: a 2500€ internal transfer between
     // "Compte perso" and "Livret A", alongside an unrelated salary-like

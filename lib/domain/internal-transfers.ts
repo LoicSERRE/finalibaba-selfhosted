@@ -15,12 +15,26 @@
  * safe to treat as an internal transfer without further evidence.
  *
  * Pure function, no DB calls - mirrors lib/domain/auto-categorize.ts's
- * shape. Greedy nearest-date matching: for each credit, the closest
- * unclaimed opposite-amount debit on a different account within
- * toleranceDays wins - not a globally-optimal matching, but a personal
- * finance account rarely has more than one same-day, same-amount transfer
- * candidate to disambiguate between, so this is a deliberate simplicity
- * tradeoff over a more complex assignment algorithm.
+ * shape. Global-priority matching: every (credit, debit) pair within
+ * toleranceDays is a candidate, and the closest-dated pair overall is
+ * assigned first, then the next-closest among what's left, and so on.
+ *
+ * Not the same as "for each credit, grab its own closest available debit" -
+ * that earlier approach let a credit processed early (in whatever order the
+ * transactions happen to be listed, which has no relationship to date)
+ * permanently claim a debit that only looked like its best local match,
+ * even when a *different*, later-processed credit was actually the true
+ * same-day counterpart for that debit. Found in production: a same-day,
+ * same-amount, cross-account pair (an obvious real transfer) went
+ * unmatched because an unrelated same-amount credit a few days off had
+ * already consumed the one true debit first. Global-priority ordering
+ * fixes this specific failure mode - the exact-date pair always outranks
+ * a looser one and gets assigned before the looser pair even gets a
+ * chance to compete for the same debit. Still not a provably-optimal
+ * assignment for every conceivable case, but a personal finance account
+ * rarely has more than a couple of same-amount candidates to disambiguate
+ * between, so this remains a deliberate simplicity tradeoff over a full
+ * min-cost matching algorithm.
  */
 
 export type TransferCandidate = {
@@ -31,6 +45,8 @@ export type TransferCandidate = {
 };
 
 const DEFAULT_TOLERANCE_DAYS = 3;
+
+type CandidatePair = { creditId: string; debitId: string; diffMs: number };
 
 // Groups every debit (negative amountCents) by its absolute amount, so a
 // credit only ever scans its own amount bucket instead of every debit in
@@ -48,28 +64,28 @@ function groupDebitsByAbsAmount(transactions: TransferCandidate[]): Map<string, 
   return debitsByAbsAmount;
 }
 
-// Picks the closest-dated unclaimed debit (different account, within
-// toleranceMs) for one credit - null if none qualifies. Same
-// complexity-budget reason as the function above.
-function findClosestDebit(
-  credit: TransferCandidate,
-  candidates: TransferCandidate[],
-  usedDebitIds: Set<string>,
+// Every (credit, debit) pair within tolerance, on different accounts,
+// regardless of whether either side is already "used" - assignment happens
+// afterward, once every candidate pair is known and sorted by closeness.
+// Same complexity-budget reason as the function above.
+function buildCandidatePairs(
+  transactions: TransferCandidate[],
+  debitsByAbsAmount: Map<string, TransferCandidate[]>,
   toleranceMs: number
-): TransferCandidate | null {
-  let best: TransferCandidate | null = null;
-  let bestDiffMs = Infinity;
-  for (const debit of candidates) {
-    if (usedDebitIds.has(debit.id)) continue;
-    if (debit.accountId === credit.accountId) continue;
-    const diffMs = Math.abs(credit.date.getTime() - debit.date.getTime());
-    if (diffMs > toleranceMs) continue;
-    if (diffMs < bestDiffMs) {
-      best = debit;
-      bestDiffMs = diffMs;
+): CandidatePair[] {
+  const pairs: CandidatePair[] = [];
+  for (const credit of transactions) {
+    if (credit.amountCents <= BigInt(0)) continue;
+    const candidates = debitsByAbsAmount.get(credit.amountCents.toString());
+    if (!candidates) continue;
+    for (const debit of candidates) {
+      if (debit.accountId === credit.accountId) continue;
+      const diffMs = Math.abs(credit.date.getTime() - debit.date.getTime());
+      if (diffMs > toleranceMs) continue;
+      pairs.push({ creditId: credit.id, debitId: debit.id, diffMs });
     }
   }
-  return best;
+  return pairs;
 }
 
 /**
@@ -85,21 +101,19 @@ export function detectInternalTransferPairs(
   toleranceDays: number = DEFAULT_TOLERANCE_DAYS
 ): Set<string> {
   const toleranceMs = toleranceDays * 24 * 60 * 60 * 1000;
-  const matched = new Set<string>();
   const debitsByAbsAmount = groupDebitsByAbsAmount(transactions);
+  const pairs = buildCandidatePairs(transactions, debitsByAbsAmount, toleranceMs);
+  pairs.sort((a, b) => a.diffMs - b.diffMs);
+
+  const matched = new Set<string>();
+  const usedCreditIds = new Set<string>();
   const usedDebitIds = new Set<string>();
-
-  for (const credit of transactions) {
-    if (credit.amountCents <= BigInt(0)) continue;
-    const candidates = debitsByAbsAmount.get(credit.amountCents.toString());
-    if (!candidates) continue;
-
-    const best = findClosestDebit(credit, candidates, usedDebitIds, toleranceMs);
-    if (best) {
-      matched.add(credit.id);
-      matched.add(best.id);
-      usedDebitIds.add(best.id);
-    }
+  for (const pair of pairs) {
+    if (usedCreditIds.has(pair.creditId) || usedDebitIds.has(pair.debitId)) continue;
+    usedCreditIds.add(pair.creditId);
+    usedDebitIds.add(pair.debitId);
+    matched.add(pair.creditId);
+    matched.add(pair.debitId);
   }
 
   return matched;

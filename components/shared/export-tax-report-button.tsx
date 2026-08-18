@@ -48,7 +48,7 @@ export function ExportTaxReportButton({ data }: Readonly<{ data: TaxReportExport
       lines.push("|---|---|---|---|---|---|---|");
       for (const s of data.sales) {
         lines.push(
-          `| ${s.date} | ${s.ticker} | ${s.accountName} | ${fmt(s.proceedsCents)} | ${fmt(s.costBasisCents)} | ${sign(s.gainCents)}${fmt(s.gainCents)} | -${fmt(s.taxCents)} |`
+          `| ${s.date} | ${s.ticker} | ${s.accountName} | ${fmt(s.proceedsCents, 2)} | ${fmt(s.costBasisCents, 2)} | ${sign(s.gainCents)}${fmt(s.gainCents, 2)} | -${fmt(s.taxCents, 2)} |`
         );
       }
       lines.push("");
@@ -59,7 +59,7 @@ export function ExportTaxReportButton({ data }: Readonly<{ data: TaxReportExport
       lines.push(`| ${t("colDate")} | ${t("colTicker")} | ${t("colAccount")} | ${t("colValue")} |`);
       lines.push("|---|---|---|---|");
       for (const e of data.dividends) {
-        lines.push(`| ${e.date} | ${e.ticker ?? "-"} | ${e.accountName} | ${fmt(e.netCents)} |`);
+        lines.push(`| ${e.date} | ${e.ticker ?? "-"} | ${e.accountName} | ${fmt(e.netCents, 2)} |`);
       }
       lines.push("");
     }
@@ -69,7 +69,7 @@ export function ExportTaxReportButton({ data }: Readonly<{ data: TaxReportExport
       lines.push(`| ${t("colDate")} | ${t("colAccount")} | ${t("colValue")} |`);
       lines.push("|---|---|---|");
       for (const e of data.interest) {
-        lines.push(`| ${e.date} | ${e.accountName} | ${fmt(e.netCents)} |`);
+        lines.push(`| ${e.date} | ${e.accountName} | ${fmt(e.netCents, 2)} |`);
       }
       lines.push("");
     }

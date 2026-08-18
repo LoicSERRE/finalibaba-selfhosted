@@ -2,22 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
-import { parseCents } from "@/lib/utils/format";
 import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
-
-export async function recordBalance(formData: FormData) {
-  const accountId = formData.get("accountId") as string;
-  const balanceStr = formData.get("balance") as string;
-  const balanceCents = parseCents(balanceStr);
-
-  await prisma.historicalBalance.create({
-    data: { accountId, balanceCents },
-  });
-
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/accounts");
-  revalidatePath("/");
-}
 
 type BalanceRow = { date: string; balanceCents: number };
 
