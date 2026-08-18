@@ -69,7 +69,7 @@ export default async function SettingsPage() {
     ]);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("settings.title")}</h1>
         <p className="text-sm text-[var(--muted)] mt-1">{t("settings.subtitle")}</p>
@@ -355,7 +355,7 @@ export default async function SettingsPage() {
           <div className="flex items-center justify-between">
             <Link
               href="/tax-report"
-              className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2"
+              className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             >
               {t("settings.tax.taxReportLink")}
             </Link>

@@ -1,6 +1,6 @@
 export default function SettingsLoading() {
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-pulse">
+    <div className="max-w-4xl mx-auto space-y-8 animate-pulse">
       <div>
         <div className="h-7 w-32 bg-[var(--surface)] rounded-lg" />
         <div className="h-4 w-52 bg-[var(--surface)] rounded mt-2" />

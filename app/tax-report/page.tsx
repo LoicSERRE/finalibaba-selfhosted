@@ -120,7 +120,7 @@ export default async function TaxReportPage({
       <div className="flex items-center justify-center gap-4">
         <Link
           href={`/tax-report?year=${year - 1}`}
-          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors"
+          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
           aria-label={tc("previous")}
         >
           <ChevronLeft size={18} aria-hidden="true" />
@@ -128,7 +128,7 @@ export default async function TaxReportPage({
         <span className="text-lg font-semibold tabular-nums text-[var(--foreground)] w-16 text-center">{year}</span>
         <Link
           href={`/tax-report?year=${year + 1}`}
-          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors"
+          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
           aria-label={tc("next")}
         >
           <ChevronRight size={18} aria-hidden="true" />
@@ -174,7 +174,7 @@ export default async function TaxReportPage({
                   <thead>
                     <tr className="border-b border-[var(--border)]">
                       {[t("colDate"), t("colTicker"), t("colAccount"), t("colProceeds"), t("colCostBasis"), t("colGain"), t("colTax")].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                           {h}
                         </th>
                       ))}

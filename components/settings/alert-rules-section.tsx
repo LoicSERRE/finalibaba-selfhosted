@@ -571,9 +571,14 @@ export function AlertRulesSection({
                 {rule.message && <p className="text-xs text-[var(--muted)] mt-0.5">{rule.message}</p>}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <Button variant="outline" size="sm" onClick={() => handleToggle(rule.id, !rule.active)} disabled={pending}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={rule.active ? t("pause") : t("resume")}
+                  onClick={() => handleToggle(rule.id, !rule.active)}
+                  disabled={pending}
+                >
                   {rule.active ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
-                  {rule.active ? t("pause") : t("resume")}
                 </Button>
                 <AlertRuleDialog
                   rule={rule}
@@ -582,7 +587,12 @@ export function AlertRulesSection({
                   holdings={holdings}
                   categories={categories}
                 />
-                <DeleteButton label={t("delete")} description={t("deleteDescription")} onDelete={handleDelete(rule.id)} />
+                <DeleteButton
+                  iconOnly
+                  label={t("delete")}
+                  description={t("deleteDescription")}
+                  onDelete={handleDelete(rule.id)}
+                />
               </div>
             </div>
           ))}

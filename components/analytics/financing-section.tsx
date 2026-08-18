@@ -50,11 +50,11 @@ export function FinancingSection({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--border)]">
-            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("financing.colAsset")}</th>
-            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("financing.colValue")}</th>
-            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("financing.colLoan")}</th>
-            <th scope="col" className="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("financing.colEquity")}</th>
-            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("financing.colLtv")}</th>
+            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("financing.colAsset")}</th>
+            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("financing.colValue")}</th>
+            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("financing.colLoan")}</th>
+            <th scope="col" className="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("financing.colEquity")}</th>
+            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("financing.colLtv")}</th>
           </tr>
         </thead>
         <tbody>

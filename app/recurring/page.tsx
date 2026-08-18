@@ -130,7 +130,7 @@ export default async function RecurringPage() {
                       {r.category && (
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ background: r.category.color }} aria-hidden="true" />
                       )}
-                      <span className={`text-sm font-medium truncate ${r.active ? "text-[var(--foreground)]" : "text-[var(--muted)]"}`}>
+                      <span className={`text-sm font-medium break-words ${r.active ? "text-[var(--foreground)]" : "text-[var(--muted)]"}`}>
                         {r.label}
                       </span>
                       {r.autoDetected && (
@@ -168,7 +168,7 @@ export default async function RecurringPage() {
                         accounts={dialogAccounts}
                         categories={categories}
                       />
-                      <DeleteButton label={tc("delete")} description={tc("irreversible")} onDelete={deleteRecurringTransaction.bind(null, r.id)} />
+                      <DeleteButton iconOnly label={tc("delete")} description={tc("irreversible")} onDelete={deleteRecurringTransaction.bind(null, r.id)} />
                     </div>
                   </div>
                   <p className="text-sm tabular-nums font-medium">
@@ -208,7 +208,7 @@ export default async function RecurringPage() {
                   <div key={`${o.date.toISOString()}-${o.label}`} className="flex items-center justify-between gap-3 px-6 py-3">
                     <div className="flex items-center gap-2 min-w-0">
                       {o.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: o.color }} aria-hidden="true" />}
-                      <span className="text-sm text-[var(--foreground)] truncate">{o.label}</span>
+                      <span className="text-sm text-[var(--foreground)] break-words">{o.label}</span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 text-sm tabular-nums">
                       <span className="text-[var(--muted)]">{new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(o.date)}</span>

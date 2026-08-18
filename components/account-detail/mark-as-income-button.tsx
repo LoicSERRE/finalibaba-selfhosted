@@ -170,9 +170,8 @@ export function MarkAsIncomeButton({
   const trigger = alreadyMarked ? (
     <span className="text-xs text-[var(--muted)]">{t("alreadyMarked")}</span>
   ) : (
-    <Button variant="outline" size="sm">
+    <Button variant="outline" size="sm" aria-label={t("markAsIncome")} title={t("markAsIncome")}>
       <Coins size={12} aria-hidden="true" />
-      {t("markAsIncome")}
     </Button>
   );
 

@@ -45,7 +45,7 @@ export function BalanceHistoryTable({
             {[td("tableHeaders.date"), td("tableHeaders.balance"), td("tableHeaders.change")].map((h) => (
               <th
                 key={h}
-                className="px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider"
+                className="px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap"
               >
                 {h}
               </th>

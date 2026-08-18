@@ -60,7 +60,7 @@ export function TransactionsTable({
             ].map((h) => (
               <th
                 key={h}
-                className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider"
+                className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap"
               >
                 {h}
               </th>
@@ -82,7 +82,7 @@ export function TransactionsTable({
                   year: "numeric",
                 }).format(tx.date)}
               </td>
-              <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] max-w-[140px] sm:max-w-xs truncate" title={tx.label ?? undefined}>
+              <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={tx.label ?? undefined}>
                 {tx.label}
               </td>
               <td className="px-3 sm:px-6 py-3 whitespace-nowrap">

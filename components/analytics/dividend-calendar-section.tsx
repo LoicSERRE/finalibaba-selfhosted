@@ -41,7 +41,7 @@ export function DividendCalendarSection({
         {dividendCalendar.map((row) => (
           <div key={row.isin} className="py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-[var(--foreground)] truncate">{row.name}</p>
+              <p className="text-sm font-medium text-[var(--foreground)] break-words">{row.name}</p>
               <p className="text-xs text-[var(--muted)]">
                 {row.symbol} · yield {(row.divYield * 100).toFixed(1)}%
                 {row.annualRatePerShare != null && (

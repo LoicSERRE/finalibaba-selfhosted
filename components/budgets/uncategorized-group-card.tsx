@@ -39,7 +39,7 @@ export function UncategorizedGroupCard({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[var(--foreground)] truncate">{label}</p>
+        <p className="text-sm font-medium text-[var(--foreground)] break-words">{label}</p>
         <p className="text-xs text-[var(--muted)]">
           {t("occurrenceCount", { count, suffix: count !== 1 ? "s" : "" })} · {formatCurrency(totalCents)}
         </p>

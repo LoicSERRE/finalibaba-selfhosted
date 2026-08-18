@@ -42,7 +42,7 @@ export function CashflowCards({
         {!hasSalary ? (
           <div>
             <p className="text-2xl font-semibold text-[var(--muted)]">-</p>
-            <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
+            <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
               {t("savingsRate.configureSalary")}
             </Link>
           </div>
@@ -97,7 +97,7 @@ export function CashflowCards({
         {!hasExpenses ? (
           <div>
             <p className="text-2xl font-semibold text-[var(--muted)]">-</p>
-            <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline">
+            <Link href="/settings" className="text-xs text-[var(--accent-text)] mt-1 inline-flex items-center min-h-[44px] hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
               {t("runway.configureExpenses")}
             </Link>
           </div>

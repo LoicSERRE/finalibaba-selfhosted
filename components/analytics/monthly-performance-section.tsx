@@ -24,10 +24,10 @@ export function MonthlyPerformanceSection({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--border)]">
-            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("monthlyPerf.colMonth")}</th>
-            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("monthlyPerf.colNetWorth")}</th>
-            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("monthlyPerf.colChange")}</th>
-            <th scope="col" className="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("monthlyPerf.colPct")}</th>
+            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("monthlyPerf.colMonth")}</th>
+            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("monthlyPerf.colNetWorth")}</th>
+            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("monthlyPerf.colChange")}</th>
+            <th scope="col" className="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("monthlyPerf.colPct")}</th>
           </tr>
         </thead>
         <tbody>

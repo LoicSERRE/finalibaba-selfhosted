@@ -35,7 +35,7 @@ export function FiatTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: FiatAccou
                   {ta(account.type as Parameters<typeof ta>[0])}
                 </p>
               </div>
-              <p className="font-medium text-[var(--foreground)] truncate">{account.name}</p>
+              <p className="font-medium text-[var(--foreground)] break-words">{account.name}</p>
             </div>
             <div className="flex items-center gap-3 sm:gap-4 shrink-0">
               {account.sparkValues.length >= 2 && (

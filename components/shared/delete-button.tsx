@@ -10,14 +10,22 @@ export function DeleteButton({
   onDelete,
   label,
   description,
+  iconOnly = false,
 }: Readonly<{
   onDelete: () => Promise<void>;
   label?: string;
   description?: string;
+  // For tight row-of-icon-buttons contexts (settings list rows, income
+  // event cards) sitting next to other icon-only actions (edit, pause) -
+  // an icon+text "Supprimer" pill next to icon-only siblings reads as
+  // visually inconsistent. Off by default: everywhere else in the app a
+  // labeled destructive button is the clearer, safer default.
+  iconOnly?: boolean;
 }>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("common");
+  const resolvedLabel = label ?? t("delete");
 
   const handleDelete = () => {
     startTransition(async () => {
@@ -32,9 +40,9 @@ export function DeleteButton({
       onOpenChange={setOpen}
       title={t("confirmDelete")}
       trigger={
-        <Button variant="destructive" size="sm">
+        <Button variant="destructive" size="sm" aria-label={iconOnly ? resolvedLabel : undefined}>
           <Trash2 size={12} aria-hidden="true" />
-          {label ?? t("delete")}
+          {!iconOnly && resolvedLabel}
         </Button>
       }
     >

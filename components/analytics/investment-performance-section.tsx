@@ -88,12 +88,12 @@ export function InvestmentPerformanceSection({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)]">
-                <th scope="col" className="pb-2 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("performance.colAccount")}</th>
-                <th scope="col" className="pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("performance.colInvested")}</th>
-                <th scope="col" className="pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("performance.colValue")}</th>
-                <th scope="col" className="pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("performance.colGrossGain")}</th>
-                <th scope="col" className="hidden sm:table-cell pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("performance.colNetGain")}</th>
-                <th scope="col" className="hidden sm:table-cell pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("performance.colCagr")}</th>
+                <th scope="col" className="pb-2 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("performance.colAccount")}</th>
+                <th scope="col" className="pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("performance.colInvested")}</th>
+                <th scope="col" className="pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("performance.colValue")}</th>
+                <th scope="col" className="pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("performance.colGrossGain")}</th>
+                <th scope="col" className="hidden sm:table-cell pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("performance.colNetGain")}</th>
+                <th scope="col" className="hidden sm:table-cell pb-2 text-right text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("performance.colCagr")}</th>
               </tr>
             </thead>
             <tbody>

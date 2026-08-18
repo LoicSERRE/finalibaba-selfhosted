@@ -45,7 +45,7 @@ export function DashboardView({
   interactive?: boolean;
 }>) {
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("dashboard.title")}</h1>
         <p className="text-sm text-[var(--muted)] mt-1">{t("dashboard.subtitle")}</p>
@@ -143,7 +143,7 @@ export function DashboardView({
                       <Link
                         key={account.id}
                         href={`/accounts/${account.id}`}
-                        className="flex items-center justify-between text-xs group min-h-[44px] -mx-2 px-2 rounded-lg hover:bg-[var(--surface-elevated)] active:bg-[var(--border)] transition-colors"
+                        className="flex items-center justify-between text-xs group min-h-[44px] -mx-2 px-2 rounded-lg hover:bg-[var(--surface-elevated)] active:bg-[var(--border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
                       >
                         <span className="text-[var(--muted)] group-hover:text-[var(--foreground)] transition-colors">
                           {account.name}

@@ -81,7 +81,10 @@ select option {
    `fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2` positioning
    classes so the animation doesn't fight the base centering transform.
    Neutralized by the prefers-reduced-motion rule above (it overrides
-   animation-duration on every element). */
+   animation-duration on every element). Fade + scale only, no translateY -
+   an earlier version combined a scale with a vertical slide-up, which read
+   as a wobbly diagonal motion rather than a confident entrance; a single
+   axis of motion (scale) reads as more deliberate. */
 @keyframes dialog-overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -91,12 +94,12 @@ select option {
   to { opacity: 0; }
 }
 @keyframes dialog-content-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96) translateY(0.75rem); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1) translateY(0); }
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 @keyframes dialog-content-out {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1) translateY(0); }
-  to { opacity: 0; transform: translate(-50%, -50%) scale(0.98) translateY(0.5rem); }
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
 }
 .dialog-overlay[data-state="open"] { animation: dialog-overlay-in 150ms ease-out; }
 .dialog-overlay[data-state="closed"] { animation: dialog-overlay-out 150ms ease-in; }

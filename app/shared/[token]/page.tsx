@@ -69,7 +69,7 @@ export default async function SharedDashboardPage({
   ];
 
   return (
-    <div className="max-w-5xl mx-auto pt-4">
+    <div className="max-w-4xl mx-auto pt-4">
       <div className="mb-6 flex items-center gap-2 text-xs text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2">
         <ShieldCheck size={14} className="text-[var(--positive)] shrink-0" aria-hidden="true" />
         <span>{link.label ? t("shared.readOnlyBannerLabeled", { label: link.label }) : t("shared.readOnlyBanner")}</span>

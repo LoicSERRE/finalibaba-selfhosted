@@ -59,7 +59,7 @@ export function SuggestionCard({
   return (
     <div className="flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[var(--foreground)] truncate">{candidate.label}</p>
+        <p className="text-sm font-medium text-[var(--foreground)] break-words">{candidate.label}</p>
         <p className="text-xs text-[var(--muted)]">
           {candidate.accountName} · {t(candidate.frequency.toLowerCase())} · {formatCurrency(candidate.amountCents)}
         </p>

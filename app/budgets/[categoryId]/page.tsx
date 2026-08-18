@@ -38,7 +38,7 @@ export default async function CategoryDetailPage({
     <div className="max-w-4xl mx-auto space-y-6">
       <Link
         href="/budgets"
-        className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors py-2 min-h-[44px]"
+        className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors py-2 min-h-[44px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
       >
         <ArrowLeft size={14} aria-hidden="true" />
         {t("title")}
@@ -62,7 +62,7 @@ export default async function CategoryDetailPage({
                 <tr className="border-b border-[var(--border)]">
                   {[td("tableHeaders.date"), t("account"), td("tableHeaders.label"), td("tableHeaders.category"), td("tableHeaders.amount")].map(
                     (h) => (
-                      <th key={h} className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                      <th key={h} className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
                     )
@@ -81,7 +81,7 @@ export default async function CategoryDetailPage({
                       {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(tx.date)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 text-[var(--muted)] whitespace-nowrap text-xs sm:text-sm">{tx.account.name}</td>
-                    <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] max-w-[140px] sm:max-w-xs truncate" title={tx.label}>
+                    <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={tx.label}>
                       {tx.label}
                     </td>
                     <td className="px-3 sm:px-6 py-3 whitespace-nowrap">

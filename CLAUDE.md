@@ -152,7 +152,7 @@ components/          Grouped by feature domain, mirroring the app/ route it belo
   income/            /income page
   budgets/           /budgets page (categories, uncategorized-spend grouping)
   settings/          /settings page (institutions, sync status, backup/restore, i18n)
-  dashboard/         Dashboard-only pieces (/ page) that nothing else reuses
+  dashboard/         Dashboard-only pieces (/ page) - dashboard-loading.tsx is the one exception, reused by app/shared/[token]/loading.tsx since that route renders the same DashboardView shape
   layout/            App shell rendered on every page - sidebar, auto-sync bootstrap
   auth/              Login form (signIn/signOut are dynamically imported where needed, no SessionProvider)
   shared/            Used by 2+ domains above - charts, exports, generic dialogs/buttons

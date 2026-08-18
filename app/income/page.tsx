@@ -113,11 +113,11 @@ export default async function IncomePage() {
                 <Link
                   key={cat.id}
                   href={`/budgets/${cat.id}`}
-                  className="flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 hover:border-[var(--accent)] transition-colors"
+                  className="flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 hover:border-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="w-3 h-3 rounded-full shrink-0" style={{ background: cat.color }} aria-hidden="true" />
-                    <span className="text-sm font-medium text-[var(--foreground)] truncate">{cat.name}</span>
+                    <span className="text-sm font-medium text-[var(--foreground)] break-words">{cat.name}</span>
                   </span>
                   <span className="text-sm font-medium tabular-nums text-[var(--positive)] shrink-0">
                     +{formatCurrency(categoryTotalMap.get(cat.id) ?? 0)}
@@ -137,7 +137,7 @@ export default async function IncomePage() {
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--muted)] shrink-0">
                       {e.type === "DIVIDEND" ? t("dividend") : t("interest")}
                     </span>
-                    <span className="text-sm font-medium truncate text-[var(--foreground)]">
+                    <span className="text-sm font-medium break-words text-[var(--foreground)]">
                       {e.ticker ? `${e.ticker} · ${e.account.name}` : e.account.name}
                     </span>
                   </div>
@@ -154,7 +154,7 @@ export default async function IncomePage() {
                       }}
                       accounts={accounts}
                     />
-                    <DeleteButton label={tc("delete")} description={tc("irreversible")} onDelete={deleteIncomeEvent.bind(null, e.id)} />
+                    <DeleteButton iconOnly label={tc("delete")} description={tc("irreversible")} onDelete={deleteIncomeEvent.bind(null, e.id)} />
                   </div>
                 </div>
                 <p className="text-sm tabular-nums font-medium">

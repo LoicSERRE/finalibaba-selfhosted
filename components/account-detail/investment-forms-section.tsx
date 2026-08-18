@@ -83,7 +83,10 @@ export function InvestmentFormsSection({
             {td("fiscalSummary.save")}
           </button>
         </form>
-        <Link href="/tax-report" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3">
+        <Link
+          href="/tax-report"
+          className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
+        >
           {td("fiscalSummary.taxReportLink")}
         </Link>
       </div>

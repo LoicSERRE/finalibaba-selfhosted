@@ -37,13 +37,13 @@ export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: Inv
                 {account.institutionName && (
                   <InstitutionLogo name={account.institutionName} logoUrl={account.institutionLogoUrl} size={24} />
                 )}
-                <p className="text-xs text-[var(--muted)] truncate">
+                <p className="text-xs text-[var(--muted)] break-words">
                   {account.institutionName && `${account.institutionName} · `}
                   {ta(account.type as Parameters<typeof ta>[0])}
                   {account.investmentSubtype && ` · ${account.investmentSubtype}`}
                 </p>
               </div>
-              <p className="font-medium text-[var(--foreground)] truncate">{account.name}</p>
+              <p className="font-medium text-[var(--foreground)] break-words">{account.name}</p>
             </div>
             <div className="text-right shrink-0">
               <p className="text-base font-semibold tabular-nums text-[var(--foreground)]">
@@ -75,23 +75,23 @@ export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: Inv
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                       {t("table.asset")}
                     </th>
-                    <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                    <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                       {t("table.qty")}
                     </th>
-                    <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                    <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                       {t("table.price")}
                     </th>
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                       {t("table.value")}
                     </th>
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                       {t("table.gain")}
                     </th>
                     {account.hasTaxRate && (
-                      <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                      <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                         {t("table.tax")}
                       </th>
                     )}

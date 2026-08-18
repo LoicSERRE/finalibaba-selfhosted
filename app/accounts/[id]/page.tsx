@@ -60,7 +60,7 @@ export default async function AccountDetailPage({
       {/* Back nav */}
       <Link
         href={`/accounts?tab=${result.backTab}`}
-        className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors py-2 min-h-[44px]"
+        className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors py-2 min-h-[44px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
       >
         <ArrowLeft size={14} />
         {td("backToAccounts")}

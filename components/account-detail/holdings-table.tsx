@@ -38,13 +38,13 @@ export function HoldingsTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)]">
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("table.asset")}</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("table.qty")}</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("table.price")}</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("table.value")}</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("table.gain")}</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("table.tax")}</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("table.weight")}</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.asset")}</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.qty")}</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.price")}</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.value")}</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.gain")}</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.tax")}</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.weight")}</th>
               {!isSynced && <th scope="col" className="px-4 py-3 w-10" />}
             </tr>
           </thead>

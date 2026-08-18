@@ -79,7 +79,7 @@ export function GoalAndPassiveIncome({
           <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
             {t("passive.title")}
           </p>
-          <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0">
+          <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
             {t("passive.viewDetail")}
           </Link>
         </div>
@@ -107,12 +107,15 @@ export function GoalAndPassiveIncome({
         ) : (
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-[var(--muted)]">{t("passive.emptyPrompt")}</p>
-            <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0">
+            <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
               {t("passive.emptyAction")}
             </Link>
           </div>
         )}
-        <Link href="/tax-report" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3">
+        <Link
+          href="/tax-report"
+          className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
+        >
           {t("passive.taxReportLink")}
         </Link>
       </div>
