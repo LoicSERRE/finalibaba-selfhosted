@@ -241,6 +241,10 @@ model Transaction {
   // registration time rather than guessed from a label substring.
   merchantCategoryCode String?
   createdAt   DateTime  @default(now())
+  // Reverse side of IncomeEvent.transactionId - lets "Mark as income"
+  // (see IncomeEvent below) tell whether this transaction already has one,
+  // so the same real-world payment can't be double-recorded.
+  incomeEvent IncomeEvent?
 
   @@index([accountId, date])
   @@index([categoryId])
@@ -296,6 +300,16 @@ model IncomeEvent {
   taxWithheldCents BigInt?    // foreign withholding tax (e.g. 15% US treaty rate) - null means none withheld
   date             DateTime
   createdAt        DateTime   @default(now())
+  // Set when this row was created via "Mark as income" from an actual
+  // Transaction row (amount/date pre-filled from it) rather than typed
+  // from scratch - null for pre-existing rows and for anyone who still
+  // prefers the manual /income form. @unique so the same real payment can't
+  // be marked as income twice. onDelete: SetNull, not Cascade: deleting the
+  // source transaction (or its account) shouldn't destroy an already
+  // fiscally-relevant income record - the record just loses its
+  // provenance link.
+  transactionId    String?     @unique
+  transaction      Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   @@index([accountId, date])
 }

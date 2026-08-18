@@ -27,25 +27,38 @@ import { normalizeLabel } from "@/lib/domain/recurring";
 /**
  * A looser variant of normalizeLabel, used only for the grouping key below
  * (and by the "apply to similar transactions" correction feature in
- * lib/actions/transactions.ts) - not recurring-transaction detection, which
- * keeps its own separately-tuned normalizeLabel untouched. Strips an
- * embedded calendar year (1900-2099) after the base normalization, so a
- * label whose only year-to-year variation is the year itself still groups
- * as the same label - a real gap found in production: French Livret
- * interest is credited once a year with a label like "INTERETS 2025" /
- * "INTERETS 2026", so two occurrences of the *exact same* label would
- * otherwise never accumulate (self-learning's MIN_HISTORY_OCCURRENCES could
- * never be reached - by the time a second interest credit lands, a full
- * year has passed and the label has already changed). `\b...\b` avoids
- * stripping a 4-digit run that's part of a longer alphanumeric token (a
- * reference number, an account suffix) - only an isolated year-like number
- * is removed.
+ * lib/actions/transactions.ts, and "mark as income" propagation in
+ * lib/actions/income.ts) - not recurring-transaction detection, which keeps
+ * its own separately-tuned normalizeLabel untouched. Strips a trailing
+ * year-like suffix after the base normalization, so a label whose only
+ * year-to-year variation is the year itself still groups as the same label
+ * - a real gap found in production: French Livret interest is credited
+ * once a year with a label like "INTERETS 2025"/"INTERETS 26" (banks vary
+ * between 4-digit and 2-digit year suffixes, and between institutions the
+ * whole prefix varies too - "INTERETS LEP" for a LEP account vs "INTERETS"
+ * for a Livret A - which is fine, those genuinely are different accounts
+ * and stay correctly separate), so two occurrences of the *exact same*
+ * label would otherwise never accumulate (self-learning's
+ * MIN_HISTORY_OCCURRENCES could never be reached - by the time a second
+ * interest credit lands, a full year has passed and the label has already
+ * changed).
+ *
+ * Only a trailing token (` 26`, ` 2026`) is stripped, not any 2-digit
+ * number anywhere in the label - a bare `\d{2}` match with no anchoring
+ * would also eat a real arrondissement/store-number suffix like
+ * "MCDONALD'S PARIS 15", which is a real but low-consequence tradeoff (it
+ * over-merges same-city branches for self-learning's grouping key, but
+ * they'd almost always resolve to the same category anyway, unlike
+ * silently misreading a genuinely different label as a duplicate).
  */
 export function normalizeLabelForCategorization(label: string): string {
-  return normalizeLabel(label)
-    .replace(/\b(19|20)\d{2}\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Whitespace is collapsed to single spaces *before* the trailing-year
+  // strip below, specifically so that strip can anchor on a single literal
+  // space instead of `\s+` - `\s+` immediately before a `{2}(...)?$`
+  // quantified group is exactly the shape ESLint's sonarjs/super-linear-
+  // regex rule flags as having super-linear backtracking risk.
+  const collapsed = normalizeLabel(label).replace(/\s+/g, " ");
+  return collapsed.replace(/ \d{2}(\d{2})?$/, "").trim();
 }
 
 // A label needs at least this many prior categorized occurrences before

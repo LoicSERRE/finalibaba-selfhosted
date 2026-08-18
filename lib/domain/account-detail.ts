@@ -41,6 +41,10 @@ export interface AccountDetailTransaction {
   label: string;
   amountCents: bigint;
   categoryId: string | null;
+  // Whether this transaction already has a linked IncomeEvent - "Mark as
+  // income" (mark-as-income-button.tsx) only renders when this is null, so
+  // the same real payment can't be recorded twice.
+  incomeEvent: { id: string } | null;
 }
 
 export interface AccountDetailAccount {

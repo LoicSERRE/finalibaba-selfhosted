@@ -169,7 +169,8 @@
       "category": "Catégorie",
       "amount": "Montant",
       "balance": "Solde",
-      "change": "Variation"
+      "change": "Variation",
+      "income": "Revenu"
     },
     "fiscalTip": "Renseignez le prix de revient sur chaque position pour voir les plus-values et l'impôt latent.",
     "fiscalSubtype": "Définissez le type de compte (PEA/CTO) pour activer le calcul fiscal.",
@@ -309,7 +310,16 @@
     "ytdDividends": "Dividendes nets",
     "ytdInterest": "Intérêts nets",
     "ytdTotal": "Total net",
-    "grossOfTax": "brut {gross}, −{tax} retenue"
+    "grossOfTax": "brut {gross}, −{tax} retenue",
+    "markAsIncome": "Marquer comme revenu",
+    "markAsIncomeTitle": "Marquer comme revenu",
+    "markAsIncomeHint": "Montant et date déjà remplis depuis la transaction - ajuste le titre ou la retenue à la source si besoin.",
+    "alreadyMarked": "Déjà enregistré comme revenu",
+    "markSimilarTitle": "Marquer aussi les transactions similaires ?",
+    "markSimilarBody": "{count} autre{suffix} transaction{suffix} de ce compte, avec le même libellé, pas encore enregistrée{suffix} comme revenu. Les enregistrer aussi comme « {typeLabel} » ?",
+    "markSimilarConfirm": "Marquer {count}",
+    "markSimilarDismiss": "Non merci",
+    "markingSimilar": "Enregistrement…"
   },
   "taxReport": {
     "title": "Rapport fiscal annuel",

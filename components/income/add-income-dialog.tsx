@@ -10,7 +10,10 @@ import { useTranslations } from "next-intl";
 
 type IncomeType = "DIVIDEND" | "INTEREST";
 
-const DIVIDEND_ACCOUNT_TYPES = new Set(["INVESTMENT", "CRYPTO"]);
+// Kept in sync with lib/actions/income.ts's ELIGIBLE_ACCOUNT_TYPES - see
+// that file's comment for why DIVIDEND also allows CHECKING (Trade
+// Republic's combined cash account).
+const DIVIDEND_ACCOUNT_TYPES = new Set(["INVESTMENT", "CRYPTO", "CHECKING"]);
 const INTEREST_ACCOUNT_TYPES = new Set(["CHECKING", "SAVINGS"]);
 
 // Plain serializable initial values only - no BigInt across the RSC boundary.

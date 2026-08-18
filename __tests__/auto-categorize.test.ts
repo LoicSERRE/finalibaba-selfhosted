@@ -122,10 +122,20 @@ describe("suggestCategoryAssignments", () => {
 });
 
 describe("normalizeLabelForCategorization", () => {
-  it("strips an embedded calendar year", () => {
+  it("strips a trailing 4-digit year suffix", () => {
     expect(normalizeLabelForCategorization("INTERETS 2025")).toBe("interets");
     expect(normalizeLabelForCategorization("Interets 2026")).toBe("interets");
     expect(normalizeLabelForCategorization("INTERETS 2025")).toBe(normalizeLabelForCategorization("INTERETS 2026"));
+  });
+
+  it("strips a trailing 2-digit year suffix too - real gap: some banks use a short year", () => {
+    expect(normalizeLabelForCategorization("INTERETS 26")).toBe("interets");
+    expect(normalizeLabelForCategorization("INTERETS 2026")).toBe(normalizeLabelForCategorization("INTERETS 26"));
+  });
+
+  it("keeps different account-specific prefixes distinct - e.g. LEP vs Livret A interest are genuinely different accounts", () => {
+    expect(normalizeLabelForCategorization("INTERETS LEP 2026")).toBe("interets lep");
+    expect(normalizeLabelForCategorization("INTERETS 2026")).not.toBe(normalizeLabelForCategorization("INTERETS LEP 2026"));
   });
 
   it("does not strip a 4-digit run that's part of a longer alphanumeric token", () => {

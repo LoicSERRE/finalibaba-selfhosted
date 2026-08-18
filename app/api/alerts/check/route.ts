@@ -105,9 +105,44 @@ async function checkLoanAlerts(settings: UserSettingsModel): Promise<string[]> {
   return fired;
 }
 
-function formatSyncFailureBody(source: string, message: string | null): string {
-  const suffix = message ? ` : ${message}` : ".";
-  return `La synchronisation "${source}" a échoué${suffix}`;
+// SyncLog.source is a machine key ("trade_republic", "lcl", or
+// "woob:<institutionId>" - the last one a raw cuid, never a name), kept
+// that way because it's also SyncFailureState's unique dedup key and
+// changing its shape would be a real migration risk. Resolved to something
+// a human actually reads only here, at notification time - a real fix
+// after a user found the raw ids in a push notification unreadable
+// ("woob:cmqpvbok4000026lom282dpi4" told them nothing).
+const FIXED_SOURCE_LABELS: Record<string, string> = {
+  trade_republic: "Trade Republic",
+  lcl: "LCL",
+};
+
+async function friendlySourceLabel(source: string): Promise<string> {
+  if (FIXED_SOURCE_LABELS[source]) return FIXED_SOURCE_LABELS[source];
+  if (source.startsWith("woob:")) {
+    const institution = await prisma.institution.findUnique({
+      where: { id: source.slice("woob:".length) },
+      select: { name: true },
+    });
+    if (institution) return institution.name;
+  }
+  return source;
+}
+
+// Deliberately does not surface the raw SyncLog.message - it's Python
+// exception text aimed at someone running the sync container's CLI
+// ("Session web absente - lance --setup", "Certicode Plus requis - lance
+// --setup"), not a notification a phone should show. A user flagged this
+// directly: alerts need to read as "sobre et claire", not a raw error log.
+// The two states the app actually distinguishes (auth_required vs a plain
+// sync error) are enough to say something clear and actionable; the exact
+// technical detail is still in Paramètres → sync status / SyncLog for
+// anyone who wants to dig further.
+function formatSyncFailureBody(label: string, status: string): string {
+  if (status === "auth_required") {
+    return `La connexion à "${label}" a expiré. Reconnecte-toi depuis Paramètres.`;
+  }
+  return `La synchronisation de "${label}" a rencontré un problème. Vérifie les journaux de synchro si ça persiste.`;
 }
 
 const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -154,14 +189,16 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
 
     if (!state) {
       await prisma.syncFailureState.create({ data: { source } });
-      await dispatchAlert(settings, "Échec de synchronisation", formatSyncFailureBody(source, latest.message));
+      const label = await friendlySourceLabel(source);
+      await dispatchAlert(settings, "Échec de synchronisation", formatSyncFailureBody(label, latest.status));
       fired.push(source);
     } else if (Date.now() - state.lastAlertedAt.getTime() >= REMINDER_INTERVAL_MS) {
       await prisma.syncFailureState.update({ where: { source }, data: { lastAlertedAt: new Date() } });
+      const label = await friendlySourceLabel(source);
       await dispatchAlert(
         settings,
         "Échec de synchronisation (toujours en cours)",
-        formatSyncFailureBody(source, latest.message)
+        formatSyncFailureBody(label, latest.status)
       );
       fired.push(source);
     }

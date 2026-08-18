@@ -1,9 +1,12 @@
 #!/bin/bash
 # Read-only diagnostic queries for troubleshooting automatic transaction
-# categorization (self-learning / MCC / merchant dictionary). Prints three
+# categorization (self-learning / MCC / merchant dictionary). Prints
 # reports: investment & crypto account transactions with their assigned
-# category, uncategorized dividend/interest-looking labels, and a per-
-# account-type breakdown of how many transactions ended up in each category.
+# category, uncategorized dividend/interest-looking labels, a per-
+# account-type breakdown of how many transactions ended up in each
+# category, sample "virement"-labeled transactions, how many of those
+# landed in Revenus, and candidate inter-account-transfer pairs (same
+# absolute amount, opposite sign, different accounts, close dates).
 #
 # Usage: ./scripts/debug-categorization.sh
 
@@ -58,4 +61,42 @@ JOIN "Category" c ON c.id = t."categoryId"
 WHERE c.name = 'Alimentation'
 GROUP BY a.type
 ORDER BY n DESC;
+SQL
+
+echo ""
+echo "=== 4) Sample 'virement'-labeled transactions (full label text, both directions) ==="
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+SELECT a.name AS account_name, t.label, t.date, t."amountCents", c.name AS category_name
+FROM "Transaction" t
+JOIN "Account" a ON a.id = t."accountId"
+LEFT JOIN "Category" c ON c.id = t."categoryId"
+WHERE t.label ILIKE '%virement%'
+ORDER BY t.date DESC
+LIMIT 100;
+SQL
+
+echo ""
+echo "=== 5) How many 'virement'-labeled transactions are currently in 'Revenus' ==="
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+SELECT count(*) AS n
+FROM "Transaction" t
+JOIN "Category" c ON c.id = t."categoryId"
+WHERE c.name = 'Revenus' AND t.label ILIKE '%virement%';
+SQL
+
+echo ""
+echo "=== 6) Candidate inter-account transfers (same |amount|, opposite sign, different accounts, within 3 days) ==="
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+SELECT
+  a1.name AS credit_account, t1.label AS credit_label, t1.date AS credit_date, t1."amountCents" AS credit_amount,
+  a2.name AS debit_account,  t2.label AS debit_label,  t2.date AS debit_date,  t2."amountCents" AS debit_amount
+FROM "Transaction" t1
+JOIN "Account" a1 ON a1.id = t1."accountId"
+JOIN "Transaction" t2 ON t2."amountCents" = -t1."amountCents"
+  AND t2."accountId" != t1."accountId"
+  AND t2.date BETWEEN t1.date - INTERVAL '3 days' AND t1.date + INTERVAL '3 days'
+JOIN "Account" a2 ON a2.id = t2."accountId"
+WHERE t1."amountCents" > 0
+ORDER BY t1.date DESC
+LIMIT 100;
 SQL

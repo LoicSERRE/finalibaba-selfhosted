@@ -169,7 +169,8 @@
       "category": "Category",
       "amount": "Amount",
       "balance": "Balance",
-      "change": "Change"
+      "change": "Change",
+      "income": "Income"
     },
     "fiscalTip": "Enter the cost basis for each position to see gains and latent tax.",
     "fiscalSubtype": "Set the account type (PEA/CTO) to enable tax computation.",
@@ -309,7 +310,16 @@
     "ytdDividends": "Net dividends",
     "ytdInterest": "Net interest",
     "ytdTotal": "Net total",
-    "grossOfTax": "gross {gross}, −{tax} withheld"
+    "grossOfTax": "gross {gross}, −{tax} withheld",
+    "markAsIncome": "Mark as income",
+    "markAsIncomeTitle": "Mark as income",
+    "markAsIncomeHint": "Amount and date are already filled in from the transaction - adjust the ticker or withholding tax if needed.",
+    "alreadyMarked": "Already recorded as income",
+    "markSimilarTitle": "Mark similar transactions too?",
+    "markSimilarBody": "{count} other transaction{suffix} in this account share the same label and aren't recorded as income yet. Mark them as \"{typeLabel}\" too?",
+    "markSimilarConfirm": "Mark {count}",
+    "markSimilarDismiss": "No thanks",
+    "markingSimilar": "Saving…"
   },
   "taxReport": {
     "title": "Annual tax report",

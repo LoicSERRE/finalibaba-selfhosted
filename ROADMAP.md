@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.7.2**
+Current stable release: **v1.8.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -77,7 +77,18 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.8 - Integrations & platform
+## v1.8 - "Mark as income" & categorization fixes - Released ✓
+
+*Closes the gap between "a real dividend/interest transaction exists" and "it's recorded for the tax report" - and fixes two real production issues found using v1.7's automatic categorization.*
+
+- [X] **Mark as income** - create an `IncomeEvent` directly from a real transaction row (amount/date pre-filled, linked back to it) instead of retyping everything by hand on `/income`; offers to apply to every other not-yet-recorded transaction with the same label in one click
+- [X] **Dividend income allowed on checking accounts** - Trade Republic's combined cash account can legitimately receive a dividend payout, not just a dedicated investment account
+- [X] **Fix: recurring-label categorization now ignores an embedded year** - "INTERETS 2025"/"INTERETS 26" (a once-a-year Livret interest credit) are recognized as the same label regardless of 2 vs 4-digit year formatting
+- [X] **Fix: Trade Republic "Sparplan" (recurring investment purchase) false positive** - was being mis-categorized as a supermarket purchase (v1.7.1)
+
+---
+
+## v1.9 - Integrations & platform
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 
