@@ -33,6 +33,24 @@
  * self-learning engine above is what actually generalizes to a genuinely
  * unknown merchant, once the user has categorized it once. Extend this
  * map as real gaps show up in practice.
+ *
+ * A real false positive, found in production: Trade Republic's own labels
+ * are German ("Kauf", "Verkauf", "Sparplan ausgeführt") and built from the
+ * traded instrument's name - which for popular French blue-chip stocks
+ * (TotalEnergies, Orange, Engie, Veolia, AXA...) is the *same word* as a
+ * real merchant this dictionary also matches for genuine spending (gas
+ * station, telecom bill, insurance premium). A label like "TotalEnergies -
+ * Kauf" and a real TotalEnergies fuel purchase are currently
+ * indistinguishable by text alone. "spar" (the Spar supermarket chain) was
+ * removed after exactly this collision: it's a substring of "Sparplan"
+ * (savings plan), Trade Republic's standard wording for every recurring
+ * investment purchase (crypto or stock), which was silently
+ * mis-categorizing investment activity as Alimentation. Known, not yet
+ * fully fixed: the broader stock-name-collision class above (totalenergies/
+ * orange/engie/veolia/axa/allianz/shell/esso/"bp "/"air france" are all
+ * both a real merchant AND a stock a French investor might hold). Confirm
+ * against real labels (scripts/debug-categorization.sh) before removing or
+ * renaming any more of these patterns.
  */
 export const MERCHANT_PATTERNS: Record<string, string> = {
   // Alimentation - supermarkets / grocery
@@ -54,7 +72,6 @@ export const MERCHANT_PATTERNS: Record<string, string> = {
   aldi: "Alimentation",
   netto: "Alimentation",
   cora: "Alimentation",
-  spar: "Alimentation",
   g20: "Alimentation",
   proxi: "Alimentation",
   "leader price": "Alimentation",
@@ -226,6 +243,18 @@ export const MERCHANT_PATTERNS: Record<string, string> = {
   futuroscope: "Loisirs",
   "zoo de": "Loisirs",
   aquarium: "Loisirs",
+
+  // Revenus - the one category here that isn't spending. "zinsen" (German
+  // for "interest") is Trade Republic's own literal transaction title for
+  // interest payouts on uninvested cash - confirmed from a real API
+  // response captured in sync/tests/test_sync_tr.py
+  // (test_timeline_item_to_transaction_omits_subtitle_when_identical_to_title
+  // uses title="Zinsen" as its example), not guessed. This is safe in a way
+  // a brand-name match isn't: it's TR's own structural vocabulary for what
+  // kind of event this is, not a company name that could coincidentally
+  // also be a purchase. Deliberately not doing the same for dividends yet -
+  // no confirmed real label text for that one, see CLAUDE.md.
+  zinsen: "Revenus",
 };
 
 /** Category color for each name used above, shared with the MCC
@@ -240,6 +269,7 @@ export const MERCHANT_CATEGORY_COLORS: Record<string, string> = {
   Santé: "#ef4444",
   Shopping: "#06b6d4",
   Loisirs: "#ec4899",
+  Revenus: "#14b8a6",
 };
 
 /**

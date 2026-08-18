@@ -33,4 +33,19 @@ describe("matchMerchantCategory", () => {
   it("folds restaurants into Alimentation rather than a separate category", () => {
     expect(matchMerchantCategory("MCDONALD'S PARIS 15")?.categoryName).toBe("Alimentation");
   });
+
+  it("does not match a Trade Republic recurring investment purchase as the Spar supermarket chain - regression test for a real production bug", () => {
+    // "Sparplan" (German for "savings plan") contains "spar" as a substring
+    // - the "spar" pattern (Spar supermarket) was removed after this
+    // silently mis-categorized every Trade Republic recurring buy
+    // (crypto or stock) as Alimentation.
+    expect(matchMerchantCategory("Bitcoin - Sparplan ausgeführt")).toBeNull();
+    expect(matchMerchantCategory("MSCI World ETF - Sparplan ausgeführt")).toBeNull();
+  });
+
+  it("matches Trade Republic's own interest-payout label", () => {
+    const match = matchMerchantCategory("Zinsen");
+    expect(match?.categoryName).toBe("Revenus");
+    expect(match?.color).toBe("#14b8a6");
+  });
 });

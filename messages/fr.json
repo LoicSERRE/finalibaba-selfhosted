@@ -249,7 +249,12 @@
     "assignLabel": "Catégorie de la transaction",
     "occurrenceCount": "{count} transaction{suffix}",
     "chooseCategory": "Choisir une catégorie",
-    "apply": "Appliquer"
+    "apply": "Appliquer",
+    "applySimilarTitle": "Appliquer aussi aux transactions similaires ?",
+    "applySimilarBody": "{count} autre{suffix} transaction{suffix} de ce compte, avec le même libellé et une catégorie différente. Appliquer « {categoryName} » à toutes ?",
+    "applySimilarConfirm": "Appliquer à {count}",
+    "applySimilarDismiss": "Non merci",
+    "applyingSimilar": "Application…"
   },
   "recurring": {
     "title": "Transactions récurrentes",
