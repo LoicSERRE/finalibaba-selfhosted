@@ -154,7 +154,7 @@ components/          Grouped by feature domain, mirroring the app/ route it belo
   settings/          /settings page (institutions, sync status, backup/restore, i18n)
   dashboard/         Dashboard-only pieces (/ page) that nothing else reuses
   layout/            App shell rendered on every page - sidebar, auto-sync bootstrap
-  auth/              Login form + NextAuth SessionProvider
+  auth/              Login form (signIn/signOut are dynamically imported where needed, no SessionProvider)
   shared/            Used by 2+ domains above - charts, exports, generic dialogs/buttons
 lib/
   actions/            Server Actions (all DB mutations go here)
