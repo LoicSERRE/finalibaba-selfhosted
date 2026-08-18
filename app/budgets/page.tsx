@@ -41,11 +41,12 @@ export default async function BudgetsPage() {
       where: {
         amountCents: { lt: BigInt(0) },
         date: { gte: startOfMonth, lt: startOfNextMonth },
+        isInternalTransfer: false,
       },
       _sum: { amountCents: true },
     }),
     prisma.transaction.findMany({
-      where: { categoryId: null },
+      where: { categoryId: null, isInternalTransfer: false },
       select: { id: true, label: true, amountCents: true },
       orderBy: { date: "desc" },
       take: MAX_UNCATEGORIZED_ROWS,

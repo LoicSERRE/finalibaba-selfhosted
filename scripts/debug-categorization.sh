@@ -5,8 +5,11 @@
 # category, uncategorized dividend/interest-looking labels, a per-
 # account-type breakdown of how many transactions ended up in each
 # category, sample "virement"-labeled transactions, how many of those
-# landed in Revenus, and candidate inter-account-transfer pairs (same
-# absolute amount, opposite sign, different accounts, close dates).
+# landed in Revenus, candidate inter-account-transfer pairs (same
+# absolute amount, opposite sign, different accounts, close dates), every
+# raw Trade Republic cash-account transaction (its labels aren't French, so
+# the "virement" query above misses them), and every transaction currently
+# in Revenus regardless of label wording.
 #
 # Usage: ./scripts/debug-categorization.sh
 
@@ -98,5 +101,30 @@ JOIN "Transaction" t2 ON t2."amountCents" = -t1."amountCents"
 JOIN "Account" a2 ON a2.id = t2."accountId"
 WHERE t1."amountCents" > 0
 ORDER BY t1.date DESC
+LIMIT 100;
+SQL
+
+echo ""
+echo "=== 7) All Trade Republic cash-account transactions (any label wording - TR's own vocabulary is German/English, not French 'virement') ==="
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+SELECT t.label, t.date, t."amountCents", c.name AS category_name
+FROM "Transaction" t
+JOIN "Account" a ON a.id = t."accountId"
+JOIN "Institution" i ON i.id = a."institutionId"
+WHERE i.name = 'Trade Republic' AND a.type = 'CHECKING'
+ORDER BY t.date DESC
+LIMIT 100;
+SQL
+
+echo ""
+echo "=== 8) Every credit transaction currently sitting in 'Revenus' (full picture, any label wording) ==="
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+SELECT i.name AS institution_name, a.name AS account_name, t.label, t.date, t."amountCents"
+FROM "Transaction" t
+JOIN "Account" a ON a.id = t."accountId"
+JOIN "Institution" i ON i.id = a."institutionId"
+JOIN "Category" c ON c.id = t."categoryId"
+WHERE c.name = 'Revenus'
+ORDER BY t.date DESC
 LIMIT 100;
 SQL

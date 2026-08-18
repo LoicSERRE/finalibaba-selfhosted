@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { suggestCategoryAssignments } from "@/lib/domain/auto-categorize";
 import { matchMerchantCategory, MERCHANT_CATEGORY_COLORS } from "@/lib/domain/merchant-categories";
 import { matchMccCategory, MCC_CATEGORY_COLORS } from "@/lib/domain/mcc-categories";
+import { detectInternalTransferPairs } from "@/lib/domain/internal-transfers";
 
 type UncategorizedTx = { id: string; accountId: string; label: string; merchantCategoryCode: string | null };
 
@@ -66,6 +67,44 @@ async function matchAgainstDefaults(
   return suggestions;
 }
 
+// Detects internal transfers (money moving between two of the user's own
+// accounts) purely by amount+date pairing, independent of the transaction
+// label - see lib/domain/internal-transfers.ts for why label text alone
+// can't do this reliably (a real production incident: a bank's generic
+// "VIREMENT SEPA" label gets reused for both). Always considers every
+// not-yet-flagged transaction across *every* account - transfers are
+// inherently cross-account, so this can't be scoped to the accountId the
+// caller might be using for the rest of autoCategorizeTransactions. Once a
+// pair is flagged, the isInternalTransfer index keeps each subsequent run
+// bounded to genuinely new transactions, not the whole table.
+async function flagInternalTransfers(): Promise<void> {
+  const candidates = await prisma.transaction.findMany({
+    where: { isInternalTransfer: false },
+    select: { id: true, accountId: true, amountCents: true, date: true },
+  });
+  if (candidates.length === 0) return;
+
+  const matchedIds = [...detectInternalTransferPairs(candidates)];
+  if (matchedIds.length === 0) return;
+
+  await prisma.transaction.updateMany({
+    where: { id: { in: matchedIds } },
+    data: { isInternalTransfer: true },
+  });
+
+  // Retroactive cleanup for the exact incident this was built to fix: a
+  // transaction already (wrongly) sitting in "Revenus" that's now
+  // confirmed to be an internal transfer gets un-categorized. Deliberately
+  // narrow - only "Revenus" specifically, not any category - a different
+  // category could reflect a deliberate manual choice (some users may want
+  // to track internal transfers under their own category) that this pass
+  // has no business overriding.
+  await prisma.transaction.updateMany({
+    where: { id: { in: matchedIds }, category: { name: "Revenus" } },
+    data: { categoryId: null },
+  });
+}
+
 /**
  * Runs three complementary categorization sources against currently-
  * uncategorized transactions and applies whatever the highest-priority one
@@ -95,13 +134,22 @@ async function matchAgainstDefaults(
  * GoCardless transactions land, so a populated merchantCategoryCode gets a
  * chance to match in the very same sync), and the manual "Auto-catégoriser"
  * button on /budgets (every account, on demand).
+ *
+ * Runs flagInternalTransfers first, unconditionally and un-scoped by
+ * accountId - a detected internal transfer is then excluded from the
+ * uncategorized pool below, so none of the three sources ever assigns it
+ * a category (it isn't real income or spending). The flag doesn't block a
+ * manual categorization from the transaction row's own dropdown, only the
+ * automatic sources here.
  */
 export async function autoCategorizeTransactions(accountId?: string): Promise<{ categorized: number }> {
+  await flagInternalTransfers();
+
   const accountFilter = accountId ? { accountId } : {};
 
   const [uncategorized, history] = await Promise.all([
     prisma.transaction.findMany({
-      where: { ...accountFilter, categoryId: null },
+      where: { ...accountFilter, categoryId: null, isInternalTransfer: false },
       select: { id: true, accountId: true, label: true, merchantCategoryCode: true },
     }),
     prisma.transaction.findMany({

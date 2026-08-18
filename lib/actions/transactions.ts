@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
-import { normalizeLabelForCategorization } from "@/lib/domain/auto-categorize";
+import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
 
 type ImportRow = { date: string; label: string; amountCents: number };
 
@@ -77,12 +77,24 @@ export async function setTransactionCategory(
   // Livret's once-a-year interest credit, labeled with the current year -
   // still group as the same label. Same grouping as
   // applyCategoryToSimilarTransactions below.
-  const normalized = normalizeLabelForCategorization(before?.label ?? "");
-  const others = await prisma.transaction.findMany({
-    where: { accountId: tx.accountId, id: { not: transactionId } },
-    select: { label: true, categoryId: true },
-  });
-  const siblingCount = others.filter((o) => normalizeLabelForCategorization(o.label) === normalized && o.categoryId !== categoryId).length;
+  //
+  // Never offered for a generic transfer label ("VIREMENT SEPA" and
+  // friends - isGenericTransferLabel) - a real incident this exact
+  // propagation feature caused: one transaction correctly categorized as
+  // salary, propagated onto every other same-labeled transaction in the
+  // account including real inter-account transfers, since the bank reuses
+  // this boilerplate for both. See lib/domain/auto-categorize.ts's
+  // GENERIC_TRANSFER_LABELS comment for the full incident.
+  const label = before?.label ?? "";
+  let siblingCount = 0;
+  if (!isGenericTransferLabel(label)) {
+    const normalized = normalizeLabelForCategorization(label);
+    const others = await prisma.transaction.findMany({
+      where: { accountId: tx.accountId, id: { not: transactionId } },
+      select: { label: true, categoryId: true },
+    });
+    siblingCount = others.filter((o) => normalizeLabelForCategorization(o.label) === normalized && o.categoryId !== categoryId).length;
+  }
 
   return { siblingCount };
 }
@@ -105,6 +117,11 @@ export async function applyCategoryToSimilarTransactions(
     select: { accountId: true, label: true },
   });
   if (!source) return { updated: 0 };
+  // Guards the server action directly, not just its own UI trigger (which
+  // never offers this for a generic label per setTransactionCategory's
+  // siblingCount above) - Server Actions are reachable regardless of what
+  // rendered, same reasoning as every other eligibility guard in this app.
+  if (isGenericTransferLabel(source.label)) return { updated: 0 };
 
   const normalized = normalizeLabelForCategorization(source.label);
   const candidates = await prisma.transaction.findMany({

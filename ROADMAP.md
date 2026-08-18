@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.8.0**
+Current stable release: **v1.9.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -88,7 +88,17 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.9 - Integrations & platform
+## v1.9 - Internal transfer detection & clearer alerts - Released ✓
+
+*Fixes two more real production issues: a bank's generic transfer label mis-categorizing internal transfers as income, and unreadable sync-failure push notifications.*
+
+- [X] **Internal transfer detection** - a transaction is now recognized as money moving between two of your own accounts by matching amount/date pairs across accounts, independent of the bank's label text; detected transfers are excluded from automatic categorization (never land in "Revenus" or any other category on their own) and from the budgets page's uncategorized-spend nagging - still categorizable by hand if you want to track them
+- [X] **Fix: generic transfer labels no longer drive bulk categorization** - a bank's catch-all wording ("VIREMENT SEPA") is reused for both real internal transfers and real external payments with no way to tell them apart from text alone; self-learning and "apply to similar"/"mark similar as income" no longer treat this as a trustworthy group
+- [X] **Clearer sync-failure notifications** - replaced a raw internal source id ("woob:cmqpvbok4...") with the actual institution name, and the sync script's own CLI-oriented error text ("lance --setup") with a plain, translated sentence
+
+---
+
+## v1.10 - Integrations & platform
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 

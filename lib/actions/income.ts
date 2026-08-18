@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { IncomeType } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
-import { normalizeLabelForCategorization } from "@/lib/domain/auto-categorize";
+import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
 
 const INCOME_TYPES = new Set(Object.values(IncomeType));
 
@@ -155,13 +155,21 @@ export async function createIncomeEventFromTransaction(
   // transactions in this account share the same
   // normalizeLabelForCategorization label (year-suffix included), so the
   // UI can offer to mark them as income too in one click rather than
-  // requiring this to be repeated for every occurrence.
-  const normalized = normalizeLabelForCategorization(transaction.label);
-  const candidates = await prisma.transaction.findMany({
-    where: { accountId: transaction.accountId, id: { not: transactionId }, amountCents: { gt: BigInt(0) }, incomeEvent: null },
-    select: { label: true },
-  });
-  const siblingCount = candidates.filter((c) => normalizeLabelForCategorization(c.label) === normalized).length;
+  // requiring this to be repeated for every occurrence. Never offered for
+  // a generic transfer label ("VIREMENT SEPA" and friends) - same reason
+  // as that function: a French bank reuses this boilerplate for both real
+  // internal transfers and real external payments, so treating every
+  // same-labeled transaction as "also income" would be just as wrong here
+  // as it was for categorization.
+  let siblingCount = 0;
+  if (!isGenericTransferLabel(transaction.label)) {
+    const normalized = normalizeLabelForCategorization(transaction.label);
+    const candidates = await prisma.transaction.findMany({
+      where: { accountId: transaction.accountId, id: { not: transactionId }, amountCents: { gt: BigInt(0) }, incomeEvent: null },
+      select: { label: true },
+    });
+    siblingCount = candidates.filter((c) => normalizeLabelForCategorization(c.label) === normalized).length;
+  }
 
   return { siblingCount };
 }
@@ -186,6 +194,7 @@ export async function markSimilarTransactionsAsIncome(
     select: { accountId: true, label: true },
   });
   if (!source) return { created: 0 };
+  if (isGenericTransferLabel(source.label)) return { created: 0 };
 
   const type = parseIncomeType(formData);
   await assertIncomeEventEligible(source.accountId, type);

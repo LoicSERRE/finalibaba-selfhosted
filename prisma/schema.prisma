@@ -245,9 +245,21 @@ model Transaction {
   // (see IncomeEvent below) tell whether this transaction already has one,
   // so the same real-world payment can't be double-recorded.
   incomeEvent IncomeEvent?
+  // Set by detectInternalTransferPairs (lib/domain/internal-transfers.ts)
+  // when this transaction is matched with an opposite-signed transaction
+  // of the same absolute amount on a different account within a few days -
+  // a real gap found in production: a French bank's generic transfer
+  // label ("VIREMENT SEPA") is reused for both internal transfers and real
+  // external payments with no way to tell them apart from text alone, so
+  // an internal transfer was getting auto-categorized as income. Once
+  // flagged true, autoCategorizeTransactions never assigns it a category
+  // automatically (it isn't real income or spending) - the flag doesn't
+  // block a manual categorization, only the automatic sources.
+  isInternalTransfer Boolean @default(false)
 
   @@index([accountId, date])
   @@index([categoryId])
+  @@index([isInternalTransfer])
 }
 
 model Category {

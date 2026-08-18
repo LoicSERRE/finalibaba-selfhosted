@@ -61,6 +61,32 @@ export function normalizeLabelForCategorization(label: string): string {
   return collapsed.replace(/ \d{2}(\d{2})?$/, "").trim();
 }
 
+/**
+ * Generic bank transfer boilerplate that gets reused for both real
+ * internal transfers *and* real external payments, with no reliable way
+ * to tell them apart from the text alone - confirmed against a real LCL
+ * account: "VIREMENT SEPA" appeared on both a same-day, same-amount
+ * internal transfer between two of the user's own accounts *and* on
+ * unrelated salary-sized credits with no counterparty name attached (the
+ * bank doesn't always bother - it does for some transfers, "VIREMENT
+ * SOPRA STERIA GROUP"/"VIREMENT M LOIC SERRE", and not others). The first
+ * production incident this whole feature caused was exactly this pattern:
+ * one transaction correctly categorized as salary, then "apply to
+ * similar" propagated that same category onto every other "VIREMENT
+ * SEPA" transaction in the account, including real inter-account
+ * transfers. Self-learning and propagation must never treat a label in
+ * this set as a trustworthy group. lib/domain/internal-transfers.ts is
+ * the actual fix for the transfer half of this - detecting the pair by
+ * amount and date, not by label text - this set only prevents the
+ * self-learning engine from making the same mistake again for whichever
+ * *other* real thing a generic label happens to also mean.
+ */
+const GENERIC_TRANSFER_LABELS = new Set(["virement sepa", "virement instantane"]);
+
+export function isGenericTransferLabel(label: string): boolean {
+  return GENERIC_TRANSFER_LABELS.has(normalizeLabelForCategorization(label));
+}
+
 // A label needs at least this many prior categorized occurrences before
 // its majority category is trusted enough to auto-apply going forward - a
 // single manually-corrected mistake shouldn't immediately start
@@ -78,7 +104,10 @@ export const MIN_CONSISTENCY_RATIO = 0.7;
 export type CategorizedSample = { accountId: string; label: string; categoryId: string };
 export type UncategorizedTransaction = { id: string; accountId: string; label: string };
 
-function groupKey(accountId: string, label: string): string {
+// null for a generic label (see GENERIC_TRANSFER_LABELS above) - callers
+// must skip it, never fall back to grouping by accountId alone.
+function groupKey(accountId: string, label: string): string | null {
+  if (isGenericTransferLabel(label)) return null;
   return `${accountId}|${normalizeLabelForCategorization(label)}`;
 }
 
@@ -86,6 +115,7 @@ function countCategoriesByGroup(history: CategorizedSample[]): Map<string, Map<s
   const countsByGroup = new Map<string, Map<string, number>>();
   for (const h of history) {
     const key = groupKey(h.accountId, h.label);
+    if (!key) continue;
     let counts = countsByGroup.get(key);
     if (!counts) {
       counts = new Map();
@@ -137,7 +167,9 @@ export function suggestCategoryAssignments(
 
   const suggestions = new Map<string, string>();
   for (const tx of uncategorized) {
-    const categoryId = confidentCategoryByGroup.get(groupKey(tx.accountId, tx.label));
+    const key = groupKey(tx.accountId, tx.label);
+    if (!key) continue;
+    const categoryId = confidentCategoryByGroup.get(key);
     if (categoryId) suggestions.set(tx.id, categoryId);
   }
   return suggestions;
