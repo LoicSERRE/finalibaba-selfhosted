@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.10.1**
+Current stable release: **v1.10.2**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -114,6 +114,20 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 - [X] **Fix: internal-transfer matching now assigns pairs by global date-priority** instead of one credit at a time in arbitrary order - fixes a real case where an unrelated same-amount transaction could permanently claim the debit that was the true same-day match for a different transfer
 - [X] **Fix: tax report export now shows 2 decimals per line** (dividends, interest, sale proceeds/gain/tax), matching what the page itself already shows - the export was rounding every line to the nearest euro, so a real 0,46€ dividend displayed as "0 €" in the downloaded file
+
+---
+
+## v1.10.2 - Accessibility & responsive-layout fixes - Released ✓
+
+*Full visual pass over every page in desktop and mobile, verified with real screenshots rather than assumption - not one specific bug report this time, a systematic audit.*
+
+- [X] **Fix: every navigation link now has a visible keyboard-focus ring** - only buttons and inputs had one before
+- [X] **Fix: bank transaction/instrument labels no longer get silently cut off** on mobile with no way to read the full text - affected 11 different lists across the app
+- [X] **Fix: table headers no longer wrap onto 2-3 lines** on narrow columns, across every table in the app
+- [X] **Fix: unified page width** - three different content widths across pages produced a visible jump navigating between them
+- [X] **Fix: consistent action-button styling** - pause/edit/delete buttons no longer mix icon-only and icon+text style in the same row, in 5 places
+- [X] **Fix: the transactions table no longer overflows the viewport** on desktop because of a long button label
+- [X] **Polish: simplified the dialog open/close animation** - fade + scale only, no more diagonal wobble from combining a scale and a slide
 
 ---
 
