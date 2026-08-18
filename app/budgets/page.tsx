@@ -2,14 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { PiggyBank, Tag } from "lucide-react";
-import Link from "next/link";
+import { CategoryCard } from "@/components/budgets/category-card";
 import { AddCategoryDialog } from "@/components/budgets/add-category-dialog";
-import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { UncategorizedGroupCard } from "@/components/budgets/uncategorized-group-card";
 import { AutoCategorizeButton } from "@/components/budgets/auto-categorize-button";
-import { deleteCategory } from "@/lib/actions/categories";
-import { formatCurrency, centsToEuro } from "@/lib/utils/format";
+import { formatCurrency } from "@/lib/utils/format";
 import { normalizeLabel } from "@/lib/domain/recurring";
 import { getTranslations } from "next-intl/server";
 
@@ -34,12 +32,29 @@ export default async function BudgetsPage() {
   const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
-  const [categories, spendByCategory, uncategorizedTx] = await Promise.all([
+  const [categories, spendByCategory, incomeByCategory, uncategorizedTx] = await Promise.all([
+    // Every category, both kinds - INCOME categories don't get a card on
+    // this page (see expenseCategories below) but the "à catégoriser" bulk
+    // picker further down still needs to offer them, e.g. for a stray
+    // salary-like credit that landed uncategorized.
     prisma.category.findMany({ orderBy: { name: "asc" } }),
     prisma.transaction.groupBy({
       by: ["categoryId"],
       where: {
         amountCents: { lt: BigInt(0) },
+        date: { gte: startOfMonth, lt: startOfNextMonth },
+        isInternalTransfer: false,
+      },
+      _sum: { amountCents: true },
+    }),
+    // Same shape as spendByCategory, credits instead of debits - not used
+    // for any single category's card (this page only ever renders EXPENSE
+    // categories), only to compute the "Reste à vivre" summary below: every
+    // credit this month regardless of category, categorized or not.
+    prisma.transaction.groupBy({
+      by: ["categoryId"],
+      where: {
+        amountCents: { gt: BigInt(0) },
         date: { gte: startOfMonth, lt: startOfNextMonth },
         isInternalTransfer: false,
       },
@@ -53,10 +68,27 @@ export default async function BudgetsPage() {
     }),
   ]);
 
+  // This page's cards are EXPENSE-only - a "budget" cap has no meaning for
+  // an income category. INCOME categories (Revenus, or anything else a
+  // user points at real income) get their own section on /income instead.
+  const expenseCategories = categories.filter((c) => c.kind === "EXPENSE");
+
   const spendMap = new Map<string | null, number>(
     spendByCategory.map((row) => [row.categoryId, -Number(row._sum.amountCents ?? BigInt(0))])
   );
+  const incomeMap = new Map<string | null, number>(
+    incomeByCategory.map((row) => [row.categoryId, Number(row._sum.amountCents ?? BigInt(0))])
+  );
   const uncategorizedSpentCents = spendMap.get(null) ?? 0;
+
+  // "Reste à vivre" - every credit minus every debit this month, categorized
+  // or not, internal transfers already excluded from both maps above. Not
+  // scoped to categorized transactions only: it's meant to answer "how much
+  // came in vs went out", which shouldn't require perfect categorization to
+  // be true.
+  const totalIncomeCents = [...incomeMap.values()].reduce((a, b) => a + b, 0);
+  const totalExpenseCents = [...spendMap.values()].reduce((a, b) => a + b, 0);
+  const resteAVivreCents = totalIncomeCents - totalExpenseCents;
 
   const groupsByLabel = new Map<string, { label: string; totalCents: number; ids: string[] }>();
   for (const tx of uncategorizedTx) {
@@ -77,10 +109,10 @@ export default async function BudgetsPage() {
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
         </div>
-        {categories.length > 0 && <AddCategoryDialog />}
+        {expenseCategories.length > 0 && <AddCategoryDialog />}
       </div>
 
-      {categories.length === 0 ? (
+      {expenseCategories.length === 0 ? (
         <EmptyState
           icon={PiggyBank}
           title={t("emptyTitle")}
@@ -88,69 +120,31 @@ export default async function BudgetsPage() {
           action={<AddCategoryDialog />}
         />
       ) : (
-        <div className="space-y-3">
-          {categories.map((cat) => {
-            const spentCents = spendMap.get(cat.id) ?? 0;
-            const budgetCents = cat.budgetCents !== null ? Number(cat.budgetCents) : null;
-            const pct = budgetCents ? Math.round((spentCents / budgetCents) * 100) : 0;
-
-            return (
-              <div key={cat.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <Link href={`/budgets/${cat.id}`} className="flex items-center gap-2 min-w-0 hover:underline underline-offset-2">
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: cat.color }} aria-hidden="true" />
-                    <span className="text-sm font-medium text-[var(--foreground)] truncate">{cat.name}</span>
-                  </Link>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <AddCategoryDialog
-                      category={{
-                        id: cat.id,
-                        name: cat.name,
-                        color: cat.color,
-                        budgetEuro: cat.budgetCents !== null ? centsToEuro(cat.budgetCents) : null,
-                      }}
-                    />
-                    <DeleteButton
-                      label={tc("delete")}
-                      description={tc("irreversible")}
-                      onDelete={deleteCategory.bind(null, cat.id)}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-[var(--foreground)] font-medium tabular-nums">{formatCurrency(spentCents)}</span>
-                  <span className="text-[var(--muted)]">
-                    {budgetCents ? t("ofBudget", { amount: formatCurrency(budgetCents) }) : t("noBudgetSet")}
-                  </span>
-                </div>
-
-                {budgetCents !== null && (
-                  // Suppressed via sonar-project.properties (typescript:S6819)
-                  // - see automobile-section.tsx: native <progress> can't
-                  // express this threshold-based color-coded fill without
-                  // vendor-prefixed pseudo-elements; full ARIA is already
-                  // present below.
-                  <div
-                    className="h-2 bg-[var(--surface-elevated)] rounded-full overflow-hidden"
-                    role="progressbar"
-                    aria-valuenow={Math.min(pct, 100)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`${cat.name}: ${pct}%`}
-                  >
-                    <div
-                      className={`h-full rounded-full ${
-                        pct > 100 ? "bg-[var(--negative)]" : pct > 80 ? "bg-[var(--warning)]" : "bg-[var(--positive)]"
-                      }`}
-                      style={{ width: `${Math.min(pct, 100)}%` }}
-                    />
-                  </div>
-                )}
+        <>
+          {(totalIncomeCents > 0 || totalExpenseCents > 0) && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-1">
+              <span className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("resteAVivreTitle")}</span>
+              <div
+                className={`text-2xl font-semibold tabular-nums ${resteAVivreCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}
+              >
+                {resteAVivreCents >= 0 ? "+" : ""}
+                {formatCurrency(resteAVivreCents)}
               </div>
-            );
-          })}
-        </div>
+              <p className="text-xs text-[var(--muted)]">
+                {t("resteAVivreBreakdown", {
+                  income: formatCurrency(totalIncomeCents),
+                  expenses: formatCurrency(totalExpenseCents),
+                })}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {expenseCategories.map((cat) => (
+              <CategoryCard key={cat.id} category={cat} spentCents={spendMap.get(cat.id) ?? 0} t={t} tc={tc} />
+            ))}
+          </div>
+        </>
       )}
 
       {uncategorizedSpentCents > 0 && (
@@ -160,7 +154,7 @@ export default async function BudgetsPage() {
         </p>
       )}
 
-      {uncategorizedGroups.length > 0 && categories.length > 0 && (
+      {uncategorizedGroups.length > 0 && expenseCategories.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("uncategorizedGroupsTitle")}</h2>

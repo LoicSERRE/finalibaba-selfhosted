@@ -36,6 +36,7 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
   revalidatePath("/accounts");
   revalidatePath("/");
   revalidatePath("/budgets");
+  revalidatePath("/income");
 
   return { imported: result.count };
 }
@@ -57,6 +58,7 @@ export async function setTransactionCategory(
 
   revalidatePath(`/accounts/${tx.accountId}`);
   revalidatePath("/budgets");
+  revalidatePath("/income");
   // TransactionCategorySelect is also used on the /budgets/[categoryId]
   // drill-down page (recategorizing a transaction away from there should
   // make it disappear from that list without a manual refresh) - revalidate
@@ -138,6 +140,7 @@ export async function applyCategoryToSimilarTransactions(
 
   revalidatePath(`/accounts/${source.accountId}`);
   revalidatePath("/budgets");
+  revalidatePath("/income");
   if (categoryId) revalidatePath(`/budgets/${categoryId}`);
 
   return { updated: result.count };

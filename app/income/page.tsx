@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { Coins } from "lucide-react";
+import Link from "next/link";
 import { AddIncomeDialog } from "@/components/income/add-income-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -15,7 +16,11 @@ export default async function IncomePage() {
   const [t, tc, locale] = await Promise.all([getTranslations("income"), getTranslations("common"), getLocale()]);
   const intlLocale = localeToIntl(locale);
 
-  const [events, accounts] = await Promise.all([
+  const now = new Date();
+  const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  const startOfNextYear = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
+
+  const [events, accounts, incomeCategories, categoryTotals] = await Promise.all([
     prisma.incomeEvent.findMany({
       include: { account: { select: { name: true } } },
       orderBy: { date: "desc" },
@@ -25,11 +30,31 @@ export default async function IncomePage() {
       select: { id: true, name: true, type: true },
       orderBy: { name: "asc" },
     }),
+    // Categories the user (or the auto-categorization dictionary, for
+    // "Revenus" specifically) has explicitly marked as income - see
+    // CategoryKind in schema.prisma. Deliberately a *separate* mechanism
+    // from the IncomeEvent list above, not merged into it: IncomeEvent
+    // feeds the tax report (dividends/interest only, by design - see
+    // CLAUDE.md), while a category like "Salaire" has no business showing
+    // up there. This section is the category-based half of the same
+    // page's "everything that came in" picture.
+    prisma.category.findMany({ where: { kind: "INCOME" }, orderBy: { name: "asc" } }),
+    prisma.transaction.groupBy({
+      by: ["categoryId"],
+      where: {
+        amountCents: { gt: BigInt(0) },
+        date: { gte: startOfYear, lt: startOfNextYear },
+        isInternalTransfer: false,
+        category: { kind: "INCOME" },
+      },
+      _sum: { amountCents: true },
+    }),
   ]);
 
-  const now = new Date();
-  const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-  const startOfNextYear = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
+  const categoryTotalMap = new Map<string, number>(
+    categoryTotals.filter((row) => row.categoryId !== null).map((row) => [row.categoryId as string, Number(row._sum.amountCents ?? BigInt(0))])
+  );
+
   const ytdEvents = events.filter((e) => e.date >= startOfYear && e.date < startOfNextYear);
 
   const netCents = (e: (typeof events)[number]) => e.amountCents - (e.taxWithheldCents ?? BigInt(0));
@@ -49,10 +74,10 @@ export default async function IncomePage() {
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
         </div>
-        {events.length > 0 && <AddIncomeDialog accounts={accounts} />}
+        {(events.length > 0 || incomeCategories.length > 0) && <AddIncomeDialog accounts={accounts} />}
       </div>
 
-      {events.length === 0 ? (
+      {events.length === 0 && incomeCategories.length === 0 ? (
         <EmptyState
           icon={Coins}
           title={t("emptyTitle")}
@@ -61,24 +86,49 @@ export default async function IncomePage() {
         />
       ) : (
         <>
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-            <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-3">{t("ytdTitle")}</p>
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
-              <div>
-                <p className="text-xs text-[var(--muted)] mb-1">{t("ytdDividends")}</p>
-                <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdDividendsNetCents, 0)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[var(--muted)] mb-1">{t("ytdInterest")}</p>
-                <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdInterestNetCents, 0)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[var(--muted)] mb-1">{t("ytdTotal")}</p>
-                <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdTotalNetCents, 0)}</p>
+          {events.length > 0 && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+              <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-3">{t("ytdTitle")}</p>
+              <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                <div>
+                  <p className="text-xs text-[var(--muted)] mb-1">{t("ytdDividends")}</p>
+                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdDividendsNetCents, 0)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted)] mb-1">{t("ytdInterest")}</p>
+                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdInterestNetCents, 0)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted)] mb-1">{t("ytdTotal")}</p>
+                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdTotalNetCents, 0)}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
+          {incomeCategories.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("otherIncomeTitle")}</h2>
+              {incomeCategories.map((cat) => (
+                <Link
+                  key={cat.id}
+                  href={`/budgets/${cat.id}`}
+                  className="flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 hover:border-[var(--accent)] transition-colors"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: cat.color }} aria-hidden="true" />
+                    <span className="text-sm font-medium text-[var(--foreground)] truncate">{cat.name}</span>
+                  </span>
+                  <span className="text-sm font-medium tabular-nums text-[var(--positive)] shrink-0">
+                    +{formatCurrency(categoryTotalMap.get(cat.id) ?? 0)}
+                  </span>
+                </Link>
+              ))}
+              <p className="text-xs text-[var(--muted)]">{t("otherIncomeHint")}</p>
+            </div>
+          )}
+
+          {events.length > 0 && (
           <div className="space-y-3">
             {events.map((e) => (
               <div key={e.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-2">
@@ -120,6 +170,7 @@ export default async function IncomePage() {
               </div>
             ))}
           </div>
+          )}
         </>
       )}
     </div>

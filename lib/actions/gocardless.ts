@@ -89,6 +89,7 @@ export async function syncGocardlessTransactions(institutionId: string) {
   revalidatePath("/accounts");
   revalidatePath("/budgets");
   revalidatePath("/");
+  revalidatePath("/income");
 
   return { imported };
 }

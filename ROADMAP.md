@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.9.0**
+Current stable release: **v1.10.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -98,7 +98,17 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.10 - Integrations & platform
+## v1.10 - Explicit income/expense categories - Released ✓
+
+*Fixes a UX complaint found using v1.9's income tracking: an income category ("Revenus") permanently read as €0 spent on `/budgets`, since that page only ever summed debits.*
+
+- [X] **Category type (Dépense/Revenu)**, chosen explicitly at creation - `/budgets` now only ever lists expense categories (a "budget" cap has no meaning for income); income categories (salary, or anything else pointed at real income) get their own section on `/income` instead, with a real year-to-date total
+- [X] **"Reste à vivre"** summary on `/budgets` - total income minus total spending for the current month, internal transfers excluded, independent of how completely things are categorized
+- [X] Considered and rejected: auto-detecting a category's type from that month's transactions (income vs expense framing would silently flip month to month) - an explicit, stable choice is the correct UX, not an inferred one
+
+---
+
+## v1.11 - Integrations & platform
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 

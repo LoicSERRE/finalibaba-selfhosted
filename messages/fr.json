@@ -229,6 +229,9 @@
     "emptyDescription": "Créez des catégories pour suivre vos dépenses par poste et définir des budgets mensuels.",
     "ofBudget": "sur {amount}",
     "noBudgetSet": "Aucun budget défini",
+    "receivedThisMonth": "Reçu ce mois-ci",
+    "resteAVivreTitle": "Reste à vivre",
+    "resteAVivreBreakdown": "{income} de revenus − {expenses} de dépenses ce mois-ci",
     "uncategorizedSpend": "{amount} de dépenses non catégorisées ce mois-ci",
     "uncategorizedGroupsTitle": "À catégoriser",
     "autoCategorizeNow": "Auto-catégoriser",
@@ -241,6 +244,9 @@
   "categories": {
     "create": "Nouvelle catégorie",
     "edit": "Modifier la catégorie",
+    "kind": "Type",
+    "kindExpense": "Dépense",
+    "kindIncome": "Revenu",
     "name": "Nom",
     "color": "Couleur",
     "budgetAmount": "Budget mensuel (€)",
@@ -319,7 +325,9 @@
     "markSimilarBody": "{count} autre{suffix} transaction{suffix} de ce compte, avec le même libellé, pas encore enregistrée{suffix} comme revenu. Les enregistrer aussi comme « {typeLabel} » ?",
     "markSimilarConfirm": "Marquer {count}",
     "markSimilarDismiss": "Non merci",
-    "markingSimilar": "Enregistrement…"
+    "markingSimilar": "Enregistrement…",
+    "otherIncomeTitle": "Autres revenus",
+    "otherIncomeHint": "Salaire et autres revenus catégorisés - total de l'année en cours, mis à jour automatiquement. Clique sur une catégorie pour voir le détail des transactions."
   },
   "taxReport": {
     "title": "Rapport fiscal annuel",

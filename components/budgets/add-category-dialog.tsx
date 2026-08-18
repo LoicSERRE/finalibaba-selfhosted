@@ -9,15 +9,18 @@ import { createCategory, updateCategory } from "@/lib/actions/categories";
 import { CATEGORY_SWATCHES } from "@/lib/utils/palette";
 import { useTranslations } from "next-intl";
 
+type CategoryKind = "EXPENSE" | "INCOME";
+
 // Existing category to edit, passed down as plain serializable fields only -
 // budgetEuro is pre-formatted server-side (e.g. "300.00"), never a BigInt.
-type EditableCategory = { id: string; name: string; color: string; budgetEuro: string | null };
+type EditableCategory = { id: string; name: string; color: string; kind: CategoryKind; budgetEuro: string | null };
 
 export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCategory }>) {
   const isEdit = !!category;
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [color, setColor] = useState(category?.color ?? CATEGORY_SWATCHES[0]);
+  const [kind, setKind] = useState<CategoryKind>(category?.kind ?? "EXPENSE");
   const t = useTranslations("categories");
   const tc = useTranslations("common");
 
@@ -26,6 +29,7 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
     const form = e.currentTarget;
     const fd = new FormData(form);
     fd.set("color", color);
+    fd.set("kind", kind);
     startTransition(async () => {
       if (category) {
         await updateCategory(category.id, fd);
@@ -33,6 +37,7 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
         await createCategory(fd);
         form.reset();
         setColor(CATEGORY_SWATCHES[0]);
+        setKind("EXPENSE");
       }
       setOpen(false);
     });
@@ -57,6 +62,25 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("kind")}</span>
+          <div className="flex rounded-lg overflow-hidden border border-[var(--border)]">
+            {(["EXPENSE", "INCOME"] as const).map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                aria-pressed={kind === candidate}
+                onClick={() => setKind(candidate)}
+                className={`flex-1 py-2 min-h-[44px] text-xs font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${
+                  kind === candidate ? "bg-[var(--accent)]/15 text-[var(--accent-text)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                {t(candidate === "EXPENSE" ? "kindExpense" : "kindIncome")}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <Input
           id="cat-name"
           label={t("name")}
@@ -90,15 +114,17 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
           </div>
         </div>
 
-        <Input
-          id="cat-budget"
-          label={t("budgetAmount")}
-          type="text"
-          inputMode="decimal"
-          name="budget"
-          placeholder="300"
-          defaultValue={category?.budgetEuro ?? ""}
-        />
+        {kind === "EXPENSE" && (
+          <Input
+            id="cat-budget"
+            label={t("budgetAmount")}
+            type="text"
+            inputMode="decimal"
+            name="budget"
+            placeholder="300"
+            defaultValue={category?.budgetEuro ?? ""}
+          />
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>

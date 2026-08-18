@@ -11,6 +11,13 @@ type UncategorizedTx = { id: string; accountId: string; label: string; merchantC
 
 const TEXT_DICTIONARY_COLORS = new Map(Object.entries(MERCHANT_CATEGORY_COLORS));
 
+// Of the 8-category default taxonomy, "Revenus" is the one that's income,
+// not spending - CategoryKind.INCOME, same as any category a user
+// explicitly marks that way via the create/edit dialog. Everything else
+// this module can create defaults to EXPENSE (Category's own schema
+// default), matching the taxonomy documented in CLAUDE.md.
+const INCOME_CATEGORY_NAMES = new Set(["Revenus"]);
+
 // Resolves category NAMES (from either default-category source below) to
 // real Category ids, creating any that don't exist yet - the one place
 // auto-categorization creates a Category rather than only assigning an
@@ -32,7 +39,11 @@ async function resolveDefaultCategoryIds(names: string[], colorByName: Map<strin
 
   const missingNames = names.filter((n) => !categoryIdByName.has(n));
   const created = await Promise.all(
-    missingNames.map((name) => prisma.category.create({ data: { name, color: colorByName.get(name)! } }))
+    missingNames.map((name) =>
+      prisma.category.create({
+        data: { name, color: colorByName.get(name)!, kind: INCOME_CATEGORY_NAMES.has(name) ? "INCOME" : "EXPENSE" },
+      })
+    )
   );
   for (const c of created) categoryIdByName.set(c.name, c.id);
 
@@ -198,5 +209,6 @@ export async function runAutoCategorizeNow() {
   revalidatePath("/budgets");
   revalidatePath("/accounts");
   revalidatePath("/");
+  revalidatePath("/income");
   return result;
 }

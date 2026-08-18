@@ -262,11 +262,25 @@ model Transaction {
   @@index([isInternalTransfer])
 }
 
+// EXPENSE is the default and by far the more common case (this app's
+// budgeting concept has always meant spending) - INCOME is explicit,
+// chosen at creation, never inferred from a category's transaction
+// history. /budgets only ever lists EXPENSE categories (a "budget" cap
+// has no meaning for income); /income lists INCOME categories alongside
+// its own IncomeEvent-based dividend/interest tracking - see CLAUDE.md's
+// "Interest & dividend income tracking" for why those stay two separate,
+// parallel mechanisms rather than merging into one.
+enum CategoryKind {
+  EXPENSE
+  INCOME
+}
+
 model Category {
   id                    String                 @id @default(cuid())
   name                  String                 @unique
   color                 String                 // hex, e.g. "#6366f1"
-  budgetCents           BigInt?                // monthly envelope - null means no budget set
+  kind                  CategoryKind           @default(EXPENSE)
+  budgetCents           BigInt?                // monthly envelope - null means no budget set, and meaningless for an INCOME category (no cap concept for income)
   transactions          Transaction[]
   recurringTransactions RecurringTransaction[]
   alertRules            AlertRule[]

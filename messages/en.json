@@ -229,6 +229,9 @@
     "emptyDescription": "Create categories to track spending by area and set monthly budgets.",
     "ofBudget": "of {amount}",
     "noBudgetSet": "No budget set",
+    "receivedThisMonth": "Received this month",
+    "resteAVivreTitle": "Disposable income",
+    "resteAVivreBreakdown": "{income} income − {expenses} spending this month",
     "uncategorizedSpend": "{amount} of uncategorized spending this month",
     "uncategorizedGroupsTitle": "To categorize",
     "autoCategorizeNow": "Auto-categorize",
@@ -241,6 +244,9 @@
   "categories": {
     "create": "New category",
     "edit": "Edit category",
+    "kind": "Type",
+    "kindExpense": "Expense",
+    "kindIncome": "Income",
     "name": "Name",
     "color": "Color",
     "budgetAmount": "Monthly budget (€)",
@@ -319,7 +325,9 @@
     "markSimilarBody": "{count} other transaction{suffix} in this account share the same label and aren't recorded as income yet. Mark them as \"{typeLabel}\" too?",
     "markSimilarConfirm": "Mark {count}",
     "markSimilarDismiss": "No thanks",
-    "markingSimilar": "Saving…"
+    "markingSimilar": "Saving…",
+    "otherIncomeTitle": "Other income",
+    "otherIncomeHint": "Salary and other categorized income - total for the current year, updated automatically. Click a category to see the transaction detail."
   },
   "taxReport": {
     "title": "Annual tax report",
