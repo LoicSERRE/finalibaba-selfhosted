@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
-import { normalizeLabel } from "@/lib/domain/recurring";
+import { normalizeLabelForCategorization } from "@/lib/domain/auto-categorize";
 
 type ImportRow = { date: string; label: string; amountCents: number };
 
@@ -71,14 +71,18 @@ export async function setTransactionCategory(
   // in one click, since a bad automatic categorization (a dictionary/MCC
   // false positive, or a self-learning miss) typically hits every
   // occurrence of a label at once, not just the one the user happened to
-  // notice and fix. Same per-account normalizeLabel grouping as
+  // notice and fix. normalizeLabelForCategorization (not the plainer
+  // normalizeLabel recurring-detection uses) also strips an embedded
+  // calendar year, so e.g. "INTERETS 2025" and "INTERETS 2026" - a French
+  // Livret's once-a-year interest credit, labeled with the current year -
+  // still group as the same label. Same grouping as
   // applyCategoryToSimilarTransactions below.
-  const normalized = normalizeLabel(before?.label ?? "");
+  const normalized = normalizeLabelForCategorization(before?.label ?? "");
   const others = await prisma.transaction.findMany({
     where: { accountId: tx.accountId, id: { not: transactionId } },
     select: { label: true, categoryId: true },
   });
-  const siblingCount = others.filter((o) => normalizeLabel(o.label) === normalized && o.categoryId !== categoryId).length;
+  const siblingCount = others.filter((o) => normalizeLabelForCategorization(o.label) === normalized && o.categoryId !== categoryId).length;
 
   return { siblingCount };
 }
@@ -102,12 +106,12 @@ export async function applyCategoryToSimilarTransactions(
   });
   if (!source) return { updated: 0 };
 
-  const normalized = normalizeLabel(source.label);
+  const normalized = normalizeLabelForCategorization(source.label);
   const candidates = await prisma.transaction.findMany({
     where: { accountId: source.accountId, id: { not: transactionId } },
     select: { id: true, label: true },
   });
-  const ids = candidates.filter((c) => normalizeLabel(c.label) === normalized).map((c) => c.id);
+  const ids = candidates.filter((c) => normalizeLabelForCategorization(c.label) === normalized).map((c) => c.id);
   if (ids.length === 0) return { updated: 0 };
 
   const result = await prisma.transaction.updateMany({

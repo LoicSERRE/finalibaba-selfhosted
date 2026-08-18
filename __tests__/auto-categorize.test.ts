@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestCategoryAssignments } from "@/lib/domain/auto-categorize";
+import { suggestCategoryAssignments, normalizeLabelForCategorization } from "@/lib/domain/auto-categorize";
 
 describe("suggestCategoryAssignments", () => {
   it("suggests nothing when there is no history at all", () => {
@@ -103,5 +103,38 @@ describe("suggestCategoryAssignments", () => {
       ]
     );
     expect(result.get("t1")).toBe("dividends");
+  });
+
+  it("groups a French Livret's once-a-year interest label across years - regression test for a real user-reported gap", () => {
+    // "INTERETS 2025"/"INTERETS 2026" would never accumulate 2 occurrences
+    // of the *exact* same label under plain normalizeLabel, since the
+    // label itself changes every year and interest is credited only once
+    // a year - self-learning could never fire for this pattern otherwise.
+    const result = suggestCategoryAssignments(
+      [{ id: "t1", accountId: "a1", label: "INTERETS 2027" }],
+      [
+        { accountId: "a1", label: "INTERETS 2025", categoryId: "interest" },
+        { accountId: "a1", label: "INTERETS 2026", categoryId: "interest" },
+      ]
+    );
+    expect(result.get("t1")).toBe("interest");
+  });
+});
+
+describe("normalizeLabelForCategorization", () => {
+  it("strips an embedded calendar year", () => {
+    expect(normalizeLabelForCategorization("INTERETS 2025")).toBe("interets");
+    expect(normalizeLabelForCategorization("Interets 2026")).toBe("interets");
+    expect(normalizeLabelForCategorization("INTERETS 2025")).toBe(normalizeLabelForCategorization("INTERETS 2026"));
+  });
+
+  it("does not strip a 4-digit run that's part of a longer alphanumeric token", () => {
+    // A reference/invoice number shouldn't lose its digits just because a
+    // substring of it happens to look like a year.
+    expect(normalizeLabelForCategorization("VIR REF20251234X")).toBe("vir ref20251234x");
+  });
+
+  it("still trims and lowercases like normalizeLabel", () => {
+    expect(normalizeLabelForCategorization("  Carrefour  ")).toBe("carrefour");
   });
 });

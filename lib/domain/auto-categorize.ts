@@ -1,8 +1,9 @@
 /**
- * Self-learns a normalizeLabel(label) -> categoryId mapping from the user's
- * own already-categorized transaction history, then suggests that category
- * for uncategorized transactions whose label matches confidently. Pure
- * function, no DB calls - mirrors lib/domain/recurring.ts's shape.
+ * Self-learns a normalizeLabelForCategorization(label) -> categoryId
+ * mapping from the user's own already-categorized transaction history, then
+ * suggests that category for uncategorized transactions whose label
+ * matches confidently. Pure function, no DB calls - mirrors
+ * lib/domain/recurring.ts's shape.
  *
  * Deliberately not a hardcoded merchant/category dictionary - Category
  * names and countries are entirely user-defined in this app (see "Tax
@@ -19,10 +20,33 @@
  * label is raw bank-feed text specific to one institution's formatting, so
  * matching similar-looking labels across two different accounts risks a
  * false merge, exactly the reasoning recurring-transaction detection
- * already applies to the identical (accountId, normalizeLabel(label)) key
- * shape.
+ * already applies to its own (accountId, normalizeLabel(label)) key shape.
  */
 import { normalizeLabel } from "@/lib/domain/recurring";
+
+/**
+ * A looser variant of normalizeLabel, used only for the grouping key below
+ * (and by the "apply to similar transactions" correction feature in
+ * lib/actions/transactions.ts) - not recurring-transaction detection, which
+ * keeps its own separately-tuned normalizeLabel untouched. Strips an
+ * embedded calendar year (1900-2099) after the base normalization, so a
+ * label whose only year-to-year variation is the year itself still groups
+ * as the same label - a real gap found in production: French Livret
+ * interest is credited once a year with a label like "INTERETS 2025" /
+ * "INTERETS 2026", so two occurrences of the *exact same* label would
+ * otherwise never accumulate (self-learning's MIN_HISTORY_OCCURRENCES could
+ * never be reached - by the time a second interest credit lands, a full
+ * year has passed and the label has already changed). `\b...\b` avoids
+ * stripping a 4-digit run that's part of a longer alphanumeric token (a
+ * reference number, an account suffix) - only an isolated year-like number
+ * is removed.
+ */
+export function normalizeLabelForCategorization(label: string): string {
+  return normalizeLabel(label)
+    .replace(/\b(19|20)\d{2}\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 // A label needs at least this many prior categorized occurrences before
 // its majority category is trusted enough to auto-apply going forward - a
@@ -42,7 +66,7 @@ export type CategorizedSample = { accountId: string; label: string; categoryId: 
 export type UncategorizedTransaction = { id: string; accountId: string; label: string };
 
 function groupKey(accountId: string, label: string): string {
-  return `${accountId}|${normalizeLabel(label)}`;
+  return `${accountId}|${normalizeLabelForCategorization(label)}`;
 }
 
 function countCategoriesByGroup(history: CategorizedSample[]): Map<string, Map<string, number>> {
