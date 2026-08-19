@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.11.2**
+Current stable release: **v1.11.3**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -157,6 +157,14 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 *Real production incident found right after v1.11.1 shipped: configuring Woob credentials on an institution that also has an active `.env`-dedicated sync (LCL/Trade Republic) silently created a full second set of duplicated accounts.*
 
 - [X] **Warn before configuring Woob on a dedicated `.env`-synced bank** - `sync_lcl.py`/`sync_tr.py` and `sync_woob.py` write different `syncId` formats for what can be the exact same real account, so neither sync path recognizes the other's rows as already-known. "Ajouter une institution" and "Configurer Woob" now show a warning banner (not a hard block - a deliberate, supervised migration off `.env` to Woob is legitimate) whenever the bank being configured matches an institution with an active `LCL_LOGIN`/`TR_PHONE` integration
+
+---
+
+## v1.11.3 - One-click cleanup for duplicate dedicated-sync accounts - Released ✓
+
+*v1.11.2's warning banner only prevented new duplication going forward - it did nothing for a bank that had already been double-configured, which is exactly what happened in production on a real "LCL" institution running both the dedicated `.env` sync and a Woob config at once.*
+
+- [X] **"Migrer maintenant" - one-click cleanup for duplicate `.env`-synced accounts** - once a Woob sync has produced its own `woob:<id>:`-prefixed accounts for a bank that also has legacy `lcl:`/`tr:`-prefixed accounts from the dedicated `.env` sync, "Configurer Woob" now offers to delete the old duplicates (full history cascades automatically) after showing both account counts side by side for confirmation. Deliberately available even after the `.env` credentials have already been removed - the whole point of removing them is to stop the duplication, so gating the cleanup tool behind them still being set would hide it exactly when it's needed most
 
 ---
 
