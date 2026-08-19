@@ -6,7 +6,7 @@ import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { deleteInstitution } from "@/lib/actions/institutions";
+import { deleteInstitution, migrateDedicatedSyncToWoob } from "@/lib/actions/institutions";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import { ConnectOpenBankingButton, SyncOpenBankingButton } from "@/components/settings/open-banking-buttons";
@@ -53,7 +53,13 @@ export default async function SettingsPage() {
       prisma.institution.findMany({
         include: {
           _count: { select: { accounts: true } },
-          accounts: { where: { gocardlessAccountId: { not: null } }, select: { id: true } },
+          // syncId is fetched for every account (not gocardless-filtered
+          // like the old query) so migrateDedicatedSyncToWoob's UI below can
+          // count "lcl:"/"tr:" (dedicated-env) vs "woob:<id>:" (already
+          // migrated) accounts per institution - see that action's own
+          // comment for why both counts matter to the user before they
+          // confirm the migration.
+          accounts: { select: { id: true, syncId: true, gocardlessAccountId: true } },
         },
         orderBy: { name: "asc" },
       }),
@@ -138,7 +144,7 @@ export default async function SettingsPage() {
                   {/* GoCardless Open Banking */}
                   {gcConfigured && (
                     inst.gocardlessInstitutionId
-                      ? inst.accounts.length > 0
+                      ? inst.accounts.some((a) => a.gocardlessAccountId)
                         ? <SyncOpenBankingButton institutionId={inst.id} />
                         : <ConnectOpenBankingButton institutionId={inst.id} />
                       : <ConnectOpenBankingDialog institutionId={inst.id} institutionName={inst.name} />
@@ -192,6 +198,9 @@ export default async function SettingsPage() {
                           currentModule={inst.woobModule}
                           modules={woobModules}
                           hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
+                          legacyAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith("lcl:") || a.syncId?.startsWith("tr:")).length}
+                          woobAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length}
+                          onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
                         />
                       </>
                     );

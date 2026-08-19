@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Settings2, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
+import { Settings2, RefreshCw, Trash2, AlertTriangle, ArrowRightLeft, CheckCircle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,19 +30,73 @@ interface Props {
   // account - warned here rather than blocked, since a deliberate,
   // supervised migration (delete the old accounts afterward) is legitimate.
   hasDedicatedEnvSync?: boolean;
+  // How many of this institution's accounts still carry the dedicated
+  // sync's "lcl:"/"tr:" syncId prefix, and how many already carry Woob's
+  // "woob:<institutionId>:" prefix - computed server-side in
+  // app/settings/page.tsx from the same accounts list already fetched for
+  // the institution row. Both are shown to the user before they confirm a
+  // migration (see onMigrate below), since a mismatch between the two
+  // counts is the one thing that can catch a partial/incomplete Woob sync
+  // before it causes real data loss.
+  legacyAccountCount?: number;
+  woobAccountCount?: number;
+  // Bound Server Action (migrateDedicatedSyncToWoob, pre-bound to this
+  // institution's id in app/settings/page.tsx) - deletes the "lcl:"/"tr:"
+  // accounts once the "woob:"-prefixed replacements exist. Only rendered
+  // when legacyAccountCount > 0; the action itself refuses to run if
+  // woobAccountCount is 0, as a second, server-side guard against deleting
+  // the only copy of an account's history.
+  onMigrate?: () => Promise<{ deleted: number }>;
 }
 
-export function ConfigureWoobDialog({ institutionId, institutionName, currentModule, modules, hasDedicatedEnvSync }: Readonly<Props>) {
+export function ConfigureWoobDialog({
+  institutionId,
+  institutionName,
+  currentModule,
+  modules,
+  hasDedicatedEnvSync,
+  legacyAccountCount = 0,
+  woobAccountCount = 0,
+  onMigrate,
+}: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [module, setModule] = useState(currentModule ?? "");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [migrateStep, setMigrateStep] = useState<"idle" | "confirming" | "done">("idle");
+  const [migratePending, startMigrateTransition] = useTransition();
+  const [migrateError, setMigrateError] = useState<string | null>(null);
+  const [migratedCount, setMigratedCount] = useState(0);
   const t = useTranslations("configureWoob");
   const tc = useTranslations("common");
 
   const isConfigured = !!currentModule;
+  // Deliberately independent of hasDedicatedEnvSync: that flag only reflects
+  // whether LCL_LOGIN/TR_PHONE is *currently* set, but the whole point of
+  // this migration is often reached after the user has already removed the
+  // .env credentials to stop the duplication - at that point
+  // hasDedicatedEnvSync is false, yet the old "lcl:"/"tr:" accounts are
+  // still sitting in the DB and still need cleaning up. Gating this on
+  // hasDedicatedEnvSync too would hide the fix exactly when it's needed
+  // most (real production case: secrets removed first, cleanup needed
+  // after).
+  const canMigrate = legacyAccountCount > 0;
+
+  const handleMigrate = () => {
+    if (!onMigrate) return;
+    setMigrateError(null);
+    startMigrateTransition(async () => {
+      try {
+        const { deleted } = await onMigrate();
+        setMigratedCount(deleted);
+        setMigrateStep("done");
+      } catch (e) {
+        setMigrateError(e instanceof Error ? e.message : t("unknownError"));
+      }
+    });
+  };
 
   const handleSubmit = (e: React.SubmitEvent) => {
     e.preventDefault();
@@ -71,7 +125,7 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
   return (
     <Dialog
       open={open}
-      onOpenChange={(v) => { setOpen(v); setError(null); }}
+      onOpenChange={(v) => { setOpen(v); setError(null); setMigrateStep("idle"); setMigrateError(null); }}
       title={t("title", { name: institutionName })}
       trigger={
         <Button variant="outline" size="sm">
@@ -81,10 +135,51 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {hasDedicatedEnvSync && (
+        {(hasDedicatedEnvSync || canMigrate) && migrateStep !== "done" && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/40">
             <AlertTriangle size={14} className="text-[var(--warning)] shrink-0 mt-0.5" aria-hidden="true" />
-            <p className="text-xs text-[var(--warning)]">{t("dedicatedEnvWarning")}</p>
+            <div className="space-y-2 flex-1">
+              <p className="text-xs text-[var(--warning)]">
+                {hasDedicatedEnvSync ? t("dedicatedEnvWarning") : t("legacyAccountsWarning", { count: legacyAccountCount })}
+              </p>
+              {canMigrate && migrateStep === "idle" && (
+                woobAccountCount > 0 ? (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setMigrateStep("confirming")}>
+                    <ArrowRightLeft size={12} aria-hidden="true" />
+                    {t("migrateButton")}
+                  </Button>
+                ) : (
+                  <p className="text-xs text-[var(--muted)]">{t("migrateNoWoobDataYet")}</p>
+                )
+              )}
+              {canMigrate && migrateStep === "confirming" && (
+                <div className="space-y-2 p-2.5 rounded-md bg-[var(--surface)] border border-[var(--border)]">
+                  <p className="text-xs text-[var(--foreground)]">
+                    {t("migrateConfirmDescription", { legacyCount: legacyAccountCount, woobCount: woobAccountCount })}
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">{t("migrateEnvReminder")}</p>
+                  {migrateError && <p role="alert" className="text-xs text-[var(--negative)]">{migrateError}</p>}
+                  <div className="flex gap-2 justify-end pt-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setMigrateStep("idle")} disabled={migratePending}>
+                      {tc("cancel")}
+                    </Button>
+                    <Button type="button" variant="destructive" size="sm" onClick={handleMigrate} disabled={migratePending}>
+                      {migratePending && <RefreshCw size={12} className="animate-spin" aria-hidden="true" />}
+                      {t("migrateConfirmButton")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {migrateStep === "done" && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--positive)]/10 border border-[var(--positive)]/40">
+            <CheckCircle size={14} className="text-[var(--positive)] shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="space-y-1">
+              <p className="text-xs text-[var(--positive)]">{t("migrateSuccess", { count: migratedCount })}</p>
+              <p className="text-xs text-[var(--muted)]">{t("migrateEnvReminder")}</p>
+            </div>
           </div>
         )}
         <p className="text-xs text-[var(--muted)]">{t("woobHint")}</p>
