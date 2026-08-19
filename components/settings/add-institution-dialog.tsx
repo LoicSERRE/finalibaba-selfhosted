@@ -4,31 +4,23 @@ import { useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { WoobModulePicker } from "@/components/settings/woob-module-picker";
 import { createInstitution } from "@/lib/actions/institutions";
 import { useTranslations } from "next-intl";
 
-const WOOB_MODULES = [
-  { module: "lcl", label: "LCL" },
-  { module: "bnporc", label: "BNP Paribas" },
-  { module: "caissedepargne", label: "Caisse d'Épargne" },
-  { module: "societegenerale", label: "Société Générale" },
-  { module: "creditagricole", label: "Crédit Agricole" },
-  { module: "boursorama", label: "Boursorama" },
-  { module: "fortuneo", label: "Fortuneo" },
-  { module: "hellobank", label: "Hello Bank!" },
-  { module: "ing", label: "ING France" },
-  { module: "bforbank", label: "BforBank" },
-  { module: "monabanq", label: "Monabanq" },
-  { module: "hsbc", label: "HSBC France" },
-  { module: "banquepostale", label: "La Banque Postale" },
-  { module: "cic", label: "CIC" },
-  { module: "creditdunord", label: "Crédit du Nord" },
-  { module: "linxea", label: "Linxea" },
-  { module: "degiro", label: "DEGIRO" },
-] as const;
+interface Props {
+  // Every Woob module capable of bank sync (~96, fetched live from Woob's
+  // repository by getWoobBankModules() and passed down from
+  // app/settings/page.tsx) - same prop shape/fallback as
+  // ConfigureWoobDialog's own `modules` prop. This dialog used to carry its
+  // own separate hardcoded 17-bank list that never got wired to the live
+  // catalog when that one was added - a real gap, since this "Ajouter une
+  // institution" dialog is the first bank-picker a new user actually sees.
+  modules: { module: string; label: string }[];
+}
 
-export function AddInstitutionDialog() {
+export function AddInstitutionDialog({ modules }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [selectedModule, setSelectedModule] = useState("");
@@ -36,14 +28,9 @@ export function AddInstitutionDialog() {
   const t = useTranslations("addInstitution");
   const tc = useTranslations("common");
 
-  const knownBank = WOOB_MODULES.find((m) => m.module === selectedModule);
+  const knownBank = modules.find((m) => m.module === selectedModule);
   const isCustom = selectedModule === "__other__";
   const woobEnabled = !!knownBank;
-  const bankOptions = [
-    { value: "", label: t("select") },
-    ...WOOB_MODULES.map((m) => ({ value: m.module, label: m.label })),
-    { value: "__other__", label: t("other") },
-  ];
 
   const reset = () => {
     setSelectedModule("");
@@ -75,13 +62,18 @@ export function AddInstitutionDialog() {
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Select
+        <WoobModulePicker
           id="inst-bank"
           label={t("bank")}
           value={selectedModule}
-          onChange={(e) => { setSelectedModule(e.target.value); setCustomName(""); }}
-          options={bankOptions}
-          required
+          onChange={(v) => { setSelectedModule(v); setCustomName(""); }}
+          modules={modules}
+          otherValue="__other__"
+          otherLabel={t("other")}
+          placeholder={t("select")}
+          searchPlaceholder={t("searchPlaceholder")}
+          searchAriaLabel={t("searchAriaLabel")}
+          noResultsLabel={t("noResults")}
         />
 
         {knownBank && (

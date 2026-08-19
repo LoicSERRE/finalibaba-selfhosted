@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { Settings2, RefreshCw, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { WoobModulePicker } from "@/components/settings/woob-module-picker";
 import { setWoobConfig, clearWoobConfig } from "@/lib/actions/institutions";
 import { useTranslations } from "next-intl";
 
@@ -74,17 +75,18 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
         <p className="text-xs text-[var(--muted)]">{t("woobHint")}</p>
 
         <div className="space-y-1.5">
-          <Select
+          <WoobModulePicker
             id="woob-module"
             label={t("module")}
             value={module}
-            onChange={(e) => setModule(e.target.value)}
-            required
-            options={[
-              { value: "", label: t("select") },
-              ...modules.map((m) => ({ value: m.module, label: m.label })),
-              { value: "__custom__", label: t("other") },
-            ]}
+            onChange={setModule}
+            modules={modules}
+            otherValue="__custom__"
+            otherLabel={t("other")}
+            placeholder={t("select")}
+            searchPlaceholder={t("searchPlaceholder")}
+            searchAriaLabel={t("searchAriaLabel")}
+            noResultsLabel={t("noResults")}
           />
           {module === "__custom__" && (
             <Input

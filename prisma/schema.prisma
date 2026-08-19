@@ -49,7 +49,20 @@ model Account {
   name                String
   type                AccountType
   institutionId       String?             // nullable - cars and loans may have no associated bank
-  institution         Institution?        @relation(fields: [institutionId], references: [id])
+  // onDelete: Cascade - deleteInstitution's own confirmation dialog
+  // (messages/*.json's deleteInstitution.description) explicitly promises
+  // "the institution and all its associated accounts will be permanently
+  // deleted". Without this, Prisma's implicit default for an optional
+  // relation is SetNull, not Cascade - deleting an Institution silently
+  // orphaned its Accounts (institutionId -> null) instead of deleting them,
+  // leaving their HistoricalBalance/Transaction/Holding history intact but
+  // invisible from Settings (no Institution row left to list them under)
+  // while still counted in net worth, /accounts, and every other page -
+  // found in production when a "fresh install" test still showed a
+  // supposedly-deleted LCL account's balance on the dashboard. Every other
+  // FK in this schema pointing at Account already writes onDelete: Cascade
+  // explicitly; this was the one left on Prisma's silent default instead.
+  institution         Institution?        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   manualValueCents    BigInt?
   liabilityCents      BigInt?
   purchasePriceCents  BigInt?             // AUTOMOBILE: original purchase price

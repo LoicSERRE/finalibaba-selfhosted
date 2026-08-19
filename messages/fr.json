@@ -526,7 +526,8 @@
     },
     "sync": {
       "title": "Synchronisation automatique",
-      "subtitle": "Sync toutes les 4h · TR keepalive toutes les 2h"
+      "subtitle": "Sync toutes les 4h · TR keepalive toutes les 2h",
+      "subtitleNoTr": "Sync toutes les 4h"
     },
     "backup": {
       "title": "Sauvegarde & restauration",
@@ -877,6 +878,9 @@
     "bank": "Banque",
     "select": "Sélectionner…",
     "other": "Autre",
+    "searchPlaceholder": "Rechercher une banque…",
+    "searchAriaLabel": "Rechercher une banque",
+    "noResults": "Aucune banque trouvée",
     "woobHint": "Sync automatique via Woob — historique illimité stocké dans votre base.",
     "login": "Identifiant / n° client",
     "password": "Mot de passe",
@@ -918,6 +922,9 @@
     "module": "Module Woob",
     "select": "Sélectionner une banque…",
     "other": "Autre (saisir manuellement)",
+    "searchPlaceholder": "Rechercher une banque…",
+    "searchAriaLabel": "Rechercher une banque",
+    "noResults": "Aucune banque trouvée",
     "moduleAriaLabel": "Nom du module Woob",
     "listHint": "Ta banque n'apparaît pas ? Choisis « Autre » et entre le nom exact du module Woob.",
     "login": "Identifiant / n° client",

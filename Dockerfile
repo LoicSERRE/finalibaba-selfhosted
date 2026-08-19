@@ -1,3 +1,9 @@
+# syntax=docker/dockerfile:1
+# Pinned explicitly (rather than relying on the local Docker daemon's default
+# frontend) so RUN --mount=type=cache below is guaranteed supported - that
+# syntax has been stable in the default frontend for a long time on any
+# remotely current Docker install, but this removes the ambiguity for free.
+
 # ── deps ───────────────────────────────────────────────────────────────────────
 FROM node:26-alpine AS deps
 RUN apk add --no-cache libc6-compat
@@ -12,7 +18,22 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # --ignore-scripts: prisma/schema.prisma isn't copied into this stage, so the
 # postinstall `prisma generate` would fail here. The builder stage below runs
 # its own explicit `prisma generate` once the full source is present.
-RUN pnpm install --frozen-lockfile --ignore-scripts
+#
+# --mount=type=cache on pnpm's own store (/root/.local/share/pnpm - this
+# stage runs as root, confirmed via `pnpm store path` against this exact
+# base image + pinned version): a build with a cold local Docker build
+# cache (e.g. `docker compose up --build` on a machine that never built
+# this image before) previously had to re-fetch the entire ~700-package
+# store from the npm registry from scratch on every single attempt, with no
+# partial progress kept between retries - confirmed the hard way when a
+# real build failed a `pnpm install` this size to a flaky/slow connection
+# after downloading 690+ of 700 packages, with nothing to show for it on
+# retry. The cache mount persists across builds (unlike a regular image
+# layer, which retry-from-scratch invalidates the moment the immediately
+# preceding COPY's content differs at all) so a retry - or the next
+# dependency bump - only fetches what's new.
+RUN --mount=type=cache,id=pnpm-store-deps,target=/root/.local/share/pnpm \
+    pnpm install --frozen-lockfile --ignore-scripts
 
 # ── builder ────────────────────────────────────────────────────────────────────
 FROM node:26-alpine AS builder
@@ -63,16 +84,25 @@ COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 # store.
 RUN chown node:node /app
 USER node
-# pnpm's own content-addressable store (now under /home/node/.cache/pnpm,
-# since this whole step runs as node) is a package-resolution/dedup cache
-# from installing - useful for a *repeated* local install, meaningless once
-# the packages are already unpacked into node_modules below, and never read
-# at runtime. Left in place it was 410MB of npm-registry metadata JSON
-# sitting in the production image - which Trivy's secret scanner then has to
-# read through on every release scan, slow enough (several large multi-MB
-# .jsonl files) to occasionally exceed its 5-minute default timeout and
-# abort the whole scan with a generic, hard-to-diagnose "context deadline
-# exceeded" failure that looks like a real finding but isn't.
+# pnpm's own content-addressable store (under /home/node/.local/share/pnpm,
+# since this whole step runs as node - confirmed empirically against this
+# exact base image + pinned pnpm version with `pnpm store path`; a stale
+# version of this comment claimed /home/node/.cache/pnpm, which pnpm hasn't
+# used as its default store location for a while, so the cleanup below used
+# to silently rm -rf a path that no longer existed - a real regression, not
+# just a documentation typo, since it meant the 410MB this comment describes
+# fixing was quietly back in every image built since whichever pnpm bump
+# moved the default) is a package-resolution/dedup cache from installing -
+# useful for a *repeated* local install (the --mount=type=cache below is
+# exactly that, scoped to the build itself), meaningless once the packages
+# are already unpacked into node_modules, and never read at runtime. Left in
+# the image layer it's 410MB of npm-registry metadata JSON - which Trivy's
+# secret scanner then has to read through on every release scan, slow enough
+# (several large multi-MB .jsonl files) to occasionally exceed its 5-minute
+# default timeout and abort the whole scan with a generic, hard-to-diagnose
+# "context deadline exceeded" failure that looks like a real finding but
+# isn't. The cache mount keeps it out of the layer in the first place; the
+# rm -rf below stays too, defensively, for anyone building without BuildKit.
 #
 # No --ignore-scripts here (unlike deps/builder, where it's needed because
 # schema.prisma isn't copied in yet): this install must run @prisma/engines'
@@ -90,7 +120,8 @@ USER node
 # from a published image, and manually re-running @prisma/engines' own
 # scripts/postinstall.js on that same image produced a correctly
 # permissioned -rwxr-xr-x file).
-RUN pnpm install --frozen-lockfile --prod
+RUN --mount=type=cache,id=pnpm-store-runner,target=/home/node/.local/share/pnpm,uid=1000,gid=1000 \
+    pnpm install --frozen-lockfile --prod
 USER root
 
 # App runtime

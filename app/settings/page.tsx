@@ -29,9 +29,6 @@ import { AlertTriggersSection } from "@/components/settings/alert-triggers-secti
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
 import { getAlertRules } from "@/lib/actions/alert-rules";
 
-// Institutions gérées par des scripts dédiés (pas Woob) - identifiées par nom
-const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
-
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
 
@@ -84,7 +81,7 @@ export default async function SettingsPage() {
             <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.institutions.title")}</h2>
             <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.institutions.subtitle")}</p>
           </div>
-          <AddInstitutionDialog />
+          <AddInstitutionDialog modules={woobModules} />
         </div>
 
         {institutions.length === 0 ? (
@@ -92,7 +89,7 @@ export default async function SettingsPage() {
             icon={Settings}
             title={t("settings.institutions.emptyTitle")}
             description={t("settings.institutions.emptyDescription")}
-            action={<AddInstitutionDialog />}
+            action={<AddInstitutionDialog modules={woobModules} />}
           />
         ) : (
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
@@ -130,10 +127,21 @@ export default async function SettingsPage() {
                         : <ConnectOpenBankingButton institutionId={inst.id} />
                       : <ConnectOpenBankingDialog institutionId={inst.id} institutionName={inst.name} />
                   )}
-                  {/* Woob sync */}
+                  {/* Woob sync - not gated by institution name (no more
+                      DEDICATED_SYNC_INSTITUTIONS name-based guard). Institution.name
+                      is globally unique, and picking a bank from the catalog
+                      auto-fills this exact name (e.g. "LCL"), so a user-created
+                      Woob-configured institution routinely collides with the
+                      seeded reference row's name - name-matching silently hid
+                      every one of these controls (including ConfigureWoobDialog
+                      itself) for any institution literally named "LCL"/"Trade
+                      Republic", real Woob credentials or not. The env-configured
+                      dedicated LCL/TR path above is entirely independent of any
+                      Institution row (keyed by env vars + fixed syncStatus
+                      source strings), so nothing here needs to special-case it -
+                      inst.woobModule being set is already the correct, unambiguous
+                      signal for "this institution has real Woob sync to manage". */}
                   {(() => {
-                    if (DEDICATED_SYNC_INSTITUTIONS.has(inst.name.toLowerCase())) return null;
-
                     const woobLog = syncStatus[`woob:${inst.id}`] ?? null;
                     return (
                       <>
@@ -378,24 +386,42 @@ export default async function SettingsPage() {
         </div>
       </section>
 
-      {/* Auto-sync - hidden in demo mode (no real credentials, mutations blocked) */}
-      {process.env.DEMO_MODE !== "true" && (
+      {/* Auto-sync - hidden in demo mode (no real credentials, mutations blocked).
+          Each card is further gated on its own .env credential actually being
+          set (LCL_LOGIN / TR_PHONE) - these are the dedicated, .env-configured
+          LCL/Trade Republic paths (see "Sync service - optional modules" in
+          CLAUDE.md), distinct from an institution named "LCL" or "Trade
+          Republic" added via the generic Woob flow below. Without this gate,
+          both cards rendered unconditionally with "Jamais synchronisé" even
+          on a fresh install with zero bank credentials configured anywhere -
+          confusing on its own, and doubly so once a user adds their own
+          Woob-configured "LCL" institution, which then shows as a second,
+          differently-behaving "LCL" surface on the same page. The whole
+          section disappears when neither is configured, rather than showing
+          an empty header. */}
+      {process.env.DEMO_MODE !== "true" && (!!process.env.LCL_LOGIN || !!process.env.TR_PHONE) && (
         <section className="space-y-4">
           <div>
             <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.sync.title")}</h2>
-            <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.sync.subtitle")}</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">
+              {t(process.env.TR_PHONE ? "settings.sync.subtitle" : "settings.sync.subtitleNoTr")}
+            </p>
           </div>
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-5 divide-y divide-[var(--border)]">
-            <SyncStatus
-              source="lcl"
-              label="LCL"
-              log={syncStatus["lcl"] ?? null}
-            />
-            <SyncStatus
-              source="trade-republic"
-              label="Trade Republic"
-              log={syncStatus["trade_republic"] ?? null}
-            />
+            {!!process.env.LCL_LOGIN && (
+              <SyncStatus
+                source="lcl"
+                label="LCL"
+                log={syncStatus["lcl"] ?? null}
+              />
+            )}
+            {!!process.env.TR_PHONE && (
+              <SyncStatus
+                source="trade-republic"
+                label="Trade Republic"
+                log={syncStatus["trade_republic"] ?? null}
+              />
+            )}
           </div>
         </section>
       )}

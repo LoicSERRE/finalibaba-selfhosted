@@ -526,7 +526,8 @@
     },
     "sync": {
       "title": "Auto-sync",
-      "subtitle": "Sync every 4h · TR keepalive every 2h"
+      "subtitle": "Sync every 4h · TR keepalive every 2h",
+      "subtitleNoTr": "Sync every 4h"
     },
     "backup": {
       "title": "Backup & restore",
@@ -877,6 +878,9 @@
     "bank": "Bank",
     "select": "Select…",
     "other": "Other",
+    "searchPlaceholder": "Search for a bank…",
+    "searchAriaLabel": "Search for a bank",
+    "noResults": "No bank found",
     "woobHint": "Auto-sync via Woob — unlimited history stored in your database.",
     "login": "Login / client number",
     "password": "Password",
@@ -918,6 +922,9 @@
     "module": "Woob module",
     "select": "Select a bank…",
     "other": "Other (enter manually)",
+    "searchPlaceholder": "Search for a bank…",
+    "searchAriaLabel": "Search for a bank",
+    "noResults": "No bank found",
     "moduleAriaLabel": "Woob module name",
     "listHint": "Don't see your bank? Pick \"Other\" and enter the exact Woob module name.",
     "login": "Login / client number",

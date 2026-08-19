@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.11.0**
+Current stable release: **v1.12.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -140,7 +140,19 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.12 - Integrations & platform
+## v1.12.0 - Full Woob catalog, searchable bank picker & institution-deletion fix - Released ✓
+
+*Real-world testing of v1.11.0's new bank-connection flow surfaced a cluster of related gaps in the same area - fixed together rather than one release each.*
+
+- [X] **Full Woob bank catalog everywhere** - "Ajouter une institution" carried its own separate hardcoded 17-bank list that never got wired to the live ~96-bank catalog `GET /woob/modules` already exposed for "Configurer Woob" - fixed so both bank pickers show the full catalog
+- [X] **Searchable bank picker** - replaced the native `<select>` (which rendered as a browser dropdown covering nearly the whole screen with ~96 entries) with a compact, accent-insensitive search-as-you-type picker
+- [X] **Fix: deleting a bank connection now actually deletes its accounts** - the confirmation dialog always promised this, but the underlying database relation silently detached accounts instead of removing them, leaving orphaned balances/transactions still counted in net worth with no way to manage them from Settings
+- [X] **Fix: Woob sync controls no longer disappear for a bank named "LCL"/"Trade Republic"** - the dedicated `.env`-configured LCL/Trade Republic integrations and a user's own Woob-configured connection of the same name were being conflated, hiding the sync button, status, and config dialog entirely for the latter
+- [X] **Fix: the dedicated auto-sync section only shows when actually configured** - it used to always display "Never synced" for LCL/Trade Republic even on installs with no `.env` credentials for either
+
+---
+
+## v1.13 - Integrations & platform
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 
