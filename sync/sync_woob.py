@@ -250,15 +250,15 @@ if __name__ == "__main__":
     import psycopg2
     logging.basicConfig(level=logging.INFO)
 
-    if "--list" in sys.argv:
-        result = subprocess.run(["woob", "config", "-l"], capture_output=False, text=True, check=False)
-        sys.exit(result.returncode)
-
     # Usage: python sync_woob.py <institution_id>
-    # Reads credentials from DB for the given institution
+    # Reads credentials from DB for the given institution. The module
+    # dropdown in Settings -> "Configurer Woob" fetches the full bank list
+    # itself now (GET /woob/modules) - this used to also accept a --list
+    # flag for that, but it shelled out to `woob config -l`, which was never
+    # valid syntax (the real subcommand is `woob config modules`) - removed
+    # rather than fixed, since nothing needs a CLI listing path anymore.
     if len(sys.argv) < 2 or sys.argv[1].startswith("-"):
         print("Usage: python sync_woob.py <institution_id>")
-        print("       python sync_woob.py --list   (list available Woob modules)")
         sys.exit(1)
 
     inst_id = sys.argv[1]

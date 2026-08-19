@@ -81,6 +81,44 @@ export async function triggerInstitutionSync(institutionId: string) {
   return res.json();
 }
 
+export type WoobBankModule = { module: string; label: string };
+
+// Small fixed fallback for when the sync service can't be reached (e.g.
+// local dev, where only the DB runs - see CLAUDE.md) - the same handful of
+// major French banks this dropdown originally hardcoded, so "Configurer
+// Woob" still works somewhere sync isn't up, just without the full ~96-bank
+// catalog GET /woob/modules returns when it is.
+const WOOB_MODULES_FALLBACK: WoobBankModule[] = [
+  { module: "lcl", label: "LCL" },
+  { module: "bnporc", label: "BNP Paribas" },
+  { module: "caissedepargne", label: "Caisse d'Épargne" },
+  { module: "societegenerale", label: "Société Générale" },
+  { module: "creditagricole", label: "Crédit Agricole" },
+  { module: "boursorama", label: "Boursorama" },
+  { module: "fortuneo", label: "Fortuneo" },
+  { module: "hellobank", label: "Hello Bank!" },
+  { module: "ing", label: "ING France" },
+  { module: "bforbank", label: "BforBank" },
+  { module: "monabanq", label: "Monabanq" },
+  { module: "hsbc", label: "HSBC France" },
+  { module: "banquepostale", label: "La Banque Postale" },
+  { module: "cic", label: "CIC" },
+  { module: "creditdunord", label: "Crédit du Nord" },
+  { module: "linxea", label: "Linxea" },
+  { module: "degiro", label: "DEGIRO" },
+];
+
+export async function getWoobBankModules(): Promise<WoobBankModule[]> {
+  try {
+    const res = await fetch(`${SYNC_URL}/woob/modules`, { next: { revalidate: 3600 } });
+    if (!res.ok) return WOOB_MODULES_FALLBACK;
+    const data = (await res.json()) as { modules: WoobBankModule[] };
+    return data.modules.length > 0 ? data.modules : WOOB_MODULES_FALLBACK;
+  } catch {
+    return WOOB_MODULES_FALLBACK;
+  }
+}
+
 export type WoobSetupResult =
   | { status: "already_connected"; accounts: number }
   | { status: "pending_approval"; medium_type: string | null; medium_label: string | null; message: string | null }

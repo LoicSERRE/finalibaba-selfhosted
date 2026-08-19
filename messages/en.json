@@ -919,7 +919,7 @@
     "select": "Select a bank…",
     "other": "Other (enter manually)",
     "moduleAriaLabel": "Woob module name",
-    "listHint": "Full list: <code>docker exec -it finalibaba-sync-1 python sync_woob.py --list</code>",
+    "listHint": "Don't see your bank? Pick \"Other\" and enter the exact Woob module name.",
     "login": "Login / client number",
     "keepExisting": "Leave blank to keep existing",
     "password": "Password",

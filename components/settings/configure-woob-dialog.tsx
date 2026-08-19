@@ -8,33 +8,21 @@ import { Input, Select } from "@/components/ui/input";
 import { setWoobConfig, clearWoobConfig } from "@/lib/actions/institutions";
 import { useTranslations } from "next-intl";
 
-const WOOB_MODULES = [
-  { module: "lcl", label: "LCL" },
-  { module: "bnporc", label: "BNP Paribas" },
-  { module: "caissedepargne", label: "Caisse d'Épargne" },
-  { module: "societegenerale", label: "Société Générale" },
-  { module: "creditagricole", label: "Crédit Agricole" },
-  { module: "boursorama", label: "Boursorama" },
-  { module: "fortuneo", label: "Fortuneo" },
-  { module: "hellobank", label: "Hello Bank!" },
-  { module: "ing", label: "ING France" },
-  { module: "bforbank", label: "BforBank" },
-  { module: "monabanq", label: "Monabanq" },
-  { module: "hsbc", label: "HSBC France" },
-  { module: "banquepostale", label: "La Banque Postale" },
-  { module: "cic", label: "CIC" },
-  { module: "creditdunord", label: "Crédit du Nord" },
-  { module: "linxea", label: "Linxea" },
-  { module: "degiro", label: "DEGIRO" },
-] as const;
-
 interface Props {
   institutionId: string;
   institutionName: string;
   currentModule?: string | null;
+  // Every Woob module capable of bank sync (~96, fetched live from Woob's
+  // repository by getWoobBankModules() and passed down from
+  // app/settings/page.tsx) - falls back to a small fixed list of major
+  // French banks when the sync service can't be reached (see that action's
+  // own comment). "Autre" below stays as an escape hatch for anything not
+  // tagged CapBank, or genuinely missing from the catalog (e.g. Revolut -
+  // confirmed absent from Woob entirely, not just this list).
+  modules: { module: string; label: string }[];
 }
 
-export function ConfigureWoobDialog({ institutionId, institutionName, currentModule }: Readonly<Props>) {
+export function ConfigureWoobDialog({ institutionId, institutionName, currentModule, modules }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [module, setModule] = useState(currentModule ?? "");
@@ -94,7 +82,7 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
             required
             options={[
               { value: "", label: t("select") },
-              ...WOOB_MODULES.map((m) => ({ value: m.module, label: m.label })),
+              ...modules.map((m) => ({ value: m.module, label: m.label })),
               { value: "__custom__", label: t("other") },
             ]}
           />
@@ -107,16 +95,7 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
               className="mt-1.5"
             />
           )}
-          <p className="text-xs text-[var(--muted)] opacity-70">
-            {t.rich("listHint", {
-              // A next-intl t.rich() renderer callback, not a React
-              // component: it's invoked synchronously by t.rich to produce
-              // inline output, never referenced via JSX tag syntax, so
-              // there's no remount/state-loss risk the rule is meant to
-              // catch.
-              code: (chunks) => <code className="text-[var(--foreground)]">{chunks}</code>, // NOSONAR (typescript:S6478)
-            })}
-          </p>
+          <p className="text-xs text-[var(--muted)] opacity-70">{t("listHint")}</p>
         </div>
 
         <Input

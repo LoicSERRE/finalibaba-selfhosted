@@ -15,7 +15,7 @@ import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog
 import { InstitutionSyncButton } from "@/components/settings/institution-sync-button";
 import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
 import { SyncStatus } from "@/components/settings/sync-status";
-import { getSyncStatus } from "@/lib/actions/sync";
+import { getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { getTranslations } from "next-intl/server";
@@ -35,7 +35,7 @@ const DEDICATED_SYNC_INSTITUTIONS = new Set(["lcl", "trade republic"]);
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
 
-  const [institutions, syncStatus, userSettings, shareLinks, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
+  const [institutions, syncStatus, woobModules, userSettings, shareLinks, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
     await Promise.all([
       prisma.institution.findMany({
         include: {
@@ -45,6 +45,7 @@ export default async function SettingsPage() {
         orderBy: { name: "asc" },
       }),
       getSyncStatus(),
+      getWoobBankModules(),
       getUserSettings(),
       getShareLinks(),
       getAlertRules(),
@@ -165,6 +166,7 @@ export default async function SettingsPage() {
                           institutionId={inst.id}
                           institutionName={inst.name}
                           currentModule={inst.woobModule}
+                          modules={woobModules}
                         />
                       </>
                     );

@@ -5,6 +5,7 @@ Endpoints (internal Docker network only, not exposed externally):
   POST /sync/lcl            → trigger LCL sync
   POST /sync/trade-republic → trigger Trade Republic sync
   POST /sync/institution/{id} → trigger Woob sync for a specific institution
+  GET  /woob/modules        → list every Woob module capable of bank sync
   GET  /status              → last sync logs per source
 
 Cron: every 4 hours
@@ -424,6 +425,38 @@ async def trigger_institution_sync(institution_id: str):
         inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"],
     )
     return {"status": "ok", "institution": inst["name"]}
+
+
+@app.get("/woob/modules")
+async def list_woob_bank_modules():
+    """Every Woob module capable of bank sync (CapBank), from the local
+    repository index - entrypoint.sh already runs `woob config update` on
+    every container start, so this doesn't need to hit the network itself.
+    Powers the module dropdown in Settings -> "Configurer Woob" - see
+    CLAUDE.md's "Sync service" section for why this replaced a hardcoded
+    17-bank list."""
+    import asyncio
+
+    def _list_modules():
+        from woob.core import Woob
+        w = Woob()
+        modules = w.repositories.get_all_modules_info()
+        return sorted(
+            (
+                {"module": name, "label": info.description or name}
+                for name, info in modules.items()
+                if "CapBank" in [str(c) for c in info.capabilities]
+            ),
+            key=lambda m: m["label"].lower(),
+        )
+
+    loop = asyncio.get_event_loop()
+    try:
+        modules = await loop.run_in_executor(executor, _list_modules)
+        return {"modules": modules}
+    except Exception:
+        log.exception("Failed to list Woob bank modules")
+        return JSONResponse({"error": "Failed to list modules - check service logs"}, status_code=500)
 
 
 @app.get("/health")
