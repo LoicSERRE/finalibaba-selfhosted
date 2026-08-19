@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { deleteInstitution, migrateDedicatedSyncToWoob } from "@/lib/actions/institutions";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
-import { ConnectOpenBankingButton, SyncOpenBankingButton } from "@/components/settings/open-banking-buttons";
+import { ConnectOpenBankingButton, SyncOpenBankingButton, DisconnectOpenBankingButton } from "@/components/settings/open-banking-buttons";
 import { ConnectOpenBankingDialog } from "@/components/settings/connect-open-banking-dialog";
 import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog";
 import { InstitutionSyncButton } from "@/components/settings/institution-sync-button";
@@ -148,6 +148,22 @@ export default async function SettingsPage() {
                         ? <SyncOpenBankingButton institutionId={inst.id} />
                         : <ConnectOpenBankingButton institutionId={inst.id} />
                       : <ConnectOpenBankingDialog institutionId={inst.id} institutionName={inst.name} />
+                  )}
+                  {/* Dangling GoCardless link cleanup - deliberately NOT
+                      gated on gcConfigured, unlike the block above. Real gap
+                      found in production: an institution with
+                      gocardlessInstitutionId set but no actual
+                      gocardlessAccountId-linked account (an abandoned
+                      connection attempt) kept showing the "· Open Banking"
+                      badge forever with zero way to act on it once
+                      GOCARDLESS_SECRET_ID was removed from this instance's
+                      env - every GoCardless button above disappears in that
+                      state, but the badge doesn't. Refuses server-side if
+                      any account for this institution already has a real
+                      gocardlessAccountId, so it can never be used to hide an
+                      actually-working sync. */}
+                  {inst.gocardlessInstitutionId && !inst.accounts.some((a) => a.gocardlessAccountId) && (
+                    <DisconnectOpenBankingButton institutionId={inst.id} />
                   )}
                   {/* Woob sync - not gated by institution name (no more
                       DEDICATED_SYNC_INSTITUTIONS name-based guard). Institution.name

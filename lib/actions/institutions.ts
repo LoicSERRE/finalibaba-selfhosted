@@ -29,6 +29,36 @@ export async function setGocardlessInstitutionId(id: string, gcId: string) {
   });
 }
 
+// Clears a stale/incomplete GoCardless link (gocardlessInstitutionId set,
+// possibly gocardlessRequisitionId too if a requisition was created but its
+// OAuth consent was never finished) - the only way to detach one, since
+// setGocardlessInstitutionId has no counterpart. Real gap found in
+// production: GOCARDLESS_SECRET_ID had been removed from this instance's
+// env after an abandoned connection attempt, which hid every GoCardless
+// button (all gated on gcConfigured in app/settings/page.tsx) - leaving the
+// "· Open Banking" badge permanently shown next to that institution with no
+// way to act on it, even though nothing was actually connected.
+//
+// Refuses to run if any account already has a real gocardlessAccountId for
+// this institution - clearing the link at that point wouldn't delete their
+// data, only hide their sync button, and there's no legitimate reason to do
+// that, so it's not offered (mirrors migrateDedicatedSyncToWoob's own
+// can't-touch-real-data guard above).
+export async function clearGocardlessConnection(id: string) {
+  const linkedAccounts = await prisma.account.count({
+    where: { institutionId: id, gocardlessAccountId: { not: null } },
+  });
+  if (linkedAccounts > 0) {
+    throw new Error("Cannot disconnect: this institution already has GoCardless-synced accounts");
+  }
+
+  await prisma.institution.update({
+    where: { id },
+    data: { gocardlessInstitutionId: null, gocardlessRequisitionId: null },
+  });
+  revalidatePath("/settings");
+}
+
 export async function setWoobConfig(id: string, module: string, login: string, password: string) {
   await prisma.institution.update({
     where: { id },

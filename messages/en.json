@@ -731,7 +731,9 @@
   "openBanking": {
     "connect": "Connect",
     "sync": "Sync OB",
-    "configure": "Configure"
+    "configure": "Configure",
+    "disconnect": "Disconnect",
+    "disconnecting": "Disconnecting…"
   },
   "woob": {
     "configure": "Configure Woob"

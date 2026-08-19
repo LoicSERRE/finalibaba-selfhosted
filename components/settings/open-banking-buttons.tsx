@@ -1,9 +1,10 @@
 "use client";
 
 import { useTransition } from "react";
-import { RefreshCw, Link } from "lucide-react";
+import { RefreshCw, Link, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { syncGocardlessAccount } from "@/lib/actions/gocardless";
+import { clearGocardlessConnection } from "@/lib/actions/institutions";
 import { useTranslations } from "next-intl";
 
 export function ConnectOpenBankingButton({ institutionId }: Readonly<{ institutionId: string }>) {
@@ -36,6 +37,31 @@ export function SyncOpenBankingButton({ institutionId }: Readonly<{ institutionI
     >
       <RefreshCw size={12} className={pending ? "animate-spin" : ""} aria-hidden="true" />
       {pending ? t("syncing") : t("synchronize")}
+    </Button>
+  );
+}
+
+// Only rendered (see app/settings/page.tsx) when an institution has a
+// gocardlessInstitutionId but no account has actually been synced through
+// it yet - a stale/incomplete link left over from an abandoned connection
+// attempt. Deliberately not gated on gcConfigured, unlike the two buttons
+// above: the whole point is to stay reachable even after GOCARDLESS_SECRET_ID
+// has been removed from this instance's env, which is exactly when a link
+// like this becomes otherwise permanently un-actionable (every other
+// GoCardless control disappears, but the "· Open Banking" badge doesn't).
+export function DisconnectOpenBankingButton({ institutionId }: Readonly<{ institutionId: string }>) {
+  const [pending, startTransition] = useTransition();
+  const t = useTranslations("openBanking");
+
+  return (
+    <Button
+      variant="destructive"
+      size="sm"
+      onClick={() => startTransition(async () => { await clearGocardlessConnection(institutionId); })}
+      disabled={pending}
+    >
+      <Unlink size={12} aria-hidden="true" />
+      {pending ? t("disconnecting") : t("disconnect")}
     </Button>
   );
 }
