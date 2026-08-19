@@ -30,6 +30,19 @@ services:
       GOCARDLESS_SECRET_ID: ${GOCARDLESS_SECRET_ID:-}
       GOCARDLESS_SECRET_KEY: ${GOCARDLESS_SECRET_KEY:-}
       SYNC_SERVICE_URL: http://sync:8000
+      # Presence-only checks - app/settings/page.tsx reads these two to decide
+      # whether to render the dedicated LCL/TR "Synchronisation automatique"
+      # cards at all (see CLAUDE.md's "Sync service - optional modules").
+      # LCL_PASSWORD/TR_PIN deliberately stay sync-service-only below - app
+      # never authenticates with either bank itself, so it has no business
+      # holding those secrets. Missing here (a real regression this comment
+      # is here to prevent reintroducing) meant that section would silently
+      # vanish for every real deployment, credentials or not, the moment
+      # app/settings/page.tsx started checking process.env for them - the
+      # check would always read undefined in the one container that actually
+      # renders Settings.
+      LCL_LOGIN: ${LCL_LOGIN:-}
+      TR_PHONE: ${TR_PHONE:-}
     ports:
       - "${APP_PORT:-3000}:3000"
     depends_on:

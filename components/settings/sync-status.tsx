@@ -128,8 +128,13 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
 
   return (
     <div className="py-3">
-      {/* Main row */}
-      <div className="flex items-center justify-between">
+      {/* Main row - stacks on mobile (flex-col) instead of staying side by
+          side: with a warning label like "Re-authentification requise" plus
+          both a "Connecter" and a "Synchroniser" button on the right, the
+          action cluster had nowhere to shrink into and overflowed past the
+          card edge on narrow viewports. Same flex-col/sm:flex-row pattern
+          already used for the institution rows just below on this page. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           {log ? <StatusIcon status={log.status} /> : <Clock size={14} className="text-[var(--muted)]" aria-hidden="true" />}
           <div>
@@ -152,7 +157,7 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isAuthRequired && setupStep === "idle" && (
             <Button
               variant="outline"
