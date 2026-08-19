@@ -29,8 +29,24 @@ import { AlertTriggersSection } from "@/components/settings/alert-triggers-secti
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
 import { getAlertRules } from "@/lib/actions/alert-rules";
 
+// Names of the dedicated .env-configured sync integrations that currently
+// have real credentials set - used to warn before a user also configures
+// Woob credentials on an institution of the same name (see the woobDialog
+// props below). Real production incident: configuring Woob on the existing
+// seeded "LCL" institution while LCL_LOGIN was still active created a full
+// second set of accounts, since sync_lcl.py and sync_woob.py write
+// different syncId prefixes ("lcl:..." vs "woob:<institutionId>:...") and
+// can't recognize each other's rows as the same bank account.
+function dedicatedEnvNames(): Set<string> {
+  const names = new Set<string>();
+  if (process.env.LCL_LOGIN) names.add("lcl");
+  if (process.env.TR_PHONE) names.add("trade republic");
+  return names;
+}
+
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
+  const dedicatedSyncNames = dedicatedEnvNames();
 
   const [institutions, syncStatus, woobModules, userSettings, shareLinks, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
     await Promise.all([
@@ -81,7 +97,7 @@ export default async function SettingsPage() {
             <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.institutions.title")}</h2>
             <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.institutions.subtitle")}</p>
           </div>
-          <AddInstitutionDialog modules={woobModules} />
+          <AddInstitutionDialog modules={woobModules} dedicatedEnvNames={dedicatedSyncNames} />
         </div>
 
         {institutions.length === 0 ? (
@@ -89,7 +105,7 @@ export default async function SettingsPage() {
             icon={Settings}
             title={t("settings.institutions.emptyTitle")}
             description={t("settings.institutions.emptyDescription")}
-            action={<AddInstitutionDialog modules={woobModules} />}
+            action={<AddInstitutionDialog modules={woobModules} dedicatedEnvNames={dedicatedSyncNames} />}
           />
         ) : (
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
@@ -175,6 +191,7 @@ export default async function SettingsPage() {
                           institutionName={inst.name}
                           currentModule={inst.woobModule}
                           modules={woobModules}
+                          hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
                         />
                       </>
                     );

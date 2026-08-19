@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Settings2, RefreshCw, Trash2 } from "lucide-react";
+import { Settings2, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,9 +21,18 @@ interface Props {
   // tagged CapBank, or genuinely missing from the catalog (e.g. Revolut -
   // confirmed absent from Woob entirely, not just this list).
   modules: { module: string; label: string }[];
+  // True when this institution's name matches a dedicated .env-configured
+  // integration (LCL_LOGIN/TR_PHONE) that's currently active - see
+  // app/settings/page.tsx's dedicatedEnvNames(). Real incident: configuring
+  // Woob here on top of an already-running dedicated sync created a full
+  // second set of accounts, since the two paths write different syncId
+  // prefixes and can't recognize each other's rows as the same bank
+  // account - warned here rather than blocked, since a deliberate,
+  // supervised migration (delete the old accounts afterward) is legitimate.
+  hasDedicatedEnvSync?: boolean;
 }
 
-export function ConfigureWoobDialog({ institutionId, institutionName, currentModule, modules }: Readonly<Props>) {
+export function ConfigureWoobDialog({ institutionId, institutionName, currentModule, modules, hasDedicatedEnvSync }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [module, setModule] = useState(currentModule ?? "");
@@ -72,6 +81,12 @@ export function ConfigureWoobDialog({ institutionId, institutionName, currentMod
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {hasDedicatedEnvSync && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/40">
+            <AlertTriangle size={14} className="text-[var(--warning)] shrink-0 mt-0.5" aria-hidden="true" />
+            <p className="text-xs text-[var(--warning)]">{t("dedicatedEnvWarning")}</p>
+          </div>
+        )}
         <p className="text-xs text-[var(--muted)]">{t("woobHint")}</p>
 
         <div className="space-y-1.5">
