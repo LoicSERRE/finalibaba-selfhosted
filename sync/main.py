@@ -356,6 +356,36 @@ async def tr_setup_complete(request: Request):
         return JSONResponse({"error": "TR setup failed - check service logs"}, status_code=500)
 
 
+@app.post("/sync/institution/{institution_id}/setup/start")
+async def institution_setup_start(institution_id: str):
+    import asyncio
+
+    import setup_woob
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(executor, setup_woob.start_setup, institution_id)
+        return result
+    except Exception as e:
+        log.exception("Woob setup/start failed for institution %s", institution_id)
+        return JSONResponse({"error": str(e)[:300]}, status_code=500)
+
+
+@app.post("/sync/institution/{institution_id}/setup/complete")
+async def institution_setup_complete(institution_id: str, request: Request):
+    body = await request.json()
+    code = (body.get("code") or "").strip() or None
+    import asyncio
+
+    import setup_woob
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(executor, setup_woob.complete_setup, institution_id, code)
+        return result
+    except Exception as e:
+        log.exception("Woob setup/complete failed for institution %s", institution_id)
+        return JSONResponse({"error": str(e)[:300]}, status_code=500)
+
+
 @app.post("/sync/institution/{institution_id}")
 async def trigger_institution_sync(institution_id: str):
     """Trigger Woob sync for a specific institution (identified by DB id)."""

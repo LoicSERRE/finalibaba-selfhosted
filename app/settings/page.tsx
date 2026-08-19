@@ -13,6 +13,7 @@ import { ConnectOpenBankingButton, SyncOpenBankingButton } from "@/components/se
 import { ConnectOpenBankingDialog } from "@/components/settings/connect-open-banking-dialog";
 import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog";
 import { InstitutionSyncButton } from "@/components/settings/institution-sync-button";
+import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
 import { SyncStatus } from "@/components/settings/sync-status";
 import { getSyncStatus } from "@/lib/actions/sync";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
@@ -159,6 +160,7 @@ export default async function SettingsPage() {
                           <Clock size={12} className="text-[var(--muted)]" role="status" aria-label={t("syncStatus.neverSynced")} />
                         )}
                         {inst.woobModule && <InstitutionSyncButton institutionId={inst.id} />}
+                        {inst.woobModule && <WoobSetupPrompt institutionId={inst.id} log={woobLog} />}
                         <ConfigureWoobDialog
                           institutionId={inst.id}
                           institutionName={inst.name}

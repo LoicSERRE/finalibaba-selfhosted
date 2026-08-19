@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.10.2**
+Current stable release: **v1.11.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -131,7 +131,16 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.11 - Integrations & platform
+## v1.11.0 - Connect any Woob bank without a terminal - Released ✓
+
+*Adding a bank via Settings → "Configurer Woob" that needed a 2FA confirmation on first connect used to be a dead end - the app pointed at a `--setup` command that didn't actually exist. LCL and Trade Republic already had a full in-browser setup flow for their own hardcoded integration; this generalizes the same flow to any of the hundreds of banks Woob supports.*
+
+- [X] **Interactive 2FA setup for any Woob-configured bank** - the app now detects, per bank, whether it needs to wait for an app approval or a typed code (SMS/email/app-generated), and shows the right prompt directly in Settings instead of a broken CLI instruction
+- [X] **Fix: banks needing a typed code (not just app approval) are now recognized at all** - previously fell straight into a generic, unhelpful error
+
+---
+
+## v1.12 - Integrations & platform
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 

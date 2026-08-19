@@ -81,6 +81,36 @@ export async function triggerInstitutionSync(institutionId: string) {
   return res.json();
 }
 
+export type WoobSetupResult =
+  | { status: "already_connected"; accounts: number }
+  | { status: "pending_approval"; medium_type: string | null; medium_label: string | null; message: string | null }
+  | { status: "code_required"; medium_type: string | null; medium_label: string | null; message: string | null }
+  | { status: "unsupported"; message: string };
+
+export async function startInstitutionSetup(institutionId: string): Promise<WoobSetupResult> {
+  if (!CUID_RE.test(institutionId)) throw new Error("Invalid institution ID");
+  const res = await fetch(`${SYNC_URL}/sync/institution/${institutionId}/setup/start`, { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error ?? `Erreur ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function completeInstitutionSetup(institutionId: string, code?: string): Promise<{ accounts: number }> {
+  if (!CUID_RE.test(institutionId)) throw new Error("Invalid institution ID");
+  const res = await fetch(`${SYNC_URL}/sync/institution/${institutionId}/setup/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: code ?? null }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error ?? `Erreur ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function autoTriggerSync(): Promise<{ triggered: boolean }> {
   const lastSync = await prisma.syncLog.findFirst({
     where: { status: "success" },

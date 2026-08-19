@@ -103,6 +103,8 @@ Syncs positions, cash balance, **and** the cash account's full transaction histo
 
 Configure credentials per institution directly from **Settings → Institutions**. Supports any bank available in the [Woob](https://woob.tech) ecosystem.
 
+If your bank requires a confirmation step on first connect (an app approval, or a code sent by SMS/email/app), a **Connecter** button appears next to that institution once the app detects it - no terminal needed, it walks you through whichever step your bank actually needs.
+
 ---
 
 ## Self-hosted alerts (optional)
