@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.11.1**
+Current stable release: **v1.11.2**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -149,6 +149,14 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 - [X] **Fix: deleting a bank connection now actually deletes its accounts** - the confirmation dialog always promised this, but the underlying database relation silently detached accounts instead of removing them, leaving orphaned balances/transactions still counted in net worth with no way to manage them from Settings
 - [X] **Fix: Woob sync controls no longer disappear for a bank named "LCL"/"Trade Republic"** - the dedicated `.env`-configured LCL/Trade Republic integrations and a user's own Woob-configured connection of the same name were being conflated, hiding the sync button, status, and config dialog entirely for the latter
 - [X] **Fix: the dedicated auto-sync section only shows when actually configured** - it used to always display "Never synced" for LCL/Trade Republic even on installs with no `.env` credentials for either
+
+---
+
+## v1.11.2 - Warn before double-configuring a dedicated sync via Woob - Released ✓
+
+*Real production incident found right after v1.11.1 shipped: configuring Woob credentials on an institution that also has an active `.env`-dedicated sync (LCL/Trade Republic) silently created a full second set of duplicated accounts.*
+
+- [X] **Warn before configuring Woob on a dedicated `.env`-synced bank** - `sync_lcl.py`/`sync_tr.py` and `sync_woob.py` write different `syncId` formats for what can be the exact same real account, so neither sync path recognizes the other's rows as already-known. "Ajouter une institution" and "Configurer Woob" now show a warning banner (not a hard block - a deliberate, supervised migration off `.env` to Woob is legitimate) whenever the bank being configured matches an institution with an active `LCL_LOGIN`/`TR_PHONE` integration
 
 ---
 
