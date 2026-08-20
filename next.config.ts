@@ -12,6 +12,11 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
+  // Falls back to script-src without this, which already covers same-origin
+  // /sw.js (components/layout/service-worker-registration.tsx) - explicit
+  // anyway rather than relying on every browser's CSP3 fallback behavior
+  // being implemented identically.
+  "worker-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   // www.google.com/s2/favicons (lib/domain/institutions.ts) actually serves
   // the image from a redirect to *.gstatic.com, not google.com itself -

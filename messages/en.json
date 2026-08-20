@@ -3,6 +3,7 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…",
+    "offlineNotice": "Offline — the data shown may be from your last visit.",
     "delete": "Delete",
     "deleting": "Deleting…",
     "deleteForever": "Delete permanently",

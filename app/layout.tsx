@@ -4,6 +4,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { SidebarWrapper } from "@/components/layout/sidebar-wrapper";
 import { AutoSync } from "@/components/layout/auto-sync";
+import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
+import { OfflineBanner } from "@/components/layout/offline-banner";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -21,7 +23,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Finalibaba",
   description: "Your wealth, at a glance",
-  manifest: "/manifest.json",
+  // No explicit `manifest:` entry - app/manifest.ts is auto-detected and
+  // linked by Next, same convention as app/icon.tsx/apple-icon.tsx below.
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -55,8 +58,14 @@ export default async function RootLayout({
             Skip to content
           </a>
           <SidebarWrapper />
-          <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:p-8 md:pb-8">{children}</main>
+          <main id="main-content" className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8">
+            <div className="sticky top-0 z-10">
+              <OfflineBanner />
+            </div>
+            <div className="p-4 md:p-8">{children}</div>
+          </main>
           {process.env.DEMO_MODE !== "true" && <AutoSync />}
+          <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} />
         </NextIntlClientProvider>
       </body>
     </html>

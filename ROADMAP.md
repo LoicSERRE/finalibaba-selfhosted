@@ -176,10 +176,10 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 - [ ] **Interactive Brokers** - the one broker from the original list with genuinely no Woob module (confirmed absent from the live repository, same way Revolut was confirmed absent - see `CLAUDE.md`'s "Sync service" section). Would need a real direct-API integration (IBKR's Client Portal/TWS API, which means running and managing an IB Gateway session) rather than just a picker entry - kept demand-driven given that added complexity
 - [ ] **GoCardless webhooks** - real-time balance updates instead of polling every 4 hours
 - [ ] **Public REST API** - read-only API endpoints for external tools (Home Assistant, custom dashboards, mobile widgets)
-- [ ] **PWA / mobile-optimised** - installable progressive web app with swipe-friendly views for phones
+- [X] **PWA / installable, offline-capable** - proper 512×512 manifest icons (`any` + a correctly safe-zoned `maskable` variant - the previous manifest reused the same unpadded icon for both, which Android's mask would crop), plus a service worker for offline page viewing when `AUTH_ENABLED` isn't `"true"` (never falls back to a stale cached page when auth is on, to avoid bypassing a session that expired or was revoked server-side - see `CLAUDE.md`'s "PWA / offline support"). "Swipe-friendly views" from this item's original wording was dropped - no concrete gap was found, and the rest of the mobile-responsiveness work (touch targets, scrollable tables, the searchable bank picker) was already shipped incrementally in earlier releases
 - [ ] **Light theme** - optional light colour scheme (currently dark only)
 - [ ] **Plaid integration** - US and Canadian banks (only if there is clear community demand)
-- [ ] **Richer read-only share view** - `/shared/<token>` currently mirrors the main dashboard 1:1 (net worth, allocation); consider more detail for the advisor/family use case (per-account breakdown, holdings, recent transactions) - flagged after real usage, scope not decided yet
+- [X] **Richer read-only share view** - `/shared/<token>` now optionally shows holdings and the last 20 transactions, opt-in per link (`includeHoldings`/`includeTransactions`, both default off) since this link may be reachable from the public internet - see `CLAUDE.md`'s "Read-only share links"
 
 ---
 

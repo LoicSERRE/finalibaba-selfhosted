@@ -76,6 +76,18 @@ export function Sidebar({ showLogout = false }: Readonly<SidebarProps>) {
           <button
             type="button"
             onClick={async () => {
+              // Only relevant when this button is even shown (AUTH_ENABLED=true) -
+              // the service worker (public/sw.js) caches successful GET
+              // responses regardless of auth mode, so a shared/public device
+              // shouldn't keep real financial data sitting in Cache Storage
+              // after an explicit logout, even though it never serves that
+              // cache back on a network failure in this mode (see sw.js's
+              // own offlinePages comment for why offline fallback itself is
+              // already disabled here).
+              if ("caches" in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map((key) => caches.delete(key)));
+              }
               const { signOut } = await import("next-auth/react");
               signOut({ callbackUrl: "/login" });
             }}
