@@ -93,7 +93,7 @@ pnpm run docker:prod:stop  # BROKEN - same reason
 
 Vitest for unit tests - `pnpm test` runs everything under `__tests__/**`, covering `lib/domain/`, `lib/utils/`, `lib/services/` (all pure functions: money math, tax, loans, recurring-transaction detection, CSV import, analytics/dashboard aggregation, export completeness) and `lib/auth.ts` (rate limiter + the real `authorize()` credentials/bcrypt flow - see the comment on `provider.options.authorize` in `__tests__/auth.test.ts` for a real next-auth v4 footgun: `CredentialsProvider()`'s top-level `.authorize` is a hardcoded `() => null` stub, the real function only lives at `.options.authorize` until NextAuth's own request pipeline merges it). `pnpm run test:coverage` runs the same suite with a `text`+`json-summary` report - trust the JSON output over the terminal table, which has a rendering bug in this vitest version that silently drops some 100%-covered files from the printed table (their numbers are still folded into the overall summary).
 
-**Known, accepted coverage gaps**: `lib/actions/*` (19 Server Action files - every DB mutation in the app) and `lib/services/gocardless.ts` are excluded from the SonarQube coverage gate wholesale (`sonar-project.properties`'s `sonar.coverage.exclusions`) even though one file now has partial Vitest coverage - `__tests__/totp-actions.test.ts` mocks `@/lib/db/prisma` directly and exercises `lib/actions/totp.ts`'s error paths and success data shape (not `startTotpSetup`'s QR generation), proving Prisma mocking is viable here. It stays "light coverage only" per that test file's own comment, and the other 18 action files remain untested - a real test DB or broader Prisma mocking convention would still be needed to close the gap for good. `sync/` only tests the pure functions extracted from `sync_tr.py` - `sync_lcl.py`/`sync_woob.py`/`db.py`/`main.py`/`setup_lcl.py`/`setup_tr.py`/`setup_woob.py` are untested. No component-rendering tests (no jest-dom/RTL/Playwright as committed dependencies) - components stay thin wrappers around the tested `lib/` functions by design, e.g. the dashboard's JSX extraction into `components/dashboard/dashboard-view.tsx` described under "Read-only share links" below.
+**Known, accepted coverage gaps**: `lib/actions/*` (21 Server Action files - every DB mutation in the app) and `lib/services/gocardless.ts` are excluded from the SonarQube coverage gate wholesale (`sonar-project.properties`'s `sonar.coverage.exclusions`) even though one file now has partial Vitest coverage - `__tests__/totp-actions.test.ts` mocks `@/lib/db/prisma` directly and exercises `lib/actions/totp.ts`'s error paths and success data shape (not `startTotpSetup`'s QR generation), proving Prisma mocking is viable here. It stays "light coverage only" per that test file's own comment, and the other 20 action files remain untested - a real test DB or broader Prisma mocking convention would still be needed to close the gap for good. `sync/` only tests the pure functions extracted from `sync_tr.py` - `sync_lcl.py`/`sync_woob.py`/`db.py`/`main.py`/`setup_lcl.py`/`setup_tr.py`/`setup_woob.py` are untested. No component-rendering tests (no jest-dom/RTL/Playwright as committed dependencies) - components stay thin wrappers around the tested `lib/` functions by design, e.g. the dashboard's JSX extraction into `components/dashboard/dashboard-view.tsx` described under "Read-only share links" below.
 
 ### pnpm overrides
 
@@ -140,9 +140,14 @@ This pipeline mirrors `ci.yml`'s job list on purpose (`lint` → `typecheck` →
 app/                  Next.js App Router pages and Server Actions - routing is tied to this
                       folder by framework convention, so it's the one place that can't be
                       reorganized by technical concern (DB/API/front) without breaking routes
+  api/                Route Handlers - sync/alerts webhooks, set-locale/set-theme, backup,
+                      GoCardless OAuth callback, and the versioned public REST API (v1/*,
+                      see "Public REST API" below) - everything else in this tree is a page
   generated/prisma/   Prisma client (generated - do not edit)
-  globals.css         Design tokens + Tailwind base
+  globals.css         Design tokens + Tailwind base (dark palette + opt-in light override)
   global-error.tsx    Global error boundary (client component, force-dynamic)
+  manifest.ts         Generated PWA manifest (see "PWA / offline support" below) - not a
+                      static public/manifest.json, auto-linked by Next like icon.tsx below
 components/          Grouped by feature domain, mirroring the app/ route it belongs to
   ui/                Radix UI primitive wrappers - button.tsx, dialog.tsx, input.tsx
   accounts/          Accounts list page (tabs, add/update/delete dialogs)
@@ -183,7 +188,8 @@ sync/                 Python FastAPI service (optional bank sync)
   sync_woob.py        Generic Woob runner for user-configured institutions
   setup_lcl.py        Interactive first-time LCL setup
   setup_tr.py         Interactive first-time Trade Republic setup
-public/               Static assets (includes manifest.json for PWA)
+public/               Static assets - sw.js (service worker, see "PWA / offline support"
+                      below) is the one file here that isn't just an image/icon
 proxy.ts              Next.js middleware (root) - auth bypass + demo POST-blocking
 ```
 

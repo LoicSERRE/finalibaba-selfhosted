@@ -23,6 +23,9 @@
 - **CSV import & backup/restore** - bulk-import transactions/balance history for accounts without auto-sync; one-command database export and restore
 - **Automatic sync** (optional) - Trade Republic (18 EU countries, positions + full transaction history with real labels) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
 - **Public REST API** (optional) - read-only, revocable API keys for net worth, accounts, and recent transactions - build a Home Assistant sensor or a custom dashboard widget without sharing your app password
+- **Read-only share links** - a token-gated `/shared/<token>` URL for an accountant or family member, with holdings and recent transactions as opt-in extras - no app password needed, works independently of built-in auth
+- **Installable, works offline** - add it to your home screen on mobile or desktop; pages you've already visited stay viewable without a connection (when built-in auth is off - see the PWA section below for why)
+- **Dark or light theme** - switchable in Settings, dark by default
 - **English & French UI** - language auto-detected from browser, switchable in Settings
 - **100% self-hosted** - your data stays on your server
 
@@ -214,6 +217,14 @@ curl -H "Authorization: Bearer fnlb_..." https://your-instance/api/v1/net-worth
 | `GET /api/v1/transactions?limit=&accountId=` | Recent transactions (`limit` defaults to 20, capped at 100) |
 
 Revoke a key any time from the same Settings section - it stops working immediately. Deliberately read-only and limited to these four endpoints for now (no transactions/budgets/holdings export) - a leaked key should only ever expose a glanceable summary, not a full financial history.
+
+---
+
+## Installable & offline
+
+Open the app in a mobile or desktop browser and use "Add to Home Screen" / "Install" - it behaves like a native app (its own icon, no browser chrome).
+
+Pages you've already visited stay viewable without a connection - but only when the [built-in password](#securing-access) is off (the default). With it on, offline viewing is disabled on purpose: falling back to a cached page on a network failure would bypass the session check that page normally goes through, so a session that expired or was revoked could otherwise still show real data. Switching themes (Réglages → Apparence, dark by default) or languages while genuinely offline can show a stale version until you're back online - it corrects itself on the next successful load.
 
 ---
 
