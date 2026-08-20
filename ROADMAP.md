@@ -172,7 +172,8 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 
-- [ ] **More broker integrations** - Degiro, Interactive Brokers, Boursorama, Binance via Woob or direct API (demand-driven)
+- [X] **More broker integrations via Woob - Degiro, Boursorama, Binance, Kraken** - already reachable today through the generic "Configurer Woob" flow shipped in v1.11.0-v1.11.3, no new code needed. Confirmed against Woob's own live module repository (not guessed): all four carry `CapBank` in their capabilities, same as any of the ~96 banks already listed in the picker
+- [ ] **Interactive Brokers** - the one broker from the original list with genuinely no Woob module (confirmed absent from the live repository, same way Revolut was confirmed absent - see `CLAUDE.md`'s "Sync service" section). Would need a real direct-API integration (IBKR's Client Portal/TWS API, which means running and managing an IB Gateway session) rather than just a picker entry - kept demand-driven given that added complexity
 - [ ] **GoCardless webhooks** - real-time balance updates instead of polling every 4 hours
 - [ ] **Public REST API** - read-only API endpoints for external tools (Home Assistant, custom dashboards, mobile widgets)
 - [ ] **PWA / mobile-optimised** - installable progressive web app with swipe-friendly views for phones
