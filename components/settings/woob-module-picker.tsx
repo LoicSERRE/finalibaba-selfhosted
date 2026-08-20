@@ -67,8 +67,26 @@ export function WoobModulePicker({
 }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // -1 = nothing highlighted (initial state, and whenever the filtered list
+  // changes shape - a stale index pointing past the new list's end, or at a
+  // now-different option, would be worse than no highlight at all).
+  const [highlighted, setHighlighted] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const selectedLabel = value === otherValue ? otherLabel : modules.find((m) => m.module === value)?.label;
+  const filtered = query.trim()
+    ? modules.filter((m) => normalize(m.label).includes(normalize(query)))
+    : modules;
+  // otherValue is always appended as a real, selectable row in the DOM list
+  // below (the escape hatch for a bank not in the catalog) - folding it
+  // into this same array is what lets arrow-key navigation and
+  // aria-activedescendant treat it as just one more option instead of a
+  // special case the keyboard handler has to know about separately.
+  const options = [...filtered, { module: otherValue, label: otherLabel }];
+  const optionId = (index: number) => `${id}-option-${index}`;
 
   useEffect(() => {
     if (!open) return;
@@ -82,15 +100,50 @@ export function WoobModulePicker({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  const selectedLabel = value === otherValue ? otherLabel : modules.find((m) => m.module === value)?.label;
-  const filtered = query.trim()
-    ? modules.filter((m) => normalize(m.label).includes(normalize(query)))
-    : modules;
+  // Runs on every close, regardless of which of the three paths above
+  // triggered it (Escape, click-outside, or a real selection) - without
+  // this, closing the panel drops focus into the void (the just-clicked
+  // option button is removed from the DOM, and browsers fall back to
+  // focusing <body>), stranding a keyboard user with no visible focus
+  // indicator anywhere on the page.
+  useEffect(() => {
+    if (!open) triggerRef.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    setHighlighted(-1);
+  }, [query, open]);
+
+  useEffect(() => {
+    if (highlighted < 0) return;
+    document.getElementById(optionId(highlighted))?.scrollIntoView({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlighted]);
 
   function select(v: string) {
     onChange(v);
     setOpen(false);
     setQuery("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    switch (e.key) {
+      case "Escape":
+        setOpen(false);
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlighted((i) => (i + 1) % options.length);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlighted((i) => (i <= 0 ? options.length - 1 : i - 1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (highlighted >= 0 && highlighted < options.length) select(options[highlighted].module);
+        break;
+    }
   }
 
   return (
@@ -101,6 +154,7 @@ export function WoobModulePicker({
         </label>
       )}
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         aria-haspopup="listbox"
@@ -121,41 +175,40 @@ export function WoobModulePicker({
             <input
               ref={searchRef}
               type="text"
+              role="combobox"
+              aria-expanded={open}
+              aria-controls={`${id}-listbox`}
+              aria-activedescendant={highlighted >= 0 ? optionId(highlighted) : undefined}
+              aria-autocomplete="list"
               aria-label={searchAriaLabel}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+              onKeyDown={handleKeyDown}
               placeholder={searchPlaceholder}
               className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg pl-8 pr-3 py-2 min-h-[40px] text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
             />
           </div>
-          <div role="listbox" className="max-h-64 overflow-y-auto divide-y divide-[var(--border)]">
+          <div ref={listRef} id={`${id}-listbox`} role="listbox" className="max-h-64 overflow-y-auto divide-y divide-[var(--border)]">
             {filtered.length === 0 && (
               <p className="py-6 text-center text-sm text-[var(--muted)]">{noResultsLabel}</p>
             )}
-            {filtered.map((m) => (
+            {options.map((m, index) => (
               <button
                 key={m.module}
+                id={optionId(index)}
                 type="button"
                 role="option"
                 aria-selected={value === m.module}
+                onMouseEnter={() => setHighlighted(index)}
                 onClick={() => select(m.module)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 min-h-[40px] text-sm text-left hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+                className={`w-full flex items-center justify-between gap-2 px-3 py-2 min-h-[40px] text-sm text-left transition-colors cursor-pointer ${
+                  highlighted === index ? "bg-[var(--surface-elevated)]" : "hover:bg-[var(--surface-elevated)]"
+                } ${m.module === otherValue ? "text-[var(--muted)]" : ""}`}
               >
-                <span className="text-[var(--foreground)]">{m.label}</span>
+                <span className={m.module === otherValue ? "" : "text-[var(--foreground)]"}>{m.label}</span>
                 {value === m.module && <Check size={14} className="text-[var(--accent-text)] shrink-0" aria-hidden="true" />}
               </button>
             ))}
-            <button
-              type="button"
-              role="option"
-              aria-selected={value === otherValue}
-              onClick={() => select(otherValue)}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2 min-h-[40px] text-sm text-left hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer text-[var(--muted)]"
-            >
-              <span>{otherLabel}</span>
-              {value === otherValue && <Check size={14} className="text-[var(--accent-text)] shrink-0" aria-hidden="true" />}
-            </button>
           </div>
         </div>
       )}

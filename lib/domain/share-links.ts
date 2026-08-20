@@ -49,7 +49,11 @@ export function buildSharedHoldings(accounts: SharedHoldingsAccountInput[]): Sha
     .map((a) => {
       const holdings = a.holdings
         .map((h) => ({ id: h.id, ticker: h.ticker, quantity: h.quantity.toString(), valueCents: holdingMarketValue(h) }))
-        .sort((x, y) => (y.valueCents > x.valueCents ? 1 : y.valueCents < x.valueCents ? -1 : 0));
+        .sort((x, y) => {
+          if (y.valueCents > x.valueCents) return 1;
+          if (y.valueCents < x.valueCents) return -1;
+          return 0;
+        });
       return {
         accountId: a.id,
         accountName: a.name,

@@ -80,4 +80,20 @@ describe("buildSharedHoldings", () => {
   it("returns an empty array when there are no eligible accounts", () => {
     expect(buildSharedHoldings([{ id: "a1", name: "Courant", type: "CHECKING", holdings: [] }])).toEqual([]);
   });
+
+  it("preserves input order for two holdings of exactly equal value", () => {
+    const result = buildSharedHoldings([
+      {
+        id: "a1",
+        name: "PEA",
+        type: "INVESTMENT",
+        holdings: [
+          { id: "h1", ticker: "AAPL", quantity: new Decimal("1"), lastPriceCents: BigInt(10000) },
+          { id: "h2", ticker: "MSFT", quantity: new Decimal("1"), lastPriceCents: BigInt(10000) },
+        ],
+      },
+    ]);
+
+    expect(result[0].holdings.map((h) => h.ticker)).toEqual(["AAPL", "MSFT"]);
+  });
 });
