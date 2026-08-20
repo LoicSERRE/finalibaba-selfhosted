@@ -88,6 +88,15 @@ export const config = {
     // meant to match subpaths, so `$`-anchoring them the same naive way
     // would break them; api/* likely has the identical latent prefix-match
     // quirk but is pre-existing, untouched by this session either way).
-    "/((?!api/auth|api/health|api/alerts|api/transactions|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    //
+    // api/v1 (the read-only REST API - see CLAUDE.md's "Public REST API")
+    // needs the same "exact path or a real subpath" shape as shared above,
+    // not a bare prefix (which would repeat the icon-512 mistake) and not
+    // a `$`-only exact match either (every real endpoint lives under
+    // api/v1/<something>). `api\/v1(?:\/.*)?$` matches `/api/v1` and
+    // `/api/v1/net-worth` alike, but not a bare-prefix collision like
+    // `/api/v1999` - verified with the same live-server method as above,
+    // not just reasoned through.
+    "/((?!api/auth|api/health|api/alerts|api/transactions|api\\/v1(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };

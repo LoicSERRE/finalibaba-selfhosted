@@ -22,6 +22,7 @@
 - **Annual tax report** - realized gains, dividend income, and taxable events for the year, exportable
 - **CSV import & backup/restore** - bulk-import transactions/balance history for accounts without auto-sync; one-command database export and restore
 - **Automatic sync** (optional) - Trade Republic (18 EU countries, positions + full transaction history with real labels) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
+- **Public REST API** (optional) - read-only, revocable API keys for net worth, accounts, and recent transactions - build a Home Assistant sensor or a custom dashboard widget without sharing your app password
 - **English & French UI** - language auto-detected from browser, switchable in Settings
 - **100% self-hosted** - your data stays on your server
 
@@ -191,6 +192,28 @@ For checking/savings/meal-voucher accounts not covered by auto-sync (foreign ban
 **Import balance history** - columns `date`, `balance` (or `solde`/`montant`/`valeur`). One point per date; this backfills both the account's balance chart and the dashboard's net worth history. Flags a row as a likely duplicate when a balance is already recorded for that date.
 
 Both accept dates as `YYYY-MM-DD` or `DD/MM/YYYY`.
+
+---
+
+## Public REST API
+
+Read-only, versioned under `/api/v1/` - for a Home Assistant sensor, a custom dashboard, or anything else that wants programmatic access without your app password or a browser session.
+
+1. **Settings → API → Créer une clé** - name it (e.g. "Home Assistant"), then copy the key. It's shown in full every time you view it (unlike a "shown once" token), so you can always come back and copy it again.
+2. Call an endpoint with it as a bearer token:
+
+```bash
+curl -H "Authorization: Bearer fnlb_..." https://your-instance/api/v1/net-worth
+```
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/v1/net-worth` | Current net worth, gross assets, liabilities, latent tax, allocation breakdown |
+| `GET /api/v1/net-worth/history` | Daily net worth series (for a graph) |
+| `GET /api/v1/accounts` | Every account's current value |
+| `GET /api/v1/transactions?limit=&accountId=` | Recent transactions (`limit` defaults to 20, capped at 100) |
+
+Revoke a key any time from the same Settings section - it stops working immediately. Deliberately read-only and limited to these four endpoints for now (no transactions/budgets/holdings export) - a leaked key should only ever expose a glanceable summary, not a full financial history.
 
 ---
 

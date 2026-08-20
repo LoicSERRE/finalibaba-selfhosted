@@ -605,6 +605,26 @@
       "revoke": "Revoke",
       "revokeDescription": "This link will stop working immediately. This action is irreversible."
     },
+    "apiKeys": {
+      "title": "API",
+      "subtitle": "Keys for read-only access to net worth, accounts, and recent transactions from an external tool (Home Assistant, a custom dashboard…)",
+      "create": "Create a key",
+      "createTitle": "Create an API key",
+      "labelField": "Name (optional)",
+      "labelPlaceholder": "e.g. Home Assistant",
+      "creating": "Creating…",
+      "confirm": "Create",
+      "emptyTitle": "No API keys",
+      "emptyDescription": "Create a key to give an external tool read-only access to /api/v1.",
+      "unlabeled": "Unlabeled",
+      "createdOn": "Created {date}",
+      "lastUsedOn": "used {date}",
+      "neverUsed": "never used",
+      "copy": "Copy",
+      "copied": "Copied!",
+      "revoke": "Revoke",
+      "revokeDescription": "This key will stop working immediately. This action is irreversible."
+    },
     "alertChannels": {
       "title": "Notification channels",
       "subtitle": "Configure how you want to be notified - push (ntfy) and/or email. Choose when you're notified in \"Triggers\" just below.",

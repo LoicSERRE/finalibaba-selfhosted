@@ -438,3 +438,23 @@ model ShareLink {
   includeHoldings     Boolean @default(false)
   includeTransactions Boolean @default(false)
 }
+
+// Read-only REST API key (Settings -> API, see CLAUDE.md's "Public REST
+// API") - deliberately its own model, not a reuse of ShareLink, even though
+// both are unguessable-entropy bearer tokens: a ShareLink is meant for a
+// specific other person to view a specific page, an ApiKey is meant for the
+// owner's own tools (Home Assistant, a custom dashboard) to call a small
+// set of JSON endpoints - different audience, different revocation
+// granularity, conflating them would make either one's semantics fuzzy.
+// token is plaintext, same trust model as ShareLink.token/
+// UserSettings.totpSecret/Institution.woobPassword - the DB isn't hardened
+// against server compromise, so hashing this one field buys little, and
+// unlike a "shown once" GitHub-style token it needs to stay re-copyable
+// (Settings -> API keeps a Copy button, no re-generation ceremony).
+model ApiKey {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  label      String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+}

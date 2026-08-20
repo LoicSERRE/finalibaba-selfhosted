@@ -605,6 +605,26 @@
       "revoke": "Révoquer",
       "revokeDescription": "Ce lien cessera immédiatement de fonctionner. Cette action est irréversible."
     },
+    "apiKeys": {
+      "title": "API",
+      "subtitle": "Clés pour accéder en lecture seule au patrimoine net, aux comptes et aux transactions récentes depuis un outil externe (Home Assistant, tableau de bord personnalisé…)",
+      "create": "Créer une clé",
+      "createTitle": "Créer une clé API",
+      "labelField": "Nom (optionnel)",
+      "labelPlaceholder": "Ex. Home Assistant",
+      "creating": "Création…",
+      "confirm": "Créer",
+      "emptyTitle": "Aucune clé API",
+      "emptyDescription": "Crée une clé pour donner à un outil externe un accès en lecture seule à /api/v1.",
+      "unlabeled": "Sans nom",
+      "createdOn": "Créée le {date}",
+      "lastUsedOn": "utilisée le {date}",
+      "neverUsed": "jamais utilisée",
+      "copy": "Copier",
+      "copied": "Copié !",
+      "revoke": "Révoquer",
+      "revokeDescription": "Cette clé cessera immédiatement de fonctionner. Cette action est irréversible."
+    },
     "alertChannels": {
       "title": "Canaux de notification",
       "subtitle": "Configure comment tu souhaites être notifié — push (ntfy) et/ou email. Choisis quand tu veux être notifié dans « Déclencheurs » juste en dessous.",

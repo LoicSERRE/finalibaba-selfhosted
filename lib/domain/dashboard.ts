@@ -68,7 +68,13 @@ export interface DashboardInstitutionGroup {
 }
 
 export interface DashboardHistoryPoint {
-  date: string; // pre-formatted per intlLocale
+  date: string; // pre-formatted per intlLocale - for UI display only
+  // ISO 8601 "YYYY-MM-DD" - added for app/api/v1/net-worth/history/route.ts,
+  // which needs a real parseable date rather than the locale-formatted
+  // string above. Computed from the same historyRaw entry as `date`, not a
+  // separate lookup - the two can never drift apart or disagree on which
+  // day a point belongs to.
+  isoDate: string;
   netWorth: number;
 }
 
@@ -227,6 +233,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
     const [y, m, d] = day.split("-");
     return {
       date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(new Date(+y, +m - 1, +d)),
+      isoDate: day,
       netWorth: nw,
     };
   });

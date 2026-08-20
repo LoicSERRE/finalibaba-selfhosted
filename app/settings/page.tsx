@@ -26,6 +26,8 @@ import { BackupRestoreSection } from "@/components/settings/backup-restore-secti
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { getShareLinks } from "@/lib/actions/share-links";
+import { ApiKeysSection } from "@/components/settings/api-keys-section";
+import { getApiKeys } from "@/lib/actions/api-keys";
 import { AlertChannelsSection } from "@/components/settings/alert-channels-section";
 import { AlertTriggersSection } from "@/components/settings/alert-triggers-section";
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
@@ -51,7 +53,7 @@ export default async function SettingsPage() {
   const dedicatedSyncNames = dedicatedEnvNames();
   const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
 
-  const [institutions, syncStatus, woobModules, userSettings, shareLinks, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
+  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
     await Promise.all([
       prisma.institution.findMany({
         include: {
@@ -70,6 +72,7 @@ export default async function SettingsPage() {
       getWoobBankModules(),
       getUserSettings(),
       getShareLinks(),
+      getApiKeys(),
       getAlertRules(),
       prisma.account.findMany({
         where: { type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
@@ -496,6 +499,13 @@ export default async function SettingsPage() {
           off for the trusted private network). Hidden in demo mode only
           (create/revoke mutations are blocked anyway). */}
       {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
+
+      {/* Public REST API keys - same demo-mode gate as share links above
+          (create/revoke mutations blocked anyway in demo mode), same
+          "independent of AUTH_ENABLED" reasoning: proxy.ts excludes
+          /api/v1 from the NextAuth matcher entirely, each route gates
+          itself via the key instead. See CLAUDE.md's "Public REST API". */}
+      {process.env.DEMO_MODE !== "true" && <ApiKeysSection keys={apiKeys} />}
 
       {/* Alerts - split into "how" (channels) and "what" (triggers) so each
           concern gets its own card and Save button, instead of one long

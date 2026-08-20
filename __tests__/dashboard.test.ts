@@ -173,6 +173,11 @@ describe("computeDashboard", () => {
     expect(result.history).toHaveLength(2);
     expect(result.history[0].netWorth).toBe(1000_00);
     expect(result.history[1].netWorth).toBe(1200_00);
+    // isoDate (app/api/v1/net-worth/history/route.ts's data source) must
+    // stay a real "YYYY-MM-DD" derived from the same day the formatted
+    // `date` string represents - not a separate lookup that could drift.
+    expect(result.history[0].isoDate).toBe("2026-07-01");
+    expect(result.history[1].isoDate).toBe("2026-07-15");
   });
 
   it("computes delta30 against the closest day at or before 30 days ago", () => {
