@@ -48,6 +48,16 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
   const [setupStep, setSetupStep] = useState<SetupStep>("idle");
   const [code, setCode] = useState("");
   const [setupError, setSetupError] = useState<string | null>(null);
+  // Separate from setupError - the "Synchroniser" click was the one path in
+  // this component with no error handling at all (every setup step already
+  // had its own try/catch). A hung sync (no internet reaching the bank from
+  // inside the sync container, or a stuck Woob session) used to leave this
+  // button spinning with zero feedback until lib/actions/sync.ts's new
+  // 2-minute timeout was added - this state is what actually surfaces that
+  // error once it fires, instead of it disappearing into an unhandled
+  // rejection. Kept distinct from setupError since it's not part of the
+  // setup flow's own state machine and shouldn't reset/interact with it.
+  const [syncError, setSyncError] = useState<string | null>(null);
   const router = useRouter();
   const t = useTranslations("syncStatus");
   const tc = useTranslations("common");
@@ -59,9 +69,14 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
   const reset = () => { setSetupStep("idle"); setCode(""); setSetupError(null); };
 
   const handleSync = () => {
+    setSyncError(null);
     startTransition(async () => {
-      await triggerSync(source);
-      router.refresh();
+      try {
+        await triggerSync(source);
+        router.refresh();
+      } catch (e) {
+        setSyncError(e instanceof Error ? e.message : t("unknownError"));
+      }
     });
   };
 
@@ -183,6 +198,12 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
           )}
         </div>
       </div>
+
+      {syncError && (
+        <p role="alert" className="mt-2 ml-[26px] text-xs text-[var(--negative)]">
+          {syncError}
+        </p>
+      )}
 
       {/* TR - code input */}
       {(setupStep === "awaiting_code" || setupStep === "submitting") && (
