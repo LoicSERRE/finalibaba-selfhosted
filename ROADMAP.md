@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.11.3**
+Current stable release: **v1.12.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -168,7 +168,7 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
-## v1.12 - Integrations & platform
+## v1.12 - Integrations & platform - Released ✓
 
 *Broader bank coverage, automation hooks, and better mobile experience.*
 
