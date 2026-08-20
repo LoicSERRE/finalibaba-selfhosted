@@ -42,6 +42,7 @@ describe("sendNtfyMessage", () => {
       topic: "mon-sujet",
       title: "Patrimoine net : seuil dépassé",
       message: "Passé au-dessus de 100 000 €.",
+      tags: ["bar_chart"],
     });
   });
 

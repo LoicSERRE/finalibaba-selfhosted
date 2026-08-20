@@ -36,13 +36,25 @@ type AlertChannelSettings = {
  * GoCardless's OAuth callback). `/icon` is Next's own file-route
  * (app/icon.tsx, a generated 32x32 PNG) - ntfy only accepts JPEG/PNG icons,
  * not SVG, which is why this doesn't point at public/icon.svg instead.
+ *
+ * `tags: ["bar_chart"]` renders as 📊 in the ntfy app/web client (ntfy maps
+ * GitHub-style emoji shortcodes) - a user found every alert visually
+ * indistinguishable from any other app's notifications in their phone's
+ * notification list. Deliberately one fixed tag for every alert rather than
+ * a different emoji per alert kind (⚠️ for a sync failure vs 🎉 for a loan
+ * paid off, etc.) - dispatchAlert below only ever receives a plain
+ * title/body pair from all ~8 call sites across this route, so a
+ * per-kind tag would mean threading a new parameter through every one of
+ * them for a cosmetic nice-to-have; one consistent, on-brand tag (matches
+ * the app's own bar-chart logo motif) already solves "make it recognizable
+ * at a glance" without that.
  */
 export async function sendNtfyMessage(topicUrl: string, title: string, body: string, authToken: string | null = null): Promise<boolean> {
   try {
     const parsed = new URL(topicUrl);
     const topic = parsed.pathname.replace(/^\//, "");
     const appUrl = process.env.APP_URL?.replace(/\/$/, "");
-    const payload: Record<string, unknown> = { topic, title, message: body };
+    const payload: Record<string, unknown> = { topic, title, message: body, tags: ["bar_chart"] };
     if (appUrl) {
       payload.icon = `${appUrl}/icon`;
       payload.click = appUrl;

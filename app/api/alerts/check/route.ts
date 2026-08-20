@@ -125,8 +125,46 @@ async function friendlySourceLabel(source: string): Promise<string> {
       select: { name: true },
     });
     if (institution) return institution.name;
+    // Real production case: the institution this SyncLog/SyncFailureState
+    // row was created for has since been deleted (e.g. deleted and
+    // recreated while troubleshooting a reconnect) - the raw source string
+    // still carries its old id, and a user found that literal cuid ("woob:
+    // cmqpvbok...") completely unreadable in a push notification. Same
+    // "never surface raw internal identifiers to a human" rule this
+    // function already exists to enforce for the FIXED_SOURCE_LABELS case
+    // - the fallback below is generic instead of leaking the id, not a fix
+    // for the underlying orphaned-row situation (which needs manual
+    // cleanup in Settings, not a notification-formatting change).
+    return "une banque configurée via Woob";
   }
   return source;
+}
+
+// Real production reports: sync-failure alerts kept firing forever for a
+// source that could never recover, either because (a) LCL_LOGIN/TR_PHONE
+// had been removed from .env (a deliberate, documented migration path off
+// the dedicated sync - see CLAUDE.md's "Migrating an existing dedicated
+// integration to Woob") so sync_lcl.py/sync_tr.py simply stop running and
+// never write a fresh "success" SyncLog row that would ever clear the
+// SyncFailureState, or (b) a woob:<id> source's Institution row was deleted
+// or had its Woob config cleared, same "nothing will ever write a success
+// row again" dead end. Neither case means the source is currently *broken*
+// - it means it's not running at all anymore, which this alert has no
+// business treating as an ongoing failure. Checked once per source per
+// run (env vars and a single Institution lookup are cheap) rather than
+// only at alert-creation time, so a source retired *after* it already had
+// an active SyncFailureState still gets cleaned up and stops reminding.
+async function isSourceRetired(source: string): Promise<boolean> {
+  if (source === "lcl") return !process.env.LCL_LOGIN;
+  if (source === "trade_republic") return !process.env.TR_PHONE;
+  if (source.startsWith("woob:")) {
+    const institution = await prisma.institution.findUnique({
+      where: { id: source.slice("woob:".length) },
+      select: { woobModule: true },
+    });
+    return !institution?.woobModule;
+  }
+  return false;
 }
 
 // Deliberately does not surface the raw SyncLog.message - it's Python
@@ -181,6 +219,11 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
     if (!latest) continue;
 
     const state = await prisma.syncFailureState.findUnique({ where: { source } });
+
+    if (await isSourceRetired(source)) {
+      if (state) await prisma.syncFailureState.delete({ where: { source } });
+      continue;
+    }
 
     if (latest.status === "success") {
       if (state) await prisma.syncFailureState.delete({ where: { source } });
