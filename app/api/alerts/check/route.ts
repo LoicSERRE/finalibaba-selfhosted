@@ -198,6 +198,14 @@ const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
  * unblocked). See CLAUDE.md's "Alerts & webhooks" / SyncFailureState comment
  * in schema.prisma for the full incident writeup.
  */
+// Shared by both "this source isn't broken (anymore or ever again)" exits
+// below (retired, or a fresh success) - extracted for real duplication
+// removal, not just to shave a point off checkSyncFailures's own cognitive
+// complexity as a side effect.
+async function clearSyncFailureState(source: string, hasState: boolean): Promise<void> {
+  if (hasState) await prisma.syncFailureState.delete({ where: { source } });
+}
+
 async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]> {
   if (!settings.syncFailureAlertsEnabled) return [];
 
@@ -221,12 +229,12 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
     const state = await prisma.syncFailureState.findUnique({ where: { source } });
 
     if (await isSourceRetired(source)) {
-      if (state) await prisma.syncFailureState.delete({ where: { source } });
+      await clearSyncFailureState(source, !!state);
       continue;
     }
 
     if (latest.status === "success") {
-      if (state) await prisma.syncFailureState.delete({ where: { source } });
+      await clearSyncFailureState(source, !!state);
       continue;
     }
 
