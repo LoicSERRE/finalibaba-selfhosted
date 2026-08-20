@@ -579,6 +579,10 @@
       "expiryField": "Expiration",
       "expiryNever": "Jamais",
       "expiryDays": "{count} jours",
+      "includeField": "Contenu inclus",
+      "includeHoldings": "Positions (actions, crypto…)",
+      "includeTransactions": "Transactions récentes",
+      "includeHint": "Désactivé par défaut — ce lien peut être accessible depuis internet. Choix fixé à la création, pas modifiable ensuite (révoque et recrée le lien pour changer).",
       "creating": "Création…",
       "confirm": "Créer",
       "emptyTitle": "Aucun lien de partage",
@@ -683,7 +687,9 @@
   },
   "shared": {
     "readOnlyBanner": "Vue en lecture seule partagée par le propriétaire — aucune modification possible.",
-    "readOnlyBannerLabeled": "Vue en lecture seule partagée par le propriétaire ({label}) — aucune modification possible."
+    "readOnlyBannerLabeled": "Vue en lecture seule partagée par le propriétaire ({label}) — aucune modification possible.",
+    "holdingsTitle": "Positions",
+    "transactionsTitle": "Transactions récentes"
   },
   "deleteAccount": {
     "title": "Supprimer ce compte ?",

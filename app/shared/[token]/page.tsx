@@ -7,10 +7,18 @@ import { prisma } from "@/lib/db/prisma";
 import { localeToIntl } from "@/lib/utils/format";
 import { type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
+import { SharedHoldingsSection } from "@/components/shared/shared-holdings-section";
+import { SharedTransactionsSection } from "@/components/shared/shared-transactions-section";
 import { computeDashboard } from "@/lib/domain/dashboard";
-import { isShareLinkExpired } from "@/lib/domain/share-links";
+import { isShareLinkExpired, buildSharedHoldings } from "@/lib/domain/share-links";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { getTranslations, getLocale } from "next-intl/server";
+
+// "Recent transactions" is a bounded window, not the account's full history
+// - same reasoning as CSV import's duplicate-flagging scope, just applied to
+// display instead of matching: a share link recipient (advisor/family) needs
+// enough to see spending patterns, not a complete ledger export.
+const MAX_SHARED_TRANSACTIONS = 20;
 
 // This URL may end up reachable from the public internet via a reverse
 // proxy (that's the point - sharing outside the private network without
@@ -32,7 +40,7 @@ export default async function SharedDashboardPage({
 
   await prisma.shareLink.update({ where: { id: link.id }, data: { lastAccessedAt: new Date() } });
 
-  const [accounts, allBalances, t, locale] = await Promise.all([
+  const [accounts, allBalances, sharedTransactions, t, locale] = await Promise.all([
     prisma.account.findMany({
       include: {
         institution: true,
@@ -42,6 +50,17 @@ export default async function SharedDashboardPage({
       orderBy: { name: "asc" },
     }),
     prisma.historicalBalance.findMany({ orderBy: { recordedAt: "asc" } }),
+    // Skip the query entirely when the link doesn't opt into it - no reason
+    // to pull real transaction rows out of the DB for a link that will never
+    // render them.
+    link.includeTransactions
+      ? prisma.transaction.findMany({
+          where: { isInternalTransfer: false },
+          orderBy: { date: "desc" },
+          take: MAX_SHARED_TRANSACTIONS,
+          include: { category: { select: { name: true, color: true } }, account: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
     getTranslations(),
     getLocale(),
   ]);
@@ -88,6 +107,27 @@ export default async function SharedDashboardPage({
         institutions={institutions}
         interactive={false}
       />
+      {link.includeHoldings && (
+        <div className="mt-8">
+          <SharedHoldingsSection t={t} groups={buildSharedHoldings(accounts)} />
+        </div>
+      )}
+      {link.includeTransactions && (
+        <div className="mt-8">
+          <SharedTransactionsSection
+            t={t}
+            locale={localeToIntl(locale)}
+            transactions={sharedTransactions.map((tx) => ({
+              id: tx.id,
+              date: tx.date,
+              label: tx.label,
+              amountCents: tx.amountCents,
+              accountName: tx.account.name,
+              category: tx.category,
+            }))}
+          />
+        </div>
+      )}
     </div>
   );
 }

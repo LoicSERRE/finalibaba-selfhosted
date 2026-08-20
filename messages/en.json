@@ -579,6 +579,10 @@
       "expiryField": "Expiry",
       "expiryNever": "Never",
       "expiryDays": "{count} days",
+      "includeField": "Content included",
+      "includeHoldings": "Holdings (stocks, crypto…)",
+      "includeTransactions": "Recent transactions",
+      "includeHint": "Off by default - this link may be reachable from the internet. Set once at creation, not editable afterward (revoke and recreate the link to change it).",
       "creating": "Creating…",
       "confirm": "Create",
       "emptyTitle": "No share links",
@@ -683,7 +687,9 @@
   },
   "shared": {
     "readOnlyBanner": "Read-only view shared by the owner — no changes possible.",
-    "readOnlyBannerLabeled": "Read-only view shared by the owner ({label}) — no changes possible."
+    "readOnlyBannerLabeled": "Read-only view shared by the owner ({label}) — no changes possible.",
+    "holdingsTitle": "Holdings",
+    "transactionsTitle": "Recent transactions"
   },
   "deleteAccount": {
     "title": "Delete this account?",

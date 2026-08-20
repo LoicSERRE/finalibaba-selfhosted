@@ -11,11 +11,21 @@ export async function getShareLinks() {
 // expiresInDays is resolved to a concrete Date here, at creation time - not
 // stored as a duration, so a link's expiry doesn't drift if the server clock
 // or the reader's notion of "now" changes later.
-export async function createShareLink(label: string | null, expiresInDays: number | null) {
+//
+// includeHoldings/includeTransactions are opt-in per link, default off in
+// the form below - see the schema comment on ShareLink for why. Set once at
+// creation, same as label/expiresAt - no update path exists for any of
+// these fields, revoke and recreate the link to change them.
+export async function createShareLink(
+  label: string | null,
+  expiresInDays: number | null,
+  includeHoldings: boolean,
+  includeTransactions: boolean,
+) {
   const expiresAt = expiresInDays !== null ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000) : null;
 
   await prisma.shareLink.create({
-    data: { token: generateShareToken(), label: label?.trim() || null, expiresAt },
+    data: { token: generateShareToken(), label: label?.trim() || null, expiresAt, includeHoldings, includeTransactions },
   });
 
   revalidatePath("/settings");

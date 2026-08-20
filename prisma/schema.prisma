@@ -430,4 +430,11 @@ model ShareLink {
   createdAt      DateTime  @default(now())
   expiresAt      DateTime?
   lastAccessedAt DateTime?
+  // Deliberate opt-in, default false: both surface more detail than the
+  // dashboard-only view this link originally shipped with, and this link
+  // may be reachable from the public internet - see "Read-only share links"
+  // in CLAUDE.md. Set once at creation (createShareLink), no edit path -
+  // same convention as label/expiresAt above.
+  includeHoldings     Boolean @default(false)
+  includeTransactions Boolean @default(false)
 }

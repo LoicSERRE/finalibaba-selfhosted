@@ -18,6 +18,8 @@ type ShareLinkRow = {
   createdAt: Date;
   expiresAt: Date | null;
   lastAccessedAt: Date | null;
+  includeHoldings: boolean;
+  includeTransactions: boolean;
 };
 
 function CopyButton({ token }: Readonly<{ token: string }>) {
@@ -47,15 +49,28 @@ export function ShareLinksSection({ links }: Readonly<{ links: ShareLinkRow[] }>
   const [createOpen, setCreateOpen] = useState(false);
   const [label, setLabel] = useState("");
   const [expiresInDays, setExpiresInDays] = useState<string>("never");
+  const [includeHoldings, setIncludeHoldings] = useState(false);
+  const [includeTransactions, setIncludeTransactions] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  function resetForm() {
+    setLabel("");
+    setExpiresInDays("never");
+    setIncludeHoldings(false);
+    setIncludeTransactions(false);
+  }
 
   async function handleCreate() {
     setCreating(true);
     try {
-      await createShareLink(label.trim() || null, expiresInDays === "never" ? null : Number(expiresInDays));
+      await createShareLink(
+        label.trim() || null,
+        expiresInDays === "never" ? null : Number(expiresInDays),
+        includeHoldings,
+        includeTransactions,
+      );
       setCreateOpen(false);
-      setLabel("");
-      setExpiresInDays("never");
+      resetForm();
       router.refresh();
     } finally {
       setCreating(false);
@@ -78,10 +93,7 @@ export function ShareLinksSection({ links }: Readonly<{ links: ShareLinkRow[] }>
           open={createOpen}
           onOpenChange={(v) => {
             setCreateOpen(v);
-            if (!v) {
-              setLabel("");
-              setExpiresInDays("never");
-            }
+            if (!v) resetForm();
           }}
           title={t("createTitle")}
           trigger={
@@ -121,6 +133,28 @@ export function ShareLinksSection({ links }: Readonly<{ links: ShareLinkRow[] }>
                 <option value="90">{t("expiryDays", { count: 90 })}</option>
               </select>
             </div>
+            <div className="pt-1 space-y-2.5">
+              <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("includeField")}</p>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeHoldings}
+                  onChange={(e) => setIncludeHoldings(e.target.checked)}
+                  className="w-4 h-4 rounded accent-[var(--accent)]"
+                />
+                <span className="text-sm text-[var(--foreground)]">{t("includeHoldings")}</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeTransactions}
+                  onChange={(e) => setIncludeTransactions(e.target.checked)}
+                  className="w-4 h-4 rounded accent-[var(--accent)]"
+                />
+                <span className="text-sm text-[var(--foreground)]">{t("includeTransactions")}</span>
+              </label>
+              <p className="text-xs text-[var(--muted)]">{t("includeHint")}</p>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
                 {tc("cancel")}
@@ -155,6 +189,16 @@ export function ShareLinksSection({ links }: Readonly<{ links: ShareLinkRow[] }>
                     >
                       {expired ? t("statusExpired") : t("statusActive")}
                     </span>
+                    {link.includeHoldings && (
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent-text)]">
+                        {t("includeHoldings")}
+                      </span>
+                    )}
+                    {link.includeTransactions && (
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent-text)]">
+                        {t("includeTransactions")}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-[var(--muted)] mt-0.5">
                     {t("createdOn", { date: link.createdAt.toLocaleDateString() })}
