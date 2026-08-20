@@ -25,10 +25,46 @@
      been reusing --accent (brand/active-nav color) for this same meaning,
      a collision between "highlighted" and "close to your limit." */
   --warning: #f59e0b;
-  /* App is dark-only - without this, native controls (select dropdown
-     popups, scrollbars, checkboxes) render with the browser's light-theme
-     defaults, so option text in --foreground barely contrasts against them. */
+  /* Without this, native controls (select dropdown popups, scrollbars,
+     checkboxes) render with the browser's light-theme defaults regardless
+     of the app's own theme, so option text in --foreground barely
+     contrasts against them. Kept in sync with the resolved theme via
+     app/layout.tsx's generateViewport() (colorScheme), not hardcoded here
+     anymore - this :root value is just the pre-hydration/no-JS fallback,
+     matching whichever palette is the bare (dark) default below. */
   color-scheme: dark;
+}
+
+/* Light theme - explicit opt-in only (Settings → Apparence), never
+   auto-applied from prefers-color-scheme. Dark stays the bare :root
+   default above regardless of OS preference - this app has always been
+   dark-only, and silently switching existing users to light because their
+   OS happens to be set that way (for reasons unrelated to this app) would
+   be a surprising regression, not a feature. [data-theme="light"] is set
+   server-side on <html> from the THEME cookie (see lib/actions/theme.ts),
+   the same pattern app/layout.tsx already uses for NEXT_LOCALE.
+   --accent/--accent-strong are deliberately NOT overridden here - the
+   brand indigo works as a background/button color regardless of overall
+   theme (accent-strong's white-on-accent-strong contrast, computed below,
+   holds regardless of what's around the button); only the accent-text
+   shade actually needs retuning for readability as small text on a light
+   surface. --positive/--negative/--warning get darker shades than dark
+   mode's bright versions - the same hue at dark-mode brightness reads as
+   washed out on a light background and fails WCAG AA as text; verified via
+   the WCAG relative-luminance formula, not eyeballed (see the ratios
+   below, all normal-text AA 4.5:1 or better on --surface). */
+:root[data-theme="light"] {
+  --background: #f7f7fa;
+  --foreground: #18181b; /* 17.72:1 on --surface */
+  --surface: #ffffff;
+  --surface-elevated: #eeeef3;
+  --border: #e2e2e8;
+  --muted: #6b6b76; /* 5.26:1 on --surface */
+  --accent-text: #4f46e5; /* 6.29:1 on --surface */
+  --positive: #15803d; /* 5.02:1 on --surface */
+  --negative: #dc2626; /* 4.83:1 on --surface */
+  --warning: #b45309; /* 5.02:1 on --surface */
+  color-scheme: light;
 }
 
 @theme inline {

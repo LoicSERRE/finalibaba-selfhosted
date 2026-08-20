@@ -60,6 +60,34 @@ export const config = {
     // requires a plain literal - a String.raw tagged-template expression here
     // isn't statically evaluable and makes the build fail with "Invalid
     // segment configuration export detected" (confirmed by testing it).
-    "/((?!api/auth|api/health|api/alerts|api/transactions|shared|_next/static|_next/image|icon\\.svg|manifest\\.json|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    //
+    // icon/apple-icon/icon-512/icon-512-maskable are Next's generated icon
+    // routes (app/icon.tsx, app/apple-icon.tsx, app/icon-512/route.tsx,
+    // app/icon-512-maskable/route.tsx - see CLAUDE.md's "PWA / offline
+    // support") - none had a literal file extension in their URL for the
+    // pre-existing `.(?:png|jpg|ico|webp)` branch below to catch, so on an
+    // AUTH_ENABLED=true instance every one of them would have been silently
+    // redirected to /login instead of serving the actual image, breaking
+    // browser tab favicons, iOS home-screen install, and PWA install
+    // prompts alike. manifest.webmanifest (app/manifest.ts, replacing the
+    // old static manifest.json this matcher used to name) and sw.js
+    // (public/sw.js) need the same treatment for the same reason - a
+    // service worker or manifest fetch has no business going through a
+    // login redirect either.
+    //
+    // Every new alternative below is `$`-anchored (added to the pre-existing
+    // icon\.svg too, while touching this line anyway) - confirmed live
+    // against a real AUTH_ENABLED=true dev server that an *unanchored*
+    // `icon-512` alternative matches as a bare prefix, not an exact path:
+    // a nonexistent `/icon-512999` was bypassing auth entirely (a harmless
+    // 404 either way here, but the wrong reason - not a path this matcher
+    // was ever meant to exempt). Deliberately not extending this same
+    // anchoring pass to the pre-existing, unrelated api/*, shared, or
+    // _next/* alternatives above - out of scope for this fix and not
+    // verified against their own subpath semantics (shared/_next/* are
+    // meant to match subpaths, so `$`-anchoring them the same naive way
+    // would break them; api/* likely has the identical latent prefix-match
+    // quirk but is pre-existing, untouched by this session either way).
+    "/((?!api/auth|api/health|api/alerts|api/transactions|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };

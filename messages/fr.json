@@ -525,6 +525,11 @@
     "language": {
       "title": "Langue"
     },
+    "theme": {
+      "title": "Apparence",
+      "dark": "Sombre",
+      "light": "Clair"
+    },
     "sync": {
       "title": "Synchronisation automatique",
       "subtitle": "Sync toutes les 4h · TR keepalive toutes les 2h",

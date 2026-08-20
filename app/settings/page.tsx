@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
@@ -20,6 +21,7 @@ import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/settings/language-switcher";
+import { ThemeSwitcher } from "@/components/settings/theme-switcher";
 import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
@@ -47,6 +49,7 @@ function dedicatedEnvNames(): Set<string> {
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
   const dedicatedSyncNames = dedicatedEnvNames();
+  const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
 
   const [institutions, syncStatus, woobModules, userSettings, shareLinks, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
     await Promise.all([
@@ -425,6 +428,16 @@ export default async function SettingsPage() {
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
           <LanguageSwitcher />
+        </div>
+      </section>
+
+      {/* Theme */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.theme.title")}</h2>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <ThemeSwitcher theme={theme} />
         </div>
       </section>
 

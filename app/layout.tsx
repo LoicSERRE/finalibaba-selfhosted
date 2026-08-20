@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -32,12 +33,22 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: "#6366f1",
-  colorScheme: "dark",
-};
+// Static width/initialScale/themeColor + dynamic colorScheme (from the
+// THEME cookie - see lib/actions/theme.ts) can't be split across a static
+// `viewport` export and a `generateViewport()` one; Next only allows one or
+// the other per segment. The whole root layout already reads cookies() for
+// locale (i18n/request.ts) and is fully dynamic per request regardless
+// (see CLAUDE.md's route table - almost nothing in this app is `○` static),
+// so making viewport async here doesn't introduce a new blocking cost.
+export async function generateViewport(): Promise<Viewport> {
+  const theme = (await cookies()).get("THEME")?.value;
+  return {
+    width: "device-width",
+    initialScale: 1,
+    themeColor: "#6366f1",
+    colorScheme: theme === "light" ? "light" : "dark",
+  };
+}
 
 export default async function RootLayout({
   children,
@@ -46,9 +57,18 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
+  const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
 
   return (
-    <html lang={locale} className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased h-full`}>
+    <html
+      lang={locale}
+      // No attribute at all for dark (the bare :root default in
+      // globals.css) - only light is an explicit override, see that
+      // file's own comment for why dark never auto-switches from
+      // prefers-color-scheme.
+      {...(theme === "light" ? { "data-theme": "light" } : {})}
+      className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased h-full`}
+    >
       <body className="flex min-h-full bg-[var(--background)]">
         <NextIntlClientProvider messages={messages}>
           <a
