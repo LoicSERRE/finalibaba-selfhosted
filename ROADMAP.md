@@ -4,6 +4,8 @@ Current stable release: **v1.12.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
+Before starting a new version's work (or right before tagging one), run the release-boundary health audit in `CLAUDE.md` - layering, complexity hotspots, real test-coverage gaps, recurring-bug patterns, doc drift, dependency health, and open security alerts. v1.13 is the first version planned with this as a standing step, not a one-off.
+
 ---
 
 ## v1.1.0 - Released ✓

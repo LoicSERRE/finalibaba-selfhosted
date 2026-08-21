@@ -133,6 +133,24 @@ Run this before proposing or making any commit - it exists so a commit never int
 
 This pipeline mirrors `ci.yml`'s job list on purpose (`lint` → `typecheck` → `test` → `python-lint`/`python-test` → `security`/`python-security`) plus the SonarQube gate `quality.yml` doesn't cover (SonarQube itself isn't in CI - see "CI quality gates" below) - the goal is that `git push` never surprises CI with something `pnpm run verify` (plus the conditional steps) would already have caught locally.
 
+## Release-boundary health audit
+
+The pipeline above catches regressions in a single diff - it says nothing about whether the codebase as a whole is still healthy, or whether the same bug class is quietly being patched downstream release after release without its root cause ever being touched. Run this broader audit **at each version boundary** - starting a new `vX.Y` (before writing its first feature) or right before tagging one, whichever fits that version's own shape - not on every commit.
+
+**Origin**: prompted directly by a real incident, not built speculatively. `migrateDedicatedSyncToWoob`'s history-depth-loss bug (see "Migrating an existing dedicated integration to Woob" above) was the *third* release in a row (v1.11.2, v1.11.3, and that fix) patching a symptom of the exact same underlying `syncId`-matching gap in `sync/db.py`'s `upsert_account()` - three warning-UI layers were shipped before anyone asked whether the root cause itself was fixable. The first run of this audit (ahead of v1.13) found that root cause in one pass and it turned out to be a ~30-line fix, cheaper than any of the three symptom patches that preceded it.
+
+Seven things to actually check, not just eyeball - each needs real evidence (a command run, a file read), not a guess:
+
+1. **Layering discipline** - grep `components/` for any direct `@/lib/db/prisma` import (there should be none - business logic and DB access belong in `lib/actions`/`lib/domain`, components stay thin). Spot-check a handful of `app/` pages you haven't touched recently, not just the ones the current version's work already covers.
+2. **File-size/complexity hotspots** - `wc -l` across `app/`, `components/`, `lib/` for files that have quietly grown into a "does everything" shape (`app/settings/page.tsx` is the current largest, by a wide margin - not urgent to split yet, but track whether it keeps growing). Cross-reference `sonar-project.properties`'s `sonar.issue.ignore.multicriteria` list - every entry needs a real, still-accurate justification; if the list is growing without individually reasoned entries, that's the debt ledger becoming a dumping ground instead of a documented, bounded set of exceptions.
+3. **Test coverage reality** - `pnpm run test:coverage`, read the JSON summary (see "Development commands" above for why, not the terminal table). `lib/actions/*`'s wholesale Sonar exclusion (see "Known, accepted coverage gaps" above) is a standing, accepted gap - but check whether any *specific* file in it just became load-bearing for something that broke in production (exactly what happened to `institutions.ts` this cycle) and close that one file's gap specifically, rather than treating the whole directory as permanently out of scope.
+4. **Recurring-bug-pattern check** - has any incident this version (or the last couple) been patched more than once? If the same file/feature shows up in two or more "real production incident" notes in this document without the underlying design ever changing, that's a signal the fix has been aimed at the symptom, not the cause - go find the cause.
+5. **Documentation-vs-code drift** - spot-check 5-8 concrete claims in this file (constants, thresholds, behavior descriptions) against current code, spread across feature areas the current version's own work didn't already touch. This file's own size is a real liability here - the bigger it gets, the easier a stale claim is to miss.
+6. **Dependency/tooling health** - skim `pnpm-workspace.yaml`'s `overrides` table and `package.json` for staleness; confirm Dependabot's grouped-update PRs are actually landing, not piling up unreviewed.
+7. **Open security-scanning alerts** (CodeQL, `docker.yml`'s Trivy scan) - triage anything open, don't let them accumulate past what's already documented as a deliberate, reasoned exception (see "Container image hardening" below for the pattern of what an accepted-vs-real finding looks like).
+
+Report a real verdict per point (not "seems fine") with concrete evidence, and an explicit answer to "is this a clean base to build the next version on, or is there something worth fixing first" - matching the shape of the audit that produced this section. Fix what's cheap and clearly worth it before moving on; log anything bigger as its own roadmap item rather than blocking the version on it.
+
 ## Architecture
 
 ### File layout
