@@ -37,6 +37,21 @@ from sync_woob import _configure_woob
 
 log = logging.getLogger(__name__)
 
+
+class SetupError(Exception):
+    """A setup failure with a message that's always safe to show the user
+    as-is - the message is set explicitly at construction, never derived
+    from str(exception)/.args of whatever caused it, so main.py's handler
+    can surface it in an HTTP response without CodeQL (correctly) flagging
+    exception-derived data reaching a client - the class itself, not a
+    try/except on RuntimeError, is what makes "safe to show" verifiable:
+    every SetupError's message was written by this module on purpose.
+    """
+    def __init__(self, user_message: str):
+        self.user_message = user_message
+        super().__init__(user_message)
+
+
 # One pending Woob session per institution - unlike setup_lcl.py's single
 # global, several institutions could plausibly be mid-setup at once here.
 _pending: dict[str, dict] = {}
@@ -132,7 +147,7 @@ def _try_connect(w, backend_name: str) -> dict:
 
     except AppValidationExpired:
         _safe_deinit(w)
-        raise RuntimeError("Validation expirée avant d'être approuvée - relance la connexion")
+        raise SetupError("Validation expirée avant d'être approuvée - relance la connexion")
 
     except (ActionNeeded, CaptchaQuestion, BrowserRedirect) as e:
         _safe_deinit(w)
@@ -144,9 +159,9 @@ def start_setup(institution_id: str) -> dict:
 
     inst = _fetch_institution(institution_id)
     if not inst:
-        raise RuntimeError("Institution introuvable")
+        raise SetupError("Institution introuvable")
     if not inst["woobModule"]:
-        raise RuntimeError("Aucun module Woob configuré pour cette institution")
+        raise SetupError("Aucun module Woob configuré pour cette institution")
 
     backend_name = _backend_name(institution_id)
     _configure_woob(backend_name, inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
@@ -156,7 +171,10 @@ def start_setup(institution_id: str) -> dict:
     try:
         w.load_backends(modules=[inst["woobModule"]], names=[backend_name])
     except Exception as e:
-        raise RuntimeError(f"Échec du chargement du module Woob '{inst['woobModule']}': {e}") from e
+        log.exception("Failed to load Woob module '%s' for institution %s", inst["woobModule"], institution_id)
+        raise SetupError(
+            f"Échec du chargement du module Woob '{inst['woobModule']}' - vérifie que le nom du module est correct"
+        ) from e
 
     return _try_connect(w, backend_name)
 
@@ -165,12 +183,12 @@ def complete_setup(institution_id: str, code: str | None = None) -> dict:
     backend_name = _backend_name(institution_id)
     pending = _pending.get(backend_name)
     if pending is None:
-        raise RuntimeError("Aucune configuration en cours pour cette institution - relance la connexion")
+        raise SetupError("Aucune configuration en cours pour cette institution - relance la connexion")
 
     w = pending["w"]
     if pending["field_ids"]:
         if not code:
-            raise RuntimeError("Code manquant")
+            raise SetupError("Code manquant")
         backend = w.get_backend(backend_name)
         for field_id in pending["field_ids"]:
             backend.config[field_id].set(code)
@@ -186,7 +204,7 @@ def complete_setup(institution_id: str, code: str | None = None) -> dict:
     if result["status"] in ("pending_approval", "code_required"):
         # Still not approved / wrong code - keep the session alive so the
         # user can retry without starting over.
-        raise RuntimeError(result.get("message") or "Connexion non encore approuvée - réessaie dans quelques secondes")
+        raise SetupError(result.get("message") or "Connexion non encore approuvée - réessaie dans quelques secondes")
 
     _cleanup(institution_id)
     return result

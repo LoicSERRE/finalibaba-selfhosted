@@ -366,20 +366,25 @@ async def institution_setup_start(institution_id: str):
     try:
         result = await loop.run_in_executor(executor, setup_woob.start_setup, institution_id)
         return result
-    except RuntimeError as e:
-        # setup_woob.py's own deliberately-crafted, French, user-facing
-        # messages ("Institution introuvable", "Code manquant"...) - safe to
-        # show as-is, same distinction as below.
+    except setup_woob.SetupError as e:
+        # e.user_message was written by setup_woob.py itself at raise time
+        # ("Institution introuvable", "Code manquant"...) - never derived
+        # from str(exception)/.args of whatever actually failed, so this
+        # isn't the same "exception text reaches a client" pattern CodeQL
+        # flags below. See SetupError's own docstring in setup_woob.py.
         log.exception("Woob setup/start failed for institution %s", institution_id)
-        return JSONResponse({"error": str(e)[:300]}, status_code=500)
+        return JSONResponse({"error": e.user_message[:300]}, status_code=500)
     except Exception:
         # Anything else (a DB error, a raw Woob/library exception never
-        # translated by setup_woob.py) could carry internal detail - a
-        # connection string, a file path, library internals - that has no
-        # business reaching an HTTP client. Full detail still goes to the
-        # service logs via log.exception; CodeQL flagged the previous
-        # str(e) here as information exposure (alert #1345/#1346), same
-        # class of fix as the backup route's pg_dump/psql stderr handling.
+        # translated by setup_woob.py into a SetupError) could carry
+        # internal detail - a connection string, a file path, library
+        # internals - that has no business reaching an HTTP client. Full
+        # detail still goes to the service logs via log.exception; CodeQL
+        # flagged the previous str(e) here as information exposure
+        # (alert #1345/#1346, then #1347/#1348 once str(e) on the
+        # RuntimeError branch above was still tainted by its own rule) -
+        # same class of fix as the backup route's pg_dump/psql stderr
+        # handling.
         log.exception("Woob setup/start failed for institution %s", institution_id)
         return JSONResponse({"error": "Échec de la configuration - vérifie les logs du service sync"}, status_code=500)
 
@@ -395,12 +400,12 @@ async def institution_setup_complete(institution_id: str, request: Request):
     try:
         result = await loop.run_in_executor(executor, setup_woob.complete_setup, institution_id, code)
         return result
-    except RuntimeError as e:
-        # See institution_setup_start above - these are setup_woob.py's own
-        # safe, user-facing messages ("Code manquant", "Connexion non
-        # encore approuvée"...), not raw internal exceptions.
+    except setup_woob.SetupError as e:
+        # See institution_setup_start above - e.user_message is one of
+        # setup_woob.py's own deliberately-written strings, not exception
+        # text.
         log.exception("Woob setup/complete failed for institution %s", institution_id)
-        return JSONResponse({"error": str(e)[:300]}, status_code=500)
+        return JSONResponse({"error": e.user_message[:300]}, status_code=500)
     except Exception:
         log.exception("Woob setup/complete failed for institution %s", institution_id)
         return JSONResponse({"error": "Échec de la configuration - vérifie les logs du service sync"}, status_code=500)
