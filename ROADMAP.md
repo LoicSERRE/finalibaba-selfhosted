@@ -183,6 +183,46 @@ Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) 
 
 ---
 
+## v1.13 - Transaction visibility & budget depth
+
+*A full feature-parity audit against Finary, Firefly III, Actual Budget, Monarch, and Kubera (see the product audit linked from the v1.12 retrospective) found the categorization/alerting layers already ahead of most of these - but two basics that nearly every one of them has were still missing entirely. Fixing the foundation before building further on top of it.*
+
+- [ ] **Global transaction ledger** (`/transactions`) - search and filter every transaction across every account by label, date range, amount, and category, instead of only per-account or via the `/budgets/[categoryId]` drill-down as today. No schema change - reads the existing `Transaction` table with the same `isInternalTransfer` exclusion and category filters already used elsewhere
+- [ ] **Split transactions** - a single transaction across multiple categories (e.g. one supermarket trip: groceries + household goods), each split summing to the transaction's total. Needs a new line-item table (`TransactionSplit` or similar); `Transaction.categoryId` stays as the single-category fast path for the common case, so every existing categorization source (self-learning, MCC, merchant dictionary) keeps working unmodified
+- [ ] **Budget rollover** (opt-in per category) - unused envelope carries into next month instead of resetting to zero, matching YNAB's "give every dollar a job" model. Off by default so every existing budget keeps today's behavior
+
+---
+
+## v1.14 - Goals & long-term projection
+
+*Turns "where did my money go" into "am I actually on track" - reuses the CAGR/savings-rate/runway math Analytics already computes, rather than building a new calculation engine from scratch.*
+
+- [ ] **Multiple named savings goals** - replaces `UserSettings.savingsGoalCents`'s single global figure with a `Goal` model (name, target amount, optional target date, optional linked account), so "down payment: 40k/80k" and "emergency fund: 8k/10k" can be tracked independently, each with its own progress bar. Migration backfills the existing global goal as the first row so nothing already in use is lost
+- [ ] **Long-term net worth projection** - a compound-growth chart from current net worth, savings rate, and an assumed return, answering "at this pace, where am I in 10/20/30 years" - the one analytics gap against Finary's own "Vision" feature, the product this README already positions against directly
+
+---
+
+## v1.15 - Mobile depth & a full UI/UX pass
+
+*Closes the mobile gap without a native rewrite - stays inside the existing PWA architecture - then a systematic design audit now that the feature surface has grown well past the last one (v1.10.2), covering both older pages and the new transaction ledger/split UI/goals screens from v1.13-v1.14.*
+
+- [ ] **App-lock (WebAuthn biometric/PIN)** for the installed PWA - independent of `AUTH_ENABLED`, a fast local unlock layer for a device that's already trusted, matching what Finary/Monarch/Copilot's native apps offer without needing a native rewrite
+- [ ] **Web Push notifications** alongside ntfy - broader device support (iOS 16.4+, Android, desktop) without depending on a third-party push relay; existing ntfy/email configs keep working unchanged
+- [ ] **Full UI/UX audit** - a systematic pass in the same spirit as v1.10.2's (verified against real screenshots, not assumed), but broader in scope this time: visual hierarchy, empty states, loading states, and spacing consistency across every page, old and new
+
+---
+
+## v1.16 - Depth on existing strengths
+
+*Levels up features already shipped and working rather than leaving them stalled at "good enough" once something more urgent came along - portfolio rebalancing, recurring detection, multi-currency, and the dashboard's allocation view each get one concrete, scoped next step.*
+
+- [ ] **Rebalancing drift alerts** - a 7th `AlertRule` kind ("this holding/account has drifted more than X points from its target"), reusing the existing 6-kind alert engine, instead of the rebalancing section only being visible on-demand on the account detail page
+- [ ] **Multi-interval recurring detection** - recognizes "every 2 months"/"every 3 months" cadences during auto-detection, not just `intervalCount = 1` as today (manual editing already supports any interval - only the detection heuristic itself is limited)
+- [ ] **On-demand multi-currency revaluation** - re-fetch the FX rate and price for a foreign-currency holding on request, on top of the existing snapshot-at-entry model, without needing to re-enter the native price by hand to trigger a refresh
+- [ ] **Historical asset-allocation chart** - extends the dashboard's current-moment allocation breakdown (liquidités/épargne/investissements…) into a stacked-area view over time, built from the same per-account `HistoricalBalance` rows already recorded - no new data collection needed
+
+---
+
 ## v2.0 - Multi-user
 
 *Breaking architectural change: all data gains user ownership, requiring a migration.*
