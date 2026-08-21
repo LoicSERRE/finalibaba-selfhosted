@@ -42,7 +42,7 @@ export function getInstitutionLogoUrl(name: string): string | null {
 // Threshold for ConfigureWoobDialog's migration-history-depth warning - see
 // getMigrationHistoryDepth (lib/actions/institutions.ts) for the real
 // production incident this fixes. Not user-configurable, same convention as
-// lib/domain/loan.ts's isLoanNearlyPaidOff fixed 5%: a few days' gap (the
+// lib/domain/alerts.ts's isLoanNearlyPaidOff fixed 5%: a few days' gap (the
 // Woob sync simply started slightly after the last .env sync ran) isn't
 // worth alarming over, but a gap measured in months means real history is
 // about to be permanently destroyed.
