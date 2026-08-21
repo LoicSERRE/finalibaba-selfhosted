@@ -26,8 +26,40 @@ def get_institution_id(cur, name: str) -> str | None:
 
 
 def upsert_account(cur, *, sync_id: str, name: str, account_type: str, institution_id: str) -> str:
-    """Create account if not exists, return its DB id."""
+    """Create account if not exists, return its DB id.
+
+    Two different sync sources can legitimately describe the same real bank
+    account under different syncId prefixes - sync_lcl.py writes
+    f"lcl:{account.id}", sync_woob.py writes
+    f"woob:{institution_id}:{account.id}" - both carry the same
+    Woob-generated native account id as their trailing colon-delimited
+    segment (confirmed empirically: "lcl:01835090481R" and
+    "woob:<id>:01835090481R" for the same real LCL account). Without a
+    fallback here, each source creates its own row for the same account -
+    the exact incident that shipped as v1.11.2's warning banner and
+    v1.11.3's manual cleanup tool, and cost a real user their transaction
+    history once already (recovered by hand from a backup). Matching on
+    that trailing native id, scoped to the same institution, closes it at
+    the root instead of relying on UI warnings alone.
+
+    Deliberately never rewrites an existing row's syncId once matched this
+    way - whichever source's row was created first stays canonical under
+    its original syncId. That keeps this idempotent regardless of sync
+    order: a source whose row lost the race still sees its own exact
+    syncId as "not found" on every future run and falls through to this
+    same native-id match again, rather than ever creating a second
+    duplicate.
+    """
     cur.execute('SELECT id FROM "Account" WHERE "syncId" = %s', (sync_id,))
+    row = cur.fetchone()
+    if row:
+        return row["id"]
+
+    native_id = sync_id.rsplit(":", 1)[-1]
+    cur.execute(
+        'SELECT id FROM "Account" WHERE "institutionId" = %s AND "syncId" LIKE %s',
+        (institution_id, f"%:{native_id}"),
+    )
     row = cur.fetchone()
     if row:
         return row["id"]
