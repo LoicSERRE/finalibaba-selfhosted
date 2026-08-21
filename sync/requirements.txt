@@ -34,6 +34,6 @@ woob[lcl,swile]==3.7.*
 pytr @ git+https://github.com/pytr-org/pytr.git@1cff3d701e0db82e3425dae2194f2eb702914484
 psycopg2-binary>=2.9.12
 fastapi>=0.141.1
-uvicorn>=0.52.0
+uvicorn>=0.52.3
 apscheduler>=3.11.3
 playwright>=1.61.0
