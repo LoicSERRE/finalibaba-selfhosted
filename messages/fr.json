@@ -958,6 +958,7 @@
     "migrateButton": "Migrer maintenant",
     "migrateNoWoobDataYet": "Aucune donnée Woob synchronisée pour cette banque pour le moment — lance d'abord une synchronisation avant de migrer.",
     "migrateConfirmDescription": "{legacyCount} compte(s) actuellement synchronisé(s) via .env, contre {woobCount} déjà créé(s) par Woob pour cette banque. Vérifie que les soldes correspondent avant de continuer : cette action supprime définitivement les comptes .env et tout leur historique (transactions, soldes).",
+    "historyDepthWarning": "⚠ L'historique .env remonte au {legacyDate}, mais Woob n'a encore d'historique que depuis le {woobDate} — soit {days} jours d'historique réel qui seront définitivement supprimés par cette migration, pas juste des doublons.",
     "migrateEnvReminder": "Il te reste à retirer les identifiants (.env) de cette banque et à redémarrer les conteneurs — sinon la prochaine synchronisation automatique (dans les 4h) recréera les comptes qui viennent d'être supprimés.",
     "migrateConfirmButton": "Confirmer la migration",
     "migrateSuccess": "{count} compte(s) .env supprimé(s). Les données Woob restent en place.",

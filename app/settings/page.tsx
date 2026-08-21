@@ -7,7 +7,7 @@ import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { deleteInstitution, migrateDedicatedSyncToWoob } from "@/lib/actions/institutions";
+import { deleteInstitution, migrateDedicatedSyncToWoob, getMigrationHistoryDepth } from "@/lib/actions/institutions";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import { ConnectOpenBankingButton, SyncOpenBankingButton, DisconnectOpenBankingButton } from "@/components/settings/open-banking-buttons";
@@ -94,6 +94,21 @@ export default async function SettingsPage() {
       }),
       getTranslations(),
     ]);
+
+  // History-depth check for the "Migrer maintenant" warning below - only
+  // fetched for institutions where the migrate button would actually be
+  // offered (legacy .env accounts AND Woob-synced replacements both exist),
+  // not for every institution on the page, since it's an extra couple of
+  // queries per institution and only matters in this one specific case.
+  const migrationCandidates = institutions.filter((inst) => {
+    const legacyCount = inst.accounts.filter((a) => a.syncId?.startsWith("lcl:") || a.syncId?.startsWith("tr:")).length;
+    const woobCount = inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length;
+    return legacyCount > 0 && woobCount > 0;
+  });
+  const historyDepthEntries = await Promise.all(
+    migrationCandidates.map(async (inst) => [inst.id, await getMigrationHistoryDepth(inst.id)] as const),
+  );
+  const historyDepthByInstitution = new Map(historyDepthEntries);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -222,6 +237,8 @@ export default async function SettingsPage() {
                           hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
                           legacyAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith("lcl:") || a.syncId?.startsWith("tr:")).length}
                           woobAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length}
+                          legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
+                          woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}
                           onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
                         />
                       </>

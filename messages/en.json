@@ -958,6 +958,7 @@
     "migrateButton": "Migrate now",
     "migrateNoWoobDataYet": "No Woob-synced data for this bank yet - run a Woob sync first before migrating.",
     "migrateConfirmDescription": "{legacyCount} account(s) are currently synced via .env, versus {woobCount} already created by Woob for this bank. Verify the balances match before continuing: this permanently deletes the .env accounts and all their history (transactions, balances).",
+    "historyDepthWarning": "⚠ The .env history goes back to {legacyDate}, but Woob only has history since {woobDate} - that's {days} days of real history that will be permanently deleted by this migration, not just duplicates.",
     "migrateEnvReminder": "You still need to remove this bank's credentials from .env and restart the containers - otherwise the next automatic sync (within 4h) will recreate the accounts just deleted here.",
     "migrateConfirmButton": "Confirm migration",
     "migrateSuccess": "{count} .env account(s) deleted. The Woob data stays in place.",

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WoobModulePicker } from "@/components/settings/woob-module-picker";
 import { setWoobConfig, clearWoobConfig } from "@/lib/actions/institutions";
+import { historyDepthLossDays } from "@/lib/domain/institutions";
 import { useTranslations } from "next-intl";
 
 interface Props {
@@ -40,6 +41,16 @@ interface Props {
   // before it causes real data loss.
   legacyAccountCount?: number;
   woobAccountCount?: number;
+  // Oldest Transaction/HistoricalBalance date on each side - see
+  // getMigrationHistoryDepth (lib/actions/institutions.ts). Real production
+  // incident: the confirmation step used to only compare account *count*
+  // (5 vs 5, which matched) and never *history depth* - a user's real
+  // multi-year transaction history was permanently deleted because nothing
+  // warned that the Woob side had only just started accumulating its own.
+  // Both null when the depth check doesn't apply (not a dedicated-sync
+  // institution, or nothing synced yet on one side).
+  legacyOldestDate?: Date | null;
+  woobOldestDate?: Date | null;
   // Bound Server Action (migrateDedicatedSyncToWoob, pre-bound to this
   // institution's id in app/settings/page.tsx) - deletes the "lcl:"/"tr:"
   // accounts once the "woob:"-prefixed replacements exist. Only rendered
@@ -57,6 +68,8 @@ export function ConfigureWoobDialog({
   hasDedicatedEnvSync,
   legacyAccountCount = 0,
   woobAccountCount = 0,
+  legacyOldestDate = null,
+  woobOldestDate = null,
   onMigrate,
 }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
@@ -83,6 +96,7 @@ export function ConfigureWoobDialog({
   // most (real production case: secrets removed first, cleanup needed
   // after).
   const canMigrate = legacyAccountCount > 0;
+  const historyLossDays = historyDepthLossDays(legacyOldestDate, woobOldestDate);
 
   const handleMigrate = () => {
     if (!onMigrate) return;
@@ -157,6 +171,15 @@ export function ConfigureWoobDialog({
                   <p className="text-xs text-[var(--foreground)]">
                     {t("migrateConfirmDescription", { legacyCount: legacyAccountCount, woobCount: woobAccountCount })}
                   </p>
+                  {historyLossDays !== null && legacyOldestDate && woobOldestDate && (
+                    <p className="text-xs font-medium text-[var(--negative)]">
+                      {t("historyDepthWarning", {
+                        legacyDate: legacyOldestDate.toLocaleDateString(),
+                        woobDate: woobOldestDate.toLocaleDateString(),
+                        days: historyLossDays,
+                      })}
+                    </p>
+                  )}
                   <p className="text-xs text-[var(--muted)]">{t("migrateEnvReminder")}</p>
                   {migrateError && <p role="alert" className="text-xs text-[var(--negative)]">{migrateError}</p>}
                   <div className="flex gap-2 justify-end pt-1">
