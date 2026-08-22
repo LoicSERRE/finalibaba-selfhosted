@@ -25,6 +25,12 @@ export async function updateAlertChannels(formData: FormData) {
   const smtpPort = smtpPortRaw ? Number.parseInt(smtpPortRaw, 10) : null;
   const smtpUser = str("smtpUser");
   const smtpFrom = str("smtpFrom");
+  // Independent per-channel on/off, layered on top of "is it configured"
+  // above - standard checkbox semantics (present in FormData when checked,
+  // absent when not), same pattern as loanAlertsEnabled/
+  // syncFailureAlertsEnabled in updateAlertTriggers below.
+  const ntfyEnabled = formData.get("ntfyEnabled") === "on";
+  const emailAlertsEnabled = formData.get("emailAlertsEnabled") === "on";
 
   // Blank means "leave unchanged", not "clear it" - unlike every other
   // field here, this one is never pre-filled with the real stored value in
@@ -33,7 +39,7 @@ export async function updateAlertChannels(formData: FormData) {
   // didn't touch this field", not "remove my password".
   const smtpPasswordInput = (formData.get("smtpPassword") as string) || "";
 
-  const data = { ntfyTopicUrl, ntfyAuthToken, alertEmailTo, smtpHost, smtpPort, smtpUser, smtpFrom };
+  const data = { ntfyTopicUrl, ntfyAuthToken, ntfyEnabled, alertEmailTo, smtpHost, smtpPort, smtpUser, smtpFrom, emailAlertsEnabled };
 
   await prisma.userSettings.upsert({
     where: { id: "singleton" },

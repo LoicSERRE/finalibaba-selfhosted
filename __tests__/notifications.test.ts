@@ -135,7 +135,18 @@ describe("dispatchAlert", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     await dispatchAlert(
-      { ntfyTopicUrl: null, ntfyAuthToken: null, alertEmailTo: null, smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
+      {
+        ntfyTopicUrl: null,
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: null,
+        smtpHost: null,
+        smtpPort: null,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: null,
+        emailAlertsEnabled: true,
+      },
       "title",
       "body"
     );
@@ -149,7 +160,18 @@ describe("dispatchAlert", () => {
     sendMailMock.mockResolvedValue({});
 
     await dispatchAlert(
-      { ntfyTopicUrl: "https://ntfy.sh/x", ntfyAuthToken: null, alertEmailTo: null, smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
+      {
+        ntfyTopicUrl: "https://ntfy.sh/x",
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: null,
+        smtpHost: null,
+        smtpPort: null,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: null,
+        emailAlertsEnabled: true,
+      },
       "title",
       "body"
     );
@@ -165,7 +187,18 @@ describe("dispatchAlert", () => {
 
     // Only alertEmailTo set, no SMTP host - must not attempt to send.
     await dispatchAlert(
-      { ntfyTopicUrl: null, ntfyAuthToken: null, alertEmailTo: "moi@example.com", smtpHost: null, smtpPort: null, smtpUser: null, smtpPassword: null, smtpFrom: null },
+      {
+        ntfyTopicUrl: null,
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: "moi@example.com",
+        smtpHost: null,
+        smtpPort: null,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: null,
+        emailAlertsEnabled: true,
+      },
       "title",
       "body"
     );
@@ -176,16 +209,91 @@ describe("dispatchAlert", () => {
       {
         ntfyTopicUrl: null,
         ntfyAuthToken: null,
+        ntfyEnabled: true,
         alertEmailTo: "moi@example.com",
         smtpHost: "smtp.example.com",
         smtpPort: 587,
         smtpUser: null,
         smtpPassword: null,
         smtpFrom: "finalibaba@example.com",
+        emailAlertsEnabled: true,
       },
       "title",
       "body"
     );
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips ntfy when configured but disabled via ntfyEnabled: false", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await dispatchAlert(
+      {
+        ntfyTopicUrl: "https://ntfy.sh/x",
+        ntfyAuthToken: null,
+        ntfyEnabled: false,
+        alertEmailTo: null,
+        smtpHost: null,
+        smtpPort: null,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: null,
+        emailAlertsEnabled: true,
+      },
+      "title",
+      "body"
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("skips email when fully configured but disabled via emailAlertsEnabled: false", async () => {
+    sendMailMock.mockResolvedValue({});
+
+    await dispatchAlert(
+      {
+        ntfyTopicUrl: null,
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: "moi@example.com",
+        smtpHost: "smtp.example.com",
+        smtpPort: 587,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: "finalibaba@example.com",
+        emailAlertsEnabled: false,
+      },
+      "title",
+      "body"
+    );
+
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends to both channels when both are configured and enabled", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    sendMailMock.mockResolvedValue({});
+
+    await dispatchAlert(
+      {
+        ntfyTopicUrl: "https://ntfy.sh/x",
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: "moi@example.com",
+        smtpHost: "smtp.example.com",
+        smtpPort: 587,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: "finalibaba@example.com",
+        emailAlertsEnabled: true,
+      },
+      "title",
+      "body"
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(sendMailMock).toHaveBeenCalledTimes(1);
   });
 });

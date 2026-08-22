@@ -4,12 +4,14 @@ import { renderAlertEmailHtml } from "@/lib/services/email-template";
 type AlertChannelSettings = {
   ntfyTopicUrl: string | null;
   ntfyAuthToken: string | null;
+  ntfyEnabled: boolean;
   alertEmailTo: string | null;
   smtpHost: string | null;
   smtpPort: number | null;
   smtpUser: string | null;
   smtpPassword: string | null;
   smtpFrom: string | null;
+  emailAlertsEnabled: boolean;
 };
 
 /**
@@ -96,20 +98,24 @@ export async function sendEmail(
 }
 
 /**
- * Fans out to every channel with non-blank config - "leave blank to
- * disable", same convention as every other optional integration in this
- * app. Each channel already catches its own errors (see above), so one
- * failing never blocks the other; Promise.allSettled is extra insurance
- * against an unexpected throw slipping through.
+ * Fans out to every channel that's both configured (non-blank config -
+ * "leave blank to disable", same convention as every other optional
+ * integration in this app) and enabled (ntfyEnabled/emailAlertsEnabled,
+ * each defaulting to true so an already-configured channel keeps firing
+ * for existing installs) - a user with both channels configured can still
+ * choose to receive through just one. Each channel already catches its own
+ * errors (see above), so one failing never blocks the other;
+ * Promise.allSettled is extra insurance against an unexpected throw
+ * slipping through.
  */
 export async function dispatchAlert(settings: AlertChannelSettings, title: string, body: string): Promise<void> {
   const jobs: Promise<boolean>[] = [];
 
-  if (settings.ntfyTopicUrl) {
+  if (settings.ntfyTopicUrl && settings.ntfyEnabled) {
     jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, title, body, settings.ntfyAuthToken));
   }
 
-  if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom) {
+  if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom && settings.emailAlertsEnabled) {
     jobs.push(
       sendEmail(
         {

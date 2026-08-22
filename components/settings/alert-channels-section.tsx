@@ -47,11 +47,13 @@ export function AlertChannelsSection({
   settings: {
     ntfyTopicUrl: string | null;
     ntfyAuthToken: string | null;
+    ntfyEnabled: boolean;
     alertEmailTo: string | null;
     smtpHost: string | null;
     smtpPort: number | null;
     smtpUser: string | null;
     smtpFrom: string | null;
+    emailAlertsEnabled: boolean;
   };
 }>) {
   const t = useTranslations("settings.alertChannels");
@@ -90,7 +92,18 @@ export function AlertChannelsSection({
       </div>
       <form action={updateAlertChannels} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-5">
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("ntfySectionTitle")}</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("ntfySectionTitle")}</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-xs text-[var(--foreground)]">{t("channelEnabled")}</span>
+              <input
+                type="checkbox"
+                name="ntfyEnabled"
+                defaultChecked={settings.ntfyEnabled}
+                className="w-4 h-4 rounded accent-[var(--accent)]"
+              />
+            </label>
+          </div>
           <label htmlFor="ntfyTopicUrl" className="sr-only">
             {t("ntfy")}
           </label>
@@ -138,7 +151,18 @@ export function AlertChannelsSection({
         </div>
 
         <div className="pt-4 border-t border-[var(--border)] space-y-4">
-          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("emailSectionTitle")}</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("emailSectionTitle")}</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-xs text-[var(--foreground)]">{t("channelEnabled")}</span>
+              <input
+                type="checkbox"
+                name="emailAlertsEnabled"
+                defaultChecked={settings.emailAlertsEnabled}
+                className="w-4 h-4 rounded accent-[var(--accent)]"
+              />
+            </label>
+          </div>
 
           <div className="space-y-1.5">
             <label htmlFor="alertEmailTo" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
