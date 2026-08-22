@@ -128,7 +128,7 @@ async function oldestHistoryDate(accountIds: string[]): Promise<Date | null> {
     prisma.historicalBalance.findFirst({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" }, select: { recordedAt: true } }),
   ]);
   const dates = [tx?.date, hb?.recordedAt].filter((d): d is Date => !!d);
-  return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : null;
+  return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b), dates[0]) : null;
 }
 
 // Compares how far back each side's history actually goes, for the same
