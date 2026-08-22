@@ -30,11 +30,21 @@ export const AVATAR_COLORS = [
 // (components/analytics/allocation-radar-section.tsx) so the same category
 // always reads as the same color everywhere in the app, not three
 // independently-typed copies that could silently drift apart.
+//
+// UI/UX audit finding: `savings` and `cash` used to be #8b5cf6/#6366f1
+// (19° apart in hue - indigo and violet), and `realEstate` used #3b82f6
+// (also blue-family, 22° from cash) - three of the six categories
+// clustered in the same narrow blue-purple band, nearly indistinguishable
+// as small legend dots/pie slices (confirmed visually, not just by hue
+// math, in a real rendered screenshot). `savings` moved to teal (67° from
+// cash) and `realEstate` to a warm neutral gray - a genuinely distinct
+// family from every other saturated hue here, sidestepping any further
+// close-hue risk rather than hunting for one more "far enough" color.
 export const ALLOCATION_CATEGORY_COLORS: Record<string, string> = {
   cash: "#6366f1",
-  savings: "#8b5cf6",
+  savings: "#14b8a6",
   investments: "#22c55e",
   crypto: "#f59e0b",
-  realEstate: "#3b82f6",
+  realEstate: "#78716c",
   auto: "#ec4899",
 };
