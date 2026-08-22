@@ -8,6 +8,8 @@ import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { deleteIncomeEvent } from "@/lib/actions/income";
 import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
+import { mergeCentsMaps } from "@/lib/domain/budgets";
+import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT", "CRYPTO"] as const;
@@ -20,7 +22,7 @@ export default async function IncomePage() {
   const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const startOfNextYear = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
 
-  const [events, accounts, incomeCategories, categoryTotals] = await Promise.all([
+  const [events, accounts, incomeCategories, categoryTotals, splitCategoryTotals] = await Promise.all([
     prisma.incomeEvent.findMany({
       include: { account: { select: { name: true } } },
       orderBy: { date: "desc" },
@@ -41,18 +43,31 @@ export default async function IncomePage() {
     prisma.category.findMany({ where: { kind: "INCOME" }, orderBy: { name: "asc" } }),
     prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: {
+      where: excludeInternalTransfers({
         amountCents: { gt: BigInt(0) },
         date: { gte: startOfYear, lt: startOfNextYear },
-        isInternalTransfer: false,
         category: { kind: "INCOME" },
-      },
+      }),
+      _sum: { amountCents: true },
+    }),
+    // A split transaction's own categoryId is always null (see CLAUDE.md's
+    // "Split transactions"), so it's already excluded from the plain
+    // groupBy above by the "category: { kind: INCOME }" relation filter
+    // (a null FK never matches a relation filter) - its portion of an
+    // INCOME category's year-to-date total comes from here instead.
+    prisma.transactionSplit.groupBy({
+      by: ["categoryId"],
+      where: excludeInternalTransfersOnSplit(
+        { amountCents: { gt: BigInt(0) }, category: { kind: "INCOME" } },
+        { date: { gte: startOfYear, lt: startOfNextYear } },
+      ),
       _sum: { amountCents: true },
     }),
   ]);
 
-  const categoryTotalMap = new Map<string, number>(
-    categoryTotals.filter((row) => row.categoryId !== null).map((row) => [row.categoryId as string, Number(row._sum.amountCents ?? BigInt(0))])
+  const categoryTotalMap = mergeCentsMaps(
+    new Map(categoryTotals.filter((row) => row.categoryId !== null).map((row) => [row.categoryId as string, Number(row._sum.amountCents ?? BigInt(0))])),
+    new Map(splitCategoryTotals.filter((row) => row.categoryId !== null).map((row) => [row.categoryId as string, Number(row._sum.amountCents ?? BigInt(0))])),
   );
 
   const ytdEvents = events.filter((e) => e.date >= startOfYear && e.date < startOfNextYear);

@@ -50,11 +50,21 @@ export async function setTransactionCategory(
     select: { categoryId: true, label: true },
   });
 
-  const tx = await prisma.transaction.update({
-    where: { id: transactionId },
-    data: { categoryId },
-    select: { accountId: true },
-  });
+  // Picking a single category from this plain dropdown is an explicit
+  // "this transaction has exactly one category now" choice - it always
+  // supersedes a prior split, same as choosing "Uncategorized" does. Split
+  // rows are deleted in the same update, not left dangling for a category
+  // the transaction no longer has splits for. See
+  // lib/actions/transaction-splits.ts's setTransactionSplits for the
+  // reverse direction.
+  const [tx] = await prisma.$transaction([
+    prisma.transaction.update({
+      where: { id: transactionId },
+      data: { categoryId },
+      select: { accountId: true },
+    }),
+    prisma.transactionSplit.deleteMany({ where: { transactionId } }),
+  ]);
 
   revalidatePath(`/accounts/${tx.accountId}`);
   revalidatePath("/budgets");
@@ -133,10 +143,14 @@ export async function applyCategoryToSimilarTransactions(
   const ids = candidates.filter((c) => normalizeLabelForCategorization(c.label) === normalized).map((c) => c.id);
   if (ids.length === 0) return { updated: 0 };
 
-  const result = await prisma.transaction.updateMany({
-    where: { id: { in: ids } },
-    data: { categoryId },
-  });
+  // Same reasoning as setTransactionCategory above - a sibling caught by
+  // this propagation could itself already be a split transaction, and
+  // assigning it a single category here must supersede that split, not
+  // leave stale TransactionSplit rows alongside a now-non-null categoryId.
+  const [result] = await prisma.$transaction([
+    prisma.transaction.updateMany({ where: { id: { in: ids } }, data: { categoryId } }),
+    prisma.transactionSplit.deleteMany({ where: { transactionId: { in: ids } } }),
+  ]);
 
   revalidatePath(`/accounts/${source.accountId}`);
   revalidatePath("/budgets");
@@ -159,10 +173,15 @@ export async function bulkAssignCategory(transactionIds: string[], categoryId: s
     distinct: ["accountId"],
   });
 
-  const result = await prisma.transaction.updateMany({
-    where: { id: { in: transactionIds } },
-    data: { categoryId },
-  });
+  // Same reasoning as setTransactionCategory/applyCategoryToSimilarTransactions
+  // above - this batch's own real-world call site (the /budgets
+  // uncategorized-groups picker) never includes an already-split
+  // transaction in practice, but a Server Action is directly invocable
+  // regardless of what's rendered, so this stays defensive here too.
+  const [result] = await prisma.$transaction([
+    prisma.transaction.updateMany({ where: { id: { in: transactionIds } }, data: { categoryId } }),
+    prisma.transactionSplit.deleteMany({ where: { transactionId: { in: transactionIds } } }),
+  ]);
 
   for (const { accountId } of accountIds) revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/budgets");

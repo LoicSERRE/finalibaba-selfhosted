@@ -6,6 +6,7 @@ import { suggestCategoryAssignments } from "@/lib/domain/auto-categorize";
 import { matchMerchantCategory, MERCHANT_CATEGORY_COLORS } from "@/lib/domain/merchant-categories";
 import { matchMccCategory, MCC_CATEGORY_COLORS } from "@/lib/domain/mcc-categories";
 import { detectInternalTransferPairs } from "@/lib/domain/internal-transfers";
+import { excludeInternalTransfers } from "@/lib/domain/transaction-filters";
 
 type UncategorizedTx = { id: string; accountId: string; label: string; merchantCategoryCode: string | null };
 
@@ -159,8 +160,14 @@ export async function autoCategorizeTransactions(accountId?: string): Promise<{ 
   const accountFilter = accountId ? { accountId } : {};
 
   const [uncategorized, history] = await Promise.all([
+    // "splits: { none: {} }" matters here specifically - a split
+    // transaction also has categoryId: null (its category info lives in
+    // TransactionSplit rows instead, see CLAUDE.md's "Split transactions"),
+    // and without this guard every one of the three sources below would
+    // treat it as genuinely uncategorized and silently overwrite the
+    // user's manual split the next time this runs.
     prisma.transaction.findMany({
-      where: { ...accountFilter, categoryId: null, isInternalTransfer: false },
+      where: excludeInternalTransfers({ ...accountFilter, categoryId: null, splits: { none: {} } }),
       select: { id: true, accountId: true, label: true, merchantCategoryCode: true },
     }),
     prisma.transaction.findMany({

@@ -13,7 +13,14 @@ type CategoryKind = "EXPENSE" | "INCOME";
 
 // Existing category to edit, passed down as plain serializable fields only -
 // budgetEuro is pre-formatted server-side (e.g. "300.00"), never a BigInt.
-type EditableCategory = { id: string; name: string; color: string; kind: CategoryKind; budgetEuro: string | null };
+type EditableCategory = {
+  id: string;
+  name: string;
+  color: string;
+  kind: CategoryKind;
+  budgetEuro: string | null;
+  rolloverEnabled: boolean;
+};
 
 export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCategory }>) {
   const isEdit = !!category;
@@ -115,15 +122,27 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
         </div>
 
         {kind === "EXPENSE" && (
-          <Input
-            id="cat-budget"
-            label={t("budgetAmount")}
-            type="text"
-            inputMode="decimal"
-            name="budget"
-            placeholder="300"
-            defaultValue={category?.budgetEuro ?? ""}
-          />
+          <>
+            <Input
+              id="cat-budget"
+              label={t("budgetAmount")}
+              type="text"
+              inputMode="decimal"
+              name="budget"
+              placeholder="300"
+              defaultValue={category?.budgetEuro ?? ""}
+            />
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="rolloverEnabled"
+                defaultChecked={category?.rolloverEnabled ?? false}
+                className="w-4 h-4 rounded accent-[var(--accent)]"
+              />
+              <span className="text-sm text-[var(--foreground)]">{t("rolloverEnabled")}</span>
+            </label>
+            <p className="text-xs text-[var(--muted)] opacity-70 -mt-2">{t("rolloverHint")}</p>
+          </>
         )}
 
         <div className="flex justify-end gap-2 pt-2">

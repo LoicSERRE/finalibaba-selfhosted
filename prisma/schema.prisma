@@ -269,10 +269,39 @@ model Transaction {
   // automatically (it isn't real income or spending) - the flag doesn't
   // block a manual categorization, only the automatic sources.
   isInternalTransfer Boolean @default(false)
+  // A transaction with splits has categoryId = null at the top level - the
+  // category breakdown lives entirely in these rows instead. Enforced by
+  // setTransactionSplits (lib/actions/transaction-splits.ts), never a raw
+  // write. See CLAUDE.md's "Split transactions" for why every
+  // "categoryId: null" query elsewhere in the app that means "genuinely
+  // uncategorized" also needs a "splits: { none: {} }" guard alongside it.
+  splits TransactionSplit[]
 
   @@index([accountId, date])
   @@index([categoryId])
   @@index([isInternalTransfer])
+}
+
+// One category's portion of a split transaction - see CLAUDE.md's "Split
+// transactions". amountCents is signed, same convention as
+// Transaction.amountCents; every split row for one transaction must sum
+// exactly to that transaction's own amountCents (validated in
+// setTransactionSplits, not enforced by the schema itself). categoryId is
+// nullable with onDelete: SetNull, same as Transaction.categoryId - a
+// split whose category gets deleted keeps its allocated amount (still
+// counts toward the transaction's total) but drops out of any
+// category-specific total, rather than losing the split breakdown outright.
+model TransactionSplit {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  category      Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  amountCents   BigInt
+  createdAt     DateTime    @default(now())
+
+  @@index([transactionId])
+  @@index([categoryId])
 }
 
 // EXPENSE is the default and by far the more common case (this app's
@@ -289,15 +318,18 @@ enum CategoryKind {
 }
 
 model Category {
-  id                    String                 @id @default(cuid())
-  name                  String                 @unique
-  color                 String                 // hex, e.g. "#6366f1"
-  kind                  CategoryKind           @default(EXPENSE)
-  budgetCents           BigInt?                // monthly envelope - null means no budget set, and meaningless for an INCOME category (no cap concept for income)
-  transactions          Transaction[]
-  recurringTransactions RecurringTransaction[]
-  alertRules            AlertRule[]
-  createdAt             DateTime               @default(now())
+  id                      String                 @id @default(cuid())
+  name                    String                 @unique
+  color                   String                 // hex, e.g. "#6366f1"
+  kind                    CategoryKind           @default(EXPENSE)
+  budgetCents             BigInt?                // monthly envelope - null means no budget set, and meaningless for an INCOME category (no cap concept for income)
+  budgetRolloverEnabled   Boolean                @default(false) // unused envelope carries into next month instead of resetting to zero - meaningless without budgetCents set, same as above
+  budgetRolloverEnabledAt DateTime?              // anchor for the carry computation - only months from here onward count, so re-enabling after a pause doesn't resurrect a stale carry. Reset to null whenever rollover is turned off; set to now() on the off->on transition, left untouched while already on (see lib/actions/categories.ts)
+  transactions            Transaction[]
+  transactionSplits       TransactionSplit[]
+  recurringTransactions   RecurringTransaction[]
+  alertRules              AlertRule[]
+  createdAt               DateTime               @default(now())
 }
 
 enum RecurringFrequency {
@@ -403,6 +435,15 @@ model UserSettings {
   smtpUser             String?
   smtpPassword         String?
   smtpFrom             String?
+  // Independent on/off per channel, layered on top of "is it configured"
+  // above - a user with both ntfy and email filled in couldn't previously
+  // choose to receive through only one of them (dispatchAlert fanned out to
+  // every configured channel unconditionally). Default true so an existing
+  // install with a channel already configured keeps firing through it
+  // exactly as before; unlike the config fields themselves, these two are
+  // meaningless (never read) when their own channel isn't configured at all.
+  ntfyEnabled          Boolean  @default(true)
+  emailAlertsEnabled   Boolean  @default(true)
   // Net worth alert - blank threshold = disabled. netWorthAlertLastAbove is
   // dedup state (null = never evaluated yet): the alert only fires when the
   // crossing direction actually flips, not on every check while it stays

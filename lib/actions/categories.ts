@@ -20,6 +20,13 @@ function parseKind(formData: FormData): CategoryKind {
   return formData.get("kind") === "INCOME" ? "INCOME" : "EXPENSE";
 }
 
+// Rollover has no meaning for an INCOME category (no budgetCents concept
+// either) - forced off regardless of what the form submitted, same
+// server-side-enforced reasoning as budgetCents itself above.
+function parseRolloverEnabled(formData: FormData, kind: CategoryKind): boolean {
+  return kind === "EXPENSE" && formData.get("rolloverEnabled") === "on";
+}
+
 function revalidateAll() {
   revalidatePath("/budgets");
   revalidatePath("/accounts");
@@ -39,9 +46,17 @@ export async function createCategory(formData: FormData) {
   // the field for INCOME, but a Server Action is reachable directly
   // regardless of what's rendered).
   const budgetCents = kind === "INCOME" ? undefined : parseOptionalCents(formData.get("budget"));
+  const rolloverEnabled = parseRolloverEnabled(formData, kind);
 
   await prisma.category.create({
-    data: { name, color, kind, budgetCents },
+    data: {
+      name,
+      color,
+      kind,
+      budgetCents,
+      budgetRolloverEnabled: rolloverEnabled,
+      budgetRolloverEnabledAt: rolloverEnabled ? new Date() : null,
+    },
   });
   revalidateAll();
 }
@@ -55,10 +70,25 @@ export async function updateCategory(id: string, formData: FormData) {
 
   const kind = parseKind(formData);
   const budgetCents = kind === "INCOME" ? undefined : parseOptionalCents(formData.get("budget"));
+  const rolloverEnabled = parseRolloverEnabled(formData, kind);
+
+  // The anchor only moves on the off->on transition - re-saving the form
+  // while already enabled must not reset an accumulated carry back to
+  // zero. `undefined` in the update payload below means "leave this field
+  // untouched", same convention Prisma uses everywhere else in this file.
+  const existing = await prisma.category.findUniqueOrThrow({ where: { id }, select: { budgetRolloverEnabled: true } });
+  let budgetRolloverEnabledAt: Date | null | undefined;
+  if (!rolloverEnabled) {
+    budgetRolloverEnabledAt = null;
+  } else if (existing.budgetRolloverEnabled) {
+    budgetRolloverEnabledAt = undefined;
+  } else {
+    budgetRolloverEnabledAt = new Date();
+  }
 
   await prisma.category.update({
     where: { id },
-    data: { name, color, kind, budgetCents: budgetCents ?? null },
+    data: { name, color, kind, budgetCents: budgetCents ?? null, budgetRolloverEnabled: rolloverEnabled, budgetRolloverEnabledAt },
   });
   revalidateAll();
 }

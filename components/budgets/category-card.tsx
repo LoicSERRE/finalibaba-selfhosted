@@ -14,16 +14,23 @@ type T = Awaited<ReturnType<typeof getTranslations>>;
 export function CategoryCard({
   category,
   spentCents,
+  rolloverCarryInCents,
   t,
   tc,
 }: Readonly<{
-  category: { id: string; name: string; color: string; budgetCents: bigint | null };
+  category: { id: string; name: string; color: string; budgetCents: bigint | null; budgetRolloverEnabled: boolean };
   spentCents: number;
+  // The carry-in already computed server-side (app/budgets/page.tsx) for
+  // this category, 0 when rollover is off or there's nothing to carry yet -
+  // this component only ever displays/adds it, the walk-through-past-months
+  // math itself lives in lib/domain/budgets.ts so it stays unit-testable.
+  rolloverCarryInCents: number;
   t: T;
   tc: T;
 }>) {
   const budgetCents = category.budgetCents !== null ? Number(category.budgetCents) : null;
-  const pct = budgetCents ? Math.round((spentCents / budgetCents) * 100) : 0;
+  const effectiveBudgetCents = budgetCents !== null ? budgetCents + rolloverCarryInCents : null;
+  const pct = effectiveBudgetCents ? Math.round((spentCents / effectiveBudgetCents) * 100) : 0;
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3">
@@ -43,6 +50,7 @@ export function CategoryCard({
               color: category.color,
               kind: "EXPENSE",
               budgetEuro: category.budgetCents !== null ? centsToEuro(category.budgetCents) : null,
+              rolloverEnabled: category.budgetRolloverEnabled,
             }}
           />
           <DeleteButton iconOnly label={tc("delete")} description={tc("irreversible")} onDelete={deleteCategory.bind(null, category.id)} />
@@ -52,11 +60,15 @@ export function CategoryCard({
       <div className="flex items-baseline justify-between text-sm">
         <span className="text-[var(--foreground)] font-medium tabular-nums">{formatCurrency(spentCents)}</span>
         <span className="text-[var(--muted)]">
-          {budgetCents ? t("ofBudget", { amount: formatCurrency(budgetCents) }) : t("noBudgetSet")}
+          {effectiveBudgetCents === null
+            ? t("noBudgetSet")
+            : rolloverCarryInCents > 0
+            ? t("ofBudgetWithRollover", { amount: formatCurrency(effectiveBudgetCents), carry: formatCurrency(rolloverCarryInCents) })
+            : t("ofBudget", { amount: formatCurrency(effectiveBudgetCents) })}
         </span>
       </div>
 
-      {budgetCents !== null && (
+      {effectiveBudgetCents !== null && (
         // Suppressed via sonar-project.properties (typescript:S6819) - see
         // automobile-section.tsx: native <progress> can't express this
         // threshold-based color-coded fill without vendor-prefixed

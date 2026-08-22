@@ -14,6 +14,7 @@ import {
   holdingMarketValueCents,
 } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
+import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
 
 /**
  * Called by sync/main.py at the end of every automatic 4h sync run (not on
@@ -447,15 +448,34 @@ async function checkBudgetOverrunRule(
 ): Promise<string | null> {
   if (rule.category?.budgetCents == null) return null;
 
-  const spend = await prisma.transaction.aggregate({
-    where: {
-      categoryId: rule.category.id,
-      amountCents: { lt: BigInt(0) },
-      date: { gte: monthRange.start, lt: monthRange.end },
-    },
-    _sum: { amountCents: true },
-  });
-  const spentCents = BigInt(0) - (spend._sum.amountCents ?? BigInt(0));
+  // isInternalTransfer: false and the split-portion sum both bring this in
+  // line with how app/budgets/page.tsx itself computes a category's spend
+  // (CLAUDE.md documents this as a standing invariant - "computed the same
+  // way /budgets does") - two real gaps found while touching this function
+  // for split-transaction support: this query never excluded internal
+  // transfers at all (a manually-categorized one would count toward a
+  // budget-overrun alert here but never toward the /budgets card for the
+  // same category), and a split transaction's own categoryId is always
+  // null so its portion of this category's spend would otherwise be
+  // invisible to this alert entirely. See CLAUDE.md's "Split transactions".
+  const [spend, splitSpend] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: excludeInternalTransfers({
+        categoryId: rule.category.id,
+        amountCents: { lt: BigInt(0) },
+        date: { gte: monthRange.start, lt: monthRange.end },
+      }),
+      _sum: { amountCents: true },
+    }),
+    prisma.transactionSplit.aggregate({
+      where: excludeInternalTransfersOnSplit(
+        { categoryId: rule.category.id, amountCents: { lt: BigInt(0) } },
+        { date: { gte: monthRange.start, lt: monthRange.end } },
+      ),
+      _sum: { amountCents: true },
+    }),
+  ]);
+  const spentCents = BigInt(0) - (spend._sum.amountCents ?? BigInt(0)) - (splitSpend._sum.amountCents ?? BigInt(0));
   const { shouldFire } = evaluateBudgetOverrunAlert(spentCents, rule.category.budgetCents, period, rule.budgetOverrunLastFiredPeriod);
 
   if (shouldFire) {

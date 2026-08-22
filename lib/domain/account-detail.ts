@@ -45,6 +45,10 @@ export interface AccountDetailTransaction {
   // income" (mark-as-income-button.tsx) only renders when this is null, so
   // the same real payment can't be recorded twice.
   incomeEvent: { id: string } | null;
+  // Empty unless this transaction was split across multiple categories -
+  // see CLAUDE.md's "Split transactions". Drives whether the category cell
+  // renders the plain <select> or the split badge/dialog.
+  splits: { categoryId: string | null; amountCents: bigint }[];
 }
 
 export interface AccountDetailAccount {

@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { formatCurrency, centsToEuro } from "@/lib/utils/format";
 import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
-import { TransactionCategorySelect } from "@/components/shared/transaction-category-select";
+import { TransactionCategoryCell } from "@/components/shared/transaction-category-cell";
 import { MarkAsIncomeButton } from "@/components/account-detail/mark-as-income-button";
 import type { AccountDetailTransaction } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
@@ -43,9 +44,17 @@ export function TransactionsTable({
         <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
           {td("transactions", { count: transactions.length, suffix: transactions.length !== 1 ? "s" : "" })}
         </h2>
-        {canImportCsv && (
-          <ImportTransactionsDialog accountId={accountId} existingFingerprints={existingFingerprints} />
-        )}
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/transactions?accountId=${accountId}`}
+            className="text-xs text-[var(--muted)] hover:text-[var(--accent-text)] transition-colors whitespace-nowrap min-h-[44px] flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] rounded"
+          >
+            {td("viewAllTransactions")}
+          </Link>
+          {canImportCsv && (
+            <ImportTransactionsDialog accountId={accountId} existingFingerprints={existingFingerprints} />
+          )}
+        </div>
       </div>
       <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -86,7 +95,13 @@ export function TransactionsTable({
                 {tx.label}
               </td>
               <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
-                <TransactionCategorySelect transactionId={tx.id} categoryId={tx.categoryId} categories={categories} />
+                <TransactionCategoryCell
+                  transactionId={tx.id}
+                  categoryId={tx.categoryId}
+                  amountCents={tx.amountCents}
+                  categories={categories}
+                  splits={tx.splits}
+                />
               </td>
               <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
                 <span

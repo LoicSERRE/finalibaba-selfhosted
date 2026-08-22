@@ -8,6 +8,24 @@ import { TransactionCategorySelect } from "@/components/shared/transaction-categ
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 
+// One row in this page's table - either a plain transaction whose own
+// categoryId matches, or one split line whose categoryId matches (id is
+// the split's own id there, not the parent transaction's, and amountCents
+// is that split's portion, not the whole transaction's - see CLAUDE.md's
+// "Split transactions" for why a split transaction's own categoryId is
+// always null and its category breakdown lives in TransactionSplit rows
+// instead).
+type Row = {
+  id: string;
+  date: Date;
+  accountName: string;
+  label: string;
+  amountCents: bigint;
+  isSplit: boolean;
+  transactionId: string;
+  transactionCategoryId: string | null;
+};
+
 export default async function CategoryDetailPage({
   params,
 }: Readonly<{
@@ -17,22 +35,50 @@ export default async function CategoryDetailPage({
   const [t, td, locale] = await Promise.all([getTranslations("budgets"), getTranslations("accountDetail"), getLocale()]);
   const intlLocale = localeToIntl(locale);
 
-  const [category, categories] = await Promise.all([
+  const [category, categories, splitLines] = await Promise.all([
     prisma.category.findUnique({
       where: { id: categoryId },
       include: {
         transactions: {
+          where: { splits: { none: {} } },
           orderBy: { date: "desc" },
           include: { account: { select: { name: true } } },
         },
       },
     }),
     prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
+    prisma.transactionSplit.findMany({
+      where: { categoryId },
+      include: { transaction: { include: { account: { select: { name: true } } } } },
+    }),
   ]);
 
   if (!category) notFound();
 
-  const totalCents = category.transactions.reduce((sum, tx) => sum + Number(tx.amountCents), 0);
+  const rows: Row[] = [
+    ...category.transactions.map((tx) => ({
+      id: tx.id,
+      date: tx.date,
+      accountName: tx.account.name,
+      label: tx.label,
+      amountCents: tx.amountCents,
+      isSplit: false,
+      transactionId: tx.id,
+      transactionCategoryId: tx.categoryId,
+    })),
+    ...splitLines.map((split) => ({
+      id: split.id,
+      date: split.transaction.date,
+      accountName: split.transaction.account.name,
+      label: split.transaction.label,
+      amountCents: split.amountCents,
+      isSplit: true,
+      transactionId: split.transactionId,
+      transactionCategoryId: null,
+    })),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const totalCents = rows.reduce((sum, r) => sum + Number(r.amountCents), 0);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -52,7 +98,7 @@ export default async function CategoryDetailPage({
         <span className="text-sm font-medium tabular-nums text-[var(--muted)]">{formatCurrency(totalCents)}</span>
       </div>
 
-      {category.transactions.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">{t("noTransactions")}</p>
       ) : (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
@@ -70,27 +116,42 @@ export default async function CategoryDetailPage({
                 </tr>
               </thead>
               <tbody>
-                {category.transactions.map((tx, i) => (
+                {rows.map((r, i) => (
                   <tr
-                    key={tx.id}
+                    key={r.id}
                     className={`${
-                      i < category.transactions.length - 1 ? "border-b border-[var(--border)]" : ""
+                      i < rows.length - 1 ? "border-b border-[var(--border)]" : ""
                     } hover:bg-[var(--surface-elevated)] transition-colors`}
                   >
                     <td className="px-3 sm:px-6 py-3 text-[var(--muted)] tabular-nums whitespace-nowrap text-xs sm:text-sm">
-                      {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(tx.date)}
+                      {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(r.date)}
                     </td>
-                    <td className="px-3 sm:px-6 py-3 text-[var(--muted)] whitespace-nowrap text-xs sm:text-sm">{tx.account.name}</td>
-                    <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={tx.label}>
-                      {tx.label}
+                    <td className="px-3 sm:px-6 py-3 text-[var(--muted)] whitespace-nowrap text-xs sm:text-sm">{r.accountName}</td>
+                    <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={r.label}>
+                      {r.label}
                     </td>
                     <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
-                      <TransactionCategorySelect transactionId={tx.id} categoryId={tx.categoryId} categories={categories} />
+                      {r.isSplit ? (
+                        // A split line's category isn't editable inline here -
+                        // it's one part of a multi-category breakdown, which
+                        // this plain <select> can't express (picking a value
+                        // would wipe the whole split, same as it does from any
+                        // other entry point). Edit the split itself from the
+                        // account's transactions table or the global ledger.
+                        <span
+                          className="inline-flex items-center gap-1 text-xs text-[var(--muted)] bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-2 py-1"
+                          title={t("splitBadgeHint")}
+                        >
+                          {t("splitBadge")}
+                        </span>
+                      ) : (
+                        <TransactionCategorySelect transactionId={r.transactionId} categoryId={r.transactionCategoryId} categories={categories} />
+                      )}
                     </td>
                     <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
-                      <span className={tx.amountCents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
-                        {tx.amountCents > BigInt(0) ? "+" : ""}
-                        {formatCurrency(tx.amountCents)}
+                      <span className={r.amountCents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                        {r.amountCents > BigInt(0) ? "+" : ""}
+                        {formatCurrency(r.amountCents)}
                       </span>
                     </td>
                   </tr>

@@ -45,7 +45,11 @@ export default async function AccountDetailPage({
         institution: true,
         history: { orderBy: { recordedAt: "desc" }, take: 120 },
         holdings: { orderBy: { ticker: "asc" } },
-        transactions: { orderBy: { date: "desc" }, take: 200, include: { incomeEvent: { select: { id: true } } } },
+        transactions: {
+          orderBy: { date: "desc" },
+          take: 200,
+          include: { incomeEvent: { select: { id: true } }, splits: { select: { categoryId: true, amountCents: true } } },
+        },
       },
     }),
     prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
