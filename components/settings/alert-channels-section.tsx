@@ -60,6 +60,8 @@ export function AlertChannelsSection({
 
   const [ntfyTopicUrl, setNtfyTopicUrl] = useState(settings.ntfyTopicUrl ?? "");
   const [copied, setCopied] = useState(false);
+  const [ntfyEnabled, setNtfyEnabled] = useState(settings.ntfyEnabled);
+  const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(settings.emailAlertsEnabled);
 
   const [emailPreset, setEmailPreset] = useState("custom");
   const [smtpHost, setSmtpHost] = useState(settings.smtpHost ?? "");
@@ -99,54 +101,62 @@ export function AlertChannelsSection({
               <input
                 type="checkbox"
                 name="ntfyEnabled"
-                defaultChecked={settings.ntfyEnabled}
+                checked={ntfyEnabled}
+                onChange={(e) => setNtfyEnabled(e.target.checked)}
                 className="w-4 h-4 rounded accent-[var(--accent)]"
               />
             </label>
           </div>
-          <label htmlFor="ntfyTopicUrl" className="sr-only">
-            {t("ntfy")}
-          </label>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              id="ntfyTopicUrl"
-              name="ntfyTopicUrl"
-              type="url"
-              autoComplete="off"
-              value={ntfyTopicUrl}
-              onChange={(e) => setNtfyTopicUrl(e.target.value)}
-              placeholder="https://ntfy.sh/..."
-              className={`${inputClass} flex-1`}
-            />
-            <div className="flex gap-2 shrink-0">
-              <Button type="button" variant="outline" size="sm" onClick={handleGenerateTopic}>
-                <Shuffle size={14} aria-hidden="true" />
-                {t("ntfyGenerate")}
-              </Button>
-              {ntfyTopicUrl && (
-                <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
-                  {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                  {copied ? t("ntfyCopied") : t("ntfyCopy")}
-                </Button>
-              )}
-            </div>
-          </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyHint")}</p>
-
-          <div className="space-y-1.5 pt-1">
-            <label htmlFor="ntfyAuthToken" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-              {t("ntfyAuthToken")}
+          {/* Dimmed (not disabled - config stays freely editable while a
+              channel is off, see updateAlertChannels) when the channel's own
+              "Actif" checkbox above is unchecked - otherwise a user who
+              unchecks it has no visual cue their filled-in URL/token is now
+              inert, only the checkbox state itself to notice. */}
+          <div className={ntfyEnabled ? undefined : "opacity-50"}>
+            <label htmlFor="ntfyTopicUrl" className="sr-only">
+              {t("ntfy")}
             </label>
-            <input
-              id="ntfyAuthToken"
-              name="ntfyAuthToken"
-              type="text"
-              autoComplete="off"
-              defaultValue={settings.ntfyAuthToken ?? ""}
-              placeholder="tk_..."
-              className={inputClass}
-            />
-            <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyAuthTokenHint")}</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                id="ntfyTopicUrl"
+                name="ntfyTopicUrl"
+                type="url"
+                autoComplete="off"
+                value={ntfyTopicUrl}
+                onChange={(e) => setNtfyTopicUrl(e.target.value)}
+                placeholder="https://ntfy.sh/..."
+                className={`${inputClass} flex-1`}
+              />
+              <div className="flex gap-2 shrink-0">
+                <Button type="button" variant="outline" size="sm" onClick={handleGenerateTopic}>
+                  <Shuffle size={14} aria-hidden="true" />
+                  {t("ntfyGenerate")}
+                </Button>
+                {ntfyTopicUrl && (
+                  <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
+                    {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                    {copied ? t("ntfyCopied") : t("ntfyCopy")}
+                  </Button>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyHint")}</p>
+
+            <div className="space-y-1.5 pt-1">
+              <label htmlFor="ntfyAuthToken" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                {t("ntfyAuthToken")}
+              </label>
+              <input
+                id="ntfyAuthToken"
+                name="ntfyAuthToken"
+                type="text"
+                autoComplete="off"
+                defaultValue={settings.ntfyAuthToken ?? ""}
+                placeholder="tk_..."
+                className={inputClass}
+              />
+              <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyAuthTokenHint")}</p>
+            </div>
           </div>
         </div>
 
@@ -158,12 +168,15 @@ export function AlertChannelsSection({
               <input
                 type="checkbox"
                 name="emailAlertsEnabled"
-                defaultChecked={settings.emailAlertsEnabled}
+                checked={emailAlertsEnabled}
+                onChange={(e) => setEmailAlertsEnabled(e.target.checked)}
                 className="w-4 h-4 rounded accent-[var(--accent)]"
               />
             </label>
           </div>
 
+          {/* Same dim-when-off treatment as the ntfy block above. */}
+          <div className={`space-y-4 ${emailAlertsEnabled ? "" : "opacity-50"}`}>
           <div className="space-y-1.5">
             <label htmlFor="alertEmailTo" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
               {t("emailTo")}
@@ -275,6 +288,7 @@ export function AlertChannelsSection({
             <p className="text-xs text-[var(--muted)] opacity-70">{t("smtpFromHint")}</p>
           </div>
           <p className="text-xs text-[var(--muted)] opacity-70">{t("emailHint")}</p>
+          </div>
         </div>
 
         <div className="flex justify-end pt-2">
