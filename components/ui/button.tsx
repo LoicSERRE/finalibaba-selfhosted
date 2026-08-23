@@ -33,7 +33,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     <button
       ref={ref}
       type={type}
-      className={`inline-flex items-center gap-2 rounded-lg font-medium transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      // whitespace-nowrap + shrink-0: a Button squeezed inside a flex header
+      // row (e.g. "flex items-center justify-between" next to a title
+      // block) would otherwise let its label wrap onto a second line while
+      // the icon stayed put on the first - real bug, reported from several
+      // call sites at once (Settings' "Ajouter une institution", the goals
+      // section's "Ajouter un objectif", share-links' "Créer un lien").
+      // Fixed once here rather than patching each call site, since nothing
+      // in this app ever wants a button label to wrap.
+      className={`inline-flex items-center gap-2 rounded-lg font-medium whitespace-nowrap shrink-0 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     />
   )

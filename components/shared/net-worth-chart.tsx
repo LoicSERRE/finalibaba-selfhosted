@@ -38,7 +38,14 @@ export function NetWorthChart({ data }: Readonly<{ data: DataPoint[] }>) {
   return (
     <div role="img" aria-label={t("ariaLabel")}>
     <ResponsiveContainer width="100%" height={260}>
-      <AreaChart data={data} margin={{ top: 4, right: 0, left: 8, bottom: 0 }}>
+      {/* accessibilityLayer defaults to true in Recharts 3, which gives the
+          root <svg> tabIndex={0} - on a mobile tap that leaves the browser's
+          native focus ring visibly stuck on the chart (no CSS anywhere in
+          this app resets it), showing as a white halo that looks backwards
+          in both themes since it's an unthemed UA default, not app styling.
+          role="img" above already covers this chart's accessible name, so
+          the SVG doesn't need to be independently focusable/tabbable. */}
+      <AreaChart data={data} margin={{ top: 4, right: 0, left: 8, bottom: 0 }} accessibilityLayer={false}>
         <defs>
           <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.25} />

@@ -42,7 +42,11 @@ export function CashflowChart({ data }: Readonly<{ data: DataPoint[] }>) {
   return (
     <div role="img" aria-label={t("chartTitle")}>
       <ResponsiveContainer width="100%" height={220}>
-        <AreaChart data={data} margin={{ top: 4, right: 0, left: 8, bottom: 0 }}>
+        {/* accessibilityLayer defaults to true in Recharts 3 (root <svg>
+            tabIndex={0}) - a mobile tap otherwise leaves a stuck native
+            focus ring. role="img" above already covers the accessible
+            name. */}
+        <AreaChart data={data} margin={{ top: 4, right: 0, left: 8, bottom: 0 }} accessibilityLayer={false}>
           <defs>
             <linearGradient id="cashflowGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.25} />

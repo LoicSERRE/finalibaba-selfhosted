@@ -45,7 +45,11 @@ export function AssetAllocationChart({ data }: Readonly<{ data: AllocationSlice[
     <div>
       <div role="img" aria-label={t("allocationAria")}>
       <ResponsiveContainer width="100%" height={190}>
-        <PieChart>
+        {/* accessibilityLayer defaults to true in Recharts 3 (root <svg>
+            tabIndex={0}) - a mobile tap otherwise leaves a stuck native
+            focus ring, since nothing in this app resets it. role="img"
+            above already covers the accessible name. */}
+        <PieChart accessibilityLayer={false}>
           <Pie
             data={nonEmpty}
             cx="50%"

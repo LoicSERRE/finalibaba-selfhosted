@@ -1,5 +1,6 @@
 import { formatCurrency } from "@/lib/utils/format";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
@@ -52,6 +53,7 @@ export function AllocationRadarSection({
         <div className="flex items-center justify-between mb-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-[var(--foreground)]">{t("radar.techExposure")}</span>
+            <InfoTooltip>{t("radar.techFootnote")}</InfoTooltip>
             {techPct > 60 && (
               <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--negative)]/15 text-[var(--negative)]">
                 {t("radar.highConcentration")}
@@ -88,9 +90,6 @@ export function AllocationRadarSection({
             style={{ width: `${techPct}%` }}
           />
         </div>
-        <p className="text-xs text-[var(--muted)] mt-1.5 opacity-70">
-          {t("radar.techFootnote")}
-        </p>
       </div>
     </div>
   );

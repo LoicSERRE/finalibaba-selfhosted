@@ -112,10 +112,18 @@ select option {
   }
 }
 
-/* Dialog enter/exit - Radix sets [data-state] on Overlay/Content. The
-   `translate(-50%, -50%)` baked into every step matches Content's own
-   `fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2` positioning
-   classes so the animation doesn't fight the base centering transform.
+/* Dialog enter/exit - Radix sets [data-state] on Overlay/Content. Content
+   is centered by its flex wrapper (components/ui/dialog.tsx), not by a
+   percentage-based transform on itself - a `translate(-50%, -50%)` baked
+   into these keyframes used to be required to match Content's own
+   `left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2` positioning, but
+   that positioning is self-referential (computed against Content's OWN
+   width/height) and produced a real, confirmed-live bug: while the
+   freshly-mounted dialog's content was still settling layout, its size
+   kept changing, so -50% kept recalculating against a moving target,
+   visibly starting off-screen top-left and snapping to center ~150ms
+   later. Scale/opacity only now, no translate term at all - the flex
+   wrapper's centering has no such dependency on Content's size.
    Neutralized by the prefers-reduced-motion rule above (it overrides
    animation-duration on every element). Fade + scale only, no translateY -
    an earlier version combined a scale with a vertical slide-up, which read
@@ -130,12 +138,12 @@ select option {
   to { opacity: 0; }
 }
 @keyframes dialog-content-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes dialog-content-out {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.97); }
 }
 .dialog-overlay[data-state="open"] { animation: dialog-overlay-in 150ms ease-out; }
 .dialog-overlay[data-state="closed"] { animation: dialog-overlay-out 150ms ease-in; }

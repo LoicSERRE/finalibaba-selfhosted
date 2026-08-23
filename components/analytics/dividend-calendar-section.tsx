@@ -1,4 +1,5 @@
 import { formatCurrency } from "@/lib/utils/format";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { DividendCalendarRow } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
@@ -21,9 +22,12 @@ export function DividendCalendarSection({
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
-      <div className="flex items-baseline justify-between mb-1">
-        <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+      <div className="flex items-baseline justify-between mb-4">
+        <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
           {t("dividends.title")}
+          <InfoTooltip>
+            {t("dividends.footnote")} {t("dividends.withholding")}
+          </InfoTooltip>
         </h2>
         <div className="text-right">
           <span className="text-sm font-semibold tabular-nums text-[var(--positive)]">
@@ -34,9 +38,6 @@ export function DividendCalendarSection({
           </span>
         </div>
       </div>
-      <p className="text-xs text-[var(--muted)] mb-4 opacity-70">
-        {t("dividends.footnote")}
-      </p>
       <div className="divide-y divide-[var(--border)]">
         {dividendCalendar.map((row) => (
           <div key={row.isin} className="py-3 flex items-center justify-between gap-4">
@@ -80,9 +81,6 @@ export function DividendCalendarSection({
           </div>
         ))}
       </div>
-      <p className="text-xs text-[var(--muted)] mt-3 opacity-70">
-        {t("dividends.withholding")}
-      </p>
     </div>
   );
 }

@@ -40,8 +40,14 @@ export function TransactionsTable({
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-3">
-        <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+      {/* flex-wrap + min-w-0/truncate on the count label - previously a
+          non-wrapping row inside an overflow-hidden card, so on narrow
+          mobile widths the count label collided with the "Voir tout"/
+          import controls and got silently clipped (a real reported bug,
+          not a hypothetical). Wrapping onto a second line is a better
+          outcome than losing content to overflow-hidden. */}
+      <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
+        <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider min-w-0 truncate">
           {td("transactions", { count: transactions.length, suffix: transactions.length !== 1 ? "s" : "" })}
         </h2>
         <div className="flex items-center gap-3">

@@ -34,7 +34,14 @@ export function DetailedAllocationSection({
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ background: slice.color }}
               />
-              <span className="text-sm text-[var(--foreground)] w-20 sm:w-32 shrink-0">
+              {/* truncate - shrink-0 alone doesn't cap width for an
+                  unbreakable single word (e.g. "Investissements"): the
+                  flex item's implicit min-width:auto let it grow past its
+                  own w-20/w-32 to fit the text, visually overflowing into
+                  the progress bar next to it. title= keeps the full name
+                  available, same affordance used elsewhere in this app
+                  (transactions-table, import dialogs). */}
+              <span className="text-sm text-[var(--foreground)] w-20 sm:w-32 shrink-0 truncate" title={name}>
                 {name}
               </span>
               <div className="flex-1 h-1.5 bg-[var(--surface-elevated)] rounded-full overflow-hidden" aria-hidden="true">

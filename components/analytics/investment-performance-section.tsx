@@ -1,4 +1,5 @@
 import { formatCurrency } from "@/lib/utils/format";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { InvestPerfRow } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
@@ -37,8 +38,9 @@ export function InvestmentPerformanceSection({
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
-      <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+      <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4 flex items-center gap-1">
         {t("performance.title")}
+        <InfoTooltip>{t("performance.cagr", { pea: (taxRatePea * 100).toFixed(1), cto: (taxRateCto * 100).toFixed(1) })}</InfoTooltip>
       </h2>
 
       {/* Résumé global */}
@@ -145,12 +147,13 @@ export function InvestmentPerformanceSection({
           </table>
         </div>
       )}
-      <p className="text-xs text-[var(--muted)] mt-3 opacity-70">
-        {t("performance.cagr", { pea: (taxRatePea * 100).toFixed(1), cto: (taxRateCto * 100).toFixed(1) })}
-        {!investAllHaveDates && investPerfRows.length > 0 && (
-          <> · {t("performance.addDateHint")}</>
-        )}
-      </p>
+      {/* The CAGR methodology text moved into the header's InfoTooltip above
+          (collapsed by default - was previously an always-visible footnote,
+          real mobile-decluttering feedback). addDateHint stays visible here
+          since it's actionable advice, not just descriptive methodology. */}
+      {!investAllHaveDates && investPerfRows.length > 0 && (
+        <p className="text-xs text-[var(--muted)] mt-3 opacity-70">{t("performance.addDateHint")}</p>
+      )}
     </div>
   );
 }

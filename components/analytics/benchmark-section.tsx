@@ -1,3 +1,4 @@
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { BenchmarkCAGRs } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
@@ -24,8 +25,9 @@ export function BenchmarkSection({
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
-      <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+      <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4 flex items-center gap-1">
         {t("benchmark.title")}
+        <InfoTooltip>{t("benchmark.footnote")}</InfoTooltip>
       </h2>
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -59,7 +61,6 @@ export function BenchmarkSection({
           ) : null
         )}
       </div>
-      <p className="text-xs text-[var(--muted)] mt-4 opacity-70">{t("benchmark.footnote")}</p>
     </div>
   );
 }

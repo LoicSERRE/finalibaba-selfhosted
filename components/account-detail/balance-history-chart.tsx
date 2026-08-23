@@ -42,7 +42,10 @@ export function BalanceHistoryChart({ data }: Readonly<{ data: BalancePoint[] }>
   return (
     <div role="img" aria-label={t("balanceAria")}>
     <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={data} margin={{ top: 5, right: 4, bottom: 0, left: 8 }}>
+      {/* accessibilityLayer defaults to true in Recharts 3 (root <svg>
+          tabIndex={0}) - a mobile tap otherwise leaves a stuck native focus
+          ring. role="img" above already covers the accessible name. */}
+      <AreaChart data={data} margin={{ top: 5, right: 4, bottom: 0, left: 8 }} accessibilityLayer={false}>
         <defs>
           <linearGradient id="balGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.22} />
