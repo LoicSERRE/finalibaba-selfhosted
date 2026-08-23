@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
+import { computeGoalProgress } from "@/lib/domain/goals";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type { AnalyticsExportData } from "@/components/shared/export-analytics-button";
@@ -162,7 +163,6 @@ export interface AnalyticsBalance {
 }
 
 export interface AnalyticsSettings {
-  savingsGoalCents: bigint;
   salaryNetCents: bigint;
   monthlyExpensesCents: bigint;
   monthlySavedCents: bigint;
@@ -176,10 +176,23 @@ export interface AnalyticsIncomeEvent {
   taxWithheldCents: bigint | null;
 }
 
+// v1.14 - one row per user-defined Goal. accountId: null means "track
+// total net worth" (the exact math the old single global
+// UserSettings.savingsGoalCents figure always did) - see the Goal model's
+// own schema comment for the full accountId semantics.
+export interface AnalyticsGoal {
+  id: string;
+  name: string;
+  targetCents: bigint;
+  targetDate: Date | null;
+  accountId: string | null;
+}
+
 export interface AnalyticsInput {
   accounts: AnalyticsAccount[];
   allBalances: AnalyticsBalance[];
   settings: AnalyticsSettings;
+  goals: AnalyticsGoal[];
   yfData: Record<string, YFDividendInfo>;
   incomeEventsYtd: AnalyticsIncomeEvent[];
   msciWorldHistory: PricePoint[];
@@ -207,6 +220,21 @@ export interface AssetRow {
 
 export interface TopAssetRow extends AssetRow {
   pct: number; // % of grossAssets
+}
+
+// v1.14 - one row per Goal, current value already resolved (net worth, or
+// the linked account's own AssetRow.value) and progress already computed
+// via lib/domain/goals.ts's computeGoalProgress.
+export interface GoalRow {
+  id: string;
+  name: string;
+  targetCents: bigint;
+  targetDate: Date | null;
+  accountId: string | null;
+  accountName: string | null; // set only when accountId is set
+  currentCents: bigint;
+  pct: number;
+  remaining: bigint;
 }
 
 export interface InvestPerfRow {
@@ -290,6 +318,10 @@ export interface AnalyticsResult {
   totalLatentTax: bigint;
   investedPct: number;
   hasTaxData: boolean;
+  // v1.14 - gain-weighted blended tax rate (0-1 ratio) across every taxable
+  // account with a real unrealized gain, for the projection chart's
+  // tax-aware mode. 0 when hasTaxData is false (nothing to weight).
+  effectiveTaxRate: number;
   momDelta: number | null;
 
   // Savings rate
@@ -305,10 +337,9 @@ export interface AnalyticsResult {
   monthlyExpensesCents: bigint;
   savingsCents: bigint; // allocation["savings"]
 
-  // Goal
-  goalCents: bigint;
-  goalPct: number;
-  goalRemaining: bigint;
+  // Goals (v1.14 - N independent goals, replacing the old single global
+  // figure)
+  goals: GoalRow[];
 
   // Real tracked passive income (IncomeEvent, YTD)
   realYtdDividendsNetCents: bigint;
@@ -355,6 +386,10 @@ export interface AnalyticsResult {
 
   // Top assets
   topAssets: TopAssetRow[];
+  // Every asset (not just the top 10 above) - exposed so a Goal linked to
+  // an account outside the top 10 can still resolve its current value
+  // without a second query, see the "Goals" computation below.
+  assetRows: AssetRow[];
 
   // Financing / debt
   debtAccounts: DebtAccountRow[];
@@ -371,13 +406,24 @@ export interface AnalyticsResult {
 // pieces for no behavioral benefit.
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
-  const { accounts, allBalances, settings, yfData, incomeEventsYtd, intlLocale, now } = input;
+  const { accounts, allBalances, settings, goals, yfData, incomeEventsYtd, intlLocale, now } = input;
   const nowMs = now.getTime();
 
   // ── Compute current values ──────────────────────────────────────────────
   let grossAssets = BigInt(0);
   let totalLiabilities = BigInt(0);
   let totalLatentTax = BigInt(0);
+  // v1.14 - cost-basis-weighted... no, gain-weighted blended effective tax
+  // rate across every account with a real unrealized gain, for the
+  // projection chart's tax-aware mode (see lib/domain/projection.ts). Same
+  // "weight by the account's own contribution" pattern investCAGRWeightedYears
+  // below already uses, just weighted by gain-in-cents instead of years.
+  // EXEMPT/DEFERRED accounts contribute rate 0, naturally pulling the
+  // blended rate down for a mostly tax-advantaged portfolio - mirrors how
+  // totalLatentTax itself already behaves, just expressed as one reusable
+  // rate instead of only ever an absolute cents amount.
+  let weightedTaxRateSum = 0; // Σ(taxRate * gainCents)
+  let totalPositiveGainCents = BigInt(0); // Σ(gainCents), gains only
   let techValueCents = BigInt(0);
   let totalInvestCents = BigInt(0);
   let annualDividendsCents = BigInt(0);    // gross
@@ -464,6 +510,10 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
           ? BigInt(Math.round(Number(accountGain) * taxRate))
           : BigInt(0);
         totalLatentTax += accountTax;
+        if (accountGain > BigInt(0)) {
+          weightedTaxRateSum += taxRate * Number(accountGain);
+          totalPositiveGainCents += accountGain;
+        }
       }
       if (hasBasis && account.type === "INVESTMENT") {
         investPerfRowsInternal.push({
@@ -603,6 +653,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
       )
     : 0;
   const hasTaxData = totalLatentTax > BigInt(0);
+  const effectiveTaxRate = totalPositiveGainCents > BigInt(0) ? weightedTaxRateSum / Number(totalPositiveGainCents) : 0;
 
   // ── Allocation metrics ───────────────────────────────────────────────────
   const garantis = allocation["cash"] + allocation["savings"];
@@ -655,15 +706,28 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
       return { ...r, daysLeft, isPast, isSoon };
     });
 
-  // ── Goal progress ───────────────────────────────────────────────────────
-  const goalCents = settings.savingsGoalCents > BigInt(0)
-    ? settings.savingsGoalCents
-    : BigInt(5000000);
-  const goalPct = Math.min(
-    Math.round((Number(netWorth) / Number(goalCents)) * 100),
-    100
-  );
-  const goalRemaining = goalCents - netWorth > BigInt(0) ? goalCents - netWorth : BigInt(0);
+  // ── Goal progress (v1.14 - N independent goals) ─────────────────────────
+  // Built once, not per-goal inside the .map below - accountId: null
+  // (net-worth-tracking) never needs a lookup, but every account-linked
+  // goal does, and a fresh Map lookup per goal is cheap either way for the
+  // handful of goals a personal instance realistically has.
+  const assetValueById = new Map(assetRows.map((r) => [r.id, r.value]));
+  const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
+  const goalRows: GoalRow[] = goals.map((g) => {
+    const currentCents = g.accountId !== null ? (assetValueById.get(g.accountId) ?? BigInt(0)) : netWorth;
+    const { pct, remaining } = computeGoalProgress(currentCents, g.targetCents);
+    return {
+      id: g.id,
+      name: g.name,
+      targetCents: g.targetCents,
+      targetDate: g.targetDate,
+      accountId: g.accountId,
+      accountName: g.accountId !== null ? (accountNameById.get(g.accountId) ?? null) : null,
+      currentCents,
+      pct,
+      remaining,
+    };
+  });
 
   // ── Cash-flow metrics (require user settings) ───────────────────────────
   const hasSalary = settings.salaryNetCents > BigInt(0);
@@ -809,6 +873,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     totalLatentTax,
     investedPct,
     hasTaxData,
+    effectiveTaxRate,
     momDelta,
     hasSalary,
     hasDeclaredSavings,
@@ -819,9 +884,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     runwayMonths,
     monthlyExpensesCents: settings.monthlyExpensesCents,
     savingsCents: allocation["savings"],
-    goalCents,
-    goalPct,
-    goalRemaining,
+    goals: goalRows,
     realYtdDividendsNetCents,
     realYtdInterestNetCents,
     realYtdPassiveNetCents,
@@ -852,6 +915,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     dailyHistory,
     performanceRows,
     topAssets,
+    assetRows,
     debtAccounts,
     debtRatio,
   };
@@ -883,9 +947,12 @@ export function buildAnalyticsExport(
     runwayMonths: result.runwayMonths ?? null,
     savingsCents: Number(result.savingsCents),
     monthlyExpensesCents: Number(result.monthlyExpensesCents),
-    goalCents: Number(result.goalCents),
-    goalPct: result.goalPct,
-    goalRemainingCents: Number(result.goalRemaining),
+    goals: result.goals.map((g) => ({
+      name: g.name,
+      targetCents: Number(g.targetCents),
+      pct: g.pct,
+      remainingCents: Number(g.remaining),
+    })),
     allocationSlices: result.allocationSlices.map((s) => ({
       name: allocationLabels[s.key] ?? s.key,
       valueCents: s.value,

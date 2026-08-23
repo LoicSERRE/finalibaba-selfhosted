@@ -90,9 +90,7 @@ export type AnalyticsExportData = {
   runwayMonths: number | null;
   savingsCents: number;
   monthlyExpensesCents: number;
-  goalCents: number;
-  goalPct: number;
-  goalRemainingCents: number;
+  goals: { name: string; targetCents: number; pct: number; remainingCents: number }[];
   allocationSlices: AllocationSliceExport[];
   investPerfRows: InvestPerfRowExport[];
   investTotalValueCents: number;
@@ -278,9 +276,11 @@ function buildMarkdown(
       lines.push(`| ${s.savingsAvailable} | ${fmt(data.savingsCents)} |`);
       lines.push(`| ${s.monthlyExpenses} | ${fmt(data.monthlyExpensesCents)} |`);
     }
-    lines.push(`| ${s.goal} | ${s.goalFmt(fmt(data.goalCents), data.goalPct)} |`);
-    if (data.goalRemainingCents > 0) {
-      lines.push(`| ${s.goalRemaining} | ${fmt(data.goalRemainingCents)} |`);
+    for (const goal of data.goals) {
+      lines.push(`| ${s.goal} - ${goal.name} | ${s.goalFmt(fmt(goal.targetCents), goal.pct)} |`);
+      if (goal.remainingCents > 0) {
+        lines.push(`| ${s.goalRemaining} - ${goal.name} | ${fmt(goal.remainingCents)} |`);
+      }
     }
     lines.push("");
   }

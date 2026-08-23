@@ -18,6 +18,7 @@ import { KpiCards } from "@/components/analytics/kpi-cards";
 import { CashflowCards } from "@/components/analytics/cashflow-cards";
 import { GoalAndPassiveIncome } from "@/components/analytics/goal-and-passive-income";
 import { ChartsSection } from "@/components/analytics/charts-section";
+import { ProjectionChart } from "@/components/analytics/projection-chart";
 import { DividendCalendarSection } from "@/components/analytics/dividend-calendar-section";
 import { InvestmentPerformanceSection } from "@/components/analytics/investment-performance-section";
 import { BenchmarkSection } from "@/components/analytics/benchmark-section";
@@ -41,7 +42,7 @@ export default async function AnalyticsPage() {
   const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
   const startOfNextYear = new Date(Date.UTC(currentYear + 1, 0, 1));
 
-  const [accounts, allBalances, settings, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History] = await Promise.all([
+  const [accounts, allBalances, settings, goals, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History] = await Promise.all([
     prisma.account.findMany({
       include: {
         institution: true,
@@ -51,6 +52,11 @@ export default async function AnalyticsPage() {
     }),
     prisma.historicalBalance.findMany({ orderBy: { recordedAt: "asc" } }),
     prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
+    // v1.14 - N independent goals (replaces the old single global
+    // UserSettings.savingsGoalCents figure). No include needed -
+    // computeAnalytics resolves each goal's linked account name/value
+    // itself from the already-fetched `accounts` above.
+    prisma.goal.findMany({ orderBy: { createdAt: "asc" } }),
     // Fetch Yahoo Finance in parallel - ex-div dates + real yields (1h cache)
     fetchYFDividends(Object.values(ISIN_TO_YF_SYMBOL)),
     // Real tracked income (IncomeEvent) - separate from the estimate below,
@@ -69,6 +75,7 @@ export default async function AnalyticsPage() {
     accounts,
     allBalances,
     settings,
+    goals,
     yfData,
     incomeEventsYtd,
     msciWorldHistory,
@@ -134,10 +141,7 @@ export default async function AnalyticsPage() {
           <GoalAndPassiveIncome
             t={t}
             tIncome={tIncome}
-            goalCents={result.goalCents}
-            goalPct={result.goalPct}
-            goalRemaining={result.goalRemaining}
-            netWorth={result.netWorth}
+            goals={result.goals}
             realYtdPassiveNetCents={result.realYtdPassiveNetCents}
             realYtdDividendsNetCents={result.realYtdDividendsNetCents}
             realYtdInterestNetCents={result.realYtdInterestNetCents}
@@ -147,6 +151,13 @@ export default async function AnalyticsPage() {
             t={t}
             dailyHistory={result.dailyHistory}
             allocationSlices={allocationSlicesForChart}
+          />
+
+          <ProjectionChart
+            currentNetWorthCents={result.netWorth}
+            annualContributionCents={result.hasDeclaredSavings ? result.monthlySavedCents * BigInt(12) : null}
+            defaultAnnualReturnPct={result.investCAGR !== null ? Math.max(0, Math.round(result.investCAGR * 10) / 10) : 5}
+            effectiveTaxRate={result.effectiveTaxRate}
           />
 
           <DividendCalendarSection

@@ -12,6 +12,7 @@
     "add": "Add",
     "edit": "Edit",
     "close": "Close",
+    "moreInfo": "More information",
     "configure": "Configure",
     "sync": "Sync",
     "loading": "Loading…",
@@ -431,7 +432,7 @@
       "warning": "Warning — build up emergency savings"
     },
     "goal": {
-      "title": "Target {amount}",
+      "title": "{name} · target {amount}",
       "remaining": "{amount} to go",
       "aria": "Goal: {pct}%"
     },
@@ -547,7 +548,6 @@
       "subtitle": "Used to compute your savings rate, runway, and passive income",
       "salary": "Monthly net salary",
       "expenses": "Fixed monthly expenses",
-      "goal": "Net worth goal",
       "saved": "Declared monthly savings",
       "savedHint": "Savings accounts + investments — excluding inter-account transfers and market performance"
     },
@@ -750,6 +750,27 @@
       "resume": "Resume",
       "delete": "Delete",
       "deleteDescription": "This rule will be permanently deleted."
+    },
+    "goals": {
+      "title": "Savings goals",
+      "subtitle": "Track several independent goals, each with its own progress bar on the Analytics page",
+      "create": "Add a goal",
+      "createTitle": "New goal",
+      "editTitle": "Edit goal",
+      "nameField": "Name",
+      "namePlaceholder": "E.g. Down payment",
+      "targetField": "Target amount (€)",
+      "targetDateField": "Target date (optional)",
+      "accountField": "Linked account",
+      "accountAllNetWorth": "Total net worth",
+      "creating": "Creating…",
+      "saving": "Saving…",
+      "confirm": "Create",
+      "save": "Save",
+      "emptyTitle": "No goals yet",
+      "emptyDescription": "Add a goal to track its progress on the Analytics page.",
+      "delete": "Delete",
+      "deleteDescription": "This goal will be permanently deleted."
     }
   },
   "shared": {
@@ -800,6 +821,19 @@
     "noHistory": "No history yet",
     "ariaLabel": "Net worth evolution",
     "seriesLabel": "Net Worth"
+  },
+  "projectionChart": {
+    "title": "Long-term projection",
+    "assumedReturnLabel": "Assumed annual return",
+    "contributionNote": "Based on {amount}/year of declared savings",
+    "noContributionNote": "No declared monthly savings — projection reflects current net worth growth only",
+    "horizonSelectorLabel": "Horizon",
+    "horizonOption": "{years}y",
+    "horizonLabel": "In {years} years",
+    "ariaLabel": "Long-term net worth projection",
+    "seriesLabel": "Projected net worth",
+    "afterTaxSeriesLabel": "Estimated after-tax",
+    "afterTaxCalloutNote": "≈ {amount} after tax"
   },
   "openBanking": {
     "connect": "Connect",

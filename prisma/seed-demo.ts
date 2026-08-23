@@ -39,6 +39,7 @@ async function main() {
   await prisma.incomeEvent.deleteMany();
   await prisma.sale.deleteMany();
   await prisma.holding.deleteMany();
+  await prisma.goal.deleteMany();
   await prisma.userSettings.deleteMany();
   await prisma.account.deleteMany();
   await prisma.institution.deleteMany();
@@ -349,23 +350,37 @@ async function main() {
   ]});
 
   // ── User settings ─────────────────────────────────────────────────────────
+  // savingsGoalCents is intentionally absent - vestigial as of v1.14,
+  // superseded by the Goal rows seeded below (see that field's own schema
+  // comment).
   console.log("Creating user settings…");
   await prisma.userSettings.upsert({
     where:  { id: "singleton" },
     update: {
       salaryNetCents:       EUR(3_800),
       monthlyExpensesCents: EUR(2_350),
-      savingsGoalCents:     EUR(500_000),
       monthlySavedCents:    EUR(950),
     },
     create: {
       id: "singleton",
       salaryNetCents:       EUR(3_800),
       monthlyExpensesCents: EUR(2_350),
-      savingsGoalCents:     EUR(500_000),
       monthlySavedCents:    EUR(950),
     },
   });
+
+  // ── Savings goals (v1.14) ────────────────────────────────────────────────
+  // Three examples spanning both goal shapes so the demo actually showcases
+  // the feature, not just the pre-v1.14 single-net-worth-goal behavior:
+  // one net-worth-tracking goal (accountId omitted) and two account-linked
+  // goals across different account types (SAVINGS, INVESTMENT), matching
+  // the ROADMAP's own "down payment"/"emergency fund" framing.
+  console.log("Creating savings goals…");
+  await prisma.goal.createMany({ data: [
+    { name: "Patrimoine",       targetCents: EUR(350_000) },
+    { name: "Fonds d'urgence",  targetCents: EUR(20_000), accountId: livretA.id },
+    { name: "Objectif CTO",     targetCents: EUR(10_000), accountId: cto.id },
+  ]});
 
   console.log("Done - demo data seeded.");
   console.log("  4 categories (Alimentation over budget, Logement near limit, Loisirs ok, Abonnements no budget set)");

@@ -9,7 +9,6 @@ import {
 const NOW = new Date("2026-07-28T12:00:00.000Z");
 
 const BASE_SETTINGS: AnalyticsInput["settings"] = {
-  savingsGoalCents: BigInt(0),
   salaryNetCents: BigInt(0),
   monthlyExpensesCents: BigInt(0),
   monthlySavedCents: BigInt(0),
@@ -46,6 +45,7 @@ function baseInput(overrides: Partial<AnalyticsInput>): AnalyticsInput {
     accounts: [],
     allBalances: [],
     settings: BASE_SETTINGS,
+    goals: [],
     yfData: {},
     incomeEventsYtd: [],
     msciWorldHistory: [],
@@ -286,5 +286,46 @@ describe("computeAnalytics", () => {
     expect(row.isSoon).toBe(true);
     expect(row.isPast).toBe(false);
     expect(row.daysLeft).toBe(10);
+  });
+});
+
+describe("computeAnalytics - goals (v1.14)", () => {
+  it("returns an empty goals array when no goal is configured", () => {
+    const result = computeAnalytics(baseInput({}));
+    expect(result.goals).toEqual([]);
+  });
+
+  it("a net-worth-tracking goal (accountId: null) tracks total net worth", () => {
+    const input = baseInput({
+      accounts: [
+        account({ id: "checking", type: "CHECKING", history: [{ balanceCents: BigInt(10_000_00) }] }),
+      ],
+      goals: [{ id: "goal-1", name: "Patrimoine", targetCents: BigInt(20_000_00), targetDate: null, accountId: null }],
+    });
+
+    const result = computeAnalytics(input);
+
+    expect(result.goals).toHaveLength(1);
+    expect(result.goals[0].currentCents).toBe(result.netWorth);
+    expect(result.goals[0].currentCents).toBe(BigInt(10_000_00));
+    expect(result.goals[0].pct).toBe(50);
+    expect(result.goals[0].accountName).toBeNull();
+  });
+
+  it("an account-linked goal tracks that account's own current value, not net worth", () => {
+    const input = baseInput({
+      accounts: [
+        account({ id: "checking", name: "Compte courant", type: "CHECKING", history: [{ balanceCents: BigInt(1_000_00) }] }),
+        account({ id: "savings", name: "Livret A", type: "SAVINGS", history: [{ balanceCents: BigInt(4_000_00) }] }),
+      ],
+      goals: [{ id: "goal-1", name: "Fonds d'urgence", targetCents: BigInt(8_000_00), targetDate: null, accountId: "savings" }],
+    });
+
+    const result = computeAnalytics(input);
+
+    expect(result.goals[0].currentCents).toBe(BigInt(4_000_00));
+    expect(result.goals[0].currentCents).not.toBe(result.netWorth);
+    expect(result.goals[0].pct).toBe(50);
+    expect(result.goals[0].accountName).toBe("Livret A");
   });
 });

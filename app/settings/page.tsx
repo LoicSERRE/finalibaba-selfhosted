@@ -32,6 +32,8 @@ import { AlertChannelsSection } from "@/components/settings/alert-channels-secti
 import { AlertTriggersSection } from "@/components/settings/alert-triggers-section";
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
 import { getAlertRules } from "@/lib/actions/alert-rules";
+import { GoalsSection } from "@/components/settings/goals-section";
+import { getGoals } from "@/lib/actions/goals";
 
 // Names of the dedicated .env-configured sync integrations that currently
 // have real credentials set - used to warn before a user also configures
@@ -53,7 +55,7 @@ export default async function SettingsPage() {
   const dedicatedSyncNames = dedicatedEnvNames();
   const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
 
-  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, t] =
+  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, t] =
     await Promise.all([
       prisma.institution.findMany({
         include: {
@@ -92,6 +94,18 @@ export default async function SettingsPage() {
         select: { id: true, name: true, budgetCents: true },
         orderBy: { name: "asc" },
       }),
+      getGoals(),
+      // A goal's linked account can be REAL_ESTATE/AUTOMOBILE too (e.g.
+      // "down payment" toward a house), unlike the fiatAccounts/
+      // investmentAccounts pickers above which are each scoped to a
+      // narrower AlertRule kind - LOAN is the only exclusion, see
+      // components/settings/goals-section.tsx and the Goal model's own
+      // schema comment for why.
+      prisma.account.findMany({
+        where: { type: { not: "LOAN" } },
+        select: { id: true, name: true, type: true },
+        orderBy: { name: "asc" },
+      }),
       getTranslations(),
     ]);
 
@@ -119,9 +133,9 @@ export default async function SettingsPage() {
 
       {/* Institutions */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.institutions.title")}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-[var(--foreground)] truncate">{t("settings.institutions.title")}</h2>
             <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.institutions.subtitle")}</p>
           </div>
           <AddInstitutionDialog modules={woobModules} dedicatedEnvNames={dedicatedSyncNames} />
@@ -245,6 +259,7 @@ export default async function SettingsPage() {
                     );
                   })()}
                   <DeleteButton
+                    iconOnly
                     label={t("common.delete")}
                     description={t("deleteInstitution.description", { name: inst.name })}
                     onDelete={deleteInstitution.bind(null, inst.id)}
@@ -304,26 +319,6 @@ export default async function SettingsPage() {
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="goal" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                {t("settings.profile.goal")}
-              </label>
-              <div className="relative">
-                <input
-                  id="goal"
-                  name="goal"
-                  type="number"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  min="0"
-                  step="1000"
-                  defaultValue={Number(userSettings.savingsGoalCents) / 100}
-                  placeholder="50000"
-                  className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
-              </div>
-            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -353,6 +348,13 @@ export default async function SettingsPage() {
           </div>
         </form>
       </section>
+
+      {/* Savings goals (v1.14) - replaces the old single "Objectif
+          patrimoine" field above. Not demo-gated, same precedent as the
+          Financial profile section it supersedes - unlike alerts, a goal
+          never sends a real notification, so there's nothing demo-unsafe
+          about it. */}
+      <GoalsSection goals={goals} accounts={goalEligibleAccounts} />
 
       {/* Tax rates */}
       <section className="space-y-4">

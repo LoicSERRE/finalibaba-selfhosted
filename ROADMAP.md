@@ -194,12 +194,12 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 ---
 
-## v1.14 - Goals & long-term projection
+## v1.14 - Goals & long-term projection - Released ✓
 
 *Turns "where did my money go" into "am I actually on track" - reuses the CAGR/savings-rate/runway math Analytics already computes, rather than building a new calculation engine from scratch.*
 
-- [ ] **Multiple named savings goals** - replaces `UserSettings.savingsGoalCents`'s single global figure with a `Goal` model (name, target amount, optional target date, optional linked account), so "down payment: 40k/80k" and "emergency fund: 8k/10k" can be tracked independently, each with its own progress bar. Migration backfills the existing global goal as the first row so nothing already in use is lost
-- [ ] **Long-term net worth projection** - a compound-growth chart from current net worth, savings rate, and an assumed return, answering "at this pace, where am I in 10/20/30 years" - the one analytics gap against Finary's own "Vision" feature, the product this README already positions against directly
+- [X] **Multiple named savings goals** - replaces `UserSettings.savingsGoalCents`'s single global figure with a `Goal` model (name, target amount, optional target date, optional linked account), so "down payment: 40k/80k" and "emergency fund: 8k/10k" can be tracked independently, each with its own progress bar. Migration backfills the existing global goal as the first row so nothing already in use is lost. `accountId: null` tracks total net worth (the old single goal's exact math); `accountId: <id>` tracks that one account's own current value instead, reusing `lib/domain/analytics.ts`'s existing per-account `assetRows` - verified live end-to-end (migration backfill exact-cents match, create/edit/delete, an account-linked goal's progress matching that account's real balance, and cascade-delete when the linked account is removed). See `CLAUDE.md`'s "Savings goals" for the full design
+- [X] **Long-term net worth projection** - a compound-growth chart from current net worth, savings rate, and an assumed return, answering "at this pace, where am I in 10/20/30 years" - the one analytics gap against Finary's own "Vision" feature, the product this README already positions against directly. The assumed return is a live, client-side input (not a persisted setting) pre-filled from the portfolio's own real CAGR when available - a "what-if" exploration tool, recomputed instantly with no network round-trip. No schema change needed - every input (`netWorth`, `hasDeclaredSavings`, `monthlySavedCents`, `investCAGR`) already existed on `AnalyticsResult`. See `CLAUDE.md`'s "Long-term net worth projection" for the full design
 
 ---
 

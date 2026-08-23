@@ -86,6 +86,7 @@ model Account {
   incomeEvents        IncomeEvent[]
   sales               Sale[]
   alertRules          AlertRule[]
+  goals               Goal[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   gocardlessAccountId String?             @unique
@@ -222,6 +223,40 @@ model AlertRule {
   updatedAt DateTime @updatedAt
 
   @@index([active])
+}
+
+// One row per user-defined savings goal (v1.14) - replaces
+// UserSettings.savingsGoalCents's single global figure, which stays in
+// the schema unused (see that field's own comment) rather than being
+// dropped, per this repo's non-destructive-migration convention
+// (taxRatePea/Cto/Crypto follow the same pattern for a superseded column).
+//
+// accountId: null means the goal tracks total net worth (grossAssets -
+// totalLiabilities) - the exact math the old single global goal always
+// did. accountId: <id> means the goal tracks that one account's current
+// value instead. Both are equally normal, everyday choices - unlike
+// AlertRule's UNREALIZED_GAIN kind (where null accountId is the only
+// option that kind offers), a null accountId here is not a fallback, it's
+// "track my whole net worth" as a first-class goal shape.
+//
+// onDelete: Cascade (not SetNull) on accountId - same reasoning as
+// AlertRule's own accountId FK: a null accountId means something
+// different here ("track total net worth"), so silently falling back to
+// that when a linked account is deleted would silently change what the
+// goal measures instead of just removing the goal that no longer makes
+// sense. LOAN accounts are excluded from the picker entirely (see
+// lib/actions/goals.ts) - a loan is a liability, not something to save
+// toward - matching lib/domain/analytics.ts's own assetRows exclusion of
+// LOAN accounts for the same reason, so the picker and the value-lookup
+// source stay in agreement by construction.
+model Goal {
+  id          String    @id @default(cuid())
+  name        String
+  targetCents BigInt
+  targetDate  DateTime?
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
 }
 
 model HistoricalBalance {
@@ -403,6 +438,9 @@ model UserSettings {
   id                   String   @id @default("singleton")
   salaryNetCents       BigInt   @default(0)
   monthlyExpensesCents BigInt   @default(0)
+  // VESTIGIAL as of v1.14 - superseded by the Goal model (see its own
+  // comment). Kept, not dropped, per this repo's non-destructive-migration
+  // convention; no longer read or written anywhere in app code.
   savingsGoalCents     BigInt   @default(5000000)
   monthlySavedCents    BigInt   @default(0)
   taxRatePea           Float    @default(0.172)

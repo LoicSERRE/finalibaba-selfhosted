@@ -12,6 +12,7 @@
     "add": "Ajouter",
     "edit": "Modifier",
     "close": "Fermer",
+    "moreInfo": "Plus d'informations",
     "configure": "Configurer",
     "sync": "Synchroniser",
     "loading": "Chargement…",
@@ -431,7 +432,7 @@
       "warning": "Attention — renforcer l'épargne de précaution"
     },
     "goal": {
-      "title": "Cap des {amount}",
+      "title": "{name} · cap des {amount}",
       "remaining": "encore {amount}",
       "aria": "Objectif : {pct}%"
     },
@@ -547,7 +548,6 @@
       "subtitle": "Utilisé pour calculer votre taux d'épargne, runway et revenus passifs",
       "salary": "Salaire net mensuel",
       "expenses": "Dépenses incompressibles / mois",
-      "goal": "Objectif patrimoine",
       "saved": "Épargne mensuelle déclarée",
       "savedHint": "Livrets + investissements — hors virements inter-comptes et perf marché"
     },
@@ -750,6 +750,27 @@
       "resume": "Réactiver",
       "delete": "Supprimer",
       "deleteDescription": "Cette règle sera définitivement supprimée."
+    },
+    "goals": {
+      "title": "Objectifs d'épargne",
+      "subtitle": "Suis plusieurs objectifs indépendants, chacun avec sa propre barre de progression sur la page Analytique",
+      "create": "Ajouter un objectif",
+      "createTitle": "Nouvel objectif",
+      "editTitle": "Modifier l'objectif",
+      "nameField": "Nom",
+      "namePlaceholder": "Ex. Apport immobilier",
+      "targetField": "Montant cible (€)",
+      "targetDateField": "Date cible (optionnel)",
+      "accountField": "Compte lié",
+      "accountAllNetWorth": "Patrimoine total",
+      "creating": "Création…",
+      "saving": "Enregistrement…",
+      "confirm": "Créer",
+      "save": "Enregistrer",
+      "emptyTitle": "Aucun objectif",
+      "emptyDescription": "Ajoute un objectif pour suivre sa progression sur la page Analytique.",
+      "delete": "Supprimer",
+      "deleteDescription": "Cet objectif sera définitivement supprimé."
     }
   },
   "shared": {
@@ -800,6 +821,19 @@
     "noHistory": "Aucun historique",
     "ariaLabel": "Évolution du patrimoine net",
     "seriesLabel": "Patrimoine Net"
+  },
+  "projectionChart": {
+    "title": "Projection à long terme",
+    "assumedReturnLabel": "Rendement annuel supposé",
+    "contributionNote": "Basé sur {amount}/an d'épargne déclarée",
+    "noContributionNote": "Aucune épargne mensuelle déclarée — projection basée uniquement sur la croissance du patrimoine actuel",
+    "horizonSelectorLabel": "Horizon",
+    "horizonOption": "{years} ans",
+    "horizonLabel": "Dans {years} ans",
+    "ariaLabel": "Projection du patrimoine net à long terme",
+    "seriesLabel": "Patrimoine projeté",
+    "afterTaxSeriesLabel": "Net d'impôt estimé",
+    "afterTaxCalloutNote": "≈ {amount} net d'impôt"
   },
   "openBanking": {
     "connect": "Connecter",
