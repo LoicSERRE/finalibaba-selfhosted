@@ -16,6 +16,7 @@ import psycopg2.extras
 
 from db import (
     get_conn,
+    infer_account_type,
     record_balance,
     upsert_account,
     upsert_transaction,
@@ -23,29 +24,6 @@ from db import (
 )
 
 log = logging.getLogger(__name__)
-
-ACCOUNT_TYPE_MAP = {
-    "livret": "SAVINGS",
-    "épargne": "SAVINGS",
-    "ldd": "SAVINGS",
-    "pel": "SAVINGS",
-    "cel": "SAVINGS",
-    "ldds": "SAVINGS",
-    "savings": "SAVINGS",
-    "bourse": "INVESTMENT",
-    "pea": "INVESTMENT",
-    "cto": "INVESTMENT",
-    "titre": "INVESTMENT",
-    "actions": "INVESTMENT",
-}
-
-
-def _infer_account_type(label: str) -> str:
-    label_lower = label.lower()
-    for keyword, account_type in ACCOUNT_TYPE_MAP.items():
-        if keyword in label_lower:
-            return account_type
-    return "CHECKING"
 
 
 def _configure_woob(backend_name: str, module: str, login: str, password: str):
@@ -187,7 +165,7 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
         return None
     balance_cents = int(Decimal(str(account.balance)) * 100)
     sync_id = f"woob:{institution_id}:{account.id}"
-    account_type = _infer_account_type(account.label)
+    account_type = infer_account_type(account.label)
     account_db_id = upsert_account(
         cur,
         sync_id=sync_id,

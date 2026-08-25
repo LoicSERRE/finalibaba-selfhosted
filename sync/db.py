@@ -10,6 +10,48 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
+# Keyword -> AccountType, matched as a case-insensitive substring of the raw
+# bank-reported account label (Woob has no structured "is this a savings
+# account" field of its own to read instead). Previously duplicated between
+# sync_lcl.py and sync_woob.py, and had already drifted apart - sync_woob.py
+# had picked up "savings" and the investment-account keywords, sync_lcl.py
+# hadn't - a real bug found from a user report (some of their own real
+# savings accounts, LEP in particular, were landing in "Liquidités" instead
+# of "Épargne" on the dashboard's allocation chart). "lep" is the concrete
+# gap that caused it: a Livret d'Épargne Populaire's raw bank label is
+# often just "LEP" with no "livret" substring for the existing keyword to
+# catch. Consolidated here as the single shared source both scripts import,
+# so the two lists can't silently diverge again the way they just did.
+ACCOUNT_TYPE_KEYWORDS = {
+    "livret": "SAVINGS",
+    "épargne": "SAVINGS",
+    "ldd": "SAVINGS",
+    "ldds": "SAVINGS",
+    "pel": "SAVINGS",
+    "cel": "SAVINGS",
+    "lep": "SAVINGS",
+    "savings": "SAVINGS",
+    "bourse": "INVESTMENT",
+    "pea": "INVESTMENT",
+    "cto": "INVESTMENT",
+    "titre": "INVESTMENT",
+    "actions": "INVESTMENT",
+}
+
+
+def infer_account_type(label: str) -> str:
+    """Guess an AccountType from a raw bank-reported account label.
+
+    Defaults to CHECKING when nothing matches - the same "not detected as
+    something more specific" fallback this always had, not a new behavior.
+    """
+    label_lower = label.lower()
+    for keyword, account_type in ACCOUNT_TYPE_KEYWORDS.items():
+        if keyword in label_lower:
+            return account_type
+    return "CHECKING"
+
+
 def get_woob_institutions(cur) -> list[dict]:
     """Return all institutions with Woob credentials configured."""
     cur.execute(
