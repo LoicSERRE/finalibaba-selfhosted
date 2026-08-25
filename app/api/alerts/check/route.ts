@@ -362,7 +362,16 @@ async function checkHoldingPriceRule(rule: CustomAlertRule, settings: UserSettin
   if (shouldFire) {
     const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
     const currentEuros = Number(current) / 100;
-    const base = `Le prix de "${rule.holding.ticker}" (${rule.holding.account.name}) est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
+    // name falls back to ticker (a real ISIN, see CLAUDE.md's "Automatic
+    // categorization") only when no friendly name was ever set on the
+    // holding - same `name ?? ticker` convention every other holding
+    // display in this app already uses (holdings-table.tsx, investment-
+    // tab.tsx, export-accounts-button.tsx). This one was missed when the
+    // custom-alert-rules feature was built - a real report: the raw ISIN
+    // was showing up in the actual dispatched ntfy/email notification
+    // text, not just a display-only quirk.
+    const holdingLabel = rule.holding.name ?? rule.holding.ticker;
+    const base = `Le prix de "${holdingLabel}" (${rule.holding.account.name}) est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
     await dispatchAlert(settings, "Alerte prix d'une position", rule.message ? `${base}\n\n${rule.message}` : base);
   }
   if (isAbove !== rule.balanceLastAbove) {

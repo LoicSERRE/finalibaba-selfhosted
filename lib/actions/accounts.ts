@@ -140,6 +140,25 @@ export async function deleteAccount(id: string) {
   revalidateAll();
 }
 
+// Works for every account type - name has always been a plain, editable
+// column, there was just no UI surface to change it after creation (the
+// per-type dialogs below only ever edit their own type-specific fields:
+// updateRealEstateAccount/updateAutomobileAccount take a name parameter
+// purely to render it in their dialog's title, never to write it). No
+// uniqueness constraint on Account.name (unlike Institution.name, which
+// several sync-matching paths rely on being globally unique - see
+// CLAUDE.md's "Sync service" section), so a rename here is safe with no
+// collision handling needed.
+export async function renameAccount(formData: FormData) {
+  const id = formData.get("id") as string;
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) throw new Error("Le nom ne peut pas être vide.");
+
+  await prisma.account.update({ where: { id }, data: { name } });
+  revalidatePath(`/accounts/${id}`);
+  revalidateAll();
+}
+
 export async function updateRealEstateAccount(formData: FormData) {
   const id = formData.get("id") as string;
   const valueCents = parseCents(formData.get("value") as string);

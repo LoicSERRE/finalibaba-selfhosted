@@ -91,7 +91,7 @@ export default async function SettingsPage() {
       // holdings in the component) - see components/settings/alert-rules-section.tsx.
       prisma.account.findMany({
         where: { type: { in: ["INVESTMENT", "CRYPTO"] } },
-        select: { id: true, name: true, holdings: { select: { id: true, ticker: true }, orderBy: { ticker: "asc" } } },
+        select: { id: true, name: true, holdings: { select: { id: true, ticker: true, name: true }, orderBy: { ticker: "asc" } } },
         orderBy: { name: "asc" },
       }),
       prisma.category.findMany({

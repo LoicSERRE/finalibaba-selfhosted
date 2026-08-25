@@ -1052,6 +1052,12 @@
     "password": "Mot de passe",
     "creating": "Création…"
   },
+  "renameAccount": {
+    "trigger": "Renommer le compte",
+    "title": "Renommer le compte",
+    "nameField": "Nom du compte",
+    "submit": "Enregistrer"
+  },
   "updateRealEstate": {
     "title": "Mettre à jour — {name}",
     "value": "Valeur estimée (€)",

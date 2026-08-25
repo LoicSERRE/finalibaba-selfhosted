@@ -22,15 +22,19 @@ type AlertRuleRow = {
   account: { id: string; name: string } | null;
   balanceThresholdCents: bigint | null;
   category: { id: string; name: string; budgetCents: bigint | null } | null;
-  holding: { id: string; ticker: string; account: { id: string; name: string } } | null;
+  holding: { id: string; ticker: string; name: string | null; account: { id: string; name: string } } | null;
   gainUnit: "PERCENT" | "AMOUNT" | null;
   gainThresholdPct: number | null;
 };
 
 type PickerOption = { id: string; name: string };
 type CategoryOption = { id: string; name: string; budgetCents: bigint | null };
-type InvestmentAccountOption = { id: string; name: string; holdings: { id: string; ticker: string }[] };
-type HoldingOption = { id: string; ticker: string; accountName: string };
+type InvestmentAccountOption = { id: string; name: string; holdings: { id: string; ticker: string; name: string | null }[] };
+// ticker is a real ISIN (see CLAUDE.md's "Automatic categorization"), never
+// shown directly - name is the friendly display value everywhere else in
+// this app already shows a holding (holdings-table.tsx, investment-tab.tsx),
+// falling back to ticker only when no name was ever set on the holding.
+type HoldingOption = { id: string; ticker: string; name: string | null; accountName: string };
 
 // ACCOUNT_BALANCE and INVESTMENT_VALUE are structurally identical fields (an
 // account + a cents threshold) - only the eligible account list differs,
@@ -140,7 +144,7 @@ function HoldingPriceFields({
     return (
       <>
         <p className="text-sm text-[var(--foreground)]">
-          {rule?.holding?.ticker} · {rule?.holding?.account.name}
+          {rule?.holding?.name ?? rule?.holding?.ticker} · {rule?.holding?.account.name}
         </p>
         <Input
           label={t("thresholdField")}
@@ -163,7 +167,7 @@ function HoldingPriceFields({
         name="holdingId"
         options={[
           { value: "", label: t("holdingPlaceholder"), disabled: true },
-          ...holdings.map((h) => ({ value: h.id, label: `${h.ticker} · ${h.accountName}` })),
+          ...holdings.map((h) => ({ value: h.id, label: `${h.name ?? h.ticker} · ${h.accountName}` })),
         ]}
         defaultValue=""
         required
@@ -492,7 +496,7 @@ function ruleLabel(rule: AlertRuleRow, t: ReturnType<typeof useTranslations>): s
       });
     case "HOLDING_PRICE":
       return t("ruleHoldingPrice", {
-        ticker: rule.holding?.ticker ?? "?",
+        ticker: rule.holding?.name ?? rule.holding?.ticker ?? "?",
         threshold: formatCurrency(rule.balanceThresholdCents ?? BigInt(0)),
       });
     case "UNREALIZED_GAIN":
@@ -522,7 +526,7 @@ export function AlertRulesSection({
   const [pending, startTransition] = useTransition();
 
   const holdings: HoldingOption[] = investmentAccounts.flatMap((a) =>
-    a.holdings.map((h) => ({ id: h.id, ticker: h.ticker, accountName: a.name }))
+    a.holdings.map((h) => ({ id: h.id, ticker: h.ticker, name: h.name, accountName: a.name }))
   );
 
   function handleToggle(id: string, active: boolean) {

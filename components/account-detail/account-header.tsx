@@ -3,6 +3,7 @@ import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import { UpdateRealEstateDialog } from "@/components/accounts/update-real-estate-dialog";
 import { UpdateAutomobileDialog } from "@/components/accounts/update-automobile-dialog";
+import { RenameAccountDialog } from "@/components/accounts/rename-account-dialog";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 import type { getTranslations } from "next-intl/server";
 
@@ -67,7 +68,10 @@ export function AccountHeader({
               {account.institution?.name && `${account.institution.name} · `}{ta(account.type as Parameters<typeof ta>[0])}{subtypeLabel}
             </p>
           </div>
-          <h1 className="text-2xl font-semibold text-[var(--foreground)]">{account.name}</h1>
+          <div className="flex items-center gap-1">
+            <h1 className="text-2xl font-semibold text-[var(--foreground)]">{account.name}</h1>
+            <RenameAccountDialog id={account.id} name={account.name} />
+          </div>
           {isFiat && latestDelta !== null && latestDelta !== BigInt(0) && (
             <p
               className={`text-sm tabular-nums mt-2 ${
