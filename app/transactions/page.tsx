@@ -105,6 +105,13 @@ export default async function TransactionsPage({
   };
 
   return (
+    // max-w-5xl, not this app's usual max-w-4xl (every other page) -
+    // deliberate, confirmed during the v1.15 UI/UX audit rather than left
+    // as unexplained drift: this is the one page with a real 5-column
+    // table (date/account/label/category/amount) behind a 5-field filter
+    // bar, both of which read as visibly cramped at 4xl - the account/
+    // category columns in particular need more room than the per-account
+    // transactions table (which never shows an account column at all).
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>

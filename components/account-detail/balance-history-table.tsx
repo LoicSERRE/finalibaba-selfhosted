@@ -23,6 +23,14 @@ export function BalanceHistoryTable({
   existingBalanceDates: string[];
   existingFingerprints: string[];
 }>) {
+  // Not a dead end for the import buttons when history is empty - checked
+  // during the v1.15 UI/UX audit and confirmed safe, not just assumed:
+  // app/accounts/[id]/page.tsx renders this component only alongside a
+  // sibling EmptyState block gated on the exact same `historyRows.length
+  // === 0` condition, which carries its own copies of
+  // ImportBalanceHistoryDialog/ImportTransactionsDialog in its `action`
+  // prop. The two are mutually exclusive by construction (only one can
+  // ever be visible for a given render), not two competing empty states.
   if (historyRows.length === 0) return null;
 
   return (
