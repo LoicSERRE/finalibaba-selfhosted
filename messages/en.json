@@ -618,6 +618,29 @@
       "regenerateHint": "Old backup codes will be invalidated. Enter a current verification code to confirm (backup codes aren't accepted here).",
       "unknownError": "An unexpected error occurred."
     },
+    "appLock": {
+      "title": "App lock",
+      "subtitle": "Quick unlock via the device's fingerprint/Face ID/PIN, on top of (or instead of) the password - independent of built-in auth",
+      "addDevice": "Add a device",
+      "addTitle": "Register this device",
+      "addHint": "Your browser will ask you to confirm with the device's fingerprint, Face ID, or PIN.",
+      "deviceLabelField": "Device name",
+      "deviceLabelPlaceholder": "My iPhone",
+      "registering": "Registering…",
+      "register": "Register",
+      "unsupported": "Not available - this browser doesn't support WebAuthn, or the page isn't served over HTTPS (or localhost).",
+      "enabledStatus": "Enabled",
+      "disabledStatus": "Disabled",
+      "disable": "Disable",
+      "emptyTitle": "No device registered",
+      "emptyDescription": "Add a device to enable quick unlock.",
+      "registeredOn": "Added on {date}",
+      "lastUsedOn": "Last unlocked on {date}",
+      "neverUsed": "Never used",
+      "remove": "Remove",
+      "removeDescription": "This device will no longer be able to unlock the app. If it was the last registered device, app lock will be disabled.",
+      "unknownError": "An unexpected error occurred."
+    },
     "shareLinks": {
       "title": "Read-only share links",
       "subtitle": "Generate a link to share the dashboard with an accountant or a family member, without giving write access",
@@ -1122,6 +1145,14 @@
   "autoSync": {
     "syncing": "Syncing…",
     "syncDone": "Sync complete"
+  },
+  "appLock": {
+    "lockTitle": "App locked",
+    "lockSubtitle": "Unlock with your fingerprint, Face ID, or device PIN.",
+    "unlockButton": "Unlock",
+    "unlocking": "Verifying…",
+    "unsupported": "This browser doesn't support quick unlock on this page (HTTPS or localhost required).",
+    "unknownError": "Unlock failed."
   },
   "exportAnalytics": {
     "button": "Export",

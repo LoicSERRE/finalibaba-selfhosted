@@ -24,6 +24,8 @@ import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { ThemeSwitcher } from "@/components/settings/theme-switcher";
 import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
+import { AppLockSection } from "@/components/settings/app-lock-section";
+import { getAppLockStatus } from "@/lib/actions/app-lock";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { getShareLinks } from "@/lib/actions/share-links";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
@@ -55,7 +57,7 @@ export default async function SettingsPage() {
   const dedicatedSyncNames = dedicatedEnvNames();
   const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
 
-  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, t] =
+  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, t] =
     await Promise.all([
       prisma.institution.findMany({
         include: {
@@ -106,6 +108,7 @@ export default async function SettingsPage() {
         select: { id: true, name: true, type: true },
         orderBy: { name: "asc" },
       }),
+      getAppLockStatus(),
       getTranslations(),
     ]);
 
@@ -510,6 +513,17 @@ export default async function SettingsPage() {
           mode (setup/disable mutations are blocked anyway) */}
       {process.env.AUTH_ENABLED === "true" && process.env.DEMO_MODE !== "true" && (
         <TwoFactorSection totpEnabled={userSettings.totpEnabled} />
+      )}
+
+      {/* App-lock - deliberately NOT gated by AUTH_ENABLED like 2FA above,
+          same "independent of AUTH_ENABLED" precedent as ShareLink below:
+          a fast local unlock for an already-installed, already-trusted PWA,
+          meant to work even on a private-network instance with no password
+          login at all. Hidden in demo mode only (registration/toggle
+          mutations would be blocked anyway, and a public demo has no real
+          device-pairing story). */}
+      {process.env.DEMO_MODE !== "true" && (
+        <AppLockSection enabled={appLockStatus.enabled} credentials={appLockStatus.credentials} />
       )}
 
       {/* Read-only share links - deliberately NOT gated by AUTH_ENABLED like

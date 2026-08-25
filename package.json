@@ -36,6 +36,8 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.2",
     "@swc/helpers": "^0.5.23",
     "bcryptjs": "^3.0.3",
     "decimal.js": "^10.6.0",

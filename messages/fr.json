@@ -618,6 +618,29 @@
       "regenerateHint": "Les anciens codes de secours seront invalidés. Saisis un code de vérification actuel pour confirmer (les codes de secours ne sont pas acceptés ici).",
       "unknownError": "Une erreur inattendue s'est produite."
     },
+    "appLock": {
+      "title": "Verrouillage de l'appli",
+      "subtitle": "Déverrouillage rapide par empreinte/Face ID/code PIN de l'appareil, en plus (ou à la place) du mot de passe - indépendant de l'authentification intégrée",
+      "addDevice": "Ajouter un appareil",
+      "addTitle": "Enregistrer cet appareil",
+      "addHint": "Ton navigateur va te demander de confirmer avec l'empreinte, Face ID ou le code de l'appareil.",
+      "deviceLabelField": "Nom de l'appareil",
+      "deviceLabelPlaceholder": "iPhone de Loïc",
+      "registering": "Enregistrement…",
+      "register": "Enregistrer",
+      "unsupported": "Non disponible - ce navigateur ne supporte pas WebAuthn, ou la page n'est pas servie en HTTPS (ou localhost).",
+      "enabledStatus": "Activé",
+      "disabledStatus": "Désactivé",
+      "disable": "Désactiver",
+      "emptyTitle": "Aucun appareil enregistré",
+      "emptyDescription": "Ajoute un appareil pour activer le verrouillage rapide.",
+      "registeredOn": "Ajouté le {date}",
+      "lastUsedOn": "Dernier déverrouillage le {date}",
+      "neverUsed": "Jamais utilisé",
+      "remove": "Retirer",
+      "removeDescription": "Cet appareil ne pourra plus déverrouiller l'appli. Si c'était le dernier appareil enregistré, le verrouillage sera désactivé.",
+      "unknownError": "Une erreur inattendue s'est produite."
+    },
     "shareLinks": {
       "title": "Liens de partage en lecture seule",
       "subtitle": "Génère un lien pour partager le tableau de bord avec un comptable ou un proche, sans lui donner d'accès en écriture",
@@ -1122,6 +1145,14 @@
   "autoSync": {
     "syncing": "Synchronisation en cours…",
     "syncDone": "Synchronisation terminée"
+  },
+  "appLock": {
+    "lockTitle": "Appli verrouillée",
+    "lockSubtitle": "Déverrouille avec ton empreinte, Face ID ou le code de l'appareil.",
+    "unlockButton": "Déverrouiller",
+    "unlocking": "Vérification…",
+    "unsupported": "Ce navigateur ne supporte pas le déverrouillage rapide sur cette page (HTTPS ou localhost requis).",
+    "unknownError": "Échec du déverrouillage."
   },
   "exportAnalytics": {
     "button": "Exporter",

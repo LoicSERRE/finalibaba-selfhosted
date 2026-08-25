@@ -7,6 +7,8 @@ import { SidebarWrapper } from "@/components/layout/sidebar-wrapper";
 import { AutoSync } from "@/components/layout/auto-sync";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import { OfflineBanner } from "@/components/layout/offline-banner";
+import { AppLockGate } from "@/components/layout/app-lock-gate";
+import { prisma } from "@/lib/db/prisma";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -58,6 +60,15 @@ export default async function RootLayout({
   const locale = await getLocale();
   const messages = await getMessages();
   const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
+  // Skipped entirely in demo mode - no real device-pairing story for a
+  // public demo, and this would just be an extra query on every page load
+  // for a feature that can never actually be enabled there anyway (see
+  // app/settings/page.tsx's own AppLockSection gate).
+  const appLockEnabled =
+    process.env.DEMO_MODE === "true"
+      ? false
+      : (await prisma.userSettings.findUnique({ where: { id: "singleton" }, select: { appLockEnabled: true } }))
+          ?.appLockEnabled ?? false;
 
   return (
     <html
@@ -77,13 +88,15 @@ export default async function RootLayout({
           >
             Skip to content
           </a>
-          <SidebarWrapper />
-          <main id="main-content" className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8">
-            <div className="sticky top-0 z-10">
-              <OfflineBanner />
-            </div>
-            <div className="p-4 md:p-8">{children}</div>
-          </main>
+          <AppLockGate enabled={appLockEnabled}>
+            <SidebarWrapper />
+            <main id="main-content" className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8">
+              <div className="sticky top-0 z-10">
+                <OfflineBanner />
+              </div>
+              <div className="p-4 md:p-8">{children}</div>
+            </main>
+          </AppLockGate>
           {process.env.DEMO_MODE !== "true" && <AutoSync />}
           <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} />
         </NextIntlClientProvider>

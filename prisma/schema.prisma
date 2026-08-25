@@ -458,6 +458,16 @@ model UserSettings {
   // bcrypt hashes, one per unused backup code - a consumed code is removed
   // from the array (not just flagged), so its length is also "codes remaining".
   totpBackupCodes      String[] @default([])
+  // App-lock (WebAuthn) - deliberately independent of AUTH_ENABLED/totp
+  // above, same "independent of AUTH_ENABLED" precedent as ShareLink: a
+  // fast local unlock for an already-installed, already-trusted PWA, not a
+  // replacement for the server-side session AUTH_ENABLED provides.
+  // appLockChallenge is transient per-ceremony state (registration or
+  // authentication, never both at once for a single-user app) - same
+  // "single reusable slot, safe to overwrite an abandoned attempt" trust
+  // model as totpSecret above during setup.
+  appLockEnabled       Boolean  @default(false)
+  appLockChallenge     String?
   // Alert channels - blank/null = that channel is disabled, same "leave
   // blank to disable" convention as every optional integration in
   // .env.example. smtpPassword is plaintext, same trust model as
@@ -536,4 +546,23 @@ model ApiKey {
   label      String?
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
+}
+
+// One row per registered WebAuthn authenticator (Settings -> "Verrouillage
+// de l'appli") - a device's platform authenticator (Touch ID, Windows
+// Hello, Android biometric) gets its own key pair, so a user with the PWA
+// installed on both a phone and a laptop registers two separate rows here,
+// each independently revocable. publicKey/counter are the standard WebAuthn
+// verification pair (COSE public key + signature counter for replay
+// detection) - never a secret to protect the way totpSecret is, the public
+// key can't be used to authenticate on its own without the matching private
+// key that never leaves the device's secure hardware.
+model AppLockCredential {
+  id           String    @id @default(cuid())
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      Int       @default(0)
+  deviceLabel  String
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
 }
