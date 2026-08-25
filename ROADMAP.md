@@ -203,7 +203,7 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 ---
 
-## v1.15 - Mobile depth & a full UI/UX pass
+## v1.15 - Mobile depth & a full UI/UX pass - Released ✓
 
 *Closes the mobile gap without a native rewrite - stays inside the existing PWA architecture - then a systematic design audit now that the feature surface has grown well past the last one (v1.10.2), covering both older pages and the new transaction ledger/split UI/goals screens from v1.13-v1.14.*
 
