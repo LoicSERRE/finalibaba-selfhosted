@@ -1,5 +1,6 @@
 import { NetWorthChart } from "@/components/shared/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { DailyHistoryPoint } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
@@ -23,8 +24,9 @@ export function ChartsSection({
         <NetWorthChart data={dailyHistory} />
       </div>
       <div className="md:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
-        <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+        <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4 flex items-center gap-1">
           {t("charts.allocation")}
+          <InfoTooltip>{t("charts.allocationHint")}</InfoTooltip>
         </h2>
         <AssetAllocationChart data={allocationSlices} />
       </div>

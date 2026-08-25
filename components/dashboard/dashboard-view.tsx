@@ -5,6 +5,7 @@ import { NetWorthChart } from "@/components/shared/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { DashboardDelta, DashboardHistoryPoint, DashboardInstitutionGroup } from "@/lib/domain/dashboard";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
@@ -111,8 +112,9 @@ export function DashboardView({
             <NetWorthChart data={history} />
           </div>
           <div className="md:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
-            <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+            <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4 flex items-center gap-1">
               {t("dashboard.allocationChart")}
+              <InfoTooltip>{t("dashboard.allocationHint")}</InfoTooltip>
             </h2>
             <AssetAllocationChart data={allocationSlices} />
           </div>
