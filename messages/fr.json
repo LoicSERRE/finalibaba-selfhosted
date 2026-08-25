@@ -571,7 +571,8 @@
     "theme": {
       "title": "Apparence",
       "dark": "Sombre",
-      "light": "Clair"
+      "light": "Clair",
+      "auto": "Auto"
     },
     "sync": {
       "title": "Synchronisation automatique",

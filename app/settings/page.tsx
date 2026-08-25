@@ -26,6 +26,7 @@ import { BackupRestoreSection } from "@/components/settings/backup-restore-secti
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { AppLockSection } from "@/components/settings/app-lock-section";
 import { getAppLockStatus } from "@/lib/actions/app-lock";
+import { resolveThemePreference } from "@/lib/domain/theme";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { getShareLinks } from "@/lib/actions/share-links";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
@@ -57,7 +58,7 @@ function dedicatedEnvNames(): Set<string> {
 export default async function SettingsPage() {
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
   const dedicatedSyncNames = dedicatedEnvNames();
-  const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
+  const theme = resolveThemePreference((await cookies()).get("THEME")?.value);
 
   const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
     await Promise.all([

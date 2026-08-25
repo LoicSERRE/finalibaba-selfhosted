@@ -35,14 +35,16 @@
   color-scheme: dark;
 }
 
-/* Light theme - explicit opt-in only (Settings → Apparence), never
-   auto-applied from prefers-color-scheme. Dark stays the bare :root
-   default above regardless of OS preference - this app has always been
-   dark-only, and silently switching existing users to light because their
-   OS happens to be set that way (for reasons unrelated to this app) would
-   be a surprising regression, not a feature. [data-theme="light"] is set
-   server-side on <html> from the THEME cookie (see lib/actions/theme.ts),
-   the same pattern app/layout.tsx already uses for NEXT_LOCALE.
+/* Light theme - explicit opt-in only (Settings → Apparence). Dark stays
+   the bare :root default above for an unset/invalid THEME cookie, or an
+   explicit "dark" choice - this app has always been dark-only, and
+   silently switching a user to light on their very first visit just
+   because their OS happens to be set that way would be a surprising
+   regression, not a feature (see lib/domain/theme.ts's
+   resolveThemePreference - "dark" is what an unset/invalid cookie
+   resolves to, never "auto"). [data-theme="light"] is set server-side on
+   <html> from the THEME cookie (see lib/actions/theme.ts), the same
+   pattern app/layout.tsx already uses for NEXT_LOCALE.
    --accent/--accent-strong are deliberately NOT overridden here - the
    brand indigo works as a background/button color regardless of overall
    theme (accent-strong's white-on-accent-strong contrast, computed below,
@@ -65,6 +67,42 @@
   --negative: #dc2626; /* 4.83:1 on --surface */
   --warning: #b45309; /* 5.02:1 on --surface */
   color-scheme: light;
+}
+
+/* "Auto" theme (v1.15) - a 3rd explicit choice alongside Sombre/Clair
+   above, additive to the opt-in-only decision documented there, not a
+   reversal of it: this only ever applies when the user themselves picked
+   "Auto" (app/layout.tsx then renders <html> with no data-theme attribute
+   at all, letting this rule decide), never as a fallback for an unset
+   cookie. `:not([data-theme])` - not `:not([data-theme="dark"])` - is
+   what makes this safe: it matches only the complete absence of the
+   attribute, so it can never collide in specificity with the unconditional
+   :root[data-theme="light"] rule above or an explicit :root[data-theme=
+   "dark"] choice (app/layout.tsx renders that attribute explicitly even
+   though it duplicates the bare :root default's own values, specifically
+   so this selector excludes it - an explicit "Sombre" pick must never get
+   silently overridden by a light-preferring OS). Same palette as
+   [data-theme="light"] above, intentionally duplicated rather than
+   factored through an indirection layer of raw/base custom properties -
+   two ~10-line static value blocks, not shared logic that could drift
+   silently wrong. This block re-evaluates live the instant the OS theme
+   changes (a scheduled day/night switch, for example) with zero JS and no
+   flash-of-wrong-theme on initial paint - both properties of `@media
+   (prefers-color-scheme)` itself, not something built here. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --background: #f7f7fa;
+    --foreground: #18181b;
+    --surface: #ffffff;
+    --surface-elevated: #eeeef3;
+    --border: #e2e2e8;
+    --muted: #6b6b76;
+    --accent-text: #4f46e5;
+    --positive: #15803d;
+    --negative: #dc2626;
+    --warning: #b45309;
+    color-scheme: light;
+  }
 }
 
 @theme inline {

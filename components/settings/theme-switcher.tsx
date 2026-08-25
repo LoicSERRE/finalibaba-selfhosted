@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { useTranslations } from "next-intl";
 
-const THEMES = ["dark", "light"] as const;
+const THEMES = ["dark", "light", "auto"] as const;
 type Theme = (typeof THEMES)[number];
 
 // Mirrors components/settings/language-switcher.tsx's exact shape - no
@@ -24,7 +24,7 @@ export function ThemeSwitcher({ theme }: Readonly<{ theme: Theme }>) {
   }
 
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
       <span className="text-sm text-[var(--foreground)]">{t(theme)}</span>
       <div className="flex items-center gap-1 bg-[var(--surface-elevated)] rounded-lg p-1">
         {THEMES.map((th) => (

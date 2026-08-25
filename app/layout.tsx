@@ -9,6 +9,7 @@ import { ServiceWorkerRegistration } from "@/components/layout/service-worker-re
 import { OfflineBanner } from "@/components/layout/offline-banner";
 import { AppLockGate } from "@/components/layout/app-lock-gate";
 import { prisma } from "@/lib/db/prisma";
+import { resolveThemePreference } from "@/lib/domain/theme";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -43,12 +44,17 @@ export const metadata: Metadata = {
 // (see CLAUDE.md's route table - almost nothing in this app is `○` static),
 // so making viewport async here doesn't introduce a new blocking cost.
 export async function generateViewport(): Promise<Viewport> {
-  const theme = (await cookies()).get("THEME")?.value;
+  const theme = resolveThemePreference((await cookies()).get("THEME")?.value);
   return {
     width: "device-width",
     initialScale: 1,
     themeColor: "#6366f1",
-    colorScheme: theme === "light" ? "light" : "dark",
+    // "light dark" (not a single fixed value) tells the browser it can
+    // pick either at its own discretion for native UI (scrollbars, form
+    // controls) - the only way those follow an OS theme change live too,
+    // not just this app's own CSS tokens (globals.css's own
+    // @media(prefers-color-scheme) block).
+    colorScheme: theme === "auto" ? "light dark" : theme,
   };
 }
 
@@ -59,7 +65,7 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
-  const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
+  const theme = resolveThemePreference((await cookies()).get("THEME")?.value);
   // Skipped entirely in demo mode - no real device-pairing story for a
   // public demo, and this would just be an extra query on every page load
   // for a feature that can never actually be enabled there anyway (see
@@ -73,11 +79,15 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      // No attribute at all for dark (the bare :root default in
-      // globals.css) - only light is an explicit override, see that
-      // file's own comment for why dark never auto-switches from
-      // prefers-color-scheme.
-      {...(theme === "light" ? { "data-theme": "light" } : {})}
+      // "auto" renders no attribute at all, letting globals.css's
+      // @media(prefers-color-scheme) block decide live - "dark" renders an
+      // explicit attribute too, even though it duplicates the bare :root
+      // default's own values, specifically so that block's
+      // :not([data-theme]) condition excludes it (an explicit "Sombre"
+      // choice must never get silently overridden by a light-preferring
+      // OS). See globals.css's "Light theme"/"Auto theme" comments for the
+      // full reasoning.
+      {...(theme === "auto" ? {} : { "data-theme": theme })}
       className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased h-full`}
     >
       <body className="flex min-h-full bg-[var(--background)]">

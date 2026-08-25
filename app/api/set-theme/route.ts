@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const SUPPORTED = new Set(["dark", "light"]);
+const SUPPORTED = new Set(["dark", "light", "auto"]);
 
 export async function GET(request: Request) {
   const theme = new URL(request.url).searchParams.get("theme") ?? "";

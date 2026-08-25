@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-const SUPPORTED = new Set(["dark", "light"]);
+const SUPPORTED = new Set(["dark", "light", "auto"]);
 
 export async function setTheme(theme: string) {
   if (!SUPPORTED.has(theme)) return;
