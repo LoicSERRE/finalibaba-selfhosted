@@ -23,9 +23,13 @@ type Subscription = {
 // publicKey prop both use everywhere else.
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const base64Safe = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const base64Safe = (base64 + padding).replaceAll("-", "+").replaceAll("_", "/");
   const raw = atob(base64Safe);
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  // codePointAt, not charCodeAt - every character here is a single-byte
+  // base64 alphabet character from atob's own output, so the two are
+  // equivalent in practice; the `?? 0` fallback is never actually hit,
+  // just satisfying codePointAt's wider (number | undefined) return type.
+  return Uint8Array.from(raw, (c) => c.codePointAt(0) ?? 0);
 }
 
 export function WebPushSection({

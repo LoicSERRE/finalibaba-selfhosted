@@ -297,11 +297,16 @@ export function ProjectionChart({
                 the Y-axis's own top tick label, a real overlap bug found
                 live. Recharts reserves real layout height for its own
                 Legend, so the chart body is pushed down automatically and
-                this can't recur regardless of chart height/content. */}
+                this can't recur regardless of chart height/content.
+                `position="top"` (Recharts 3.10+), not the older
+                `verticalAlign`/`align` pair (both deprecated in favor of
+                `position`, flagged by SonarQube) - centers the legend
+                above the chart rather than left-aligning it, the one
+                cosmetic difference; the actual point (a real reserved row,
+                not overlap-prone absolute positioning) is unchanged. */}
             {showAfterTax && (
               <Legend
-                verticalAlign="top"
-                align="left"
+                position="top"
                 height={28}
                 wrapperStyle={{ fontSize: 12, color: "var(--muted)" }}
               />

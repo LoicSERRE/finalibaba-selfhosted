@@ -8,10 +8,8 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
   type WebAuthnCredential,
-} from "@simplewebauthn/server";
-import type {
-  RegistrationResponseJSON,
-  AuthenticationResponseJSON,
+  type RegistrationResponseJSON,
+  type AuthenticationResponseJSON,
 } from "@simplewebauthn/server";
 import { prisma } from "@/lib/db/prisma";
 

@@ -31,9 +31,12 @@ export function BalanceHistoryChart({ data }: Readonly<{ data: BalancePoint[] }>
   // Recharts' own labelFormatter type is (label: ReactNode) => ReactNode -
   // wider than this component ever actually receives (always the isoDate
   // string, for a category axis) - narrowed to a plain string here since
-  // that's the only case that ever really happens.
+  // that's the only case that ever really happens. The non-string branch
+  // is purely to satisfy that wider type, not a real case - an empty
+  // string, not String(isoDate) (SonarQube S6551: risks "[object Object]"
+  // for a non-primitive ReactNode).
   function formatShortDate(isoDate: React.ReactNode): string {
-    if (typeof isoDate !== "string") return String(isoDate);
+    if (typeof isoDate !== "string") return "";
     return shortDateFormat.format(new Date(`${isoDate}T00:00:00`));
   }
 
