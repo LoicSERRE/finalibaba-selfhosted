@@ -20,7 +20,7 @@ export function BalanceChartSection({
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2 mb-4">
         <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
           {td("balanceEvolution")}
         </h2>

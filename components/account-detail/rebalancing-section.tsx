@@ -1,4 +1,5 @@
 import { formatCurrency } from "@/lib/utils/format";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { RebalancingRow } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
@@ -15,8 +16,9 @@ export function RebalancingSection({
 
   return (
     <div className="border-t border-[var(--border)] px-6 py-4">
-      <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-3">
+      <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-3 flex items-center gap-1">
         {td("rebalancing.title")}
+        <InfoTooltip>{td("rebalancing.footnote")}</InfoTooltip>
       </p>
       <div className="space-y-3">
         {rebalancingRows.map((h) => (
@@ -48,7 +50,6 @@ export function RebalancingSection({
           </div>
         ))}
       </div>
-      <p className="text-xs text-[var(--muted)] mt-3 opacity-70">{td("rebalancing.footnote")}</p>
     </div>
   );
 }

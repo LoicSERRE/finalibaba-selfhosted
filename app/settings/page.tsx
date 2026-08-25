@@ -133,9 +133,9 @@ export default async function SettingsPage() {
 
       {/* Institutions */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-[var(--foreground)] truncate">{t("settings.institutions.title")}</h2>
+        <div className="flex items-start justify-between flex-wrap gap-x-3 gap-y-2">
+          <div>
+            <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.institutions.title")}</h2>
             <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.institutions.subtitle")}</p>
           </div>
           <AddInstitutionDialog modules={woobModules} dedicatedEnvNames={dedicatedSyncNames} />

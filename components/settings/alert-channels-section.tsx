@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { updateAlertChannels } from "@/lib/actions/alerts";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { Button } from "@/components/ui/button";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 // Client-side only - a pure "fill the field" convenience, not persisted
 // until the form's own Save button runs updateAlertChannels. 192 bits from
@@ -95,7 +96,10 @@ export function AlertChannelsSection({
       <form action={updateAlertChannels} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-5">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("ntfySectionTitle")}</p>
+            <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
+              {t("ntfySectionTitle")}
+              <InfoTooltip>{t("ntfyHint")}</InfoTooltip>
+            </p>
             <label className="flex items-center gap-2 cursor-pointer">
               <span className="text-xs text-[var(--foreground)]">{t("channelEnabled")}</span>
               <input
@@ -140,11 +144,11 @@ export function AlertChannelsSection({
                 )}
               </div>
             </div>
-            <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyHint")}</p>
 
             <div className="space-y-1.5 pt-1">
-              <label htmlFor="ntfyAuthToken" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+              <label htmlFor="ntfyAuthToken" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
                 {t("ntfyAuthToken")}
+                <InfoTooltip>{t("ntfyAuthTokenHint")}</InfoTooltip>
               </label>
               <input
                 id="ntfyAuthToken"
@@ -155,7 +159,6 @@ export function AlertChannelsSection({
                 placeholder="tk_..."
                 className={inputClass}
               />
-              <p className="text-xs text-[var(--muted)] opacity-70">{t("ntfyAuthTokenHint")}</p>
             </div>
           </div>
         </div>
@@ -257,8 +260,9 @@ export function AlertChannelsSection({
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="smtpPassword" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+              <label htmlFor="smtpPassword" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
                 {t("smtpPassword")}
+                <InfoTooltip>{t("smtpPasswordHint")}</InfoTooltip>
               </label>
               <input
                 id="smtpPassword"
@@ -270,11 +274,11 @@ export function AlertChannelsSection({
               />
             </div>
           </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("smtpPasswordHint")}</p>
 
           <div className="space-y-1.5">
-            <label htmlFor="smtpFrom" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+            <label htmlFor="smtpFrom" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
               {t("smtpFrom")}
+              <InfoTooltip>{t("smtpFromHint")}</InfoTooltip>
             </label>
             <input
               id="smtpFrom"
@@ -285,7 +289,6 @@ export function AlertChannelsSection({
               placeholder="finalibaba@example.com"
               className={inputClass}
             />
-            <p className="text-xs text-[var(--muted)] opacity-70">{t("smtpFromHint")}</p>
           </div>
           <p className="text-xs text-[var(--muted)] opacity-70">{t("emailHint")}</p>
           </div>

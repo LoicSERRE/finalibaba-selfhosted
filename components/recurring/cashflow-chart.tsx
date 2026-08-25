@@ -46,7 +46,7 @@ export function CashflowChart({ data }: Readonly<{ data: DataPoint[] }>) {
             tabIndex={0}) - a mobile tap otherwise leaves a stuck native
             focus ring. role="img" above already covers the accessible
             name. */}
-        <AreaChart data={data} margin={{ top: 4, right: 0, left: 8, bottom: 0 }} accessibilityLayer={false}>
+        <AreaChart data={data} margin={{ top: 4, right: 16, left: 8, bottom: 0 }} accessibilityLayer={false}>
           <defs>
             <linearGradient id="cashflowGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.25} />
@@ -87,6 +87,8 @@ export function CashflowChart({ data }: Readonly<{ data: DataPoint[] }>) {
             fill="url(#cashflowGradient)"
             dot={false}
             activeDot={{ r: 4, fill: "var(--accent)" }}
+            // See net-worth-chart.tsx's identical prop for why.
+            isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>

@@ -12,10 +12,16 @@ export function DeleteAccountButton({
   id,
   name,
   backHref,
+  iconOnly = false,
 }: Readonly<{
   id: string;
   name: string;
   backHref: string;
+  // Same convention as components/shared/delete-button.tsx's own prop -
+  // for a row already crowded with other figures (e.g. the loan cards in
+  // loan-tab.tsx), a labeled "Supprimer" pill was overflowing the card on
+  // mobile. Off by default everywhere else this button is used.
+  iconOnly?: boolean;
 }>) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -36,9 +42,9 @@ export function DeleteAccountButton({
       onOpenChange={setOpen}
       title={t("deleteAccount.title")}
       trigger={
-        <Button variant="destructive" size="sm">
+        <Button variant="destructive" size="sm" aria-label={iconOnly ? t("common.delete") : undefined}>
           <Trash2 size={12} aria-hidden="true" />
-          {t("common.delete")}
+          {!iconOnly && t("common.delete")}
         </Button>
       }
     >

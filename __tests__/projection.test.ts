@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectNetWorth } from "@/lib/domain/projection";
+import { projectNetWorth, projectNetWorthSplit } from "@/lib/domain/projection";
 
 describe("projectNetWorth", () => {
   it("year 0 always equals the current net worth exactly", () => {
@@ -116,5 +116,117 @@ describe("projectNetWorth", () => {
       effectiveTaxRate: 0.3,
     });
     expect(points[0].netWorthAfterTaxCents).toBe(50_000_00);
+  });
+});
+
+describe("projectNetWorthSplit", () => {
+  it("year 0 equals liquid + invested + fixed exactly", () => {
+    const points = projectNetWorthSplit({
+      liquidCurrentCents: 20_000_00,
+      investedCurrentCents: 50_000_00,
+      fixedCurrentCents: 100_000_00,
+      annualContributionCents: 6_000_00,
+      liquidReturnRate: 0.02,
+      investedReturnRate: 0.07,
+      horizonYears: 10,
+    });
+    expect(points[0].netWorthCents).toBe(170_000_00);
+    expect(points[0].netWorthAfterTaxCents).toBe(170_000_00);
+  });
+
+  it("fixedCurrentCents never grows - a fixed offset with 0/0 growing balance stays flat", () => {
+    const points = projectNetWorthSplit({
+      liquidCurrentCents: 0,
+      investedCurrentCents: 0,
+      fixedCurrentCents: 250_000_00,
+      annualContributionCents: 0,
+      liquidReturnRate: 0.02,
+      investedReturnRate: 0.07,
+      horizonYears: 20,
+    });
+    for (const p of points) {
+      expect(p.netWorthCents).toBe(250_000_00);
+    }
+  });
+
+  it("splits both the current balance and the contribution proportionally to today's real split (hand-computed)", () => {
+    // 25% liquid / 75% invested today - the contribution should follow the
+    // exact same proportions, not an even 50/50 or all-invested default.
+    const liquidCurrentCents = 25_000_00;
+    const investedCurrentCents = 75_000_00;
+    const annualContributionCents = 4_000_00;
+    const liquidReturnRate = 0.02;
+    const investedReturnRate = 0.08;
+    const horizonYears = 5;
+
+    const points = projectNetWorthSplit({
+      liquidCurrentCents,
+      investedCurrentCents,
+      fixedCurrentCents: 0,
+      annualContributionCents,
+      liquidReturnRate,
+      investedReturnRate,
+      horizonYears,
+    });
+
+    const investedContribution = annualContributionCents * 0.75;
+    const liquidContribution = annualContributionCents * 0.25;
+    const expectedInvested =
+      investedCurrentCents * (1 + investedReturnRate) ** horizonYears +
+      (investedContribution * ((1 + investedReturnRate) ** horizonYears - 1)) / investedReturnRate;
+    const expectedLiquid =
+      liquidCurrentCents * (1 + liquidReturnRate) ** horizonYears +
+      (liquidContribution * ((1 + liquidReturnRate) ** horizonYears - 1)) / liquidReturnRate;
+
+    expect(points[horizonYears].netWorthCents).toBe(Math.round(expectedInvested + expectedLiquid));
+  });
+
+  it("puts 100% of fresh contributions into the liquid bucket when there's no current liquid/invested balance", () => {
+    const points = projectNetWorthSplit({
+      liquidCurrentCents: 0,
+      investedCurrentCents: 0,
+      fixedCurrentCents: 0,
+      annualContributionCents: 1_000_00,
+      liquidReturnRate: 0,
+      investedReturnRate: 0.1,
+      horizonYears: 3,
+    });
+    // With 0 growing balance, only liquidReturnRate=0 applies - invested at
+    // 10% never gets a share, so the total is exactly the linear sum of
+    // contributions, not compounded at the higher rate.
+    expect(points[3].netWorthCents).toBe(3_000_00);
+  });
+
+  it("applies effectiveTaxRate to the invested bucket's gain only, never to the liquid bucket", () => {
+    const points = projectNetWorthSplit({
+      liquidCurrentCents: 50_000_00,
+      investedCurrentCents: 50_000_00,
+      fixedCurrentCents: 0,
+      annualContributionCents: 0,
+      liquidReturnRate: 0.03,
+      investedReturnRate: 0.08,
+      horizonYears: 5,
+      effectiveTaxRate: 0.3,
+    });
+
+    const investedOnly = projectNetWorth({
+      currentCents: 50_000_00,
+      annualContributionCents: 0,
+      annualReturnRate: 0.08,
+      horizonYears: 5,
+      effectiveTaxRate: 0.3,
+    });
+    const liquidOnly = projectNetWorth({
+      currentCents: 50_000_00,
+      annualContributionCents: 0,
+      annualReturnRate: 0.03,
+      horizonYears: 5,
+    });
+
+    expect(points[5].netWorthAfterTaxCents).toBe(investedOnly[5].netWorthAfterTaxCents + liquidOnly[5].netWorthAfterTaxCents);
+    // Sanity: the split's after-tax figure reflects only the invested
+    // bucket being taxed, so it must be strictly less than its own pre-tax
+    // total (both buckets have positive gain here).
+    expect(points[5].netWorthAfterTaxCents).toBeLessThan(points[5].netWorthCents);
   });
 });

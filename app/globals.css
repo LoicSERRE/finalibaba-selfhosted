@@ -104,6 +104,22 @@ select option {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Recharts gives many of its own internal elements (pie sectors, area/line
+   group layers, etc.) tabIndex={-1} - not part of the tab order, but still
+   focusable on a real click/tap, which lands the browser's own default
+   `outline: auto` focus ring on whatever was clicked. Confirmed live via
+   getComputedStyle after clicking a chart: a rendered `rgb(16, 16, 16) auto
+   5px` outline on the clicked <path>/<g> - a thick, glaring ring the
+   `accessibilityLayer={false}` prop already set on every chart's *root*
+   element (see e.g. net-worth-chart.tsx) doesn't reach, since it only
+   removes tabIndex from the root <svg>, not these per-element ones deeper
+   inside. Suppressed for every chart in the app in one place rather than
+   chasing down each individual focusable sub-element per chart. */
+.recharts-wrapper *:focus,
+.recharts-wrapper *:focus-visible {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -1,5 +1,6 @@
 import type { getTranslations } from "next-intl/server";
 import { formatCurrency } from "@/lib/utils/format";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 export interface SharedTransactionRow {
   id: string;
@@ -40,7 +41,7 @@ export function SharedTransactionsSection({
                 />
               )}
               <div className="min-w-0">
-                <p className="text-sm text-[var(--foreground)] truncate">{tx.label}</p>
+                <TruncatedText text={tx.label} className="text-sm text-[var(--foreground)] w-full" />
                 <p className="text-xs text-[var(--muted)]">
                   {tx.accountName} · {tx.date.toLocaleDateString(locale)}
                 </p>

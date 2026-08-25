@@ -5,6 +5,7 @@ import { Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ExportTaxReportButton, type TaxReportExportData } from "@/components/shared/export-tax-report-button";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { getAccountTaxRate } from "@/lib/domain/tax";
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
@@ -109,7 +110,7 @@ export default async function TaxReportPage({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
@@ -161,7 +162,10 @@ export default async function TaxReportPage({
                 <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(totalInterestNetCents, 0)}</p>
               </div>
             </div>
-            <p className="text-xs text-[var(--muted)] mt-4 opacity-70">{t("disclaimer")}</p>
+            <p className="text-xs text-[var(--muted)] mt-4 opacity-70 flex items-center gap-1">
+              {t("disclaimerShort")}
+              <InfoTooltip>{t("disclaimer")}</InfoTooltip>
+            </p>
           </div>
 
           {salesWithGain.length > 0 && (

@@ -20,6 +20,7 @@ export const TECH_WEIGHTS: Record<string, number> = {
   LU1681043599: 0.23,  // MSCI World
   IE0002XZSHO1: 0.23,  // MSCI World Swap PEA
   FR001400U5Q4: 0.23,  // Pea Monde MSCI World
+  IE00B4L5Y983: 0.23,  // iShares Core MSCI World UCITS ETF
   LU3176111881: 0.10,  // Private Equity
   // everything else: 0
 };
@@ -292,6 +293,21 @@ export interface HistoryPoint {
   netWorth: number;
 }
 
+// Only for dailyHistory below, which is the one HistoryPoint[] actually fed
+// to a Recharts date-axis chart (components/shared/net-worth-chart.tsx) -
+// MonthlyHistoryPoint/PerformanceRow below extend the plain HistoryPoint
+// instead since they're table rows, not chart input, and already carry
+// their own naturally-unique `month` ("YYYY-MM") field. isoDate exists for
+// the identical reason DashboardHistoryPoint's own isoDate field does
+// (lib/domain/dashboard.ts): the XAxis needs a per-point value that's
+// actually unique. `date` alone (day+month, no year) repeats every 12
+// months on a 2-year chart - a real, precisely reproduced Recharts bug
+// where hover/tooltip resolution breaks once the category axis has
+// duplicate values (see net-worth-chart.tsx's own comment).
+export interface DailyHistoryPoint extends HistoryPoint {
+  isoDate: string;
+}
+
 export interface MonthlyHistoryPoint extends HistoryPoint {
   month: string; // "YYYY-MM"
 }
@@ -381,7 +397,7 @@ export interface AnalyticsResult {
   totalAllocation: number;
 
   // History / charts
-  dailyHistory: HistoryPoint[];
+  dailyHistory: DailyHistoryPoint[];
   performanceRows: PerformanceRow[];
 
   // Top assets
@@ -778,7 +794,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   // NOSONAR (typescript:S2871) - "YYYY-MM-DD" keys (ISO 8601, from
   // toISOString().slice(0,10) above): same reasoning as monthlyHistory
   // above, lexicographic order already equals chronological order.
-  const dailyHistory: HistoryPoint[] = [...dayMap.keys()].sort().map((day) => { // NOSONAR
+  const dailyHistory: DailyHistoryPoint[] = [...dayMap.keys()].sort().map((day) => { // NOSONAR
     for (const [id, v] of dayMap.get(day)!) runningD.set(id, v);
     let gross = BigInt(0);
     for (const v of runningD.values()) gross += v;
@@ -787,6 +803,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     const [y, m, d] = day.split("-");
     return {
       date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(new Date(+y, +m - 1, +d)),
+      isoDate: day,
       netWorth: Number(gross - liab),
     };
   });

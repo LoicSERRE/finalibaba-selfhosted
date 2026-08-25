@@ -1,6 +1,6 @@
 import { NetWorthChart } from "@/components/shared/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
-import type { HistoryPoint } from "@/lib/domain/analytics";
+import type { DailyHistoryPoint } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
@@ -11,7 +11,7 @@ export function ChartsSection({
   allocationSlices,
 }: Readonly<{
   t: T;
-  dailyHistory: HistoryPoint[];
+  dailyHistory: DailyHistoryPoint[];
   allocationSlices: AllocationSlice[];
 }>) {
   return (

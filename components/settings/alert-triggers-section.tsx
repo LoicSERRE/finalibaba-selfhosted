@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { updateAlertTriggers } from "@/lib/actions/alerts";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 const inputClass =
   "w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30";
@@ -27,8 +28,9 @@ export async function AlertTriggersSection({
       </div>
       <form action={updateAlertTriggers} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-5">
         <div className="space-y-1.5">
-          <label htmlFor="netWorthAlertThreshold" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+          <label htmlFor="netWorthAlertThreshold" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
             {t("netWorthThreshold")}
+            <InfoTooltip>{t("netWorthThresholdHint")}</InfoTooltip>
           </label>
           <div className="relative">
             <input
@@ -45,7 +47,6 @@ export async function AlertTriggersSection({
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
           </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("netWorthThresholdHint")}</p>
         </div>
 
         <div className="pt-2 border-t border-[var(--border)] space-y-3">

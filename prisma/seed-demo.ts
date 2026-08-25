@@ -80,6 +80,18 @@ async function main() {
     institutionId: tr.id,
     investmentSubtype: "CTO",
     investmentStartDate: new Date("2022-06-01"),
+    // taxTreatment stays TAXABLE (the schema default, see the PEA comment
+    // above) - but taxRatePct has no schema default (nullable, meaningful
+    // only when TAXABLE), and was missing here entirely: real gap found
+    // checking why the tax-aware projection chart showed no effect on
+    // this demo data. getAccountTaxRate() correctly treats a null rate on
+    // a TAXABLE account as "unknown" (excluded from totalLatentTax/
+    // effectiveTaxRate) rather than silently defaulting to 0 - exactly
+    // right for a real misconfigured account, but it meant every TAXABLE
+    // account in this demo (CTO + both crypto accounts below) contributed
+    // nothing to latent tax anywhere in the app, not just the new
+    // projection. 17.2% matches this app's own PEA/CTO suggested default.
+    taxRatePct: 0.172,
   }});
 
   // Crypto
@@ -88,12 +100,14 @@ async function main() {
     type: "CRYPTO",
     institutionId: tr.id,
     investmentStartDate: new Date("2023-01-10"),
+    taxRatePct: 0.314, // this app's own suggested crypto default
   }});
   const btcCB = await prisma.account.create({ data: {
     name: "Bitcoin",
     type: "CRYPTO",
     institutionId: cb.id,
     investmentStartDate: new Date("2022-01-05"),
+    taxRatePct: 0.314,
   }});
 
   // Immobilier & auto (IDs capturés pour l'historique)
@@ -146,16 +160,29 @@ async function main() {
     // from the 70%/30% target, so the account page shows a clear suggested
     // trade in both directions rather than a "nothing to do" empty state.
     // IWDA.L (iShares MSCI World, LSE) ≈ 113 € · CSPX.L (S&P 500, LSE) ≈ 618 €
-    { accountId: pea.id, ticker: "IWDA.L", name: "iShares Core MSCI World ETF",  quantity: "45",   lastPriceCents: EUR(113),    costBasisCents: EUR(3_798), targetPct: 0.7 },
-    { accountId: pea.id, ticker: "CSPX.L", name: "iShares Core S&P 500 ETF",     quantity: "20",   lastPriceCents: EUR(618),    costBasisCents: EUR(10_240), targetPct: 0.3 },
+    // `ticker` is the fund's real ISIN, not the exchange ticker symbol - a
+    // real gap found checking why the demo's own "Exposition Tech" showed
+    // 0% despite directly holding Apple/Microsoft: TECH_WEIGHTS/
+    // DIVIDEND_YIELDS/ISIN_TO_YF_SYMBOL (all in lib/domain/analytics.ts)
+    // and dividendEffectiveTaxRate() all key/parse off Holding.ticker as a
+    // real ISIN (matching how this app's actual sync sources - GoCardless/
+    // Woob/Trade Republic - report positions), so a friendly symbol like
+    // "AAPL" instead of "US0378331005" silently misses every one of those
+    // lookups at once, not just tech exposure. `name` (shown as the
+    // holdings table's own bold primary label) stays human-readable
+    // either way, so this only changes the small secondary ticker line -
+    // which is also a more accurate depiction of what real synced data
+    // actually looks like in this app.
+    { accountId: pea.id, ticker: "IE00B4L5Y983", name: "iShares Core MSCI World ETF",  quantity: "45",   lastPriceCents: EUR(113),    costBasisCents: EUR(3_798), targetPct: 0.7 },
+    { accountId: pea.id, ticker: "IE00B5BMR087", name: "iShares Core S&P 500 ETF",     quantity: "20",   lastPriceCents: EUR(618),    costBasisCents: EUR(10_240), targetPct: 0.3 },
     // CTO - actions US, priced natively in USD (currency/native*/fxRateToEur
     // set) to showcase multi-currency holdings - lastPriceCents/costBasisCents
     // are still the EUR-converted values every other calculation reads.
     // AAPL: $200/share now, bought at $172/share avg · MSFT: $470/share now, bought at $378.50/share avg
-    { accountId: cto.id, ticker: "AAPL",   name: "Apple Inc.",                    quantity: "15",
+    { accountId: cto.id, ticker: "US0378331005", name: "Apple Inc.",                    quantity: "15",
       currency: "USD", nativePriceCents: EUR(200), nativeCostBasisCents: EUR(172 * 15), fxRateToEur: usdToEur,
       lastPriceCents: EUR(200 * usdToEur), costBasisCents: EUR(172 * 15 * usdToEur) },
-    { accountId: cto.id, ticker: "MSFT",   name: "Microsoft Corp.",               quantity: "10",
+    { accountId: cto.id, ticker: "US5949181045", name: "Microsoft Corp.",               quantity: "10",
       currency: "USD", nativePriceCents: EUR(470), nativeCostBasisCents: EUR(378.5 * 10), fxRateToEur: usdToEur,
       lastPriceCents: EUR(470 * usdToEur), costBasisCents: EUR(378.5 * 10 * usdToEur) },
     // Crypto - BTC ≈ 92 000 € · ETH ≈ 3 400 €

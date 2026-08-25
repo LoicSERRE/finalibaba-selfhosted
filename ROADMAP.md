@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.12.0**
+Current stable release: **v1.14.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -221,6 +221,7 @@ Before starting a new version's work (or right before tagging one), run the rele
 - [ ] **Multi-interval recurring detection** - recognizes "every 2 months"/"every 3 months" cadences during auto-detection, not just `intervalCount = 1` as today (manual editing already supports any interval - only the detection heuristic itself is limited)
 - [ ] **On-demand multi-currency revaluation** - re-fetch the FX rate and price for a foreign-currency holding on request, on top of the existing snapshot-at-entry model, without needing to re-enter the native price by hand to trigger a refresh
 - [ ] **Historical asset-allocation chart** - extends the dashboard's current-moment allocation breakdown (liquidités/épargne/investissements…) into a stacked-area view over time, built from the same per-account `HistoricalBalance` rows already recorded - no new data collection needed
+- [ ] **Full sector-exposure breakdown** - generalizes Analytics' current Tech-only exposure card (`allocation-radar-section.tsx`'s `TECH_WEIGHTS`) into a per-sector view (financials, healthcare, energy, industrials, etc.) across every holding, not just one hardcoded sector. Scoped out of v1.14.1 rather than built alongside the Tech card's ISIN-mismatch fix: `TECH_WEIGHTS` itself is a small, individually-verified-by-hand map (each ISIN checked against a real prospectus/fund fact sheet, not guessed) - a full GICS-equivalent sector taxonomy across every sector would need either a real per-ISIN sector data source (none currently in the stack, and no free/reliable one confirmed yet) or the same one-by-one manual verification discipline applied to several sectors' worth of holdings instead of one. Scope the data-sourcing question with real user holdings before building, same "verified, not fabricated" bar `TECH_WEIGHTS` was held to
 
 ---
 

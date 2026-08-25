@@ -51,3 +51,80 @@ export function projectNetWorth(params: {
   }
   return points;
 }
+
+// A single blended return rate applied to the *entire* net worth (the
+// plain projectNetWorth above) silently assumes every euro - including
+// cash sitting in a checking account or a low-yield livret - compounds at
+// the same rate as the invested portion. Real user feedback: "on ne sait
+// pas où va l'épargne" - a livret at ~2-3% and a PEA at ~7% can't share
+// one number without materially over- or under-stating the real outcome.
+//
+// This splits both today's net worth AND the future annual contribution
+// into two growing buckets - "invested" (compounds at investedReturnRate,
+// the only bucket effectiveTaxRate applies to, matching how latent tax is
+// scoped to investment/crypto accounts elsewhere in this app) and "liquid"
+// (cash + savings accounts, compounds at a separate, usually much lower
+// liquidReturnRate) - plus a third, non-compounding fixedCents offset for
+// everything else (real estate/automobile equity net of any standalone
+// loan capital) added unchanged at every year. This app has no home-price-
+// appreciation model anywhere else either, so freezing that portion is the
+// honest "we don't model this" stance rather than a silent, more
+// optimistic assumption.
+//
+// The contribution is split in the same proportion as today's real
+// liquidCents/investedCents balance - this app doesn't track which
+// account declared monthly savings actually lands in, so "assume future
+// savings keep the same habit as today's real portfolio split" is the
+// best available grounded default (vs. inventing a number, or - the
+// previous behavior - implicitly assuming 100% goes to the invested rate).
+export function projectNetWorthSplit(params: {
+  liquidCurrentCents: number;
+  investedCurrentCents: number;
+  fixedCurrentCents: number;
+  annualContributionCents: number;
+  liquidReturnRate: number;
+  investedReturnRate: number;
+  horizonYears: number;
+  effectiveTaxRate?: number;
+}): ProjectionPoint[] {
+  const {
+    liquidCurrentCents,
+    investedCurrentCents,
+    fixedCurrentCents,
+    annualContributionCents: C,
+    liquidReturnRate,
+    investedReturnRate,
+    horizonYears,
+    effectiveTaxRate = 0,
+  } = params;
+
+  const growingTotal = liquidCurrentCents + investedCurrentCents;
+  // No current liquid/invested balance at all (e.g. a fresh account that's
+  // only real estate) - put fresh savings in the liquid bucket rather than
+  // dividing by zero or guessing an invested share with no basis.
+  const investedShare = growingTotal > 0 ? investedCurrentCents / growingTotal : 0;
+  const investedContributionCents = C * investedShare;
+  const liquidContributionCents = C - investedContributionCents;
+
+  const investedPoints = projectNetWorth({
+    currentCents: investedCurrentCents,
+    annualContributionCents: investedContributionCents,
+    annualReturnRate: investedReturnRate,
+    horizonYears,
+    effectiveTaxRate,
+  });
+  const liquidPoints = projectNetWorth({
+    currentCents: liquidCurrentCents,
+    annualContributionCents: liquidContributionCents,
+    annualReturnRate: liquidReturnRate,
+    horizonYears,
+  });
+
+  return investedPoints.map((invested, i) => ({
+    year: invested.year,
+    netWorthCents: Math.round(fixedCurrentCents + invested.netWorthCents + liquidPoints[i].netWorthCents),
+    netWorthAfterTaxCents: Math.round(
+      fixedCurrentCents + invested.netWorthAfterTaxCents + liquidPoints[i].netWorthAfterTaxCents,
+    ),
+  }));
+}

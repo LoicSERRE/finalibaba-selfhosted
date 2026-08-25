@@ -39,7 +39,7 @@ export function LoanTab({
                   <p className="font-medium text-[var(--foreground)]">{loan.name}</p>
                   <p className="text-xs text-[var(--muted)] mt-1">{t("loan.incompleteParams")}</p>
                 </div>
-                <DeleteAccountButton id={loan.id} name={loan.name} backHref="/accounts?tab=credits" />
+                <DeleteAccountButton id={loan.id} name={loan.name} backHref="/accounts?tab=credits" iconOnly />
               </div>
             );
           }
@@ -79,7 +79,7 @@ export function LoanTab({
                     </p>
                     <p className="text-xs text-[var(--muted)]">{t("loan.remaining")}</p>
                   </div>
-                  <DeleteAccountButton id={loan.id} name={loan.name} backHref="/accounts?tab=credits" />
+                  <DeleteAccountButton id={loan.id} name={loan.name} backHref="/accounts?tab=credits" iconOnly />
                 </div>
               </div>
 

@@ -27,12 +27,12 @@ export function BalanceHistoryTable({
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between gap-3">
+      <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
         <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
           {td("history", { count: historyRows.length, suffix: historyRows.length !== 1 ? "s" : "" })}
         </h2>
         {canImportCsv && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <ImportBalanceHistoryDialog accountId={accountId} existingDates={existingBalanceDates} />
             <ImportTransactionsDialog accountId={accountId} existingFingerprints={existingFingerprints} />
           </div>

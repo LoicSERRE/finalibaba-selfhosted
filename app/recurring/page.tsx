@@ -94,7 +94,7 @@ export default async function RecurringPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>

@@ -196,7 +196,7 @@ export default async function BudgetsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
@@ -255,7 +255,7 @@ export default async function BudgetsPage() {
 
       {uncategorizedGroups.length > 0 && expenseCategories.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("uncategorizedGroupsTitle")}</h2>
             <AutoCategorizeButton />
           </div>

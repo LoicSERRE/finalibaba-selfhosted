@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import { Upload } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { importTransactions } from "@/lib/actions/transactions";
 import { parseCents, formatCurrency } from "@/lib/utils/format";
 import { parseCsvDate, looksNumeric, makeHeaderNormalizer } from "@/lib/domain/csv-import";
@@ -168,8 +169,8 @@ export function ImportTransactionsDialog({
                         <input type="checkbox" checked={selected.has(i)} disabled={!!r.error} onChange={() => toggle(i)} />
                       </td>
                       <td className="px-2 py-1.5 whitespace-nowrap text-[var(--muted)]">{r.date || "-"}</td>
-                      <td className="px-2 py-1.5 max-w-[160px] truncate" title={r.label}>
-                        {r.label}
+                      <td className="px-2 py-1.5 max-w-[160px]">
+                        <TruncatedText text={r.label} className="w-full" />
                       </td>
                       <td
                         className={`px-2 py-1.5 text-right tabular-nums whitespace-nowrap ${

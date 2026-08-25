@@ -114,6 +114,13 @@ export interface HistoryRow extends AccountDetailBalance {
 
 export interface ChartPoint {
   date: string; // pre-formatted per intlLocale, matches historical behavior
+  // ISO 8601 "YYYY-MM-DD" - see net-worth-chart.tsx's XAxis dataKey
+  // comment: `date` alone (day+month, no year) can repeat once the 60
+  // charted points span more than 12 months, and a duplicated category
+  // axis value breaks Recharts' own hover/tooltip index resolution past
+  // the point where values start repeating - a real, precisely
+  // reproduced bug, not theoretical.
+  isoDate: string;
   balance: number;
 }
 
@@ -233,6 +240,7 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
         day: "numeric",
         month: "short",
       }).format(h.recordedAt),
+      isoDate: h.recordedAt.toISOString().slice(0, 10),
       balance: Number(h.balanceCents),
     }));
 

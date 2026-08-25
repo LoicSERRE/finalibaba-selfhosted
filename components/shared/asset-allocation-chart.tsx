@@ -3,6 +3,7 @@
 import { PieChart, Pie, Tooltip, ResponsiveContainer } from "recharts";
 import { useTranslations } from "next-intl";
 import { CHART_COLORS } from "@/lib/utils/palette";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 export type AllocationSlice = {
   name: string;
@@ -56,8 +57,27 @@ export function AssetAllocationChart({ data }: Readonly<{ data: AllocationSlice[
             cy="50%"
             innerRadius={52}
             outerRadius={80}
-            paddingAngle={2}
             dataKey="value"
+            // Recharts animates every Pie mount by default (~800ms sweep
+            // from 0 to its final angle) - this app's AutoSync component
+            // fires a background router.refresh() after its sync-poll
+            // cycle, re-rendering this chart with fresh (but structurally
+            // identical) props and restarting that animation. Disabling it
+            // means a re-render always snaps straight to the correct final
+            // state instead of ever being caught mid-motion.
+            isAnimationActive={false}
+            // Recharts defaults every Pie slice to a 1px white stroke -
+            // glaring against this app's dark theme (confirmed live: the
+            // rendered <path> had stroke="#fff" with no override anywhere
+            // in this file). A `paddingAngle` gap was tried as the
+            // separator instead of a stroke, but at this chart's small
+            // radius the gap itself read as a set of thick black outlines
+            // around every slice - the exact same "ugly contour" complaint
+            // in a different color. Removed entirely: slices sit flush
+            // against each other with no visible seam, relying on the
+            // palette's own contrast for separation (confirmed live these
+            // colors are distinct enough with no separator at all).
+            stroke="none"
           />
           <Tooltip
             contentStyle={{
@@ -65,7 +85,8 @@ export function AssetAllocationChart({ data }: Readonly<{ data: AllocationSlice[
               border: "1px solid var(--border)",
               borderRadius: 8,
               color: "var(--foreground)",
-              fontSize: 13,
+              fontSize: 12,
+              padding: "6px 10px",
             }}
             formatter={(value, name) =>
               value != null
@@ -86,7 +107,7 @@ export function AssetAllocationChart({ data }: Readonly<{ data: AllocationSlice[
               className="w-2 h-2 rounded-full shrink-0"
               style={{ background: entry.color ?? CHART_COLORS[index % CHART_COLORS.length] }}
             />
-            <span className="text-xs text-[var(--muted)] truncate">{entry.name}</span>
+            <TruncatedText text={entry.name} className="text-xs text-[var(--muted)]" />
           </div>
         ))}
       </div>

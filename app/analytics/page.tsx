@@ -155,6 +155,8 @@ export default async function AnalyticsPage() {
 
           <ProjectionChart
             currentNetWorthCents={result.netWorth}
+            liquidCents={result.savingsCents}
+            investedCents={result.risques}
             annualContributionCents={result.hasDeclaredSavings ? result.monthlySavedCents * BigInt(12) : null}
             defaultAnnualReturnPct={result.investCAGR !== null ? Math.max(0, Math.round(result.investCAGR * 10) / 10) : 5}
             effectiveTaxRate={result.effectiveTaxRate}

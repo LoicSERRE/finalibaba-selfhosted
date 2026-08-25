@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AddIncomeDialog } from "@/components/income/add-income-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { deleteIncomeEvent } from "@/lib/actions/income";
 import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
 import { mergeCentsMaps } from "@/lib/domain/budgets";
@@ -84,7 +85,7 @@ export default async function IncomePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
@@ -123,7 +124,10 @@ export default async function IncomePage() {
 
           {incomeCategories.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("otherIncomeTitle")}</h2>
+              <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
+                {t("otherIncomeTitle")}
+                <InfoTooltip>{t("otherIncomeHint")}</InfoTooltip>
+              </h2>
               {incomeCategories.map((cat) => (
                 <Link
                   key={cat.id}
@@ -139,7 +143,6 @@ export default async function IncomePage() {
                   </span>
                 </Link>
               ))}
-              <p className="text-xs text-[var(--muted)]">{t("otherIncomeHint")}</p>
             </div>
           )}
 

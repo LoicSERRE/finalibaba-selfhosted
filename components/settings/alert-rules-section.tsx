@@ -541,7 +541,7 @@ export function AlertRulesSection({
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
         <div>
           <h2 className="text-base font-semibold text-[var(--foreground)]">{t("title")}</h2>
           <p className="text-xs text-[var(--muted)] mt-0.5">{t("subtitle")}</p>
