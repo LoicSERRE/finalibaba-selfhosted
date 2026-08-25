@@ -31,6 +31,8 @@ import { getShareLinks } from "@/lib/actions/share-links";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
 import { getApiKeys } from "@/lib/actions/api-keys";
 import { AlertChannelsSection } from "@/components/settings/alert-channels-section";
+import { WebPushSection } from "@/components/settings/web-push-section";
+import { getPushStatus } from "@/lib/actions/push";
 import { AlertTriggersSection } from "@/components/settings/alert-triggers-section";
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
 import { getAlertRules } from "@/lib/actions/alert-rules";
@@ -57,7 +59,7 @@ export default async function SettingsPage() {
   const dedicatedSyncNames = dedicatedEnvNames();
   const theme = (await cookies()).get("THEME")?.value === "light" ? "light" : "dark";
 
-  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, t] =
+  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
     await Promise.all([
       prisma.institution.findMany({
         include: {
@@ -109,6 +111,7 @@ export default async function SettingsPage() {
         orderBy: { name: "asc" },
       }),
       getAppLockStatus(),
+      getPushStatus(),
       getTranslations(),
     ]);
 
@@ -545,6 +548,13 @@ export default async function SettingsPage() {
           mixed form. Hidden in demo mode (mutations are blocked anyway, and
           a demo instance shouldn't be sending real notifications). */}
       {process.env.DEMO_MODE !== "true" && <AlertChannelsSection settings={userSettings} />}
+      {/* A 3rd channel alongside ntfy/email above, but its own section (not
+          folded into AlertChannelsSection's form) since "configuring" it is
+          a subscribe action on this browser, not a text field to type into
+          and Save. */}
+      {process.env.DEMO_MODE !== "true" && (
+        <WebPushSection enabled={pushStatus.enabled} publicKey={pushStatus.publicKey} subscriptions={pushStatus.subscriptions} />
+      )}
       {process.env.DEMO_MODE !== "true" && <AlertTriggersSection settings={userSettings} />}
 
       {/* Custom alert rules - same demo-mode gating as the two sections above. */}

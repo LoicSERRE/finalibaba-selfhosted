@@ -492,6 +492,17 @@ model UserSettings {
   // meaningless (never read) when their own channel isn't configured at all.
   ntfyEnabled          Boolean  @default(true)
   emailAlertsEnabled   Boolean  @default(true)
+  // Web Push - a 3rd alert channel alongside ntfy/email, same independent
+  // on/off toggle convention as the two above. vapidPublicKey/vapidPrivateKey
+  // are generated once by the app itself on first use (lib/services/
+  // notifications.ts's getOrCreateVapidKeys()), never something a
+  // self-hoster configures - same "app generates it, not the user"
+  // precedent as totpSecret. Meaningless (never read) until at least one
+  // PushSubscription row exists, same "meaningless when unconfigured"
+  // convention as ntfyEnabled/emailAlertsEnabled above.
+  webPushEnabled       Boolean  @default(true)
+  vapidPublicKey       String?
+  vapidPrivateKey      String?
   // Net worth alert - blank threshold = disabled. netWorthAlertLastAbove is
   // dedup state (null = never evaluated yet): the alert only fires when the
   // crossing direction actually flips, not on every check while it stays
@@ -565,4 +576,22 @@ model AppLockCredential {
   deviceLabel  String
   createdAt    DateTime  @default(now())
   lastUsedAt   DateTime?
+}
+
+// One row per browser/device subscribed to Web Push (Settings -> "Alertes"),
+// a 3rd alert channel alongside ntfy/email - see CLAUDE.md's "Alerts &
+// webhooks". endpoint/p256dh/auth are exactly what the browser's own
+// PushSubscription.toJSON() returns from pushManager.subscribe() - not a
+// secret to protect (an attacker needs the matching VAPID private key,
+// stored once on UserSettings, to actually push through it), but unique
+// per browser+device the same way AppLockCredential is, so a phone and a
+// laptop each get their own independently-revocable row.
+model PushSubscription {
+  id          String    @id @default(cuid())
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  deviceLabel String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
 }

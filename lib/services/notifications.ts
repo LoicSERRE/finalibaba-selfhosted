@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
+import * as webPush from "web-push";
 import { renderAlertEmailHtml } from "@/lib/services/email-template";
+import { prisma } from "@/lib/db/prisma";
 
 type AlertChannelSettings = {
   ntfyTopicUrl: string | null;
@@ -12,6 +14,9 @@ type AlertChannelSettings = {
   smtpPassword: string | null;
   smtpFrom: string | null;
   emailAlertsEnabled: boolean;
+  webPushEnabled: boolean;
+  vapidPublicKey: string | null;
+  vapidPrivateKey: string | null;
 };
 
 /**
@@ -97,16 +102,96 @@ export async function sendEmail(
   }
 }
 
+// Same "app generates it, not the user" precedent as totpSecret (lib/auth.ts)
+// - a self-hoster never sees or configures these, they're purely internal
+// to identifying this app instance to push services. Generated once, on
+// first use (the Settings page's first "activer" click - see
+// lib/actions/push.ts), then reused for every subscription and every send
+// forever after; VAPID keys must stay stable, regenerating them would
+// silently invalidate every already-registered browser subscription.
+export async function getOrCreateVapidKeys(): Promise<{ publicKey: string; privateKey: string }> {
+  const settings = await prisma.userSettings.upsert({
+    where: { id: "singleton" },
+    create: {},
+    update: {},
+    select: { vapidPublicKey: true, vapidPrivateKey: true },
+  });
+  if (settings.vapidPublicKey && settings.vapidPrivateKey) {
+    return { publicKey: settings.vapidPublicKey, privateKey: settings.vapidPrivateKey };
+  }
+  const keys = webPush.generateVAPIDKeys();
+  await prisma.userSettings.update({
+    where: { id: "singleton" },
+    data: { vapidPublicKey: keys.publicKey, vapidPrivateKey: keys.privateKey },
+  });
+  return keys;
+}
+
+// A 'https:' URL or 'mailto:' address identifying this app instance to push
+// services, required by the VAPID spec - reuses APP_URL (same "leave blank
+// for localhost use" convention already documented for GoCardless/ntfy
+// above) when set, since it's already a real reachable URL for any instance
+// that has one configured. Falls back to a fixed placeholder mailto -
+// spec-required but not actually contacted by any push service in
+// practice, so a generic value is fine for the common (no APP_URL) case.
+const VAPID_SUBJECT = process.env.APP_URL?.replace(/\/$/, "") || "mailto:push@finalibaba.local";
+
+// Fetches its own subscriber list rather than taking one as a parameter -
+// same "a service reads what it needs from the DB directly" precedent as
+// lib/services/api-auth.ts's authenticateApiKey(), which keeps this
+// function's signature (and dispatchAlert's, and every one of the ~10
+// alert-check functions in app/api/alerts/check/route.ts that call it)
+// unchanged from before Web Push existed - UserSettings just grew 3 real
+// columns that flow through automatically.
+//
+// Also prunes subscriptions the push service reports as gone (HTTP 404/410
+// - the browser unsubscribed or the OS cleared it) - safe to do inline
+// here since this function already has DB access for the read above, and
+// a dead subscription would otherwise fail silently forever with no way
+// for the user to notice short of it just never working.
+export async function sendWebPush(vapidPublicKey: string, vapidPrivateKey: string, title: string, body: string): Promise<boolean> {
+  const subscriptions = await prisma.pushSubscription.findMany();
+  if (subscriptions.length === 0) return false;
+
+  webPush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
+  const payload = JSON.stringify({ title, body });
+
+  const staleIds: string[] = [];
+  let successCount = 0;
+  await Promise.allSettled(
+    subscriptions.map(async (sub) => {
+      try {
+        await webPush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+        successCount++;
+      } catch (e) {
+        const statusCode = e instanceof webPush.WebPushError ? e.statusCode : null;
+        if (statusCode === 404 || statusCode === 410) {
+          staleIds.push(sub.id);
+        } else {
+          console.error("Failed to send web push", e);
+        }
+      }
+    })
+  );
+
+  if (staleIds.length > 0) {
+    await prisma.pushSubscription.deleteMany({ where: { id: { in: staleIds } } });
+  }
+  return successCount > 0;
+}
+
 /**
  * Fans out to every channel that's both configured (non-blank config -
  * "leave blank to disable", same convention as every other optional
- * integration in this app) and enabled (ntfyEnabled/emailAlertsEnabled,
- * each defaulting to true so an already-configured channel keeps firing
- * for existing installs) - a user with both channels configured can still
- * choose to receive through just one. Each channel already catches its own
- * errors (see above), so one failing never blocks the other;
- * Promise.allSettled is extra insurance against an unexpected throw
- * slipping through.
+ * integration in this app - Web Push's own "configured" is "at least one
+ * PushSubscription row exists", checked inside sendWebPush itself since
+ * this function has no subscriber count to gate on) and enabled
+ * (ntfyEnabled/emailAlertsEnabled/webPushEnabled, each defaulting to true
+ * so an already-configured channel keeps firing for existing installs) - a
+ * user with multiple channels configured can still choose to receive
+ * through only some of them. Each channel already catches its own errors
+ * (see above), so one failing never blocks the others; Promise.allSettled
+ * is extra insurance against an unexpected throw slipping through.
  */
 export async function dispatchAlert(settings: AlertChannelSettings, title: string, body: string): Promise<void> {
   const jobs: Promise<boolean>[] = [];
@@ -131,6 +216,10 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
         renderAlertEmailHtml(title, body)
       )
     );
+  }
+
+  if (settings.webPushEnabled && settings.vapidPublicKey && settings.vapidPrivateKey) {
+    jobs.push(sendWebPush(settings.vapidPublicKey, settings.vapidPrivateKey, title, body));
   }
 
   await Promise.allSettled(jobs);

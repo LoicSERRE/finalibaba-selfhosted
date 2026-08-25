@@ -103,3 +103,41 @@ async function networkOnlyButCache(request) {
   }
   return response;
 }
+
+// Web Push (Settings -> "Alertes") - a 3rd alert channel alongside ntfy/
+// email, see lib/services/notifications.ts's sendWebPush(). The payload is
+// the plain { title, body } JSON dispatchAlert already builds for every
+// other channel - no separate formatting needed here.
+self.addEventListener("push", (event) => {
+  let data = { title: "Finalibaba", body: "" };
+  try {
+    if (event.data) data = event.data.json();
+  } catch {
+    // Malformed/non-JSON payload - fall back to the generic title above
+    // rather than dropping the notification entirely.
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icon-512",
+      badge: "/icon-512",
+      tag: "finalibaba-alert",
+    })
+  );
+});
+
+// Focuses an already-open tab instead of always opening a new one - a
+// user tapping the notification almost certainly already has the PWA
+// open somewhere (this app's own auto-sync/offline-banner run in it
+// continuously), and a second tab would just be a duplicate, unsynced view.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if ("focus" in client) return client.focus();
+      }
+      return clients.openWindow("/");
+    })
+  );
+});

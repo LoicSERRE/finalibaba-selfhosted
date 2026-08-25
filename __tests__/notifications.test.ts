@@ -12,13 +12,45 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: (...args: unknown[]) => createTransportMock(...args) },
 }));
 
-const { sendNtfyMessage, sendEmail, dispatchAlert } = await import("@/lib/services/notifications");
+const { findManyMock, deleteManyMock, sendNotificationMock, setVapidDetailsMock } = vi.hoisted(() => ({
+  findManyMock: vi.fn(),
+  deleteManyMock: vi.fn(),
+  sendNotificationMock: vi.fn(),
+  setVapidDetailsMock: vi.fn(),
+}));
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    pushSubscription: { findMany: findManyMock, deleteMany: deleteManyMock },
+    userSettings: { upsert: vi.fn(), update: vi.fn() },
+  },
+}));
+
+class MockWebPushError extends Error {
+  statusCode: number;
+  constructor(statusCode: number) {
+    super("mock web-push error");
+    this.statusCode = statusCode;
+  }
+}
+vi.mock("web-push", () => ({
+  sendNotification: (...args: unknown[]) => sendNotificationMock(...args),
+  setVapidDetails: (...args: unknown[]) => setVapidDetailsMock(...args),
+  generateVAPIDKeys: vi.fn(),
+  WebPushError: MockWebPushError,
+}));
+
+const { sendNtfyMessage, sendEmail, sendWebPush, dispatchAlert } = await import("@/lib/services/notifications");
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   sendMailMock.mockReset();
   createTransportMock.mockClear();
+  findManyMock.mockReset();
+  deleteManyMock.mockReset();
+  sendNotificationMock.mockReset();
+  setVapidDetailsMock.mockReset();
 });
 
 describe("sendNtfyMessage", () => {
@@ -146,6 +178,9 @@ describe("dispatchAlert", () => {
         smtpPassword: null,
         smtpFrom: null,
         emailAlertsEnabled: true,
+        webPushEnabled: false,
+        vapidPublicKey: null,
+        vapidPrivateKey: null,
       },
       "title",
       "body"
@@ -171,6 +206,9 @@ describe("dispatchAlert", () => {
         smtpPassword: null,
         smtpFrom: null,
         emailAlertsEnabled: true,
+        webPushEnabled: false,
+        vapidPublicKey: null,
+        vapidPrivateKey: null,
       },
       "title",
       "body"
@@ -198,6 +236,9 @@ describe("dispatchAlert", () => {
         smtpPassword: null,
         smtpFrom: null,
         emailAlertsEnabled: true,
+        webPushEnabled: false,
+        vapidPublicKey: null,
+        vapidPrivateKey: null,
       },
       "title",
       "body"
@@ -217,6 +258,9 @@ describe("dispatchAlert", () => {
         smtpPassword: null,
         smtpFrom: "finalibaba@example.com",
         emailAlertsEnabled: true,
+        webPushEnabled: false,
+        vapidPublicKey: null,
+        vapidPrivateKey: null,
       },
       "title",
       "body"
@@ -240,6 +284,9 @@ describe("dispatchAlert", () => {
         smtpPassword: null,
         smtpFrom: null,
         emailAlertsEnabled: true,
+        webPushEnabled: false,
+        vapidPublicKey: null,
+        vapidPrivateKey: null,
       },
       "title",
       "body"
@@ -263,6 +310,9 @@ describe("dispatchAlert", () => {
         smtpPassword: null,
         smtpFrom: "finalibaba@example.com",
         emailAlertsEnabled: false,
+        webPushEnabled: false,
+        vapidPublicKey: null,
+        vapidPrivateKey: null,
       },
       "title",
       "body"
@@ -288,6 +338,9 @@ describe("dispatchAlert", () => {
         smtpPassword: null,
         smtpFrom: "finalibaba@example.com",
         emailAlertsEnabled: true,
+        webPushEnabled: false,
+        vapidPublicKey: null,
+        vapidPrivateKey: null,
       },
       "title",
       "body"
@@ -295,5 +348,101 @@ describe("dispatchAlert", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(sendMailMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sendWebPush", () => {
+  const sub = { id: "sub1", endpoint: "https://push.example/x", p256dh: "p256dh-key", auth: "auth-key" };
+
+  it("returns false without sending when there are no subscriptions", async () => {
+    findManyMock.mockResolvedValueOnce([]);
+    const ok = await sendWebPush("pub", "priv", "title", "body");
+    expect(ok).toBe(false);
+    expect(sendNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it("sends to every subscription and returns true when at least one succeeds", async () => {
+    findManyMock.mockResolvedValueOnce([sub]);
+    sendNotificationMock.mockResolvedValueOnce({});
+    const ok = await sendWebPush("pub", "priv", "Alerte", "Corps du message");
+    expect(ok).toBe(true);
+    expect(setVapidDetailsMock).toHaveBeenCalledWith(expect.any(String), "pub", "priv");
+    const [subscriptionArg, payload] = sendNotificationMock.mock.calls[0];
+    expect(subscriptionArg).toEqual({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } });
+    expect(JSON.parse(payload)).toEqual({ title: "Alerte", body: "Corps du message" });
+    expect(deleteManyMock).not.toHaveBeenCalled();
+  });
+
+  it("prunes a subscription the push service reports as gone (410) instead of treating it as a hard failure", async () => {
+    findManyMock.mockResolvedValueOnce([sub]);
+    sendNotificationMock.mockRejectedValueOnce(new MockWebPushError(410));
+    const ok = await sendWebPush("pub", "priv", "title", "body");
+    expect(ok).toBe(false);
+    expect(deleteManyMock).toHaveBeenCalledWith({ where: { id: { in: [sub.id] } } });
+  });
+
+  it("logs and does not prune on a non-410/404 error", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    findManyMock.mockResolvedValueOnce([sub]);
+    sendNotificationMock.mockRejectedValueOnce(new MockWebPushError(500));
+    const ok = await sendWebPush("pub", "priv", "title", "body");
+    expect(ok).toBe(false);
+    expect(deleteManyMock).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});
+
+describe("dispatchAlert - web push channel", () => {
+  it("dispatches web push when enabled with VAPID keys configured", async () => {
+    findManyMock.mockResolvedValueOnce([{ id: "s1", endpoint: "https://push.example/y", p256dh: "p", auth: "a" }]);
+    sendNotificationMock.mockResolvedValueOnce({});
+
+    await dispatchAlert(
+      {
+        ntfyTopicUrl: null,
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: null,
+        smtpHost: null,
+        smtpPort: null,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: null,
+        emailAlertsEnabled: true,
+        webPushEnabled: true,
+        vapidPublicKey: "pub",
+        vapidPrivateKey: "priv",
+      },
+      "title",
+      "body"
+    );
+
+    expect(sendNotificationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips web push when webPushEnabled is false, even with keys configured", async () => {
+    await dispatchAlert(
+      {
+        ntfyTopicUrl: null,
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: null,
+        smtpHost: null,
+        smtpPort: null,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: null,
+        emailAlertsEnabled: true,
+        webPushEnabled: false,
+        vapidPublicKey: "pub",
+        vapidPrivateKey: "priv",
+      },
+      "title",
+      "body"
+    );
+
+    expect(findManyMock).not.toHaveBeenCalled();
+    expect(sendNotificationMock).not.toHaveBeenCalled();
   });
 });
