@@ -1,5 +1,7 @@
 import { formatCurrency } from "@/lib/utils/format";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
+import { SectorExposureSection } from "@/components/analytics/sector-exposure-section";
+import type { SectorContribution } from "@/lib/domain/sector-exposure";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
@@ -10,16 +12,33 @@ type T = Awaited<ReturnType<typeof getTranslations>>;
 // question, two different numbers - TECH_WEIGHTS' hand-picked weights vs the
 // new section's live Yahoo-sourced Technology sector figure). Superseded,
 // not duplicated - see CLAUDE.md's "Full sector-exposure breakdown".
+//
+// SectorExposureSection now renders *inside* this same card (as a second,
+// divider-separated section) rather than as its own standalone card next to
+// it - also real user feedback: "Garantis vs Risqués" is a coarser cut of
+// the exact same invested total the sector breakdown drills into, so two
+// separate bordered boxes read as more disconnected than the data actually
+// is. Passed straight through rather than re-derived here, keeping this
+// component's own responsibility limited to the safe/risky split it always
+// had.
 export function AllocationRadarSection({
   t,
   garantis,
   risques,
   garantisPct,
+  sectorBreakdown,
+  sectorContributions,
+  sectorUnclassifiedCents,
+  sectorTotalCents,
 }: Readonly<{
   t: T;
   garantis: bigint;
   risques: bigint;
   garantisPct: number;
+  sectorBreakdown: Record<string, bigint>;
+  sectorContributions: Record<string, { holdings: SectorContribution[]; truncated: boolean }>;
+  sectorUnclassifiedCents: bigint;
+  sectorTotalCents: bigint;
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 space-y-6">
@@ -50,6 +69,14 @@ export function AllocationRadarSection({
           <span>{t("radar.risky", { amount: formatCurrency(risques, 0) })}</span>
         </div>
       </div>
+
+      <SectorExposureSection
+        t={t}
+        breakdown={sectorBreakdown}
+        contributions={sectorContributions}
+        unclassifiedCents={sectorUnclassifiedCents}
+        totalCents={sectorTotalCents}
+      />
     </div>
   );
 }

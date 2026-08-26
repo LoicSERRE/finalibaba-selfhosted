@@ -505,6 +505,7 @@
       "ariaLabel": "Répartition du portefeuille par secteur",
       "footnote": "Basé sur les classifications sectorielles Yahoo Finance (actions via une recherche par ISIN, ETF via leur composition détaillée) — les cryptomonnaies ont leur propre catégorie (elles n'ont pas de secteur GICS). « Non classé » ne regroupe que les rares positions que Yahoo Finance (et une éventuelle clé API de secours FMP/Alpha Vantage) n'a pas réussi à identifier.",
       "totalClassified": "{amount} classés par secteur",
+      "andMore": "+ d'autres positions",
       "sectors": {
         "technology": "Technologie",
         "financial_services": "Services financiers",

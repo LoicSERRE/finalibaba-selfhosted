@@ -16,7 +16,6 @@ import {
 } from "@/lib/domain/analytics";
 import { fetchYFDividends, fetchYFPriceHistory, resolveHoldingSectorWeights } from "@/lib/services/yahoo-finance";
 import { aggregateSectorExposure } from "@/lib/domain/sector-exposure";
-import { SectorExposureSection } from "@/components/analytics/sector-exposure-section";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { CashflowCards } from "@/components/analytics/cashflow-cards";
 import { GoalAndPassiveIncome } from "@/components/analytics/goal-and-passive-income";
@@ -104,17 +103,31 @@ export default async function AnalyticsPage() {
   // missing lookup. Bucketing by the holding's own account type (known
   // locally, no network round-trip) is both more accurate and cheaper than
   // attempting - and always failing - the Yahoo path for these.
-  const investmentHoldings = accounts.filter((a) => a.type === "INVESTMENT").flatMap((a) => a.holdings);
-  const cryptoHoldings = accounts.filter((a) => a.type === "CRYPTO").flatMap((a) => a.holdings);
+  // holdingLabel matches this app's existing "name falls back to ticker"
+  // convention (holdings-table.tsx, investment-tab.tsx, export-accounts-
+  // button.tsx) plus the account name, so a contribution tooltip reads
+  // "iShares Core MSCI World (PEA)" rather than a bare ISIN - real user
+  // request: knowing *which* holdings make up a sector's percentage, not
+  // just the total.
+  const holdingLabel = (h: { name: string | null; ticker: string }, accountName: string) =>
+    `${h.name ?? h.ticker} (${accountName})`;
+  const investmentHoldings = accounts
+    .filter((a) => a.type === "INVESTMENT")
+    .flatMap((a) => a.holdings.map((h) => ({ ...h, accountName: a.name })));
+  const cryptoHoldings = accounts
+    .filter((a) => a.type === "CRYPTO")
+    .flatMap((a) => a.holdings.map((h) => ({ ...h, accountName: a.name })));
   const investmentSectorWeights = await Promise.all(
     investmentHoldings.map((h) => resolveHoldingSectorWeights(h.ticker))
   );
   const sectorExposure = aggregateSectorExposure([
     ...investmentHoldings.map((h, i) => ({
+      name: holdingLabel(h, h.accountName),
       marketValueCents: holdingMarketValue(h),
       sectorWeights: investmentSectorWeights[i],
     })),
     ...cryptoHoldings.map((h) => ({
+      name: holdingLabel(h, h.accountName),
       marketValueCents: holdingMarketValue(h),
       sectorWeights: { crypto: 1 },
     })),
@@ -232,13 +245,10 @@ export default async function AnalyticsPage() {
             garantis={result.garantis}
             risques={result.risques}
             garantisPct={result.garantisPct}
-          />
-
-          <SectorExposureSection
-            t={t}
-            breakdown={sectorExposure.breakdown}
-            unclassifiedCents={sectorExposure.unclassifiedCents}
-            totalCents={sectorExposure.totalCents}
+            sectorBreakdown={sectorExposure.breakdown}
+            sectorContributions={sectorExposure.contributions}
+            sectorUnclassifiedCents={sectorExposure.unclassifiedCents}
+            sectorTotalCents={sectorExposure.totalCents}
           />
 
           <DetailedAllocationSection

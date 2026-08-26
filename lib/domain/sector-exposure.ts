@@ -61,6 +61,12 @@ export function normalizeSectorKey(raw: string): string {
 }
 
 export interface SectorExposureHolding {
+  // Display label for this holding, already resolved by the caller (e.g.
+  // "iShares Core MSCI World (PEA)") - kept as a plain string rather than
+  // separate name/account fields so this file stays presentation-agnostic
+  // about how the two are combined; app/analytics/page.tsx builds it once
+  // from Holding.name/ticker + the parent Account.name.
+  name: string;
   marketValueCents: bigint;
   // null = this holding's sector couldn't be resolved from any source
   // (Yahoo, and neither optional fallback provider if configured/reachable) -
@@ -69,11 +75,29 @@ export interface SectorExposureHolding {
   sectorWeights: SectorWeights | null;
 }
 
+export interface SectorContribution {
+  name: string;
+  cents: bigint;
+}
+
+// Real user request: "où ça vient" for a sector - which holdings actually
+// make up its percentage, not just the total. Capped and sorted so a
+// portfolio with many holdings still produces a short, scannable tooltip -
+// same "safety cap, not a feature limit" precedent as MAX_UNCATEGORIZED_GROUPS
+// (lib/domain/budgets.ts) / topAssets' own top-10 slice.
+export const MAX_CONTRIBUTIONS_PER_SECTOR = 5;
+
 export interface SectorExposureResult {
   // Only keys that actually received weight from at least one holding are
   // present - callers render whatever's here, they don't need to know the
   // full SECTOR_KEYS list to iterate correctly.
   breakdown: Record<string, bigint>;
+  // Same keys as `breakdown` (plus "unclassified" when applicable) - each
+  // list is sorted by contribution descending and capped at
+  // MAX_CONTRIBUTIONS_PER_SECTOR; `truncated` says whether real contributors
+  // beyond the cap exist, so the UI can show "+N autres" instead of
+  // silently presenting a partial list as if it were the whole story.
+  contributions: Record<string, { holdings: SectorContribution[]; truncated: boolean }>;
   unclassifiedCents: bigint;
   totalCents: bigint;
 }
@@ -81,18 +105,26 @@ export interface SectorExposureResult {
 /**
  * Weighted sum of each holding's market value across its resolved sector
  * weights - a holding split 60/40 across two sectors contributes 60%/40% of
- * its own market value to each, not its whole value to both.
+ * its own market value to each, not its whole value to both. Also builds
+ * the per-sector contribution lists (see SectorContribution above).
  */
 export function aggregateSectorExposure(holdings: SectorExposureHolding[]): SectorExposureResult {
   const breakdown: Record<string, bigint> = {};
+  const contributionsByKey: Record<string, SectorContribution[]> = {};
   let unclassifiedCents = BigInt(0);
   let totalCents = BigInt(0);
+
+  const addContribution = (key: string, name: string, cents: bigint) => {
+    if (!contributionsByKey[key]) contributionsByKey[key] = [];
+    contributionsByKey[key].push({ name, cents });
+  };
 
   for (const h of holdings) {
     totalCents += h.marketValueCents;
 
     if (!h.sectorWeights || Object.keys(h.sectorWeights).length === 0) {
       unclassifiedCents += h.marketValueCents;
+      addContribution("unclassified", h.name, h.marketValueCents);
       continue;
     }
 
@@ -101,8 +133,18 @@ export function aggregateSectorExposure(holdings: SectorExposureHolding[]): Sect
       const key = normalizeSectorKey(rawKey);
       const cents = BigInt(Math.round(Number(h.marketValueCents) * weight));
       breakdown[key] = (breakdown[key] ?? BigInt(0)) + cents;
+      addContribution(key, h.name, cents);
     }
   }
 
-  return { breakdown, unclassifiedCents, totalCents };
+  const contributions: SectorExposureResult["contributions"] = {};
+  for (const [key, list] of Object.entries(contributionsByKey)) {
+    const sorted = [...list].sort((a, b) => Number(b.cents - a.cents));
+    contributions[key] = {
+      holdings: sorted.slice(0, MAX_CONTRIBUTIONS_PER_SECTOR),
+      truncated: sorted.length > MAX_CONTRIBUTIONS_PER_SECTOR,
+    };
+  }
+
+  return { breakdown, contributions, unclassifiedCents, totalCents };
 }

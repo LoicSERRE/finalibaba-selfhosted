@@ -505,6 +505,7 @@
       "ariaLabel": "Portfolio breakdown by sector",
       "footnote": "Based on Yahoo Finance sector classifications (stocks via an ISIN search, ETFs via their detailed composition) — cryptocurrencies get their own category (they have no GICS sector). \"Unclassified\" only covers the rare positions Yahoo Finance (and an optional FMP/Alpha Vantage fallback key) couldn't identify.",
       "totalClassified": "{amount} classified by sector",
+      "andMore": "+ more positions",
       "sectors": {
         "technology": "Technology",
         "financial_services": "Financial Services",
