@@ -60,6 +60,7 @@ export async function updateAlertTriggers(formData: FormData) {
   // they need an explicit boolean.
   const loanAlertsEnabled = formData.get("loanAlertsEnabled") === "on";
   const syncFailureAlertsEnabled = formData.get("syncFailureAlertsEnabled") === "on";
+  const sectorDataAlertsEnabled = formData.get("sectorDataAlertsEnabled") === "on";
 
   const current = await prisma.userSettings.findUnique({
     where: { id: "singleton" },
@@ -75,6 +76,7 @@ export async function updateAlertTriggers(formData: FormData) {
     netWorthAlertThresholdCents,
     loanAlertsEnabled,
     syncFailureAlertsEnabled,
+    sectorDataAlertsEnabled,
     ...(thresholdChanged ? { netWorthAlertLastAbove: null } : {}),
   };
 

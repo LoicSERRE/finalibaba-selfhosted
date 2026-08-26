@@ -15,6 +15,7 @@ import {
   computeHoldingDriftPts,
 } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
+import { probeYahooSectorHealth } from "@/lib/services/yahoo-finance";
 import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
 
 /**
@@ -117,6 +118,11 @@ async function checkLoanAlerts(settings: UserSettingsModel): Promise<string[]> {
 const FIXED_SOURCE_LABELS: Record<string, string> = {
   trade_republic: "Trade Republic",
   lcl: "LCL",
+  // Not a real bank sync - reuses this same SyncFailureState/dispatchAlert
+  // machinery for the Analytics sector-exposure chart's own health probe
+  // (checkSectorDataHealth below). See CLAUDE.md's "Full sector-exposure
+  // breakdown".
+  yahoo_sector_data: "Données sectorielles Yahoo Finance",
 };
 
 async function friendlySourceLabel(source: string): Promise<string> {
@@ -258,6 +264,53 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
   }
 
   return fired;
+}
+
+const SECTOR_DATA_SOURCE = "yahoo_sector_data";
+
+/**
+ * Degradation alert for the Analytics sector-exposure chart's Yahoo Finance
+ * crumb-based ETF path (lib/services/yahoo-finance.ts's
+ * probeYahooSectorHealth) - the fragile half of that feature (see CLAUDE.md's
+ * "Full sector-exposure breakdown" for the full scoping writeup on why it's
+ * fragile and what the two optional fallback providers are). Reuses
+ * SyncFailureState/dispatchAlert exactly like checkSyncFailures above (same
+ * edge-triggered + REMINDER_INTERVAL_MS shape), but manages its own row
+ * directly under a reserved source key instead of going through that
+ * function's SyncLog-scanning loop - nothing writes a SyncLog row for this
+ * JS-only concern, so that loop would never discover it.
+ *
+ * Alerts on `!anyPathHealthy`, not `!yahooHealthy` - a self-hoster with a
+ * fallback provider configured and working shouldn't get paged just because
+ * Yahoo alone hiccupped while the fallback quietly covered for it. The alert
+ * exists for "the feature has actually stopped working."
+ */
+async function checkSectorDataHealth(settings: UserSettingsModel): Promise<string[]> {
+  if (!settings.sectorDataAlertsEnabled) return [];
+
+  const { anyPathHealthy } = await probeYahooSectorHealth();
+  const state = await prisma.syncFailureState.findUnique({ where: { source: SECTOR_DATA_SOURCE } });
+
+  if (anyPathHealthy) {
+    await clearSyncFailureState(SECTOR_DATA_SOURCE, !!state);
+    return [];
+  }
+
+  const body =
+    "La récupération des données de répartition sectorielle (Analytique) depuis Yahoo Finance a échoué. " +
+    "Configure une clé API de secours (FMP_API_KEY ou ALPHA_VANTAGE_API_KEY) pour plus de résilience.";
+
+  if (!state) {
+    await prisma.syncFailureState.create({ data: { source: SECTOR_DATA_SOURCE } });
+    await dispatchAlert(settings, "Données sectorielles indisponibles", body);
+    return [SECTOR_DATA_SOURCE];
+  }
+  if (Date.now() - state.lastAlertedAt.getTime() >= REMINDER_INTERVAL_MS) {
+    await prisma.syncFailureState.update({ where: { source: SECTOR_DATA_SOURCE }, data: { lastAlertedAt: new Date() } });
+    await dispatchAlert(settings, "Données sectorielles indisponibles (toujours en cours)", body);
+    return [SECTOR_DATA_SOURCE];
+  }
+  return [];
 }
 
 type CustomAlertRule = Awaited<ReturnType<typeof findActiveAlertRules>>[number];
@@ -593,12 +646,14 @@ export async function POST(req: NextRequest) {
   const netWorthFired = await checkNetWorthAlert(settings);
   const loansFired = await checkLoanAlerts(settings);
   const syncFailuresFired = await checkSyncFailures(settings);
+  const sectorDataFired = await checkSectorDataHealth(settings);
   const customRulesFired = await checkCustomAlertRules(settings);
 
   const fired = [
     ...(netWorthFired ? ["net_worth_threshold"] : []),
     ...loansFired.map((id) => `loan_nearly_paid_off:${id}`),
     ...syncFailuresFired.map((source) => `sync_failure:${source}`),
+    ...sectorDataFired.map((source) => `sync_failure:${source}`),
     ...customRulesFired,
   ];
 

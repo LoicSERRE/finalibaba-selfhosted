@@ -10,10 +10,13 @@ import { getTranslations, getLocale } from "next-intl/server";
 import {
   computeAnalytics,
   buildAnalyticsExport,
+  holdingMarketValue,
   ISIN_TO_YF_SYMBOL,
   BENCHMARK_SYMBOLS,
 } from "@/lib/domain/analytics";
-import { fetchYFDividends, fetchYFPriceHistory } from "@/lib/services/yahoo-finance";
+import { fetchYFDividends, fetchYFPriceHistory, resolveHoldingSectorWeights } from "@/lib/services/yahoo-finance";
+import { aggregateSectorExposure } from "@/lib/domain/sector-exposure";
+import { SectorExposureSection } from "@/components/analytics/sector-exposure-section";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { CashflowCards } from "@/components/analytics/cashflow-cards";
 import { GoalAndPassiveIncome } from "@/components/analytics/goal-and-passive-income";
@@ -84,6 +87,24 @@ export default async function AnalyticsPage() {
     intlLocale,
     now: new Date(),
   });
+
+  // Full sector-exposure breakdown (v1.16) - depends on `accounts` above, so
+  // it can't join the first Promise.all. See CLAUDE.md's "Full sector-
+  // exposure breakdown" for the full design (Yahoo Finance's free
+  // ISIN-resolution + crumb-gated ETF path, with two optional fallback
+  // providers) behind resolveHoldingSectorWeights.
+  const investmentHoldings = accounts
+    .filter((a) => a.type === "INVESTMENT" || a.type === "CRYPTO")
+    .flatMap((a) => a.holdings);
+  const sectorWeightsList = await Promise.all(
+    investmentHoldings.map((h) => resolveHoldingSectorWeights(h.ticker))
+  );
+  const sectorExposure = aggregateSectorExposure(
+    investmentHoldings.map((h, i) => ({
+      marketValueCents: holdingMarketValue(h),
+      sectorWeights: sectorWeightsList[i],
+    }))
+  );
 
   const allocationLabels = Object.fromEntries(
     result.allocationSlices.map((s) => [s.key, tAlloc(s.key as Parameters<typeof tAlloc>[0])])
@@ -198,6 +219,13 @@ export default async function AnalyticsPage() {
             risques={result.risques}
             garantisPct={result.garantisPct}
             techPct={result.techPct}
+          />
+
+          <SectorExposureSection
+            t={t}
+            breakdown={sectorExposure.breakdown}
+            unclassifiedCents={sectorExposure.unclassifiedCents}
+            totalCents={sectorExposure.totalCents}
           />
 
           <DetailedAllocationSection

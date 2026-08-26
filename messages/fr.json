@@ -504,6 +504,26 @@
       "monitor": "À surveiller",
       "techFootnote": "Inclut l'exposition indirecte via ETF Nasdaq, S&P 500, MSCI World — poids théoriques approximatifs"
     },
+    "sectorExposure": {
+      "title": "Répartition sectorielle",
+      "ariaLabel": "Répartition du portefeuille par secteur",
+      "footnote": "Basé sur les classifications sectorielles Yahoo Finance (actions via une recherche par ISIN, ETF via leur composition détaillée) — certaines positions rares peuvent ne pas être classées. Une position non résolue par Yahoo Finance peut basculer sur une clé API de secours (FMP ou Alpha Vantage) si configurée dans les variables d'environnement.",
+      "totalClassified": "{amount} classés par secteur",
+      "sectors": {
+        "technology": "Technologie",
+        "financial_services": "Services financiers",
+        "healthcare": "Santé",
+        "consumer_cyclical": "Consommation discrétionnaire",
+        "consumer_defensive": "Consommation de base",
+        "industrials": "Industrie",
+        "energy": "Énergie",
+        "utilities": "Services publics",
+        "basic_materials": "Matériaux de base",
+        "real_estate": "Immobilier",
+        "communication_services": "Communication",
+        "unclassified": "Non classé"
+      }
+    },
     "detailedAllocation": {
       "title": "Répartition détaillée"
     },
@@ -754,7 +774,9 @@
       "netWorthThresholdPlaceholder": "Ex. 100000",
       "netWorthThresholdHint": "Laisse vide pour désactiver. Alerte envoyée quand ton patrimoine net franchit ce seuil, dans un sens ou dans l'autre.",
       "triggerLoan": "Prêt bientôt remboursé",
-      "triggerSyncFailure": "Échec de synchronisation"
+      "triggerSyncFailure": "Échec de synchronisation",
+      "triggerSectorData": "Données de répartition sectorielle indisponibles",
+      "triggerSectorDataHint": "Alerte si le graphique de répartition sectorielle (Analytique) ne parvient plus à récupérer ses données Yahoo Finance et qu'aucune clé de secours (FMP/Alpha Vantage) n'est configurée."
     },
     "alertRules": {
       "title": "Règles d'alerte personnalisées",

@@ -48,3 +48,31 @@ export const ALLOCATION_CATEGORY_COLORS: Record<string, string> = {
   realEstate: "#78716c",
   auto: "#ec4899",
 };
+
+// Full sector-exposure breakdown (v1.16, components/analytics/sector-exposure-section.tsx)
+// - a different taxonomy from ALLOCATION_CATEGORY_COLORS above (GICS-style
+// sectors, not asset-class buckets), shown on the same Analytics page, so
+// kept as its own map rather than overloading the existing one with keys
+// from two unrelated category systems. 12 colors (11 sectors from
+// lib/domain/sector-exposure.ts's SECTOR_KEYS + "unclassified") spread across
+// the hue wheel to stay visually distinct - not individually contrast-
+// measured the way the 6-color map above was after a real complaint, but
+// deliberately avoiding both pure red (this app's own "negative amount"
+// convention everywhere else) and clustering multiple entries in the same
+// narrow blue-indigo-violet band that caused that complaint in the first
+// place. `unclassified` is a cool muted gray, matching `realEstate` above's
+// precedent of a desaturated neutral for a "different kind of thing" bucket.
+export const SECTOR_COLORS: Record<string, string> = {
+  technology: "#6366f1",
+  financial_services: "#0ea5e9",
+  healthcare: "#22c55e",
+  consumer_cyclical: "#f59e0b",
+  consumer_defensive: "#84cc16",
+  industrials: "#a855f7",
+  energy: "#fb923c",
+  utilities: "#14b8a6",
+  basic_materials: "#78716c",
+  real_estate: "#ec4899",
+  communication_services: "#06b6d4",
+  unclassified: "#64748b",
+};

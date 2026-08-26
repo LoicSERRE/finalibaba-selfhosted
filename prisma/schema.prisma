@@ -525,6 +525,12 @@ model UserSettings {
   // these fields existed).
   loanAlertsEnabled        Boolean  @default(true)
   syncFailureAlertsEnabled Boolean  @default(true)
+  // Degradation alert for the Analytics sector-exposure chart's Yahoo Finance
+  // crumb-based ETF path (see CLAUDE.md's "Full sector-exposure breakdown") -
+  // default false, unlike the two toggles above, since this is a brand new
+  // notification category with no pre-existing always-on behavior to
+  // preserve for existing installs.
+  sectorDataAlertsEnabled Boolean  @default(false)
   updatedAt            DateTime @updatedAt
 }
 
