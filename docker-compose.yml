@@ -29,6 +29,10 @@ services:
       APP_URL: ${APP_URL:-}
       GOCARDLESS_SECRET_ID: ${GOCARDLESS_SECRET_ID:-}
       GOCARDLESS_SECRET_KEY: ${GOCARDLESS_SECRET_KEY:-}
+      # Optional sector-exposure fallback providers - see .env.example and
+      # CLAUDE.md's "Full sector-exposure breakdown".
+      FMP_API_KEY: ${FMP_API_KEY:-}
+      ALPHA_VANTAGE_API_KEY: ${ALPHA_VANTAGE_API_KEY:-}
       SYNC_SERVICE_URL: http://sync:8000
       # Presence-only checks - app/settings/page.tsx reads these two to decide
       # whether to render the dedicated LCL/TR "Synchronisation automatique"

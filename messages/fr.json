@@ -498,16 +498,12 @@
       "title": "Radar d'allocation",
       "safeVsRisky": "Garantis vs Risqués",
       "safe": "Livrets · {amount}",
-      "risky": "Bourse · {amount}",
-      "techExposure": "Exposition Tech",
-      "highConcentration": "Concentration élevée",
-      "monitor": "À surveiller",
-      "techFootnote": "Inclut l'exposition indirecte via ETF Nasdaq, S&P 500, MSCI World — poids théoriques approximatifs"
+      "risky": "Bourse · {amount}"
     },
     "sectorExposure": {
       "title": "Répartition sectorielle",
       "ariaLabel": "Répartition du portefeuille par secteur",
-      "footnote": "Basé sur les classifications sectorielles Yahoo Finance (actions via une recherche par ISIN, ETF via leur composition détaillée) — certaines positions rares peuvent ne pas être classées. Une position non résolue par Yahoo Finance peut basculer sur une clé API de secours (FMP ou Alpha Vantage) si configurée dans les variables d'environnement.",
+      "footnote": "Basé sur les classifications sectorielles Yahoo Finance (actions via une recherche par ISIN, ETF via leur composition détaillée) — les cryptomonnaies ont leur propre catégorie (elles n'ont pas de secteur GICS). « Non classé » ne regroupe que les rares positions que Yahoo Finance (et une éventuelle clé API de secours FMP/Alpha Vantage) n'a pas réussi à identifier.",
       "totalClassified": "{amount} classés par secteur",
       "sectors": {
         "technology": "Technologie",
@@ -521,6 +517,7 @@
         "basic_materials": "Matériaux de base",
         "real_estate": "Immobilier",
         "communication_services": "Communication",
+        "crypto": "Cryptomonnaies",
         "unclassified": "Non classé"
       }
     },
@@ -1302,7 +1299,6 @@
     "mdSafeVsRisky": "Garantis vs Risqués",
     "mdSafe": "Garantis",
     "mdRisky": "Risqués",
-    "mdTechExposure": "Exposition Tech",
     "mdTotalLiabilities": "Passif total",
     "mdDebtRatio": "Ratio dette / brut",
     "mdEquity": "Fonds propres"

@@ -117,7 +117,6 @@ export type AnalyticsExportData = {
   garantisCents: number;
   risquesCents: number;
   garantisPct: number;
-  techPct: number;
   // Top assets (top 10 by value)
   topAssets: TopAssetRowExport[];
   // Financing / debt analysis
@@ -202,7 +201,6 @@ interface AnalyticsExportStrings {
   safeVsRisky: string;
   safe: string;
   risky: string;
-  techExposure: string;
   totalLiabilities: string;
   debtRatio: string;
   equity: string;
@@ -393,7 +391,6 @@ function buildMarkdown(
     lines.push(`| ${s.indicator} | ${s.value} |`);
     lines.push("|---|---|");
     lines.push(`| ${s.safeVsRisky} | ${s.safe} ${fmt(data.garantisCents)} (${data.garantisPct}%) · ${s.risky} ${fmt(data.risquesCents)} (${100 - data.garantisPct}%) |`);
-    lines.push(`| ${s.techExposure} | ${data.techPct}% |`);
     lines.push("");
   }
 
@@ -549,7 +546,6 @@ export function ExportAnalyticsButton({ data }: Readonly<{ data: AnalyticsExport
       safeVsRisky: t("mdSafeVsRisky"),
       safe: t("mdSafe"),
       risky: t("mdRisky"),
-      techExposure: t("mdTechExposure"),
       totalLiabilities: t("mdTotalLiabilities"),
       debtRatio: t("mdDebtRatio"),
       equity: t("mdEquity"),

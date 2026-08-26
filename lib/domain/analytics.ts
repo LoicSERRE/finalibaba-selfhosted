@@ -8,23 +8,6 @@ import type { AnalyticsExportData } from "@/components/shared/export-analytics-b
 
 // ── Static config ────────────────────────────────────────────────────────────
 
-// Approximate tech exposure per ticker (0–1)
-export const TECH_WEIGHTS: Record<string, number> = {
-  US5949181045: 1.0,   // Microsoft
-  US30303M1027: 1.0,   // Meta
-  US0378331005: 1.0,   // Apple
-  IE00BGV5VN51: 0.85,  // AI & Big Data ETF
-  FR0011871110: 0.60,  // PEA Nasdaq 100
-  IE00B5BMR087: 0.32,  // Core S&P 500
-  LU1681048804: 0.32,  // S&P 500 EUR
-  LU1681043599: 0.23,  // MSCI World
-  IE0002XZSHO1: 0.23,  // MSCI World Swap PEA
-  FR001400U5Q4: 0.23,  // Pea Monde MSCI World
-  IE00B4L5Y983: 0.23,  // iShares Core MSCI World UCITS ETF
-  LU3176111881: 0.10,  // Private Equity
-  // everything else: 0
-};
-
 // Annual dividend yields (only distributing stocks; accumulating ETFs = 0)
 export const DIVIDEND_YIELDS: Record<string, number> = {
   FR0000120073: 0.020, // Air Liquide ~2%
@@ -390,7 +373,6 @@ export interface AnalyticsResult {
   garantis: bigint;
   risques: bigint;
   garantisPct: number;
-  techPct: number;
 
   // Allocation
   allocationSlices: AllocationSliceResult[];
@@ -440,8 +422,6 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   // rate instead of only ever an absolute cents amount.
   let weightedTaxRateSum = 0; // Σ(taxRate * gainCents)
   let totalPositiveGainCents = BigInt(0); // Σ(gainCents), gains only
-  let techValueCents = BigInt(0);
-  let totalInvestCents = BigInt(0);
   let annualDividendsCents = BigInt(0);    // gross
   let annualDividendsNetCents = BigInt(0); // net after tax
   let annualInterestCents = BigInt(0);     // already net (French regulated savings accounts are income-tax-exempt)
@@ -482,10 +462,6 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
       for (const h of account.holdings) {
         const mv = holdingMarketValue(h);
         value += mv;
-
-        // Tech exposure
-        techValueCents += BigInt(Math.round(Number(mv) * (TECH_WEIGHTS[h.ticker] ?? 0)));
-        totalInvestCents += mv;
 
         // Dividends - real Yahoo Finance yield, falls back to hard-coded rate
         const symbol = ISIN_TO_YF_SYMBOL[h.ticker];
@@ -678,10 +654,6 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   const garantisPct = garantisTotal > BigInt(0)
     ? Math.round((Number(garantis) / Number(garantisTotal)) * 100)
     : 50;
-
-  const techPct = totalInvestCents > BigInt(0)
-    ? Math.round((Number(techValueCents) / Number(totalInvestCents)) * 100)
-    : 0;
 
   // ── Passive income (net after tax) ──────────────────────────────────────
   // Dividends: net after flat tax / social levies depending on account type
@@ -926,7 +898,6 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     garantis,
     risques,
     garantisPct,
-    techPct,
     allocationSlices,
     totalAllocation,
     dailyHistory,
@@ -1029,7 +1000,6 @@ export function buildAnalyticsExport(
     garantisCents: Number(result.garantis),
     risquesCents: Number(result.risques),
     garantisPct: result.garantisPct,
-    techPct: result.techPct,
     topAssets: result.topAssets.map((a) => ({
       name: a.name,
       institution: a.institution,

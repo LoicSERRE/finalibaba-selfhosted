@@ -93,18 +93,32 @@ export default async function AnalyticsPage() {
   // exposure breakdown" for the full design (Yahoo Finance's free
   // ISIN-resolution + crumb-gated ETF path, with two optional fallback
   // providers) behind resolveHoldingSectorWeights.
-  const investmentHoldings = accounts
-    .filter((a) => a.type === "INVESTMENT" || a.type === "CRYPTO")
-    .flatMap((a) => a.holdings);
-  const sectorWeightsList = await Promise.all(
+  //
+  // CRYPTO-account holdings skip that resolution entirely - a real
+  // imprecision found in production: BTC/ETH-style tickers aren't ISINs
+  // Yahoo (or either fallback provider) can classify under a GICS sector,
+  // so every crypto holding landed in "unclassified" indistinguishable from
+  // a genuine data gap, understating how much of the "unclassified" slice
+  // was actually just "this app doesn't try to sector-classify crypto,
+  // because crypto doesn't have a GICS sector" - a true statement, not a
+  // missing lookup. Bucketing by the holding's own account type (known
+  // locally, no network round-trip) is both more accurate and cheaper than
+  // attempting - and always failing - the Yahoo path for these.
+  const investmentHoldings = accounts.filter((a) => a.type === "INVESTMENT").flatMap((a) => a.holdings);
+  const cryptoHoldings = accounts.filter((a) => a.type === "CRYPTO").flatMap((a) => a.holdings);
+  const investmentSectorWeights = await Promise.all(
     investmentHoldings.map((h) => resolveHoldingSectorWeights(h.ticker))
   );
-  const sectorExposure = aggregateSectorExposure(
-    investmentHoldings.map((h, i) => ({
+  const sectorExposure = aggregateSectorExposure([
+    ...investmentHoldings.map((h, i) => ({
       marketValueCents: holdingMarketValue(h),
-      sectorWeights: sectorWeightsList[i],
-    }))
-  );
+      sectorWeights: investmentSectorWeights[i],
+    })),
+    ...cryptoHoldings.map((h) => ({
+      marketValueCents: holdingMarketValue(h),
+      sectorWeights: { crypto: 1 },
+    })),
+  ]);
 
   const allocationLabels = Object.fromEntries(
     result.allocationSlices.map((s) => [s.key, tAlloc(s.key as Parameters<typeof tAlloc>[0])])
@@ -218,7 +232,6 @@ export default async function AnalyticsPage() {
             garantis={result.garantis}
             risques={result.risques}
             garantisPct={result.garantisPct}
-            techPct={result.techPct}
           />
 
           <SectorExposureSection

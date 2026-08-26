@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import {
   computeAnalytics,
-  TECH_WEIGHTS,
   type AnalyticsAccount,
   type AnalyticsInput,
 } from "@/lib/domain/analytics";
@@ -148,53 +147,6 @@ describe("computeAnalytics", () => {
     );
     expect(taxable.investPerfRows[0].tax).toBe(BigInt(Math.round(1000_00 * 0.3)));
     expect(taxable.totalLatentTax).toBe(BigInt(Math.round(1000_00 * 0.3)));
-  });
-
-  // Real incident: prisma/seed-demo.ts stored holdings under friendly
-  // symbols ("AAPL") instead of their real ISIN, so this exact lookup
-  // (TECH_WEIGHTS[h.ticker]) silently missed every entry and the demo's
-  // own Tech Exposure showed 0% despite directly holding Apple/Microsoft
-  // - not caught earlier because techPct had zero test coverage. This
-  // hand-computes the expected result from TECH_WEIGHTS' own real entry
-  // for Apple (US0378331005, weight 1.0) rather than a fabricated one, so
-  // it would have caught that exact class of bug.
-  it("computes techPct as the tech-weighted share of total invested+crypto value", () => {
-    const appleWeight = TECH_WEIGHTS["US0378331005"];
-    expect(appleWeight).toBe(1.0); // sanity check the fixture assumption below still holds
-
-    const result = computeAnalytics(
-      baseInput({
-        accounts: [
-          account({
-            id: "cto",
-            type: "INVESTMENT",
-            taxTreatment: "TAXABLE",
-            taxRatePct: 0,
-            holdings: [
-              {
-                ticker: "US0378331005", // Apple - real ISIN, weight 1.0
-                name: "Apple Inc.",
-                quantity: new Decimal(1),
-                lastPriceCents: BigInt(1_000_00), // 1 000€, fully "tech"
-                costBasisCents: BigInt(1_000_00),
-              },
-              {
-                ticker: "FR0000120271", // Total Energies - not in TECH_WEIGHTS, weight 0
-                name: "TotalEnergies SE",
-                quantity: new Decimal(1),
-                lastPriceCents: BigInt(1_000_00), // 1 000€, 0% "tech"
-                costBasisCents: BigInt(1_000_00),
-              },
-            ],
-          }),
-        ],
-      })
-    );
-
-    // techValueCents = 1_000_00*1.0 + 1_000_00*0 = 1_000_00
-    // totalInvestCents = 1_000_00 + 1_000_00 = 2_000_00
-    // techPct = round(1_000_00 / 2_000_00 * 100) = 50
-    expect(result.techPct).toBe(50);
   });
 
   it("computes per-row CAGR from investmentStartDate using the injected `now`, not the real clock", () => {

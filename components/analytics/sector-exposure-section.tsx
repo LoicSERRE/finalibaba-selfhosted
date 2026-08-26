@@ -6,11 +6,15 @@ import type { getTranslations } from "next-intl/server";
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
 /**
- * Full sector-exposure breakdown (v1.16) - generalizes AllocationRadarSection's
- * existing Tech-only bar (left untouched, still independently hand-verified
- * via TECH_WEIGHTS) into every GICS-style sector across every holding. See
- * CLAUDE.md's "Full sector-exposure breakdown" for the scoping research
- * behind the data source and the degradation-alert design.
+ * Full sector-exposure breakdown (v1.16) - generalizes
+ * AllocationRadarSection's former Tech-only bar (TECH_WEIGHTS, a 12-entry
+ * hand-verified map) into every GICS-style sector across every holding.
+ * That bar was removed, not kept alongside this section - real user
+ * feedback found two different "how much tech?" numbers on the same page
+ * (the hand-picked weight vs this section's live Yahoo-sourced figure)
+ * confusing rather than complementary. See CLAUDE.md's "Full sector-
+ * exposure breakdown" for the scoping research behind the data source and
+ * the degradation-alert design.
  */
 export function SectorExposureSection({
   t,

@@ -191,11 +191,40 @@ def _auto_categorize():
         log.exception("Auto-categorize failed")
 
 
+def _snapshot_investment_balances():
+    # Real production feedback: investment/crypto HistoricalBalance rows are
+    # event-driven (only written when a holding is upserted/deleted/sold/FX-
+    # refreshed), so a rarely-edited position's own value chart stayed stuck
+    # on "not enough data" indefinitely - unlike a synced fiat account, which
+    # already gets a fresh balance snapshot on every sync cycle. Same call
+    # shape as _check_alerts()/_auto_categorize() below; this doesn't fetch
+    # new market prices for holdings (still a manual action, unchanged) -
+    # only records today's already-known valuation more regularly. See
+    # CLAUDE.md's "Historical value chart per investment account".
+    app_url = os.environ.get("APP_SERVICE_URL")
+    secret = os.environ.get("NEXTAUTH_SECRET")
+    if not app_url or not secret:
+        log.info("APP_SERVICE_URL or NEXTAUTH_SECRET not set - investment balance snapshot skipped")
+        return
+    try:
+        import requests
+        resp = requests.post(
+            f"{app_url}/api/investments/snapshot-balances",
+            headers={"Authorization": f"Bearer {secret}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        log.info("Investment balance snapshot done: %s", resp.json())
+    except Exception:
+        log.exception("Investment balance snapshot failed")
+
+
 def _run_all():
     log.info("=== Daily sync started ===")
     _run_lcl()
     _run_tr()
     _run_all_woob()
+    _snapshot_investment_balances()
     _auto_categorize()
     _check_alerts()
     log.info("=== Daily sync done ===")

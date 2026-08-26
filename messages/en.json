@@ -498,16 +498,12 @@
       "title": "Allocation radar",
       "safeVsRisky": "Safe vs Risky",
       "safe": "Savings · {amount}",
-      "risky": "Stocks · {amount}",
-      "techExposure": "Tech exposure",
-      "highConcentration": "High concentration",
-      "monitor": "Monitor",
-      "techFootnote": "Includes indirect exposure via Nasdaq, S&P 500, MSCI World ETFs — approximate theoretical weights"
+      "risky": "Stocks · {amount}"
     },
     "sectorExposure": {
       "title": "Sector exposure",
       "ariaLabel": "Portfolio breakdown by sector",
-      "footnote": "Based on Yahoo Finance sector classifications (stocks via an ISIN search, ETFs via their detailed composition) — some rare positions may not be classified. A position Yahoo Finance can't resolve can fall back to a configured API key (FMP or Alpha Vantage) if set in the environment variables.",
+      "footnote": "Based on Yahoo Finance sector classifications (stocks via an ISIN search, ETFs via their detailed composition) — cryptocurrencies get their own category (they have no GICS sector). \"Unclassified\" only covers the rare positions Yahoo Finance (and an optional FMP/Alpha Vantage fallback key) couldn't identify.",
       "totalClassified": "{amount} classified by sector",
       "sectors": {
         "technology": "Technology",
@@ -521,6 +517,7 @@
         "basic_materials": "Basic Materials",
         "real_estate": "Real Estate",
         "communication_services": "Communication",
+        "crypto": "Cryptocurrencies",
         "unclassified": "Unclassified"
       }
     },
@@ -1302,7 +1299,6 @@
     "mdSafeVsRisky": "Safe vs Risky",
     "mdSafe": "Safe",
     "mdRisky": "Risky",
-    "mdTechExposure": "Tech exposure",
     "mdTotalLiabilities": "Total liabilities",
     "mdDebtRatio": "Debt / gross ratio",
     "mdEquity": "Equity"

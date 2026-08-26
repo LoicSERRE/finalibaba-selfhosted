@@ -14,11 +14,17 @@
 // portion); a resolved individual stock has exactly one key at 1.
 export type SectorWeights = Record<string, number>;
 
-// The 11 canonical sector keys this app buckets into - matches Yahoo
-// Finance's own topHoldings.sectorWeightings key set (confirmed live against
-// real ETF data during scoping), used as the single internal taxonomy every
-// data source (Yahoo search, Yahoo topHoldings, FMP, Alpha Vantage) gets
-// normalized into.
+// The 11 canonical GICS-style sector keys this app buckets into - matches
+// Yahoo Finance's own topHoldings.sectorWeightings key set (confirmed live
+// against real ETF data during scoping), used as the single internal
+// taxonomy every data source (Yahoo search, Yahoo topHoldings, FMP, Alpha
+// Vantage) gets normalized into. Two more keys exist outside this list and
+// outside normalizeSectorKey's domain entirely, both assigned directly by
+// the caller (app/analytics/page.tsx) rather than resolved from any source:
+// "crypto" (CRYPTO-account holdings - BTC/ETH-style tickers have no GICS
+// sector, so classifying them as one of these 11 would be a real inaccuracy,
+// not a data gap) and "unclassified" (aggregateSectorExposure's own fallback
+// for a genuinely unresolved holding).
 export const SECTOR_KEYS = [
   "technology",
   "financial_services",

@@ -49,12 +49,14 @@ export const config = {
     // link) that must work the same whether AUTH_ENABLED is on or off - the
     // token check inside the page is its own, independent gate. See
     // CLAUDE.md's "Read-only share links" section.
-    // api/alerts and api/transactions (specifically auto-categorize) are
-    // excluded for the same "no browser session on this call path" reason
-    // as api/auth/api/health: sync/main.py calls both directly,
+    // api/alerts, api/transactions (specifically auto-categorize), and
+    // api/investments (specifically snapshot-balances) are excluded for the
+    // same "no browser session on this call path" reason as
+    // api/auth/api/health: sync/main.py calls all three directly,
     // container-to-container, with no cookie to present - each gates
     // itself via a NEXTAUTH_SECRET bearer token instead. See CLAUDE.md's
-    // "Alerts & webhooks" section.
+    // "Alerts & webhooks" and "Historical value chart per investment
+    // account" sections.
     // NOSONAR (typescript:S7780) - this `config` export is statically parsed
     // by Next.js's middleware build step (extractExportedConstValue), which
     // requires a plain literal - a String.raw tagged-template expression here
@@ -97,6 +99,6 @@ export const config = {
     // `/api/v1/net-worth` alike, but not a bare-prefix collision like
     // `/api/v1999` - verified with the same live-server method as above,
     // not just reasoned through.
-    "/((?!api/auth|api/health|api/alerts|api/transactions|api\\/v1(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api\\/v1(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };
