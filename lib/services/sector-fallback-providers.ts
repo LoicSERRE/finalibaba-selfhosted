@@ -25,6 +25,31 @@ import { normalizeSectorKey } from "@/lib/domain/sector-exposure";
  * page's sector section actually shows data for their own holdings.
  */
 
+/**
+ * Pure response-shape parsing, extracted from the fetch call below so it's
+ * testable without mocking `fetch`/network I/O - matches this file's own
+ * documentation-only confirmation of FMP's shape (see the top-of-file
+ * comment): these tests assert against that documented shape, not a live
+ * response, so they'd need updating if FMP's real API ever disagrees with
+ * its own docs.
+ */
+export function parseFmpSectorWeightings(data: unknown): SectorWeights | null {
+  if (!Array.isArray(data) || data.length === 0) return null;
+
+  const weights: SectorWeights = {};
+  for (const entry of data as { sector?: string; weightPercentage?: string }[]) {
+    const sector = entry?.sector;
+    // FMP documents weightPercentage as a string like "45.20%" - parseFloat
+    // stops at the first non-numeric character, so the trailing "%" is
+    // safely ignored without a separate strip step.
+    const pct = Number.parseFloat(entry?.weightPercentage ?? "");
+    if (sector && Number.isFinite(pct) && pct > 0) {
+      weights[normalizeSectorKey(sector)] = pct / 100;
+    }
+  }
+  return Object.keys(weights).length > 0 ? weights : null;
+}
+
 async function fetchFmpEtfSectorWeightings(symbol: string): Promise<SectorWeights | null> {
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) return null;
@@ -34,21 +59,7 @@ async function fetchFmpEtfSectorWeightings(symbol: string): Promise<SectorWeight
       { headers: { Accept: "application/json" }, next: { revalidate: 3600 } }
     );
     if (!res.ok) return null;
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
-
-    const weights: SectorWeights = {};
-    for (const entry of data) {
-      const sector = entry?.sector as string | undefined;
-      // FMP documents weightPercentage as a string like "45.20%" - parseFloat
-      // stops at the first non-numeric character, so the trailing "%" is
-      // safely ignored without a separate strip step.
-      const pct = Number.parseFloat(entry?.weightPercentage);
-      if (sector && Number.isFinite(pct) && pct > 0) {
-        weights[normalizeSectorKey(sector)] = pct / 100;
-      }
-    }
-    return Object.keys(weights).length > 0 ? weights : null;
+    return parseFmpSectorWeightings(await res.json());
   } catch {
     return null;
   }
@@ -74,9 +85,30 @@ const ALPHA_VANTAGE_SECTOR_ALIASES: Record<string, string> = {
   materials: "basic_materials",
 };
 
-function normalizeAlphaVantageSector(raw: string): string {
+export function normalizeAlphaVantageSector(raw: string): string {
   const lowered = raw.trim().toLowerCase();
   return ALPHA_VANTAGE_SECTOR_ALIASES[lowered] ?? normalizeSectorKey(raw);
+}
+
+/**
+ * Pure response-shape parsing, extracted for the same testability reason as
+ * parseFmpSectorWeightings above - unlike FMP's shape, this one is asserted
+ * against a real, live-confirmed response (Alpha Vantage's public `demo` key
+ * against QQQ, see the top-of-file comment), not documentation alone.
+ */
+export function parseAlphaVantageSectorWeightings(data: unknown): SectorWeights | null {
+  const sectors = (data as { sectors?: { sector?: string; weight?: string }[] } | undefined)
+    ?.sectors;
+  if (!sectors || sectors.length === 0) return null;
+
+  const weights: SectorWeights = {};
+  for (const entry of sectors) {
+    const weight = Number.parseFloat(entry.weight ?? "");
+    if (entry.sector && Number.isFinite(weight) && weight > 0) {
+      weights[normalizeAlphaVantageSector(entry.sector)] = weight;
+    }
+  }
+  return Object.keys(weights).length > 0 ? weights : null;
 }
 
 async function fetchAlphaVantageEtfSectorWeightings(symbol: string): Promise<SectorWeights | null> {
@@ -88,18 +120,7 @@ async function fetchAlphaVantageEtfSectorWeightings(symbol: string): Promise<Sec
       { headers: { Accept: "application/json" }, next: { revalidate: 3600 } }
     );
     if (!res.ok) return null;
-    const data = await res.json();
-    const sectors = data?.sectors as { sector?: string; weight?: string }[] | undefined;
-    if (!sectors || sectors.length === 0) return null;
-
-    const weights: SectorWeights = {};
-    for (const entry of sectors) {
-      const weight = Number.parseFloat(entry.weight ?? "");
-      if (entry.sector && Number.isFinite(weight) && weight > 0) {
-        weights[normalizeAlphaVantageSector(entry.sector)] = weight;
-      }
-    }
-    return Object.keys(weights).length > 0 ? weights : null;
+    return parseAlphaVantageSectorWeightings(await res.json());
   } catch {
     return null;
   }
