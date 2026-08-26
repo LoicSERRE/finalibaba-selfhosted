@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v1.15.1**
+Current stable release: **v1.16.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -215,7 +215,7 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 ---
 
-## v1.16 - Depth on existing strengths
+## v1.16 - Depth on existing strengths - Released ✓
 
 *Levels up features already shipped and working rather than leaving them stalled at "good enough" once something more urgent came along - portfolio rebalancing, recurring detection, multi-currency, and the dashboard's allocation view each get one concrete, scoped next step.*
 
