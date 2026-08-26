@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddRecurringDialog, type RecurringInitial } from "@/components/recurring/add-recurring-dialog";
 import { dismissSuggestion } from "@/lib/actions/recurring";
+import { formatFrequencyLabel } from "@/lib/domain/recurring";
 import { formatCurrency } from "@/lib/utils/format";
 import { useTranslations } from "next-intl";
 
@@ -16,6 +17,7 @@ type Candidate = {
   label: string;
   amountCents: number;
   frequency: Frequency;
+  intervalCount: number;
   anchorDate: string; // YYYY-MM-DD
   categoryId: string | null;
 };
@@ -37,7 +39,7 @@ export function SuggestionCard({
     amountEuro: (Math.abs(candidate.amountCents) / 100).toFixed(2),
     type: candidate.amountCents >= 0 ? "income" : "expense",
     frequency: candidate.frequency,
-    intervalCount: 1,
+    intervalCount: candidate.intervalCount,
     anchorDate: candidate.anchorDate,
     categoryId: candidate.categoryId,
     accountId: candidate.accountId,
@@ -61,7 +63,8 @@ export function SuggestionCard({
       <div className="min-w-0">
         <p className="text-sm font-medium text-[var(--foreground)] break-words">{candidate.label}</p>
         <p className="text-xs text-[var(--muted)]">
-          {candidate.accountName} · {t(candidate.frequency.toLowerCase())} · {formatCurrency(candidate.amountCents)}
+          {candidate.accountName} · {formatFrequencyLabel(candidate.frequency, candidate.intervalCount, t)} ·{" "}
+          {formatCurrency(candidate.amountCents)}
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">

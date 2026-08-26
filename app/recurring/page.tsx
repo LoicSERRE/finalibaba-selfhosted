@@ -12,6 +12,7 @@ import { deleteRecurringTransaction } from "@/lib/actions/recurring";
 import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
 import {
   detectCandidates,
+  formatFrequencyLabel,
   getOccurrencesInRange,
   isMissed,
   normalizeLabel,
@@ -177,7 +178,7 @@ export default async function RecurringPage() {
                     </span>
                     <span className="text-[var(--muted)] font-normal">
                       {" "}
-                      · {r.account.name} · {t(r.frequency.toLowerCase())}
+                      · {r.account.name} · {formatFrequencyLabel(r.frequency, r.intervalCount, t)}
                     </span>
                   </p>
                 </div>

@@ -5,6 +5,7 @@ import {
   getMostRecentExpectedOccurrence,
   isMissed,
   detectCandidates,
+  formatFrequencyLabel,
   projectDailyCumulative,
   type RecurringSeries,
 } from "@/lib/domain/recurring";
@@ -143,6 +144,21 @@ describe("detectCandidates", () => {
     }));
   }
 
+  // Fixed day-gaps (not calendar-month stepping) so a bimonthly/quarterly
+  // gap lands exactly where GAP_BANDS expects it, independent of which
+  // months' real lengths would otherwise skew a month-by-month date walk.
+  function spacedTx(n: number, gapDays: number, opts: Partial<{ label: string; amount: number }> = {}) {
+    const { label = "Assurance", amount = -8000 } = opts;
+    const start = utc(2026, 0, 1).getTime();
+    return Array.from({ length: n }, (_, i) => ({
+      accountId: "acc1",
+      label,
+      amountCents: BigInt(amount),
+      date: new Date(start + i * gapDays * 24 * 60 * 60 * 1000),
+      categoryId: null,
+    }));
+  }
+
   it("requires at least MIN_OCCURRENCES (3) transactions in a group", () => {
     expect(detectCandidates(monthlyTx(2), new Set())).toEqual([]);
     expect(detectCandidates(monthlyTx(3), new Set())).toHaveLength(1);
@@ -151,8 +167,27 @@ describe("detectCandidates", () => {
   it("detects a monthly pattern and proposes the median amount as-is", () => {
     const [candidate] = detectCandidates(monthlyTx(4), new Set());
     expect(candidate.frequency).toBe("MONTHLY");
+    expect(candidate.intervalCount).toBe(1);
     expect(candidate.amountCents).toBe(-1500);
     expect(candidate.accountId).toBe("acc1");
+  });
+
+  it("detects a bimonthly (every 2 months) pattern", () => {
+    const [candidate] = detectCandidates(spacedTx(4, 60), new Set());
+    expect(candidate.frequency).toBe("MONTHLY");
+    expect(candidate.intervalCount).toBe(2);
+  });
+
+  it("detects a quarterly (every 3 months) pattern", () => {
+    const [candidate] = detectCandidates(spacedTx(4, 90), new Set());
+    expect(candidate.frequency).toBe("MONTHLY");
+    expect(candidate.intervalCount).toBe(3);
+  });
+
+  it("still rejects a gap in the uncovered range between two MONTHLY bands", () => {
+    // 45 days: past the ×1 band (27-33) but short of the ×2 band (54-66) -
+    // deliberately uncovered, not guessed at as either.
+    expect(detectCandidates(spacedTx(3, 45), new Set())).toEqual([]);
   });
 
   it("rejects a group whose amounts vary too much to pass the match-ratio threshold", () => {
@@ -188,6 +223,7 @@ describe("detectCandidates", () => {
     const candidates = detectCandidates([...weekly, ...yearly], new Set());
     const frequencies = candidates.map((c) => c.frequency).sort();
     expect(frequencies).toEqual(["WEEKLY", "YEARLY"].sort());
+    expect(candidates.every((c) => c.intervalCount === 1)).toBe(true);
   });
 
   it("excludes groups already represented via existingKeys", () => {
@@ -204,6 +240,26 @@ describe("detectCandidates", () => {
     ];
     const [candidate] = detectCandidates(txs, new Set());
     expect(candidate.categoryId).toBe("cat-a");
+  });
+});
+
+describe("formatFrequencyLabel", () => {
+  const t = (key: string) => ({ every: "Tous les", months: "mois", monthly: "Mensuel", weekly: "Hebdomadaire", yearly: "Annuel" })[key] ?? key;
+
+  it("returns the plain frequency label for intervalCount 1", () => {
+    expect(formatFrequencyLabel("MONTHLY", 1, t)).toBe("Mensuel");
+    expect(formatFrequencyLabel("WEEKLY", 1, t)).toBe("Hebdomadaire");
+    expect(formatFrequencyLabel("YEARLY", 1, t)).toBe("Annuel");
+  });
+
+  it("composes an interval sentence for MONTHLY with intervalCount > 1", () => {
+    expect(formatFrequencyLabel("MONTHLY", 2, t)).toBe("Tous les 2 mois");
+    expect(formatFrequencyLabel("MONTHLY", 3, t)).toBe("Tous les 3 mois");
+  });
+
+  it("falls back to the plain label for WEEKLY/YEARLY even with intervalCount > 1 (manual-entry-only case, not produced by detection)", () => {
+    expect(formatFrequencyLabel("WEEKLY", 2, t)).toBe("Hebdomadaire");
+    expect(formatFrequencyLabel("YEARLY", 2, t)).toBe("Annuel");
   });
 });
 

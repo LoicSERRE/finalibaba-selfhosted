@@ -19,11 +19,21 @@ export const AMOUNT_TOLERANCE_RATIO = 0.1;
 export const AMOUNT_TOLERANCE_FLOOR_CENTS = 500; // 5€
 export const MIN_MATCH_RATIO = 0.7;
 export const DEFAULT_GRACE_DAYS = 5;
-// Median day-gap must fall in this band to be inferred as this frequency.
-const GAP_BANDS: { frequency: RecurringFrequency; min: number; max: number }[] = [
-  { frequency: "WEEKLY", min: 6, max: 8 },
-  { frequency: "MONTHLY", min: 27, max: 33 },
-  { frequency: "YEARLY", min: 350, max: 380 },
+// Median day-gap must fall in this band to be inferred as this
+// (frequency, intervalCount) pair. Every band still uses the same ~10%
+// tolerance as the original MONTHLY×1 band (27-33 = 30±3) scaled to its own
+// interval (54-66 = 60±6, 81-99 = 90±9) - not a looser threshold for the
+// wider intervals. Bounded to MONTHLY×2/×3 specifically (bimonthly/
+// quarterly) per the roadmap's own scope, not a general "any interval"
+// inference - the gaps between bands (34-53, 67-80) are deliberately
+// uncovered rather than guessed at, and WEEKLY/YEARLY stay ×1-only (a
+// biweekly or biennial pattern falls through to no match, same as before).
+const GAP_BANDS: { frequency: RecurringFrequency; intervalCount: number; min: number; max: number }[] = [
+  { frequency: "WEEKLY", intervalCount: 1, min: 6, max: 8 },
+  { frequency: "MONTHLY", intervalCount: 1, min: 27, max: 33 },
+  { frequency: "MONTHLY", intervalCount: 2, min: 54, max: 66 },
+  { frequency: "MONTHLY", intervalCount: 3, min: 81, max: 99 },
+  { frequency: "YEARLY", intervalCount: 1, min: 350, max: 380 },
 ];
 
 export function normalizeLabel(label: string): string {
@@ -141,6 +151,12 @@ export type Candidate = {
   label: string;
   amountCents: number;
   frequency: RecurringFrequency;
+  // Which GAP_BANDS entry matched - 1 for every WEEKLY/YEARLY candidate and
+  // plain monthly, 2 or 3 for a detected bimonthly/quarterly MONTHLY
+  // pattern. Confirming the suggestion (components/recurring/suggestion-card.tsx)
+  // must carry this through rather than assuming 1, or a correctly-detected
+  // quarterly bill would be miscreated as a monthly one on confirm.
+  intervalCount: number;
   anchorDate: Date;
   // Most common category already assigned among the matched transactions, if
   // any - lets the confirm dialog start pre-filled instead of forcing the
@@ -151,9 +167,11 @@ export type Candidate = {
 /**
  * Groups transactions by (accountId, normalized label) and flags groups whose
  * amounts and date spacing look regular enough to be a subscription or
- * regular income. Only ever proposes intervalCount = 1 - inferring "every 2
- * months" style cadences from noisy gaps is out of scope; the manual
- * create/edit form covers that case.
+ * regular income. Proposes intervalCount 2 or 3 for a MONTHLY pattern whose
+ * spacing matches a bimonthly/quarterly GAP_BANDS entry (a semi-annual
+ * insurance premium or a quarterly tax payment, for example) - beyond that,
+ * inferring an arbitrary "every N months/weeks/years" cadence from noisy
+ * gaps is still out of scope; the manual create/edit form covers that case.
  *
  * `existingKeys` (each `${accountId}|${normalizeLabel(label)}`) excludes
  * patterns already represented by a RecurringTransaction row - confirmed,
@@ -194,12 +212,38 @@ export function detectCandidates(transactions: TxLike[], existingKeys: Set<strin
       label: latest.label,
       amountCents: Math.round(medianAmount),
       frequency: band.frequency,
+      intervalCount: band.intervalCount,
       anchorDate: latest.date,
       categoryId: mode(sorted.map((tx) => tx.categoryId)),
     });
   }
 
   return candidates;
+}
+
+/**
+ * "Mensuel"/"Hebdomadaire"/"Annuel" for intervalCount 1 (every existing
+ * case before multi-interval detection), or "Tous les {n} mois" for a
+ * detected bimonthly/quarterly MONTHLY candidate - the only multi-interval
+ * case detectCandidates can produce (see its own comment). Deliberately
+ * doesn't handle WEEKLY/YEARLY with intervalCount > 1 (only reachable via
+ * the manual create/edit form, never detection) - "semaines" needs
+ * "Toutes les", not "Tous les", and guessing at that agreement without a
+ * confirmed real case to test against isn't worth the risk; those fall back
+ * to the plain frequency label unchanged, same as before this feature.
+ * Takes a plain (key: string) => string translator, not next-intl's own
+ * richer type, so this works unmodified from both a Server Component's
+ * getTranslations and a Client Component's useTranslations.
+ */
+export function formatFrequencyLabel(
+  frequency: RecurringFrequency,
+  intervalCount: number,
+  t: (key: string) => string
+): string {
+  if (frequency === "MONTHLY" && intervalCount > 1) {
+    return `${t("every")} ${intervalCount} ${t("months")}`;
+  }
+  return t(frequency.toLowerCase());
 }
 
 /**

@@ -336,6 +336,7 @@
     "monthly": "Monthly",
     "yearly": "Yearly",
     "every": "Every",
+    "months": "months",
     "anchorDate": "Since",
     "submit": "Save"
   },
