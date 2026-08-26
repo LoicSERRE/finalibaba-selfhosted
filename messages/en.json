@@ -186,6 +186,7 @@
     "syncChanged": "{delta} since last sync",
     "afterTax": "~{amount} after taxes",
     "balanceEvolution": "Balance history",
+    "valueEvolution": "Value history",
     "fiscalSummary": {
       "costBasis": "Total cost basis",
       "latentGain": "Unrealized gain",
@@ -1184,7 +1185,9 @@
     "notEnoughData": "Not enough data yet",
     "allocationAria": "Asset allocation by category",
     "balanceAria": "Balance history",
-    "balance": "Balance"
+    "balance": "Balance",
+    "valueAria": "Value history",
+    "value": "Value"
   },
   "autoSync": {
     "syncing": "Syncing…",

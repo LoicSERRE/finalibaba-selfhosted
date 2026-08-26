@@ -90,13 +90,14 @@ export default async function AccountDetailPage({
         liability={result.liability}
       />
 
-      {result.isFiat && (
+      {(result.isFiat || result.isInvestment) && (
         <BalanceChartSection
           td={td}
           accountId={account.id}
           chartData={result.chartData}
           canImportCsv={result.canImportCsv}
           existingBalanceDates={result.existingBalanceDates}
+          isInvestment={result.isInvestment}
         />
       )}
 

@@ -24,8 +24,16 @@ const fmt = (cents: number) =>
     maximumFractionDigits: 0,
   }).format(cents / 100);
 
-export function BalanceHistoryChart({ data }: Readonly<{ data: BalancePoint[] }>) {
+// isInvestment picks the "Valeur"/"Value" wording over "Solde"/"Balance" -
+// this component is data-shape-generic (BalancePoint has no fiat-specific
+// field), reused as-is for INVESTMENT/CRYPTO accounts (see
+// "Historical value chart per investment account" in CLAUDE.md) rather than
+// building a second near-identical chart - the data.length < 2 empty state
+// below already reads correctly for a sparsely-updated investment account
+// ("not enough data yet"), no change needed there.
+export function BalanceHistoryChart({ data, isInvestment = false }: Readonly<{ data: BalancePoint[]; isInvestment?: boolean }>) {
   const t = useTranslations("charts");
+  const seriesLabel = t(isInvestment ? "value" : "balance");
   const locale = useLocale();
   const shortDateFormat = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" });
   // Recharts' own labelFormatter type is (label: ReactNode) => ReactNode -
@@ -54,7 +62,7 @@ export function BalanceHistoryChart({ data }: Readonly<{ data: BalancePoint[] }>
   const pad = (max - min) * 0.15 || max * 0.05;
 
   return (
-    <div role="img" aria-label={t("balanceAria")}>
+    <div role="img" aria-label={t(isInvestment ? "valueAria" : "balanceAria")}>
     <ResponsiveContainer width="100%" height={220}>
       {/* accessibilityLayer defaults to true in Recharts 3 (root <svg>
           tabIndex={0}) - a mobile tap otherwise leaves a stuck native focus
@@ -99,7 +107,7 @@ export function BalanceHistoryChart({ data }: Readonly<{ data: BalancePoint[] }>
             fontSize: "13px",
           }}
           labelFormatter={formatShortDate}
-          formatter={(v) => [fmt(Number(v)), t("balance")]}
+          formatter={(v) => [fmt(Number(v)), seriesLabel]}
           labelStyle={{ color: "var(--muted)", marginBottom: 4 }}
           cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
         />

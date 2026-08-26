@@ -186,6 +186,7 @@
     "syncChanged": "{delta} depuis la dernière sync",
     "afterTax": "~{amount} après impôts",
     "balanceEvolution": "Évolution du solde",
+    "valueEvolution": "Évolution de la valeur",
     "fiscalSummary": {
       "costBasis": "Prix de revient total",
       "latentGain": "Plus-value latente",
@@ -1184,7 +1185,9 @@
     "notEnoughData": "Pas encore assez de données",
     "allocationAria": "Répartition des actifs par catégorie",
     "balanceAria": "Historique du solde",
-    "balance": "Solde"
+    "balance": "Solde",
+    "valueAria": "Historique de la valeur",
+    "value": "Valeur"
   },
   "autoSync": {
     "syncing": "Synchronisation en cours…",

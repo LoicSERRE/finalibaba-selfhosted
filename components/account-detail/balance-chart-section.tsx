@@ -11,24 +11,26 @@ export function BalanceChartSection({
   chartData,
   canImportCsv,
   existingBalanceDates,
+  isInvestment = false,
 }: Readonly<{
   td: T;
   accountId: string;
   chartData: ChartPoint[];
   canImportCsv: boolean;
   existingBalanceDates: string[];
+  isInvestment?: boolean;
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
       <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2 mb-4">
         <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-          {td("balanceEvolution")}
+          {td(isInvestment ? "valueEvolution" : "balanceEvolution")}
         </h2>
         {canImportCsv && (
           <ImportBalanceHistoryDialog accountId={accountId} existingDates={existingBalanceDates} />
         )}
       </div>
-      <BalanceHistoryChart data={chartData} />
+      <BalanceHistoryChart data={chartData} isInvestment={isInvestment} />
     </div>
   );
 }
