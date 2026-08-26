@@ -52,7 +52,22 @@ RUN pnpm run build
 FROM node:26-alpine AS runner
 # postgresql16-client: matches the postgres:16-alpine server exactly - used by
 # app/api/backup/route.ts (pg_dump/psql) for in-app backup & restore
-RUN npm install -g corepack@latest && corepack enable && apk add --no-cache libc6-compat postgresql16-client
+#
+# `apk upgrade` runs first, before installing anything else - `node:26-alpine`
+# is a floating tag, so its baked-in Alpine package snapshot is only as fresh
+# as whenever that tag was last rebuilt upstream, which can lag behind
+# Alpine's own live repo by days/weeks. Real incident: the trivy-scan gate on
+# the v1.16.0 tag failed on CVE-2026-14456 (libssl3 3.5.7-r0, a HIGH
+# unbounded-memory-growth DoS in OpenSSL's QUIC server) even though
+# libssl3 3.5.8-r0 - which fixes it - was already available in Alpine's repo
+# at build time; nothing in this Dockerfile ever installs libssl3 directly,
+# it only ever arrives transitively via the base image. Same root-cause shape
+# as the pnpm/tar saga documented in CLAUDE.md's "Container image hardening"
+# (a floating/cached dependency source drifting behind a disclosed CVE) - but
+# unlike that one, there's no version to bump here since the tag is already
+# unpinned, so the durable fix is pulling current packages at every build
+# instead of trusting whatever the base image happened to bundle.
+RUN apk upgrade --no-cache && npm install -g corepack@latest && corepack enable && apk add --no-cache libc6-compat postgresql16-client
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
