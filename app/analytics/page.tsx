@@ -19,7 +19,6 @@ import { aggregateSectorExposure } from "@/lib/domain/sector-exposure";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { CashflowCards } from "@/components/analytics/cashflow-cards";
 import { GoalAndPassiveIncome } from "@/components/analytics/goal-and-passive-income";
-import { ChartsSection } from "@/components/analytics/charts-section";
 import { ProjectionChart } from "@/components/analytics/projection-chart";
 import { DividendCalendarSection } from "@/components/analytics/dividend-calendar-section";
 import { InvestmentPerformanceSection } from "@/components/analytics/investment-performance-section";
@@ -142,11 +141,6 @@ export default async function AnalyticsPage() {
     )
   );
   const analyticsExport = buildAnalyticsExport(result, allocationLabels, typeLabels);
-  const allocationSlicesForChart = result.allocationSlices.map((s) => ({
-    name: allocationLabels[s.key],
-    value: s.value,
-    color: s.color,
-  }));
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -193,12 +187,6 @@ export default async function AnalyticsPage() {
             realYtdPassiveNetCents={result.realYtdPassiveNetCents}
             realYtdDividendsNetCents={result.realYtdDividendsNetCents}
             realYtdInterestNetCents={result.realYtdInterestNetCents}
-          />
-
-          <ChartsSection
-            t={t}
-            dailyHistory={result.dailyHistory}
-            allocationSlices={allocationSlicesForChart}
           />
 
           <ProjectionChart

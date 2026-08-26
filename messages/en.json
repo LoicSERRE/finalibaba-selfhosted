@@ -448,11 +448,6 @@
       "emptyAction": "Track my income →",
       "taxReportLink": "Annual tax report →"
     },
-    "charts": {
-      "netWorthEvolution": "Net worth history",
-      "allocation": "Allocation",
-      "allocationHint": "\"Cash\" covers checking accounts and meal vouchers (0% interest). \"Savings\" only counts savings accounts. Same distinction the long-term projection makes, so a checking account isn't treated as if it compounded at the same rate as a savings account."
-    },
     "dividends": {
       "title": "Dividends",
       "netPerYear": "net / year",

@@ -276,21 +276,6 @@ export interface HistoryPoint {
   netWorth: number;
 }
 
-// Only for dailyHistory below, which is the one HistoryPoint[] actually fed
-// to a Recharts date-axis chart (components/shared/net-worth-chart.tsx) -
-// MonthlyHistoryPoint/PerformanceRow below extend the plain HistoryPoint
-// instead since they're table rows, not chart input, and already carry
-// their own naturally-unique `month` ("YYYY-MM") field. isoDate exists for
-// the identical reason DashboardHistoryPoint's own isoDate field does
-// (lib/domain/dashboard.ts): the XAxis needs a per-point value that's
-// actually unique. `date` alone (day+month, no year) repeats every 12
-// months on a 2-year chart - a real, precisely reproduced Recharts bug
-// where hover/tooltip resolution breaks once the category axis has
-// duplicate values (see net-worth-chart.tsx's own comment).
-export interface DailyHistoryPoint extends HistoryPoint {
-  isoDate: string;
-}
-
 export interface MonthlyHistoryPoint extends HistoryPoint {
   month: string; // "YYYY-MM"
 }
@@ -379,7 +364,6 @@ export interface AnalyticsResult {
   totalAllocation: number;
 
   // History / charts
-  dailyHistory: DailyHistoryPoint[];
   performanceRows: PerformanceRow[];
 
   // Top assets
@@ -755,31 +739,6 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     };
   });
 
-  // Daily aggregation - for the chart
-  const dayMap = new Map<string, Map<string, bigint>>();
-  for (const b of allBalances) {
-    const day = b.recordedAt.toISOString().slice(0, 10);
-    if (!dayMap.has(day)) dayMap.set(day, new Map());
-    dayMap.get(day)!.set(b.accountId, b.balanceCents);
-  }
-  const runningD = new Map<string, bigint>();
-  // NOSONAR (typescript:S2871) - "YYYY-MM-DD" keys (ISO 8601, from
-  // toISOString().slice(0,10) above): same reasoning as monthlyHistory
-  // above, lexicographic order already equals chronological order.
-  const dailyHistory: DailyHistoryPoint[] = [...dayMap.keys()].sort().map((day) => { // NOSONAR
-    for (const [id, v] of dayMap.get(day)!) runningD.set(id, v);
-    let gross = BigInt(0);
-    for (const v of runningD.values()) gross += v;
-    let liab = BigInt(0);
-    for (const [id, v] of liabMap) { if (runningD.has(id)) liab += v; }
-    const [y, m, d] = day.split("-");
-    return {
-      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(new Date(+y, +m - 1, +d)),
-      isoDate: day,
-      netWorth: Number(gross - liab),
-    };
-  });
-
   // ── MOM performance ─────────────────────────────────────────────────────
   const last6Months = monthlyHistory.slice(-6);
   const performanceRows: PerformanceRow[] = last6Months.map((row, i) => {
@@ -900,7 +859,6 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     garantisPct,
     allocationSlices,
     totalAllocation,
-    dailyHistory,
     performanceRows,
     topAssets,
     assetRows,

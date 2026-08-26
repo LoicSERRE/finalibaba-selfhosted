@@ -153,7 +153,6 @@ describe("analytics export completeness", () => {
       investAllHaveDates: "render gate for the CAGR/benchmark sections, not a data point itself",
       taxRatePea: "only shown inside a methodology footnote sentence, not a standalone indicator",
       taxRateCto: "only shown inside a methodology footnote sentence, not a standalone indicator",
-      dailyHistory: "chart-only raw series (SVG line chart) - performanceRows is the tabular monthly equivalent that IS exported",
       investTotalGainNet: "derivable from investTotalGainCents - investTotalTaxCents, which the export already recomputes inline in its own summary line",
       assetRows: "internal-only per-account lookup used to resolve a Goal's accountId to its current value (v1.14) - topAssets already covers the top 10 for export purposes, exporting every account's raw row too would be redundant",
       effectiveTaxRate: "internal input for the projection chart's tax-aware mode (v1.14) - not a standalone indicator, the export already shows per-account/aggregate latent tax cents directly",

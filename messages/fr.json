@@ -448,11 +448,6 @@
       "emptyAction": "Suivre mes revenus →",
       "taxReportLink": "Rapport fiscal annuel →"
     },
-    "charts": {
-      "netWorthEvolution": "Évolution du patrimoine",
-      "allocation": "Répartition",
-      "allocationHint": "« Liquidités » regroupe vos comptes courants et titres-restaurant (rémunérés à 0%). « Épargne » ne compte que vos livrets et comptes d'épargne. C'est la même distinction que fait la projection long terme, pour ne pas faire composer un compte courant au même rendement qu'un livret."
-    },
     "dividends": {
       "title": "Dividendes",
       "netPerYear": "net / an",
