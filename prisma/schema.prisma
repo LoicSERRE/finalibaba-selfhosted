@@ -149,6 +149,7 @@ enum AlertRuleKind {
   INVESTMENT_VALUE
   HOLDING_PRICE
   UNREALIZED_GAIN
+  REBALANCING_DRIFT
 }
 
 enum GainUnit {
@@ -195,10 +196,13 @@ model AlertRule {
   // (null = never evaluated, fires only when the crossing direction flips).
   balanceLastAbove      Boolean?
 
-  // HOLDING_PRICE only - a specific position's lastPriceCents (already
+  // HOLDING_PRICE - a specific position's lastPriceCents (already
   // EUR-converted at entry time for foreign-currency holdings, see
   // Holding.fxRateToEur) crosses balanceThresholdCents, reusing the two
-  // fields above for the actual comparison/dedup.
+  // fields above for the actual comparison/dedup. Also the account/holding
+  // scope for REBALANCING_DRIFT below (same picker shape - one specific
+  // position), which reuses gainThresholdPct/balanceLastAbove instead of
+  // this pair, since drift is a points comparison, not a cents one.
   holdingId String?
   holding   Holding? @relation(fields: [holdingId], references: [id], onDelete: Cascade)
 
@@ -206,6 +210,12 @@ model AlertRule {
   // crosses this instead of balanceThresholdCents. A separate field rather
   // than overloading balanceThresholdCents as "either cents or a raw
   // percent number", so a stored value's unit is never ambiguous.
+  // Also reused by REBALANCING_DRIFT (gainUnit stays null there - it's the
+  // only other kind using this column) to mean "drift points from target",
+  // not a gain percentage - same rationale as balanceThresholdCents being
+  // reused across dissimilarly-named kinds above: it's mathematically the
+  // same edge-triggered "float crosses a threshold" comparison
+  // (evaluatePercentAlert), just fed |driftPts| instead of a gain %.
   gainUnit         GainUnit?
   gainThresholdPct Float?
 

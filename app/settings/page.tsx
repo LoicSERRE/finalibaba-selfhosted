@@ -87,11 +87,18 @@ export default async function SettingsPage() {
         orderBy: { name: "asc" },
       }),
       // INVESTMENT_VALUE + UNREALIZED_GAIN's account picker, and
-      // HOLDING_PRICE's holding picker (flattened from these accounts'
-      // holdings in the component) - see components/settings/alert-rules-section.tsx.
+      // HOLDING_PRICE/REBALANCING_DRIFT's holding picker (flattened from
+      // these accounts' holdings in the component) - see
+      // components/settings/alert-rules-section.tsx. targetPct is fetched so
+      // the component can filter to only the holdings REBALANCING_DRIFT can
+      // actually evaluate (see computeHoldingDriftPts's own null guard).
       prisma.account.findMany({
         where: { type: { in: ["INVESTMENT", "CRYPTO"] } },
-        select: { id: true, name: true, holdings: { select: { id: true, ticker: true, name: true }, orderBy: { ticker: "asc" } } },
+        select: {
+          id: true,
+          name: true,
+          holdings: { select: { id: true, ticker: true, name: true, targetPct: true }, orderBy: { ticker: "asc" } },
+        },
         orderBy: { name: "asc" },
       }),
       prisma.category.findMany({

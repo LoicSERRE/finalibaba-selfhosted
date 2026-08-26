@@ -4,9 +4,25 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { parseCents } from "@/lib/utils/format";
 
+// Real, pre-existing bug found while testing REBALANCING_DRIFT live (the
+// first kind whose demo/dev data actually exercised a holding-linked rule
+// end-to-end): a blanket `holding: { include: { account: true } }` sends
+// the full Holding row - including `quantity`, a Decimal.js instance -
+// across the Server -> Client boundary to this "use client" component's
+// props. React's RSC serialization rejects that outright ("Only plain
+// objects can be passed to Client Components... Decimal objects are not
+// supported"), confirmed live on every /settings load once any rule has a
+// holdingId (this affects the pre-existing HOLDING_PRICE kind identically,
+// not something new to REBALANCING_DRIFT). Narrowed every relation to a
+// `select` matching exactly what AlertRuleRow/HoldingOption in
+// alert-rules-section.tsx actually read.
 export async function getAlertRules() {
   return prisma.alertRule.findMany({
-    include: { account: true, holding: { include: { account: true } }, category: true },
+    include: {
+      account: { select: { id: true, name: true } },
+      holding: { select: { id: true, ticker: true, name: true, account: { select: { id: true, name: true } } } },
+      category: { select: { id: true, name: true, budgetCents: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -87,11 +103,35 @@ function buildCreateData(formData: FormData) {
     if (!categoryId) throw new Error("Catégorie requise.");
     return { kind: "BUDGET_OVERRUN" as const, categoryId, message };
   }
+  if (kind === "REBALANCING_DRIFT") {
+    const holdingId = (formData.get("holdingId") as string) || "";
+    const pctRaw = (formData.get("gainThresholdPct") as string) || "";
+    if (!holdingId || !pctRaw) throw new Error("Position et seuil requis.");
+    return { kind: "REBALANCING_DRIFT" as const, holdingId, gainThresholdPct: Number.parseFloat(pctRaw), message };
+  }
   throw new Error("Invalid rule kind.");
 }
 
+// Server Actions are directly invocable regardless of what the UI picker
+// offers (same trust boundary as assertGoalAccountEligible/
+// assertCsvImportEligible elsewhere in this codebase) - a REBALANCING_DRIFT
+// rule pointed at a holding with no target set would silently never fire
+// (computeHoldingDriftPts's own malformed-row guard), the same kind of
+// dead-rule-with-no-explanation gap assertGoalAccountEligible was added to
+// close for Goal/LOAN accounts.
+async function assertHoldingHasTarget(holdingId: string): Promise<void> {
+  const holding = await prisma.holding.findUnique({ where: { id: holdingId }, select: { targetPct: true } });
+  if (!holding || holding.targetPct === null) {
+    throw new Error("Cette position n'a pas de cible de répartition définie.");
+  }
+}
+
 export async function createAlertRule(formData: FormData) {
-  await prisma.alertRule.create({ data: buildCreateData(formData) });
+  const data = buildCreateData(formData);
+  if (data.kind === "REBALANCING_DRIFT") {
+    await assertHoldingHasTarget(data.holdingId);
+  }
+  await prisma.alertRule.create({ data });
   revalidatePath("/settings");
 }
 
@@ -118,6 +158,18 @@ function applyThresholdCentsUpdate(data: UpdateData, thresholdRaw: string, curre
 
 const THRESHOLD_CENTS_EDITABLE_KINDS = new Set(["ACCOUNT_BALANCE", "INVESTMENT_VALUE", "HOLDING_PRICE"]);
 
+// Mirrors applyThresholdCentsUpdate above, over gainThresholdPct instead of
+// balanceThresholdCents - shared by UNREALIZED_GAIN/PERCENT and
+// REBALANCING_DRIFT below, the two kinds that store their threshold there.
+function applyGainThresholdPctUpdate(data: UpdateData, pctRaw: string, currentPct: number | null) {
+  if (!pctRaw) return;
+  const newPct = Number.parseFloat(pctRaw);
+  if (newPct !== currentPct) {
+    data.gainThresholdPct = newPct;
+    data.balanceLastAbove = null;
+  }
+}
+
 // Only message and each kind's own threshold are editable after creation -
 // kind/account/holding/category/gainUnit are fixed at creation time, same
 // "immutable, delete and recreate instead" simplification ShareLink applies
@@ -132,15 +184,11 @@ export async function updateAlertRule(id: string, formData: FormData) {
 
   if (THRESHOLD_CENTS_EDITABLE_KINDS.has(current.kind)) {
     applyThresholdCentsUpdate(data, (formData.get("balanceThreshold") as string) || "", current.balanceThresholdCents);
-  } else if (current.kind === "UNREALIZED_GAIN" && current.gainUnit === "PERCENT") {
-    const pctRaw = (formData.get("gainThresholdPct") as string) || "";
-    if (pctRaw) {
-      const newPct = Number.parseFloat(pctRaw);
-      if (newPct !== current.gainThresholdPct) {
-        data.gainThresholdPct = newPct;
-        data.balanceLastAbove = null;
-      }
-    }
+  } else if (
+    (current.kind === "UNREALIZED_GAIN" && current.gainUnit === "PERCENT") ||
+    current.kind === "REBALANCING_DRIFT"
+  ) {
+    applyGainThresholdPctUpdate(data, (formData.get("gainThresholdPct") as string) || "", current.gainThresholdPct);
   } else if (current.kind === "UNREALIZED_GAIN") {
     applyThresholdCentsUpdate(data, (formData.get("balanceThreshold") as string) || "", current.balanceThresholdCents);
   }

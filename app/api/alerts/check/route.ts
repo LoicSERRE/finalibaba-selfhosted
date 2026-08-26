@@ -12,6 +12,7 @@ import {
   computeUnrealizedGain,
   evaluatePercentAlert,
   holdingMarketValueCents,
+  computeHoldingDriftPts,
 } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
 import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
@@ -271,7 +272,10 @@ function findActiveAlertRules() {
           holdings: true,
         },
       },
-      holding: { include: { account: true } },
+      // account.holdings (not just account itself) - REBALANCING_DRIFT needs
+      // every holding in the account to compute this position's own %
+      // weight (see computeHoldingDriftPts), not just its own market value.
+      holding: { include: { account: { include: { holdings: true } } } },
       category: true,
     },
   });
@@ -379,6 +383,34 @@ async function checkHoldingPriceRule(rule: CustomAlertRule, settings: UserSettin
   }
 
   return shouldFire ? `holding_price_rule:${rule.id}` : null;
+}
+
+// REBALANCING_DRIFT: |driftPts| crosses gainThresholdPct, reusing
+// evaluatePercentAlert's edge-triggered comparison (see its own comment for
+// why REBALANCING_DRIFT is included there) fed the absolute drift, since
+// both overweight and underweight count as "drifted" - fires once when
+// newly past tolerance, once again when it comes back within tolerance.
+async function checkRebalancingDriftRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+  if (!rule.holding || rule.gainThresholdPct === null) return null;
+
+  const driftPts = computeHoldingDriftPts(rule.holding, rule.holding.account.holdings);
+  if (driftPts === null) return null; // target cleared since the rule was created, or the account is empty
+
+  const { shouldFire, isAbove } = evaluatePercentAlert(Math.abs(driftPts), rule.gainThresholdPct, rule.balanceLastAbove);
+
+  if (shouldFire) {
+    const holdingLabel = rule.holding.name ?? rule.holding.ticker;
+    const accountName = rule.holding.account.name;
+    const base = isAbove
+      ? `La position "${holdingLabel}" (${accountName}) a dérivé de plus de ${rule.gainThresholdPct} points de sa cible (actuellement ${driftPts > 0 ? "surpondérée" : "sous-pondérée"} de ${Math.abs(driftPts)} points).`
+      : `La position "${holdingLabel}" (${accountName}) est revenue dans la tolérance de ${rule.gainThresholdPct} points par rapport à sa cible.`;
+    await dispatchAlert(settings, "Alerte de dérive du portefeuille", rule.message ? `${base}\n\n${rule.message}` : base);
+  }
+  if (isAbove !== rule.balanceLastAbove) {
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { balanceLastAbove: isAbove } });
+  }
+
+  return shouldFire ? `rebalancing_drift_rule:${rule.id}` : null;
 }
 
 async function checkUnrealizedGainPercent(
@@ -514,6 +546,8 @@ function dispatchAlertRuleCheck(
       return checkInvestmentValueRule(rule, settings);
     case "HOLDING_PRICE":
       return checkHoldingPriceRule(rule, settings);
+    case "REBALANCING_DRIFT":
+      return checkRebalancingDriftRule(rule, settings);
     case "UNREALIZED_GAIN":
       return checkUnrealizedGainRule(rule, settings);
     case "BUDGET_OVERRUN":

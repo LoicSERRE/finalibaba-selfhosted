@@ -107,8 +107,9 @@ export function computeUnrealizedGain(
 /**
  * Same edge-triggered shape as evaluateAccountBalanceAlert, but over a plain
  * float percentage instead of bigint cents - UNREALIZED_GAIN's gainUnit =
- * PERCENT case. Kept separate rather than coercing percent into cents,
- * since a stored threshold's unit must never be ambiguous (see
+ * PERCENT case, and REBALANCING_DRIFT (fed |driftPts| - see
+ * computeHoldingDriftPts below). Kept separate rather than coercing percent
+ * into cents, since a stored threshold's unit must never be ambiguous (see
  * AlertRule.gainThresholdPct in schema.prisma).
  */
 export function evaluatePercentAlert(
@@ -119,4 +120,33 @@ export function evaluatePercentAlert(
   const isAbove = currentPct >= thresholdPct;
   const shouldFire = wasAbove !== null && isAbove !== wasAbove;
   return { shouldFire, isAbove };
+}
+
+/**
+ * REBALANCING_DRIFT's "current value" - how many points a holding's actual
+ * weight has drifted from its Holding.targetPct. Same rounding as
+ * lib/domain/account-detail.ts's computeAccountDetail (Math.round to an
+ * integer percent before subtracting, both for the holding's own weight and
+ * for the target) - this alert must never disagree with what the
+ * account-detail page's own "Rééquilibrage" section shows for the same
+ * holding. Kept as its own isolated copy in this file rather than importing
+ * from account-detail.ts, same "each feature area's alert/page logic stays
+ * self-contained" precedent already documented on holdingMarketValueCents
+ * above. Returns null when the holding has no target set (a rule can
+ * outlive the target being cleared after creation - malformed-row guard,
+ * same shape as every other per-kind checker in app/api/alerts/check/route.ts)
+ * or the account's total holdings value is 0 (division by zero guard - can
+ * only happen if every holding in the account has a 0 price/quantity).
+ */
+export function computeHoldingDriftPts(
+  holding: { targetPct: number | null; quantity: Decimal; lastPriceCents: bigint },
+  accountHoldings: { quantity: Decimal; lastPriceCents: bigint }[]
+): number | null {
+  if (holding.targetPct === null) return null;
+  const total = accountHoldings.reduce((sum, h) => sum + holdingMarketValueCents(h), BigInt(0));
+  if (total <= BigInt(0)) return null;
+  const marketValueCents = holdingMarketValueCents(holding);
+  const pct = Math.round((Number(marketValueCents) / Number(total)) * 100);
+  const targetPctInt = Math.round(holding.targetPct * 100);
+  return pct - targetPctInt;
 }

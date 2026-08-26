@@ -12,7 +12,14 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { createAlertRule, updateAlertRule, deleteAlertRule, toggleAlertRuleActive } from "@/lib/actions/alert-rules";
 import { formatCurrency, centsToEuro } from "@/lib/utils/format";
 
-type AlertRuleKind = "ACCOUNT_BALANCE" | "BUDGET_OVERRUN" | "ACCOUNT_OVERDRAFT" | "INVESTMENT_VALUE" | "HOLDING_PRICE" | "UNREALIZED_GAIN";
+type AlertRuleKind =
+  | "ACCOUNT_BALANCE"
+  | "BUDGET_OVERRUN"
+  | "ACCOUNT_OVERDRAFT"
+  | "INVESTMENT_VALUE"
+  | "HOLDING_PRICE"
+  | "UNREALIZED_GAIN"
+  | "REBALANCING_DRIFT";
 
 type AlertRuleRow = {
   id: string;
@@ -29,12 +36,19 @@ type AlertRuleRow = {
 
 type PickerOption = { id: string; name: string };
 type CategoryOption = { id: string; name: string; budgetCents: bigint | null };
-type InvestmentAccountOption = { id: string; name: string; holdings: { id: string; ticker: string; name: string | null }[] };
+type InvestmentAccountOption = {
+  id: string;
+  name: string;
+  holdings: { id: string; ticker: string; name: string | null; targetPct: number | null }[];
+};
 // ticker is a real ISIN (see CLAUDE.md's "Automatic categorization"), never
 // shown directly - name is the friendly display value everywhere else in
 // this app already shows a holding (holdings-table.tsx, investment-tab.tsx),
 // falling back to ticker only when no name was ever set on the holding.
-type HoldingOption = { id: string; ticker: string; name: string | null; accountName: string };
+// targetPct is only used to filter this same flattened list down to
+// REBALANCING_DRIFT-eligible holdings below (see driftEligibleHoldings) -
+// HOLDING_PRICE's own picker ignores it, any holding is a valid target there.
+type HoldingOption = { id: string; ticker: string; name: string | null; accountName: string; targetPct: number | null };
 
 // ACCOUNT_BALANCE and INVESTMENT_VALUE are structurally identical fields (an
 // account + a cents threshold) - only the eligible account list differs,
@@ -177,6 +191,62 @@ function HoldingPriceFields({
   );
 }
 
+// REBALANCING_DRIFT: same picker shape as HoldingPriceFields (a specific
+// position from the flattened list), but the threshold is drift points
+// (gainThresholdPct, like UNREALIZED_GAIN's PERCENT branch) rather than a
+// euro price - and only holdings with a targetPct already set are eligible,
+// enforced both here (picker content) and server-side
+// (assertHoldingHasTarget in lib/actions/alert-rules.ts).
+function RebalancingDriftFields({
+  isEdit,
+  rule,
+  holdings,
+  noEligibleHoldings,
+  t,
+}: Readonly<{
+  isEdit: boolean;
+  rule?: AlertRuleRow;
+  holdings: HoldingOption[];
+  noEligibleHoldings: boolean;
+  t: ReturnType<typeof useTranslations>;
+}>) {
+  if (isEdit) {
+    return (
+      <>
+        <p className="text-sm text-[var(--foreground)]">
+          {rule?.holding?.name ?? rule?.holding?.ticker} · {rule?.holding?.account.name}
+        </p>
+        <Input
+          label={t("driftThresholdField")}
+          name="gainThresholdPct"
+          type="text"
+          inputMode="decimal"
+          defaultValue={rule?.gainThresholdPct ?? ""}
+          required
+        />
+      </>
+    );
+  }
+  if (noEligibleHoldings) {
+    return <p className="text-xs text-[var(--muted)]">{t("noEligibleDriftHoldings")}</p>;
+  }
+  return (
+    <>
+      <Select
+        label={t("holdingField")}
+        name="holdingId"
+        options={[
+          { value: "", label: t("holdingPlaceholder"), disabled: true },
+          ...holdings.map((h) => ({ value: h.id, label: `${h.name ?? h.ticker} · ${h.accountName}` })),
+        ]}
+        defaultValue=""
+        required
+      />
+      <Input label={t("driftThresholdField")} name="gainThresholdPct" type="text" inputMode="decimal" required />
+    </>
+  );
+}
+
 // UNREALIZED_GAIN: account is optional (blank = every investment/crypto
 // account combined, see checkUnrealizedGainRule) and the threshold's unit
 // (percent or currency) is picked once at creation and fixed afterward,
@@ -291,6 +361,7 @@ function KindFields({
   fiatAccounts,
   investmentAccounts,
   holdings,
+  driftEligibleHoldings,
   categories,
   t,
 }: Readonly<{
@@ -300,6 +371,7 @@ function KindFields({
   fiatAccounts: PickerOption[];
   investmentAccounts: InvestmentAccountOption[];
   holdings: HoldingOption[];
+  driftEligibleHoldings: HoldingOption[];
   categories: CategoryOption[];
   t: ReturnType<typeof useTranslations>;
 }>) {
@@ -346,6 +418,16 @@ function KindFields({
           t={t}
         />
       );
+    case "REBALANCING_DRIFT":
+      return (
+        <RebalancingDriftFields
+          isEdit={isEdit}
+          rule={rule}
+          holdings={driftEligibleHoldings}
+          noEligibleHoldings={!isEdit && driftEligibleHoldings.length === 0}
+          t={t}
+        />
+      );
     case "UNREALIZED_GAIN":
       return <UnrealizedGainFields isEdit={isEdit} rule={rule} accounts={investmentAccounts} t={t} />;
     case "BUDGET_OVERRUN":
@@ -381,6 +463,11 @@ function AlertRuleDialog({
   const tc = useTranslations("common");
   const router = useRouter();
 
+  // Filtered here rather than threaded in as a separate prop - holdings is
+  // already passed down, and REBALANCING_DRIFT's eligibility is just a view
+  // over it (see computeHoldingDriftPts's own targetPct null guard).
+  const driftEligibleHoldings = holdings.filter((h) => h.targetPct !== null);
+
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [kind, setKind] = useState<AlertRuleKind>(rule?.kind ?? "ACCOUNT_BALANCE");
@@ -408,6 +495,7 @@ function AlertRuleDialog({
       (kind === "ACCOUNT_OVERDRAFT" && fiatAccounts.length === 0) ||
       (kind === "INVESTMENT_VALUE" && investmentAccounts.length === 0) ||
       (kind === "HOLDING_PRICE" && holdings.length === 0) ||
+      (kind === "REBALANCING_DRIFT" && driftEligibleHoldings.length === 0) ||
       (kind === "BUDGET_OVERRUN" && categories.length === 0));
 
   return (
@@ -440,6 +528,7 @@ function AlertRuleDialog({
             { value: "ACCOUNT_OVERDRAFT", label: t("kindAccountOverdraft") },
             { value: "INVESTMENT_VALUE", label: t("kindInvestmentValue") },
             { value: "HOLDING_PRICE", label: t("kindHoldingPrice") },
+            { value: "REBALANCING_DRIFT", label: t("kindRebalancingDrift") },
             { value: "UNREALIZED_GAIN", label: t("kindUnrealizedGain") },
             { value: "BUDGET_OVERRUN", label: t("kindBudgetOverrun") },
           ]}
@@ -452,6 +541,7 @@ function AlertRuleDialog({
           fiatAccounts={fiatAccounts}
           investmentAccounts={investmentAccounts}
           holdings={holdings}
+          driftEligibleHoldings={driftEligibleHoldings}
           categories={categories}
           t={t}
         />
@@ -499,6 +589,11 @@ function ruleLabel(rule: AlertRuleRow, t: ReturnType<typeof useTranslations>): s
         ticker: rule.holding?.name ?? rule.holding?.ticker ?? "?",
         threshold: formatCurrency(rule.balanceThresholdCents ?? BigInt(0)),
       });
+    case "REBALANCING_DRIFT":
+      return t("ruleRebalancingDrift", {
+        ticker: rule.holding?.name ?? rule.holding?.ticker ?? "?",
+        threshold: `${rule.gainThresholdPct ?? 0} pts`,
+      });
     case "UNREALIZED_GAIN":
       return t("ruleUnrealizedGain", {
         scope: rule.account?.name ?? t("gainAllAccounts"),
@@ -526,7 +621,7 @@ export function AlertRulesSection({
   const [pending, startTransition] = useTransition();
 
   const holdings: HoldingOption[] = investmentAccounts.flatMap((a) =>
-    a.holdings.map((h) => ({ id: h.id, ticker: h.ticker, name: h.name, accountName: a.name }))
+    a.holdings.map((h) => ({ id: h.id, ticker: h.ticker, name: h.name, accountName: a.name, targetPct: h.targetPct }))
   );
 
   function handleToggle(id: string, active: boolean) {

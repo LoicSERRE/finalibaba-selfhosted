@@ -8,6 +8,7 @@ import {
   holdingMarketValueCents,
   computeUnrealizedGain,
   evaluatePercentAlert,
+  computeHoldingDriftPts,
 } from "@/lib/domain/alerts";
 
 describe("evaluateNetWorthAlert", () => {
@@ -194,5 +195,41 @@ describe("evaluatePercentAlert", () => {
 
   it("does not fire when staying on the same side", () => {
     expect(evaluatePercentAlert(30, 20, true)).toEqual({ shouldFire: false, isAbove: true });
+  });
+});
+
+describe("computeHoldingDriftPts", () => {
+  // Same two-holding fixture as __tests__/account-detail.test.ts's
+  // "suggests selling an overweight holding..." rebalancing test (total
+  // value 1100 = 1000 + 100) - cross-checked so this isolated copy can never
+  // silently disagree with what the account-detail page itself computes.
+  const overweight = { quantity: new Decimal(10), lastPriceCents: BigInt(100_00), targetPct: 0.3 }; // pct 91, target 30
+  const underweight = { quantity: new Decimal(1), lastPriceCents: BigInt(100_00), targetPct: 0.5 }; // pct 9, target 50
+  const accountHoldings = [overweight, underweight];
+
+  it("returns a positive drift for an overweight holding", () => {
+    expect(computeHoldingDriftPts(overweight, accountHoldings)).toBe(61); // 91 - 30
+  });
+
+  it("returns a negative drift for an underweight holding", () => {
+    expect(computeHoldingDriftPts(underweight, accountHoldings)).toBe(-41); // 9 - 50
+  });
+
+  it("rounds the same way account-detail.ts's rebalancingRows does - can land on exactly 0", () => {
+    // Same fixture as account-detail.test.ts's "hides the suggested-trade
+    // amount when drift in points rounds to exactly 0" case.
+    const a = { quantity: new Decimal(1), lastPriceCents: BigInt(3900), targetPct: 0.39 };
+    const b = { quantity: new Decimal(1), lastPriceCents: BigInt(6100), targetPct: 0.61 };
+    expect(computeHoldingDriftPts(a, [a, b])).toBe(0);
+  });
+
+  it("returns null when the holding has no target set", () => {
+    const untargeted = { quantity: new Decimal(1), lastPriceCents: BigInt(100_00), targetPct: null };
+    expect(computeHoldingDriftPts(untargeted, [untargeted])).toBeNull();
+  });
+
+  it("returns null when the account's total holdings value is 0", () => {
+    const zeroValue = { quantity: new Decimal(0), lastPriceCents: BigInt(100_00), targetPct: 0.5 };
+    expect(computeHoldingDriftPts(zeroValue, [zeroValue])).toBeNull();
   });
 });

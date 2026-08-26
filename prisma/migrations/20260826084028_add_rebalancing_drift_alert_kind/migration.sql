@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AlertRuleKind" ADD VALUE 'REBALANCING_DRIFT';
