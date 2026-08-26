@@ -75,6 +75,7 @@ export default async function SharedDashboardPage({
     allocationRaw,
     institutions,
     history,
+    allocationHistory,
     delta30,
   } = computeDashboard({ accounts, allBalances, intlLocale: localeToIntl(locale), now: new Date() });
 
@@ -104,6 +105,7 @@ export default async function SharedDashboardPage({
         hasData={hasAccounts}
         history={history}
         allocationSlices={allocationSlices}
+        allocationHistory={allocationHistory}
         institutions={institutions}
         interactive={false}
       />

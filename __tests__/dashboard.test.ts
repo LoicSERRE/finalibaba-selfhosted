@@ -204,4 +204,66 @@ describe("computeDashboard", () => {
     );
     expect(result.delta30).toBeNull();
   });
+
+  describe("allocationHistory", () => {
+    it("buckets the running daily balance by account type, matching allocationRaw's own categories", () => {
+      const result = computeDashboard(
+        baseInput({
+          accounts: [
+            account({ id: "checking", type: "CHECKING" }),
+            account({ id: "savings", type: "SAVINGS" }),
+          ],
+          allBalances: [
+            { accountId: "checking", recordedAt: new Date("2026-07-01T00:00:00.000Z"), balanceCents: BigInt(500_00) },
+            { accountId: "savings", recordedAt: new Date("2026-07-01T00:00:00.000Z"), balanceCents: BigInt(1000_00) },
+          ],
+        })
+      );
+      expect(result.allocationHistory).toHaveLength(1);
+      const point = result.allocationHistory[0];
+      expect(point.cash).toBe(500_00);
+      expect(point.savings).toBe(1000_00);
+      expect(point.investments).toBe(0);
+      expect(point.isoDate).toBe("2026-07-01");
+    });
+
+    it("stays in lockstep with the main history array (same days, same isoDate)", () => {
+      const result = computeDashboard(
+        baseInput({
+          accounts: [account({ id: "a1" })],
+          allBalances: [
+            { accountId: "a1", recordedAt: new Date("2026-07-01T00:00:00.000Z"), balanceCents: BigInt(500_00) },
+            { accountId: "a1", recordedAt: new Date("2026-07-15T00:00:00.000Z"), balanceCents: BigInt(700_00) },
+          ],
+        })
+      );
+      expect(result.allocationHistory.map((p) => p.isoDate)).toEqual(result.history.map((p) => p.isoDate));
+    });
+
+    it("clamps real-estate/automobile equity against today's liabilityCents, same as the current-moment allocationRaw bucket", () => {
+      const result = computeDashboard(
+        baseInput({
+          accounts: [
+            account({ id: "house", type: "REAL_ESTATE", liabilityCents: BigInt(180_000_00) }),
+          ],
+          allBalances: [
+            { accountId: "house", recordedAt: new Date("2026-07-01T00:00:00.000Z"), balanceCents: BigInt(200_000_00) },
+          ],
+        })
+      );
+      // 200k value - 180k liability = 20k equity, same clampedEquity math as allocationRaw.
+      expect(result.allocationHistory[0].realEstate).toBe(20_000_00);
+    });
+
+    it("excludes LOAN accounts entirely, matching allocationRaw's own exclusion", () => {
+      const result = computeDashboard(
+        baseInput({
+          accounts: [account({ id: "loan", type: "LOAN" })],
+          allBalances: [{ accountId: "loan", recordedAt: new Date("2026-07-01T00:00:00.000Z"), balanceCents: BigInt(0) }],
+        })
+      );
+      const point = result.allocationHistory[0];
+      expect(point.cash + point.savings + point.investments + point.crypto + point.realEstate + point.auto).toBe(0);
+    });
+  });
 });

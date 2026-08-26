@@ -84,6 +84,7 @@
     "latentTax": "Latent taxes",
     "netWorthChart": "Net worth history",
     "allocationChart": "Asset allocation",
+    "allocationHistoryChart": "Allocation over time",
     "allocationHint": "\"Cash\" covers checking accounts and meal vouchers (0% interest). \"Savings\" only counts savings accounts. Same distinction the long-term projection makes, so a checking account isn't treated as if it compounded at the same rate as a savings account.",
     "myAccounts": "My accounts",
     "emptyStateIntro": "Start by adding your institutions in",
@@ -873,6 +874,10 @@
     "lclApprovalHint": "Open the <strong>LCL</strong> app → <strong>Certicode Plus</strong> → approve the connection, then click below:",
     "lclConfirm": "I've approved in the LCL app",
     "unknownError": "Unknown error"
+  },
+  "allocationHistoryChart": {
+    "noHistory": "No history yet",
+    "ariaLabel": "Asset allocation over time"
   },
   "netWorthChart": {
     "noHistory": "No history yet",

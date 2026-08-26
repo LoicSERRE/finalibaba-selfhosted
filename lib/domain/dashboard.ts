@@ -83,6 +83,23 @@ export interface DashboardDelta {
   percent: number | null;
 }
 
+// Same date/isoDate split as DashboardHistoryPoint above, plus one field per
+// allocationRaw bucket - the stacked-area history chart extending the
+// current-moment allocation pie (see "Historical asset-allocation chart" in
+// CLAUDE.md). No `loan` field - LOAN accounts are excluded here exactly like
+// they're excluded from allocationRaw itself (pure liability, no asset
+// counterpart).
+export interface DashboardAllocationHistoryPoint {
+  date: string;
+  isoDate: string;
+  cash: number;
+  savings: number;
+  investments: number;
+  crypto: number;
+  realEstate: number;
+  auto: number;
+}
+
 export interface DashboardResult {
   hasAccounts: boolean;
   netWorth: bigint;
@@ -93,6 +110,7 @@ export interface DashboardResult {
   allocationRaw: Record<string, number>;
   institutions: DashboardInstitutionGroup[];
   history: DashboardHistoryPoint[];
+  allocationHistory: DashboardAllocationHistoryPoint[];
   delta30: DashboardDelta | null;
 }
 
@@ -121,9 +139,14 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
   // (which every account already carries) was a fully redundant DB round
   // trip on every dashboard load.
   const liabMap = new Map<string, bigint>();
+  // Account type, keyed the same way - used below to bucket the daily
+  // running HistoricalBalance total by allocation category, the same way
+  // the current-moment loop above buckets allocation[...].
+  const typeMap = new Map<string, string>();
 
   for (const account of accounts) {
     liabMap.set(account.id, account.liabilityCents ?? BigInt(0));
+    typeMap.set(account.id, account.type);
 
     // Every branch below assigns a real value before use - the initializer
     // itself is redundant, but removing it risks a "used before assigned"
@@ -217,16 +240,40 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
   const sortedDays = [...dayMap.keys()].sort(); // NOSONAR
   const running = new Map<string, bigint>();
   const historyRaw: { day: string; netWorth: number }[] = [];
+  const allocationHistoryRaw: { day: string; buckets: Record<string, bigint> }[] = [];
 
   for (const day of sortedDays) {
     for (const [id, v] of dayMap.get(day)!) running.set(id, v);
     let gross = BigInt(0);
-    for (const v of running.values()) gross += v;
+    // Same 6 buckets as allocationRaw below - REAL_ESTATE/AUTOMOBILE go
+    // through clampedEquity against today's liabilityCents (liabMap), the
+    // same static-liability simplification the netWorth figure above
+    // already applies uniformly across every past day (there's no
+    // historical liability series, only the asset's own HistoricalBalance
+    // rows) - not a new approximation introduced here, just extended to
+    // this new per-category breakdown. LOAN accounts are skipped entirely,
+    // matching allocationRaw's own exclusion (pure liability, no asset
+    // counterpart).
+    const buckets: Record<string, bigint> = {
+      cash: BigInt(0), savings: BigInt(0), investments: BigInt(0),
+      crypto: BigInt(0), realEstate: BigInt(0), auto: BigInt(0),
+    };
+    for (const [id, v] of running) {
+      gross += v;
+      const type = typeMap.get(id);
+      if (type === "SAVINGS") buckets.savings += v;
+      else if (type === "CHECKING" || type === "MEAL_VOUCHER") buckets.cash += v;
+      else if (type === "INVESTMENT") buckets.investments += v;
+      else if (type === "CRYPTO") buckets.crypto += v;
+      else if (type === "REAL_ESTATE") buckets.realEstate += clampedEquity(v, liabMap.get(id) ?? BigInt(0));
+      else if (type === "AUTOMOBILE") buckets.auto += clampedEquity(v, liabMap.get(id) ?? BigInt(0));
+    }
     let liab = BigInt(0);
     for (const [id, v] of liabMap) {
       if (running.has(id)) liab += v;
     }
     historyRaw.push({ day, netWorth: Number(gross - liab) });
+    allocationHistoryRaw.push({ day, buckets });
   }
 
   const history: DashboardHistoryPoint[] = historyRaw.map(({ day, netWorth: nw }) => {
@@ -235,6 +282,20 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
       date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(new Date(+y, +m - 1, +d)),
       isoDate: day,
       netWorth: nw,
+    };
+  });
+
+  const allocationHistory: DashboardAllocationHistoryPoint[] = allocationHistoryRaw.map(({ day, buckets }) => {
+    const [y, m, d] = day.split("-");
+    return {
+      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(new Date(+y, +m - 1, +d)),
+      isoDate: day,
+      cash: Number(buckets.cash),
+      savings: Number(buckets.savings),
+      investments: Number(buckets.investments),
+      crypto: Number(buckets.crypto),
+      realEstate: Number(buckets.realEstate),
+      auto: Number(buckets.auto),
     };
   });
 
@@ -267,6 +328,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
     },
     institutions,
     history,
+    allocationHistory,
     delta30,
   };
 }

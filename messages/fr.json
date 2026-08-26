@@ -84,6 +84,7 @@
     "latentTax": "Fiscalité latente",
     "netWorthChart": "Évolution du patrimoine",
     "allocationChart": "Répartition des actifs",
+    "allocationHistoryChart": "Répartition dans le temps",
     "allocationHint": "« Liquidités » regroupe vos comptes courants et titres-restaurant (rémunérés à 0%). « Épargne » ne compte que vos livrets et comptes d'épargne. C'est la même distinction que fait la projection long terme, pour ne pas faire composer un compte courant au même rendement qu'un livret.",
     "myAccounts": "Mes comptes",
     "emptyStateIntro": "Commencez par ajouter vos institutions dans",
@@ -873,6 +874,10 @@
     "lclApprovalHint": "Ouvre l'app <strong>LCL</strong> → <strong>Certicode Plus</strong> → approuve la connexion, puis clique ci-dessous :",
     "lclConfirm": "J'ai approuvé dans l'app LCL",
     "unknownError": "Erreur inconnue"
+  },
+  "allocationHistoryChart": {
+    "noHistory": "Aucun historique",
+    "ariaLabel": "Répartition des actifs dans le temps"
   },
   "netWorthChart": {
     "noHistory": "Aucun historique",

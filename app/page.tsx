@@ -33,6 +33,7 @@ export default async function DashboardPage() {
     allocationRaw,
     institutions,
     history,
+    allocationHistory,
     delta30,
   } = computeDashboard({ accounts, allBalances, intlLocale: localeToIntl(locale), now: new Date() });
 
@@ -64,6 +65,7 @@ export default async function DashboardPage() {
       hasData={hasData}
       history={history}
       allocationSlices={allocationSlices}
+      allocationHistory={allocationHistory}
       institutions={institutions}
     />
   );

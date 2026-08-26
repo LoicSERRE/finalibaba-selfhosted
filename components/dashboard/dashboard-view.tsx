@@ -3,10 +3,16 @@ import type { getTranslations } from "next-intl/server";
 import { formatCurrency } from "@/lib/utils/format";
 import { NetWorthChart } from "@/components/shared/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
+import { AllocationHistoryChart } from "@/components/shared/allocation-history-chart";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import type { DashboardDelta, DashboardHistoryPoint, DashboardInstitutionGroup } from "@/lib/domain/dashboard";
+import type {
+  DashboardDelta,
+  DashboardHistoryPoint,
+  DashboardAllocationHistoryPoint,
+  DashboardInstitutionGroup,
+} from "@/lib/domain/dashboard";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -29,6 +35,7 @@ export function DashboardView({
   hasData,
   history,
   allocationSlices,
+  allocationHistory,
   institutions,
   interactive = true,
 }: Readonly<{
@@ -42,6 +49,7 @@ export function DashboardView({
   hasData: boolean;
   history: DashboardHistoryPoint[];
   allocationSlices: AllocationSlice[];
+  allocationHistory: DashboardAllocationHistoryPoint[];
   institutions: DashboardInstitutionGroup[];
   interactive?: boolean;
 }>) {
@@ -118,6 +126,16 @@ export function DashboardView({
             </h2>
             <AssetAllocationChart data={allocationSlices} />
           </div>
+        </div>
+      )}
+
+      {hasData && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
+          <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4 flex items-center gap-1">
+            {t("dashboard.allocationHistoryChart")}
+            <InfoTooltip>{t("dashboard.allocationHint")}</InfoTooltip>
+          </h2>
+          <AllocationHistoryChart data={allocationHistory} />
         </div>
       )}
 
