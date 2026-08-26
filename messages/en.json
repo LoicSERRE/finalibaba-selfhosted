@@ -985,7 +985,9 @@
     "targetPctPlaceholder": "e.g. 30",
     "targetPctHint": "Used for rebalancing — leave blank if this position isn't part of it.",
     "update": "Update",
-    "submit": "Add"
+    "submit": "Add",
+    "refreshFx": "Refresh exchange rate",
+    "unknownError": "An unexpected error occurred."
   },
   "sellHolding": {
     "title": "Sell — {ticker}",

@@ -9,6 +9,14 @@ import Decimal from "decimal.js";
 
 const FOREIGN_CURRENCIES = new Set(["USD", "GBP", "CHF"]);
 
+// Shared by upsertHolding's entry-time conversion and
+// refreshHoldingExchangeRate's on-demand one below - same rounding, one
+// formula, so a future change to how a native amount becomes EUR cents
+// can't drift between the two call sites.
+function applyFxRate(nativeCents: bigint, fxRateToEur: number): bigint {
+  return BigInt(Math.round(Number(nativeCents) * fxRateToEur));
+}
+
 // Handles both create/edit and both EUR/foreign-currency paths (fetching +
 // caching an FX rate only when the native price actually changed) in one
 // place - see the "Multi-currency" section of CLAUDE.md for why the
@@ -57,10 +65,10 @@ export async function upsertHolding(formData: FormData) {
     } else {
       fxRateToEur = await fetchExchangeRateToEur(currency as "USD" | "GBP" | "CHF");
       if (fxRateToEur === null) {
-        throw new Error(`Could not fetch the ${currency}→EUR exchange rate - try again or use EUR`);
+        throw new Error(`Impossible de récupérer le taux de change ${currency}→EUR - réessaie ou utilise l'EUR.`);
       }
-      lastPriceCents = BigInt(Math.round(Number(nativePriceCents) * fxRateToEur));
-      costBasisCents = nativeCostBasisCents !== null ? BigInt(Math.round(Number(nativeCostBasisCents) * fxRateToEur)) : null;
+      lastPriceCents = applyFxRate(nativePriceCents, fxRateToEur);
+      costBasisCents = nativeCostBasisCents !== null ? applyFxRate(nativeCostBasisCents, fxRateToEur) : null;
     }
   }
 
@@ -106,6 +114,44 @@ export async function deleteHolding(id: string, accountId: string) {
   await prisma.holding.delete({ where: { id } });
   await refreshAccountBalance(accountId);
   revalidatePath(`/accounts/${accountId}`);
+  revalidatePath("/accounts");
+  revalidatePath("/analytics");
+  revalidatePath("/");
+}
+
+// On-demand multi-currency revaluation - re-fetches the FX rate and
+// recomputes lastPriceCents/costBasisCents from the already-stored
+// nativePriceCents/nativeCostBasisCents, without the user having to reopen
+// the edit dialog and retype the native price just to force upsertHolding's
+// own "only re-fetch when the native price actually changed" branch to run
+// (see that function's comment). bypassCache=true on the fetch itself (see
+// fetchExchangeRateToEur) - a user who explicitly clicks "refresh" expects
+// a genuinely current rate, not whatever was cached up to an hour ago.
+export async function refreshHoldingExchangeRate(holdingId: string) {
+  const holding = await prisma.holding.findUnique({ where: { id: holdingId } });
+  if (!holding) throw new Error("Position introuvable.");
+  if (holding.currency === "EUR" || holding.nativePriceCents === null) {
+    throw new Error("Cette position n'est pas dans une devise étrangère.");
+  }
+
+  const fxRateToEur = await fetchExchangeRateToEur(holding.currency as "USD" | "GBP" | "CHF", true);
+  if (fxRateToEur === null) {
+    throw new Error(`Impossible de récupérer le taux de change ${holding.currency}→EUR - réessaie plus tard.`);
+  }
+
+  await prisma.holding.update({
+    where: { id: holdingId },
+    data: {
+      fxRateToEur,
+      lastPriceCents: applyFxRate(holding.nativePriceCents, fxRateToEur),
+      costBasisCents:
+        holding.nativeCostBasisCents !== null ? applyFxRate(holding.nativeCostBasisCents, fxRateToEur) : holding.costBasisCents,
+    },
+  });
+
+  await refreshAccountBalance(holding.accountId);
+
+  revalidatePath(`/accounts/${holding.accountId}`);
   revalidatePath("/accounts");
   revalidatePath("/analytics");
   revalidatePath("/");

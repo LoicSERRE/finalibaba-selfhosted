@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { formatCurrency } from "@/lib/utils/format";
 import { AddHoldingDialog } from "@/components/account-detail/add-holding-dialog";
 import { SellHoldingDialog } from "@/components/account-detail/sell-holding-dialog";
+import { RefreshHoldingFxButton } from "@/components/account-detail/refresh-holding-fx-button";
 import type { HoldingWithTax } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
@@ -141,6 +142,7 @@ export function HoldingsTable({
                         accountName={accountName}
                         existing={{ ...h, quantity: h.quantity.toString() }}
                       />
+                      {h.currency !== "EUR" && <RefreshHoldingFxButton holdingId={h.id} />}
                     </div>
                   </td>
                 )}

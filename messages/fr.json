@@ -985,7 +985,9 @@
     "targetPctPlaceholder": "Ex: 30",
     "targetPctHint": "Sert au rééquilibrage — laisse vide si cette position n'en fait pas partie.",
     "update": "Mettre à jour",
-    "submit": "Ajouter"
+    "submit": "Ajouter",
+    "refreshFx": "Actualiser le taux de change",
+    "unknownError": "Une erreur inattendue s'est produite."
   },
   "sellHolding": {
     "title": "Vendre — {ticker}",
