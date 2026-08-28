@@ -12,14 +12,24 @@ import {
   type AuthenticationResponseJSON,
 } from "@simplewebauthn/server";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer } from "@/lib/auth-context";
 
 const RP_NAME = "Finalibaba";
-// Fixed, stable across every registration - this is a single-user app (see
-// CLAUDE.md's v2.0 multi-user note), so there's no real per-account user id
-// to derive this from. WebAuthn only uses it to namespace resident keys and
-// dedupe registrations for "the same user" on one authenticator - a fixed
-// value is exactly correct here, not a shortcut.
-const USER_ID = new TextEncoder().encode("finalibaba-singleton-user");
+// As of v2.0 the WebAuthn user handle is the real user id (it used to be a
+// fixed instance-wide constant, back when the app was single-user). WebAuthn
+// uses it to namespace resident keys and dedupe registrations for "the same
+// user" on one authenticator - so with several users on one instance it has
+// to differ per user, or two people registering on the same shared device
+// would collide on the authenticator side.
+function webAuthnUserId(userId: string): Uint8Array<ArrayBuffer> {
+  const bytes = new TextEncoder().encode(userId);
+  // Copied into a plain ArrayBuffer-backed view: TextEncoder returns
+  // Uint8Array<ArrayBufferLike>, which @simplewebauthn's stricter
+  // Uint8Array<ArrayBuffer> parameter type doesn't accept.
+  const out = new Uint8Array(new ArrayBuffer(bytes.byteLength));
+  out.set(bytes);
+  return out;
+}
 
 // Same fallback precedent as app/api/gocardless/connect/route.ts's own
 // `process.env.APP_URL ?? \`${req.nextUrl.protocol}//${req.nextUrl.host}\``
@@ -48,14 +58,14 @@ function toStoredCredential(row: { credentialId: string; publicKey: Uint8Array; 
 }
 
 export async function getAppLockStatus() {
+  const viewer = await getViewer();
   const [settings, credentials] = await Promise.all([
-    prisma.userSettings.upsert({
-      where: { id: "singleton" },
-      create: {},
-      update: {},
+    prisma.user.findUniqueOrThrow({
+      where: { id: viewer.id },
       select: { appLockEnabled: true },
     }),
     prisma.appLockCredential.findMany({
+      where: { userId: viewer.id },
       orderBy: { createdAt: "asc" },
       select: { id: true, deviceLabel: true, createdAt: true, lastUsedAt: true },
     }),
@@ -66,13 +76,17 @@ export async function getAppLockStatus() {
 // ── Registration (adding a device) ──────────────────────────────────────────
 
 export async function startAppLockRegistration() {
+  const viewer = await getViewer();
   const { rpID } = await getRpConfig();
-  const existing = await prisma.appLockCredential.findMany({ select: { credentialId: true } });
+  const [existing, user] = await Promise.all([
+    prisma.appLockCredential.findMany({ where: { userId: viewer.id }, select: { credentialId: true } }),
+    prisma.user.findUnique({ where: { id: viewer.id }, select: { username: true, displayName: true } }),
+  ]);
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
     rpID,
-    userName: "owner",
-    userID: USER_ID,
+    userName: user?.username || user?.displayName || "owner",
+    userID: webAuthnUserId(viewer.id),
     attestationType: "none",
     // Excludes already-registered devices from being re-registered as a
     // second credential for the same authenticator.
@@ -80,12 +94,13 @@ export async function startAppLockRegistration() {
     authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
   });
   // Single reusable slot - see the schema comment on appLockChallenge.
-  await prisma.userSettings.update({ where: { id: "singleton" }, data: { appLockChallenge: options.challenge } });
+  await prisma.user.update({ where: { id: viewer.id }, data: { appLockChallenge: options.challenge } });
   return options;
 }
 
 export async function verifyAppLockRegistration(response: RegistrationResponseJSON, deviceLabel: string) {
-  const settings = await prisma.userSettings.findUnique({ where: { id: "singleton" }, select: { appLockChallenge: true } });
+  const viewer = await getViewer();
+  const settings = await prisma.user.findUnique({ where: { id: viewer.id }, select: { appLockChallenge: true } });
   if (!settings?.appLockChallenge) throw new Error("No pending app-lock registration");
 
   const { rpID, origin } = await getRpConfig();
@@ -105,10 +120,11 @@ export async function verifyAppLockRegistration(response: RegistrationResponseJS
         publicKey: Buffer.from(credential.publicKey),
         counter: credential.counter,
         deviceLabel: deviceLabel.trim() || "Appareil",
+        userId: viewer.id,
       },
     }),
-    prisma.userSettings.update({
-      where: { id: "singleton" },
+    prisma.user.update({
+      where: { id: viewer.id },
       data: { appLockChallenge: null, appLockEnabled: true },
     }),
   ]);
@@ -118,8 +134,9 @@ export async function verifyAppLockRegistration(response: RegistrationResponseJS
 // ── Authentication (unlocking) ──────────────────────────────────────────────
 
 export async function startAppLockAuthentication() {
+  const viewer = await getViewer();
   const { rpID } = await getRpConfig();
-  const credentials = await prisma.appLockCredential.findMany({ select: { credentialId: true } });
+  const credentials = await prisma.appLockCredential.findMany({ where: { userId: viewer.id }, select: { credentialId: true } });
   if (credentials.length === 0) throw new Error("No app-lock device registered");
 
   const options = await generateAuthenticationOptions({
@@ -127,14 +144,17 @@ export async function startAppLockAuthentication() {
     allowCredentials: credentials.map((c) => ({ id: c.credentialId })),
     userVerification: "preferred",
   });
-  await prisma.userSettings.update({ where: { id: "singleton" }, data: { appLockChallenge: options.challenge } });
+  await prisma.user.update({ where: { id: viewer.id }, data: { appLockChallenge: options.challenge } });
   return options;
 }
 
 export async function verifyAppLockAuthentication(response: AuthenticationResponseJSON) {
+  const viewer = await getViewer();
   const [settings, row] = await Promise.all([
-    prisma.userSettings.findUnique({ where: { id: "singleton" }, select: { appLockChallenge: true } }),
-    prisma.appLockCredential.findUnique({ where: { credentialId: response.id } }),
+    prisma.user.findUnique({ where: { id: viewer.id }, select: { appLockChallenge: true } }),
+    // Scoped to this viewer: an unlock must never be satisfied by another
+    // user's registered authenticator on a shared device.
+    prisma.appLockCredential.findFirst({ where: { credentialId: response.id, userId: viewer.id } }),
   ]);
   if (!settings?.appLockChallenge) throw new Error("No pending app-lock authentication");
   if (!row) throw new Error("Unknown app-lock device");
@@ -147,7 +167,7 @@ export async function verifyAppLockAuthentication(response: AuthenticationRespon
     expectedRPID: rpID,
     credential: toStoredCredential(row),
   });
-  await prisma.userSettings.update({ where: { id: "singleton" }, data: { appLockChallenge: null } });
+  await prisma.user.update({ where: { id: viewer.id }, data: { appLockChallenge: null } });
   if (!verification.verified) throw new Error("Unlock failed");
 
   await prisma.appLockCredential.update({
@@ -163,11 +183,16 @@ export async function verifyAppLockAuthentication(response: AuthenticationRespon
 // "enabled" state would leave the lock screen with nothing to authenticate
 // against, an unrecoverable dead end short of shell access to the DB.
 export async function removeAppLockCredential(id: string) {
+  const viewer = await getViewer();
   await prisma.$transaction(async (tx) => {
-    await tx.appLockCredential.delete({ where: { id } });
-    const remaining = await tx.appLockCredential.count();
+    // deleteMany scoped to the viewer, not delete-by-id: a Server Action is
+    // directly invocable, so an id alone must never be enough to remove
+    // another user's authenticator.
+    const { count } = await tx.appLockCredential.deleteMany({ where: { id, userId: viewer.id } });
+    if (count === 0) throw new Error("Device not found.");
+    const remaining = await tx.appLockCredential.count({ where: { userId: viewer.id } });
     if (remaining === 0) {
-      await tx.userSettings.update({ where: { id: "singleton" }, data: { appLockEnabled: false } });
+      await tx.user.update({ where: { id: viewer.id }, data: { appLockEnabled: false } });
     }
   });
   revalidatePath("/settings");
@@ -177,6 +202,7 @@ export async function removeAppLockCredential(id: string) {
 // later (a fresh registration, since there's no separate "re-enable with
 // existing device" flow) starts clean rather than resurrecting stale state.
 export async function disableAppLock() {
-  await prisma.userSettings.update({ where: { id: "singleton" }, data: { appLockEnabled: false } });
+  const viewer = await getViewer();
+  await prisma.user.update({ where: { id: viewer.id }, data: { appLockEnabled: false } });
   revalidatePath("/settings");
 }

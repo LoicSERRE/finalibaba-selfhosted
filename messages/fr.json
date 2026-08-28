@@ -45,6 +45,11 @@
   "auth": {
     "subtitle": "Votre patrimoine, en un coup d'œil",
     "password": "Mot de passe",
+    "username": "Identifiant",
+    "usernameOptional": "Identifiant (laisser vide si non défini)",
+    "confirmPassword": "Confirmer le mot de passe",
+    "passwordHint": "{min} caractères minimum",
+    "passwordMismatch": "Les deux mots de passe ne correspondent pas",
     "showPassword": "Afficher le mot de passe",
     "hidePassword": "Masquer le mot de passe",
     "submit": "Se connecter",
@@ -53,7 +58,15 @@
     "totpLabel": "Code de vérification",
     "totpHint": "Ouvre ton application d'authentification, ou utilise un code de secours",
     "errorInvalidWithCode": "Mot de passe ou code incorrect",
-    "footer": "Vos données restent sur votre serveur"
+    "footer": "Vos données restent sur votre serveur",
+    "setupError": "Impossible de créer le compte. L'identifiant est peut-être déjà utilisé.",
+    "bootstrapTitle": "Créez votre compte administrateur",
+    "bootstrapSubtitle": "L'authentification vient d'être activée sur cette instance",
+    "bootstrapNotice": "Toutes vos données existantes (comptes, transactions, budgets…) seront rattachées à ce compte. Rien n'est perdu ni déplacé.",
+    "bootstrapSubmit": "Créer le compte",
+    "inviteTitle": "Créez votre compte",
+    "inviteSubtitle": "Vous avez été invité à rejoindre cette instance Finalibaba",
+    "inviteSubmit": "Créer mon compte"
   },
   "accountTypes": {
     "CHECKING": "Courant",

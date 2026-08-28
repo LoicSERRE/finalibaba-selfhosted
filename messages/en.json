@@ -45,6 +45,11 @@
   "auth": {
     "subtitle": "Your wealth, at a glance",
     "password": "Password",
+    "username": "Username",
+    "usernameOptional": "Username (leave blank if not set)",
+    "confirmPassword": "Confirm password",
+    "passwordHint": "{min} characters minimum",
+    "passwordMismatch": "The two passwords don't match",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "submit": "Sign in",
@@ -53,7 +58,15 @@
     "totpLabel": "Verification code",
     "totpHint": "Open your authenticator app, or use a backup code",
     "errorInvalidWithCode": "Incorrect password or code",
-    "footer": "Your data stays on your server"
+    "footer": "Your data stays on your server",
+    "setupError": "Could not create the account. The username may already be taken.",
+    "bootstrapTitle": "Create your admin account",
+    "bootstrapSubtitle": "Authentication has just been enabled on this instance",
+    "bootstrapNotice": "All your existing data (accounts, transactions, budgets…) will be attached to this account. Nothing is lost or moved.",
+    "bootstrapSubmit": "Create account",
+    "inviteTitle": "Create your account",
+    "inviteSubtitle": "You've been invited to join this Finalibaba instance",
+    "inviteSubmit": "Create my account"
   },
   "accountTypes": {
     "CHECKING": "Checking",

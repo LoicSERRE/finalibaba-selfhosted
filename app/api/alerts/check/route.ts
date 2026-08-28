@@ -212,8 +212,8 @@ const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 // below (retired, or a fresh success) - extracted for real duplication
 // removal, not just to shave a point off checkSyncFailures's own cognitive
 // complexity as a side effect.
-async function clearSyncFailureState(source: string, hasState: boolean): Promise<void> {
-  if (hasState) await prisma.syncFailureState.delete({ where: { source } });
+async function clearSyncFailureState(userId: string, source: string, hasState: boolean): Promise<void> {
+  if (hasState) await prisma.syncFailureState.delete({ where: { userId_source: { userId, source } } });
 }
 
 async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]> {
@@ -221,8 +221,13 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
 
   // Only ever looks at each source's single most recent SyncLog row - older
   // rows are irrelevant to "is it broken right now".
+  // Scoped to this user's own sync sources (v2.0) - a Woob source belongs to
+  // whoever owns the institution, and the env-driven lcl/trade_republic
+  // sources belong to the owner, so one user's broken bank never alerts
+  // another.
   const latestPerSource = await prisma.syncLog.groupBy({
     by: ["source"],
+    where: { userId: settings.userId },
     _max: { createdAt: true },
   });
 
@@ -231,30 +236,35 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
   for (const { source, _max } of latestPerSource) {
     if (!_max.createdAt) continue;
     const latest = await prisma.syncLog.findFirst({
-      where: { source, createdAt: _max.createdAt },
+      where: { userId: settings.userId, source, createdAt: _max.createdAt },
       orderBy: { id: "desc" },
     });
     if (!latest) continue;
 
-    const state = await prisma.syncFailureState.findUnique({ where: { source } });
+    const state = await prisma.syncFailureState.findUnique({
+      where: { userId_source: { userId: settings.userId, source } },
+    });
 
     if (await isSourceRetired(source)) {
-      await clearSyncFailureState(source, !!state);
+      await clearSyncFailureState(settings.userId, source, !!state);
       continue;
     }
 
     if (latest.status === "success") {
-      await clearSyncFailureState(source, !!state);
+      await clearSyncFailureState(settings.userId, source, !!state);
       continue;
     }
 
     if (!state) {
-      await prisma.syncFailureState.create({ data: { source } });
+      await prisma.syncFailureState.create({ data: { userId: settings.userId, source } });
       const label = await friendlySourceLabel(source);
       await dispatchAlert(settings, "Échec de synchronisation", formatSyncFailureBody(label, latest.status));
       fired.push(source);
     } else if (Date.now() - state.lastAlertedAt.getTime() >= REMINDER_INTERVAL_MS) {
-      await prisma.syncFailureState.update({ where: { source }, data: { lastAlertedAt: new Date() } });
+      await prisma.syncFailureState.update({
+        where: { userId_source: { userId: settings.userId, source } },
+        data: { lastAlertedAt: new Date() },
+      });
       const label = await friendlySourceLabel(source);
       await dispatchAlert(
         settings,
@@ -291,10 +301,16 @@ async function checkSectorDataHealth(settings: UserSettingsModel): Promise<strin
   if (!settings.sectorDataAlertsEnabled) return [];
 
   const { anyPathHealthy } = await probeYahooSectorHealth();
-  const state = await prisma.syncFailureState.findUnique({ where: { source: SECTOR_DATA_SOURCE } });
+  // Yahoo's health is an instance-wide fact, but the dedup state is still
+  // per-user: each user opted into this alert separately, so each gets their
+  // own "already told you" bookkeeping rather than the first user's check
+  // silencing everyone else's.
+  const state = await prisma.syncFailureState.findUnique({
+    where: { userId_source: { userId: settings.userId, source: SECTOR_DATA_SOURCE } },
+  });
 
   if (anyPathHealthy) {
-    await clearSyncFailureState(SECTOR_DATA_SOURCE, !!state);
+    await clearSyncFailureState(settings.userId, SECTOR_DATA_SOURCE, !!state);
     return [];
   }
 
@@ -303,12 +319,15 @@ async function checkSectorDataHealth(settings: UserSettingsModel): Promise<strin
     "Configure une clé API de secours (FMP_API_KEY ou ALPHA_VANTAGE_API_KEY) pour plus de résilience.";
 
   if (!state) {
-    await prisma.syncFailureState.create({ data: { source: SECTOR_DATA_SOURCE } });
+    await prisma.syncFailureState.create({ data: { userId: settings.userId, source: SECTOR_DATA_SOURCE } });
     await dispatchAlert(settings, "Données sectorielles indisponibles", body);
     return [SECTOR_DATA_SOURCE];
   }
   if (Date.now() - state.lastAlertedAt.getTime() >= REMINDER_INTERVAL_MS) {
-    await prisma.syncFailureState.update({ where: { source: SECTOR_DATA_SOURCE }, data: { lastAlertedAt: new Date() } });
+    await prisma.syncFailureState.update({
+      where: { userId_source: { userId: settings.userId, source: SECTOR_DATA_SOURCE } },
+      data: { lastAlertedAt: new Date() },
+    });
     await dispatchAlert(settings, "Données sectorielles indisponibles (toujours en cours)", body);
     return [SECTOR_DATA_SOURCE];
   }

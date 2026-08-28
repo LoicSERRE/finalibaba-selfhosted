@@ -11,14 +11,22 @@ const { findUniqueMock, updateMock } = vi.hoisted(() => ({
   updateMock: vi.fn(),
 }));
 
+// TOTP lives on the User row as of v2.0 (per-user 2FA), not the old
+// UserSettings singleton.
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    userSettings: {
+    user: {
       findUnique: findUniqueMock,
       update: updateMock,
       upsert: vi.fn(),
     },
   },
+}));
+
+// These actions resolve the current user first; in mono mode that's the
+// instance owner, which is what the mocked rows below stand in for.
+vi.mock("@/lib/auth-context", () => ({
+  getViewer: vi.fn(async () => ({ id: "user-owner", role: "ADMIN", isMonoMode: true })),
 }));
 
 import { confirmTotpSetup, disableTotp, regenerateBackupCodes } from "@/lib/actions/totp";
@@ -56,7 +64,7 @@ describe("confirmTotpSetup", () => {
     expect(result.backupCodes).toHaveLength(8);
     expect(updateMock).toHaveBeenCalledTimes(1);
     const call = updateMock.mock.calls[0][0];
-    expect(call.where).toEqual({ id: "singleton" });
+    expect(call.where).toEqual({ id: "user-owner" });
     expect(call.data.totpEnabled).toBe(true);
     expect(call.data.totpBackupCodes).toHaveLength(8);
   });
@@ -83,7 +91,7 @@ describe("disableTotp", () => {
     await disableTotp(token);
 
     expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "singleton" },
+      where: { id: "user-owner" },
       data: { totpEnabled: false, totpSecret: null, totpBackupCodes: [] },
     });
   });

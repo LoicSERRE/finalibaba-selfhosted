@@ -15,8 +15,9 @@ type AlertChannelSettings = {
   smtpFrom: string | null;
   emailAlertsEnabled: boolean;
   webPushEnabled: boolean;
-  vapidPublicKey: string | null;
-  vapidPrivateKey: string | null;
+  // Whose devices to push to - VAPID keys themselves are instance-level as
+  // of v2.0 and resolved inside sendWebPush.
+  userId: string;
 };
 
 /**
@@ -109,8 +110,11 @@ export async function sendEmail(
 // lib/actions/push.ts), then reused for every subscription and every send
 // forever after; VAPID keys must stay stable, regenerating them would
 // silently invalidate every already-registered browser subscription.
+// Instance-level as of v2.0 (they moved off UserSettings): a VAPID keypair
+// identifies this SERVER to push services, not a person, so every user's
+// subscriptions share one pair.
 export async function getOrCreateVapidKeys(): Promise<{ publicKey: string; privateKey: string }> {
-  const settings = await prisma.userSettings.upsert({
+  const settings = await prisma.instanceSettings.upsert({
     where: { id: "singleton" },
     create: {},
     update: {},
@@ -120,7 +124,7 @@ export async function getOrCreateVapidKeys(): Promise<{ publicKey: string; priva
     return { publicKey: settings.vapidPublicKey, privateKey: settings.vapidPrivateKey };
   }
   const keys = webPush.generateVAPIDKeys();
-  await prisma.userSettings.update({
+  await prisma.instanceSettings.update({
     where: { id: "singleton" },
     data: { vapidPublicKey: keys.publicKey, vapidPrivateKey: keys.privateKey },
   });
@@ -149,11 +153,22 @@ const VAPID_SUBJECT = process.env.APP_URL?.replace(/\/$/, "") || "mailto:push@fi
 // here since this function already has DB access for the read above, and
 // a dead subscription would otherwise fail silently forever with no way
 // for the user to notice short of it just never working.
-export async function sendWebPush(vapidPublicKey: string, vapidPrivateKey: string, title: string, body: string): Promise<boolean> {
-  const subscriptions = await prisma.pushSubscription.findMany();
+export async function sendWebPush(userId: string, title: string, body: string): Promise<boolean> {
+  // Scoped to this user's own devices (v2.0) - previously every subscription
+  // in the instance, which with several users would push one person's
+  // financial alerts to everyone else's phone.
+  const subscriptions = await prisma.pushSubscription.findMany({ where: { userId } });
   if (subscriptions.length === 0) return false;
 
-  webPush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
+  // Instance-level keypair (moved off UserSettings in v2.0), read here rather
+  // than passed in so callers don't have to know where it lives.
+  const settings = await prisma.instanceSettings.findUnique({
+    where: { id: "singleton" },
+    select: { vapidPublicKey: true, vapidPrivateKey: true },
+  });
+  if (!settings?.vapidPublicKey || !settings.vapidPrivateKey) return false;
+
+  webPush.setVapidDetails(VAPID_SUBJECT, settings.vapidPublicKey, settings.vapidPrivateKey);
   const payload = JSON.stringify({ title, body });
 
   const staleIds: string[] = [];
@@ -218,8 +233,11 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
     );
   }
 
-  if (settings.webPushEnabled && settings.vapidPublicKey && settings.vapidPrivateKey) {
-    jobs.push(sendWebPush(settings.vapidPublicKey, settings.vapidPrivateKey, title, body));
+  // sendWebPush resolves the instance VAPID keypair and this user's own
+  // subscriptions itself, so there's nothing left to gate on here beyond the
+  // per-user toggle.
+  if (settings.webPushEnabled) {
+    jobs.push(sendWebPush(settings.userId, title, body));
   }
 
   await Promise.allSettled(jobs);

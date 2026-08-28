@@ -10,6 +10,7 @@ import { OfflineBanner } from "@/components/layout/offline-banner";
 import { AppLockGate } from "@/components/layout/app-lock-gate";
 import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import "./globals.css";
 
@@ -71,11 +72,17 @@ export default async function RootLayout({
   // public demo, and this would just be an extra query on every page load
   // for a feature that can never actually be enabled there anyway (see
   // app/settings/page.tsx's own AppLockSection gate).
+  // Per-user as of v2.0 (app-lock moved from the settings singleton to the
+  // User row). getViewer() resolves to the instance owner in mono mode, so
+  // this behaves exactly as before when AUTH_ENABLED is off.
   const appLockEnabled =
     process.env.DEMO_MODE === "true"
       ? false
-      : (await prisma.userSettings.findUnique({ where: { id: "singleton" }, select: { appLockEnabled: true } }))
-          ?.appLockEnabled ?? false;
+      : await getViewer()
+          .then((viewer) =>
+            prisma.user.findUnique({ where: { id: viewer.id }, select: { appLockEnabled: true } })
+          )
+          .then((user) => user?.appLockEnabled ?? false);
 
   return (
     <html

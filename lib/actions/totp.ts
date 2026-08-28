@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer } from "@/lib/auth-context";
 import {
   generateTotpSecret,
   generateTotpUri,
@@ -20,19 +21,23 @@ export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: str
   const secret = generateTotpSecret();
   // totpEnabled stays false until confirmTotpSetup verifies a live code -
   // overwriting any abandoned prior attempt here is safe for that reason.
-  await prisma.userSettings.upsert({
-    where: { id: "singleton" },
-    create: { totpSecret: secret, totpEnabled: false },
-    update: { totpSecret: secret, totpEnabled: false },
+  const viewer = await getViewer();
+  await prisma.user.update({
+    where: { id: viewer.id },
+    data: { totpSecret: secret, totpEnabled: false },
   });
-  const uri = generateTotpUri(secret, process.env.AUTH_USER_NAME ?? "owner");
+  const label = await prisma.user
+    .findUnique({ where: { id: viewer.id }, select: { username: true, displayName: true } })
+    .then((u) => u?.displayName || u?.username || process.env.AUTH_USER_NAME || "owner");
+  const uri = generateTotpUri(secret, label);
   const qrDataUrl = await QRCode.toDataURL(uri, { errorCorrectionLevel: "M", margin: 1, scale: 6 });
   return { qrDataUrl, secret };
 }
 
 export async function confirmTotpSetup(code: string): Promise<{ backupCodes: string[] }> {
-  const settings = await prisma.userSettings.findUnique({
-    where: { id: "singleton" },
+  const viewer = await getViewer();
+  const settings = await prisma.user.findUnique({
+    where: { id: viewer.id },
     select: { totpSecret: true },
   });
   if (!settings?.totpSecret) throw new Error("No pending 2FA setup");
@@ -40,8 +45,8 @@ export async function confirmTotpSetup(code: string): Promise<{ backupCodes: str
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);
-  await prisma.userSettings.update({
-    where: { id: "singleton" },
+  await prisma.user.update({
+    where: { id: viewer.id },
     data: { totpEnabled: true, totpBackupCodes: hashed },
   });
   revalidatePath("/settings");
@@ -49,8 +54,9 @@ export async function confirmTotpSetup(code: string): Promise<{ backupCodes: str
 }
 
 export async function disableTotp(code: string): Promise<void> {
-  const settings = await prisma.userSettings.findUnique({
-    where: { id: "singleton" },
+  const viewer = await getViewer();
+  const settings = await prisma.user.findUnique({
+    where: { id: viewer.id },
     select: { totpEnabled: true, totpSecret: true, totpBackupCodes: true },
   });
   if (!settings?.totpEnabled || !settings.totpSecret) throw new Error("2FA is not enabled");
@@ -60,16 +66,17 @@ export async function disableTotp(code: string): Promise<void> {
     (await matchBackupCode(code, settings.totpBackupCodes)) !== -1;
   if (!ok) throw new Error("Invalid code");
 
-  await prisma.userSettings.update({
-    where: { id: "singleton" },
+  await prisma.user.update({
+    where: { id: viewer.id },
     data: { totpEnabled: false, totpSecret: null, totpBackupCodes: [] },
   });
   revalidatePath("/settings");
 }
 
 export async function regenerateBackupCodes(code: string): Promise<{ backupCodes: string[] }> {
-  const settings = await prisma.userSettings.findUnique({
-    where: { id: "singleton" },
+  const viewer = await getViewer();
+  const settings = await prisma.user.findUnique({
+    where: { id: viewer.id },
     select: { totpEnabled: true, totpSecret: true },
   });
   if (!settings?.totpEnabled || !settings.totpSecret) throw new Error("2FA is not enabled");
@@ -80,8 +87,8 @@ export async function regenerateBackupCodes(code: string): Promise<{ backupCodes
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);
-  await prisma.userSettings.update({
-    where: { id: "singleton" },
+  await prisma.user.update({
+    where: { id: viewer.id },
     data: { totpBackupCodes: hashed },
   });
   revalidatePath("/settings");
