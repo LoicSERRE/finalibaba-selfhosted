@@ -8,6 +8,7 @@ import { AutoSync } from "@/components/layout/auto-sync";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import { OfflineBanner } from "@/components/layout/offline-banner";
 import { AppLockGate } from "@/components/layout/app-lock-gate";
+import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import "./globals.css";
@@ -109,6 +110,7 @@ export default async function RootLayout({
           </AppLockGate>
           {process.env.DEMO_MODE !== "true" && <AutoSync />}
           <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} />
+          <RealtimeRefresh />
         </NextIntlClientProvider>
       </body>
     </html>

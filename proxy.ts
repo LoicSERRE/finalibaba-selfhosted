@@ -57,6 +57,11 @@ export const config = {
     // itself via a NEXTAUTH_SECRET bearer token instead. See CLAUDE.md's
     // "Alerts & webhooks" and "Historical value chart per investment
     // account" sections.
+    // api/realtime/notify is the same category, one more container-to-
+    // container caller (sync/sync_tr_realtime.py) - api/realtime/stream is
+    // deliberately NOT listed here, it's opened directly by the browser and
+    // needs the normal session. See CLAUDE.md's "Trade Republic real-time
+    // tracking".
     // NOSONAR (typescript:S7780) - this `config` export is statically parsed
     // by Next.js's middleware build step (extractExportedConstValue), which
     // requires a plain literal - a String.raw tagged-template expression here
@@ -99,6 +104,6 @@ export const config = {
     // `/api/v1/net-worth` alike, but not a bare-prefix collision like
     // `/api/v1999` - verified with the same live-server method as above,
     // not just reasoned through.
-    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api\\/v1(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api/realtime/notify|api\\/v1(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };
