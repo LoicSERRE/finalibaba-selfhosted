@@ -219,27 +219,60 @@ def _snapshot_investment_balances():
         log.exception("Investment balance snapshot failed")
 
 
-def _run_all():
-    log.info("=== Daily sync started ===")
+def _run_woob_sources():
+    """LCL + every user-configured Woob institution, plus the categorize/
+    alert follow-up so a freshly-synced transaction gets processed within
+    this cadence instead of waiting for the next full sync. Split out from
+    _run_all() into its own, more frequent job (v1.17) - LCL/Woob are pure
+    screen-scraping with no official push/webhook mechanism to tap into
+    (see CLAUDE.md's "Trade Republic real-time tracking" for the scoping
+    that established this - a shorter poll interval is the realistic
+    freshness ceiling for these sources, not true real-time). Deliberately
+    excludes GoCardless-synced accounts (that sync path lives entirely in
+    the Next.js app, never in this service) and Trade Republic (its own
+    optional real-time listener, plus the less-frequent full sync below as
+    a fallback, already cover it)."""
+    log.info("=== Woob-source sync started ===")
     _run_lcl()
-    _run_tr()
     _run_all_woob()
+    _auto_categorize()
+    _check_alerts()
+    log.info("=== Woob-source sync done ===")
+
+
+def _run_all():
+    """Full sync - Trade Republic (batch fallback, on top of its own
+    optional real-time listener) + investment balance snapshots, plus the
+    same categorize/alert follow-up as a safety net for anything the more
+    frequent Woob-source job above didn't already cover. LCL/Woob moved to
+    _run_woob_sources as of v1.17 - not duplicated here."""
+    log.info("=== Full sync started ===")
+    _run_tr()
     _snapshot_investment_balances()
     _auto_categorize()
     _check_alerts()
-    log.info("=== Daily sync done ===")
+    log.info("=== Full sync done ===")
 
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Full sync every 4 hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00
+    # Woob-source sync (LCL + user-configured Woob institutions) every 30
+    # min - the realistic freshness ceiling for screen-scraped banks with no
+    # push/webhook mechanism (see CLAUDE.md's "Trade Republic real-time
+    # tracking"). A real, disclosed tradeoff, not a free win: more frequent
+    # scraping raises the risk of a bank's own anti-automation detection
+    # flagging the account - 30 min was picked as a middle ground (8x
+    # fresher than the old 4h cadence) after weighing that directly.
+    scheduler.add_job(_run_woob_sources, "interval", minutes=30, id="woob_sync")
+    # Full sync (Trade Republic batch fallback + investment snapshots)
+    # every 4 hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00
     scheduler.add_job(_run_all, "cron", hour="*/4", minute=0, id="auto_sync")
     # TR session keepalive every 90 min - observed TTL is ~2h, so 90min gives a 30min buffer.
     scheduler.add_job(_keepalive_tr, "interval", minutes=90, id="tr_keepalive")
     scheduler.start()
-    log.info("Scheduler started - auto sync every 4h, TR keepalive every 90min")
+    log.info("Scheduler started - Woob-source sync every 30min, full sync every 4h, TR keepalive every 90min")
 
     # Immediate keepalive on startup: if the container restarts when the session
     # was close to expiry (3h TTL), the next scheduled keepalive (≤2h away) would
