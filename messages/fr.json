@@ -29,7 +29,7 @@
     "retry": "Réessayer"
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Tableau de bord",
     "accounts": "Comptes",
     "budgets": "Budgets",
     "recurring": "Récurrent",
@@ -74,7 +74,7 @@
     "auto": "Automobile"
   },
   "dashboard": {
-    "title": "Dashboard",
+    "title": "Tableau de bord",
     "subtitle": "Vue d'ensemble de votre patrimoine",
     "netWorth": "Patrimoine Net",
     "last30d": "sur 30 jours",
