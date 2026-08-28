@@ -19,7 +19,8 @@ type AlertRuleKind =
   | "INVESTMENT_VALUE"
   | "HOLDING_PRICE"
   | "UNREALIZED_GAIN"
-  | "REBALANCING_DRIFT";
+  | "REBALANCING_DRIFT"
+  | "NEW_TRANSACTION";
 
 type AlertRuleRow = {
   id: string;
@@ -32,6 +33,7 @@ type AlertRuleRow = {
   holding: { id: string; ticker: string; name: string | null; account: { id: string; name: string } } | null;
   gainUnit: "PERCENT" | "AMOUNT" | null;
   gainThresholdPct: number | null;
+  transactionDirection: "DEBIT" | "CREDIT" | null;
 };
 
 type PickerOption = { id: string; name: string };
@@ -351,6 +353,77 @@ function BudgetOverrunFields({
   );
 }
 
+// NEW_TRANSACTION: the only kind where every field is optional - an empty
+// account picker means "every account" (same "null is valid input"
+// precedent as UnrealizedGainFields' gainAllAccounts option above), an empty
+// threshold means "no minimum amount," an empty direction means "debits and
+// credits both." Never blocked from submitting even with zero accounts
+// (unlike every other kind's noEligibleX guard) - "notify me on any new
+// transaction anywhere" needs no account to exist yet at rule-creation time.
+type DirectionFormValue = "" | "DEBIT" | "CREDIT";
+
+function NewTransactionFields({
+  isEdit,
+  rule,
+  accounts,
+  t,
+}: Readonly<{
+  isEdit: boolean;
+  rule?: AlertRuleRow;
+  accounts: PickerOption[];
+  t: ReturnType<typeof useTranslations>;
+}>) {
+  const [direction, setDirection] = useState<DirectionFormValue>(rule?.transactionDirection ?? "");
+
+  if (isEdit) {
+    return (
+      <>
+        <p className="text-sm text-[var(--foreground)]">{rule?.account?.name ?? t("newTransactionAllAccounts")}</p>
+        <Input
+          label={t("minimumAmountField")}
+          name="balanceThreshold"
+          type="text"
+          inputMode="decimal"
+          defaultValue={rule?.balanceThresholdCents !== null ? centsToEuro(rule!.balanceThresholdCents!) : ""}
+        />
+        <Select
+          label={t("directionField")}
+          name="transactionDirection"
+          value={direction}
+          onChange={(e) => setDirection(e.target.value as DirectionFormValue)}
+          options={[
+            { value: "", label: t("directionBoth") },
+            { value: "DEBIT", label: t("directionDebit") },
+            { value: "CREDIT", label: t("directionCredit") },
+          ]}
+        />
+      </>
+    );
+  }
+  return (
+    <>
+      <Select
+        label={t("accountField")}
+        name="accountId"
+        options={[{ value: "", label: t("newTransactionAllAccounts") }, ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+        defaultValue=""
+      />
+      <Input label={t("minimumAmountField")} name="balanceThreshold" type="text" inputMode="decimal" />
+      <Select
+        label={t("directionField")}
+        name="transactionDirection"
+        value={direction}
+        onChange={(e) => setDirection(e.target.value as DirectionFormValue)}
+        options={[
+          { value: "", label: t("directionBoth") },
+          { value: "DEBIT", label: t("directionDebit") },
+          { value: "CREDIT", label: t("directionCredit") },
+        ]}
+      />
+    </>
+  );
+}
+
 // Renders the field group for the currently selected kind - kept as its own
 // function (not inlined into AlertRuleDialog) to stay under the sonarjs
 // cognitive-complexity gate now that there are 6 kinds instead of 2.
@@ -360,6 +433,7 @@ function KindFields({
   rule,
   fiatAccounts,
   investmentAccounts,
+  allAccounts,
   holdings,
   driftEligibleHoldings,
   categories,
@@ -370,6 +444,7 @@ function KindFields({
   rule?: AlertRuleRow;
   fiatAccounts: PickerOption[];
   investmentAccounts: InvestmentAccountOption[];
+  allAccounts: PickerOption[];
   holdings: HoldingOption[];
   driftEligibleHoldings: HoldingOption[];
   categories: CategoryOption[];
@@ -440,6 +515,8 @@ function KindFields({
           t={t}
         />
       );
+    case "NEW_TRANSACTION":
+      return <NewTransactionFields isEdit={isEdit} rule={rule} accounts={allAccounts} t={t} />;
     default:
       return null;
   }
@@ -467,6 +544,12 @@ function AlertRuleDialog({
   // already passed down, and REBALANCING_DRIFT's eligibility is just a view
   // over it (see computeHoldingDriftPts's own targetPct null guard).
   const driftEligibleHoldings = holdings.filter((h) => h.targetPct !== null);
+  // NEW_TRANSACTION is the only kind whose account scope spans both fiat and
+  // investment/crypto accounts (a transaction can land on either - Trade
+  // Republic's own cash/trades/dividends all share one account, see
+  // CLAUDE.md's "Trade Republic transaction history") - combined here from
+  // the two lists already passed in, rather than a third prop from the page.
+  const allAccounts: PickerOption[] = [...fiatAccounts, ...investmentAccounts.map((a) => ({ id: a.id, name: a.name }))];
 
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -531,6 +614,7 @@ function AlertRuleDialog({
             { value: "REBALANCING_DRIFT", label: t("kindRebalancingDrift") },
             { value: "UNREALIZED_GAIN", label: t("kindUnrealizedGain") },
             { value: "BUDGET_OVERRUN", label: t("kindBudgetOverrun") },
+            { value: "NEW_TRANSACTION", label: t("kindNewTransaction") },
           ]}
         />
 
@@ -540,6 +624,7 @@ function AlertRuleDialog({
           rule={rule}
           fiatAccounts={fiatAccounts}
           investmentAccounts={investmentAccounts}
+          allAccounts={allAccounts}
           holdings={holdings}
           driftEligibleHoldings={driftEligibleHoldings}
           categories={categories}
@@ -599,6 +684,19 @@ function ruleLabel(rule: AlertRuleRow, t: ReturnType<typeof useTranslations>): s
         scope: rule.account?.name ?? t("gainAllAccounts"),
         threshold: rule.gainUnit === "PERCENT" ? `${rule.gainThresholdPct ?? 0} %` : formatCurrency(rule.balanceThresholdCents ?? BigInt(0)),
       });
+    case "NEW_TRANSACTION": {
+      const scope = rule.account?.name ?? t("newTransactionAllAccounts");
+      const direction =
+        rule.transactionDirection === "DEBIT"
+          ? t("directionDebit")
+          : rule.transactionDirection === "CREDIT"
+            ? t("directionCredit")
+            : t("directionBoth");
+      const minimum = rule.balanceThresholdCents !== null ? formatCurrency(rule.balanceThresholdCents) : null;
+      return minimum
+        ? t("ruleNewTransactionWithMinimum", { scope, direction, minimum })
+        : t("ruleNewTransaction", { scope, direction });
+    }
     case "BUDGET_OVERRUN":
     default:
       return t("ruleBudgetOverrun", { category: rule.category?.name ?? "?" });

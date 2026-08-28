@@ -150,11 +150,18 @@ enum AlertRuleKind {
   HOLDING_PRICE
   UNREALIZED_GAIN
   REBALANCING_DRIFT
+  NEW_TRANSACTION
 }
 
 enum GainUnit {
   PERCENT
   AMOUNT
+}
+
+// NEW_TRANSACTION only - null means "both debits and credits", not "unset".
+enum TransactionAlertDirection {
+  DEBIT
+  CREDIT
 }
 
 // User-defined alert rules - a parallel mechanism alongside the 3 fixed
@@ -228,6 +235,25 @@ model AlertRule {
   // this rule last fired for, so a rule that fired in July can fire again
   // in August even though spend never "un-overran" in between.
   budgetOverrunLastFiredPeriod String?
+
+  // NEW_TRANSACTION only (v1.17) - the one kind that isn't a threshold
+  // crossing, so it can't reuse balanceLastAbove's edge-trigger dedup.
+  // accountId above is reused as the scope (null = every account, same
+  // "null is valid input" precedent as UNREALIZED_GAIN's aggregate mode);
+  // balanceThresholdCents above is reused as a minimum absolute amount to
+  // alert on (null = no minimum), not a crossing value.
+  transactionDirection TransactionAlertDirection?
+  // The cursor: transactions with createdAt after this are "new" and
+  // eligible to fire. null means never evaluated - the rule's first-ever
+  // check sets this to the latest already-matching transaction's createdAt
+  // without firing (same never-fire-on-first-check convention as
+  // netWorthAlertLastAbove), so creating the rule doesn't dump an account's
+  // entire history into one notification. Deliberately NOT reset when
+  // balanceThresholdCents/transactionDirection are edited later, unlike a
+  // crossing threshold's own dedup flag - this cursor means "already told
+  // the user about this transaction," which stays true regardless of a
+  // later filter change.
+  lastNotifiedTransactionAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -13,10 +13,12 @@ import {
   evaluatePercentAlert,
   holdingMarketValueCents,
   computeHoldingDriftPts,
+  evaluateNewTransactionAlert,
 } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
 import { probeYahooSectorHealth } from "@/lib/services/yahoo-finance";
 import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
+import { amountMagnitudeRanges, type AmountRange } from "@/lib/domain/transactions-ledger";
 
 /**
  * Called by sync/main.py at the end of every automatic 4h sync run (not on
@@ -581,6 +583,80 @@ async function checkBudgetOverrunRule(
   return null;
 }
 
+// NEW_TRANSACTION's own amount filter, kept out of checkNewTransactionRule
+// below since it's the one place a single Prisma key (amountCents) is built
+// from two independent rule fields (transactionDirection + the reused
+// balanceThresholdCents-as-minimum) - computing it in one place avoids the
+// two fields ever accidentally producing two separate amountCents objects
+// that would silently overwrite each other on spread.
+function buildNewTransactionAmountFilter(
+  direction: "DEBIT" | "CREDIT" | null,
+  minimumCents: bigint | null
+): { amountCents?: { lt: bigint } | { gt: bigint } | { lte: bigint } | { gte: bigint }; OR?: { amountCents: AmountRange }[] } {
+  if (direction === "DEBIT") {
+    return { amountCents: minimumCents !== null ? { lte: -minimumCents } : { lt: BigInt(0) } };
+  }
+  if (direction === "CREDIT") {
+    return { amountCents: minimumCents !== null ? { gte: minimumCents } : { gt: BigInt(0) } };
+  }
+  if (minimumCents !== null) {
+    const ranges = amountMagnitudeRanges(minimumCents, null)?.map((range) => ({ amountCents: range }));
+    return ranges ? { OR: ranges } : {};
+  }
+  return {};
+}
+
+const MAX_NEW_TRANSACTION_DIGEST = 20;
+
+// NEW_TRANSACTION doesn't fit the threshold-crossing shape every kind above
+// does - "a new transaction exists" isn't a value crossing a line, so it
+// can't reuse balanceLastAbove's edge-trigger dedup. Uses its own cursor
+// instead (AlertRule.lastNotifiedTransactionAt - see schema.prisma for the
+// full reasoning). accountId reused as scope (null = every account, same
+// "null is valid input" precedent as UNREALIZED_GAIN); balanceThresholdCents
+// reused as a minimum absolute amount, not a crossing value. Internal
+// transfers are unconditionally excluded, same as every other transaction
+// query in this app - not a rule option.
+async function checkNewTransactionRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+  const where = excludeInternalTransfers({
+    ...(rule.accountId ? { accountId: rule.accountId } : {}),
+    ...buildNewTransactionAmountFilter(rule.transactionDirection, rule.balanceThresholdCents),
+  });
+
+  // First-ever check: establish the cursor baseline without notifying, so
+  // creating the rule against a long-synced account doesn't dump its entire
+  // transaction history into one alert - same never-fire-on-first-check
+  // convention as netWorthAlertLastAbove/balanceLastAbove.
+  if (rule.lastNotifiedTransactionAt === null) {
+    const latest = await prisma.transaction.findFirst({ where, orderBy: { createdAt: "desc" } });
+    await prisma.alertRule.update({
+      where: { id: rule.id },
+      data: { lastNotifiedTransactionAt: latest?.createdAt ?? new Date() },
+    });
+    return null;
+  }
+
+  const newTransactions = await prisma.transaction.findMany({
+    where: { ...where, createdAt: { gt: rule.lastNotifiedTransactionAt } },
+    orderBy: { createdAt: "asc" },
+    take: MAX_NEW_TRANSACTION_DIGEST,
+  });
+  if (newTransactions.length === 0) return null;
+
+  const { title, body } = evaluateNewTransactionAlert(newTransactions);
+  await dispatchAlert(settings, title, rule.message ? `${body}\n\n${rule.message}` : body);
+  // Deliberately NOT resetting on a later threshold/direction edit, unlike
+  // every threshold-crossing kind's own dedup flag - this cursor means
+  // "already told the user about this transaction," which stays true
+  // regardless of a later filter change.
+  await prisma.alertRule.update({
+    where: { id: rule.id },
+    data: { lastNotifiedTransactionAt: newTransactions.at(-1)!.createdAt },
+  });
+
+  return `new_transaction_rule:${rule.id}`;
+}
+
 // One dispatch function per rule, kept separate from checkCustomAlertRules
 // below to stay under the sonarjs cognitive-complexity gate (see CLAUDE.md's
 // pre-commit pipeline notes) - a single combined switch inlined into the
@@ -605,6 +681,8 @@ function dispatchAlertRuleCheck(
       return checkUnrealizedGainRule(rule, settings);
     case "BUDGET_OVERRUN":
       return checkBudgetOverrunRule(rule, settings, period, monthRange);
+    case "NEW_TRANSACTION":
+      return checkNewTransactionRule(rule, settings);
     default:
       return Promise.resolve(null);
   }

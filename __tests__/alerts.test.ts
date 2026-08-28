@@ -9,6 +9,7 @@ import {
   computeUnrealizedGain,
   evaluatePercentAlert,
   computeHoldingDriftPts,
+  evaluateNewTransactionAlert,
 } from "@/lib/domain/alerts";
 
 describe("evaluateNetWorthAlert", () => {
@@ -231,5 +232,48 @@ describe("computeHoldingDriftPts", () => {
   it("returns null when the account's total holdings value is 0", () => {
     const zeroValue = { quantity: new Decimal(0), lastPriceCents: BigInt(100_00), targetPct: 0.5 };
     expect(computeHoldingDriftPts(zeroValue, [zeroValue])).toBeNull();
+  });
+});
+
+describe("evaluateNewTransactionAlert", () => {
+  it("formats a single transaction as one line, sign-prefixed for credits", () => {
+    expect(evaluateNewTransactionAlert([{ label: "Carrefour", amountCents: BigInt(-4599) }])).toEqual({
+      title: "Nouvelle transaction",
+      body: "Carrefour · -45,99 €",
+    });
+    // fr-FR's thousands separator is U+202F (narrow no-break space), not a
+    // plain space - built via the same toLocaleString call the code itself
+    // uses, rather than a hardcoded literal that looks identical but isn't.
+    const twoThousandFiveHundred = (2500).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    expect(evaluateNewTransactionAlert([{ label: "Salaire", amountCents: BigInt(250000) }])).toEqual({
+      title: "Nouvelle transaction",
+      body: `Salaire · +${twoThousandFiveHundred} €`,
+    });
+  });
+
+  it("lists every transaction when at or under the digest cap", () => {
+    const transactions = [
+      { label: "A", amountCents: BigInt(-100) },
+      { label: "B", amountCents: BigInt(-200) },
+      { label: "C", amountCents: BigInt(300) },
+    ];
+    const result = evaluateNewTransactionAlert(transactions);
+    expect(result.title).toBe("3 nouvelles transactions");
+    expect(result.body).toBe("A · -1,00 €\nB · -2,00 €\nC · +3,00 €");
+  });
+
+  it("caps the digest at 5 lines and appends a count of the rest", () => {
+    const transactions = Array.from({ length: 8 }, (_, i) => ({ label: `T${i}`, amountCents: BigInt(-100 * (i + 1)) }));
+    const result = evaluateNewTransactionAlert(transactions);
+    expect(result.title).toBe("8 nouvelles transactions");
+    const lines = result.body.split("\n");
+    expect(lines).toHaveLength(6); // 5 shown + 1 "+N autre(s)" line
+    expect(lines[5]).toBe("+ 3 autre(s)");
+  });
+
+  it("returns an empty-title-safe shape for an empty list (caller never dispatches on this)", () => {
+    const result = evaluateNewTransactionAlert([]);
+    expect(result.title).toBe("0 nouvelles transactions");
+    expect(result.body).toBe("");
   });
 });

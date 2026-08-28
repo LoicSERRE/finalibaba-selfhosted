@@ -150,3 +150,40 @@ export function computeHoldingDriftPts(
   const targetPctInt = Math.round(holding.targetPct * 100);
   return pct - targetPctInt;
 }
+
+// NEW_TRANSACTION doesn't fit the threshold-crossing shape every other kind
+// above does - "a new transaction exists" isn't a value crossing a line, so
+// there's no isAbove/wasAbove pair here. The caller (checkNewTransactionRule
+// in app/api/alerts/check/route.ts) already did the DB work of finding which
+// transactions are new (createdAt after the rule's own cursor) and matching
+// the rule's own account/threshold/direction filters - this function is pure
+// text formatting only, same "no I/O" bar as every other evaluator in this
+// file, just producing a title/body pair instead of a boolean.
+const MAX_TRANSACTIONS_IN_DIGEST = 5;
+
+export function evaluateNewTransactionAlert(
+  transactions: { label: string; amountCents: bigint }[]
+): { title: string; body: string } {
+  if (transactions.length === 1) {
+    const t = transactions[0];
+    const amount = (Number(t.amountCents) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return {
+      title: "Nouvelle transaction",
+      body: `${t.label} · ${t.amountCents >= BigInt(0) ? "+" : ""}${amount} €`,
+    };
+  }
+
+  const shown = transactions.slice(0, MAX_TRANSACTIONS_IN_DIGEST);
+  const lines = shown.map((t) => {
+    const amount = (Number(t.amountCents) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${t.label} · ${t.amountCents >= BigInt(0) ? "+" : ""}${amount} €`;
+  });
+  if (transactions.length > MAX_TRANSACTIONS_IN_DIGEST) {
+    lines.push(`+ ${transactions.length - MAX_TRANSACTIONS_IN_DIGEST} autre(s)`);
+  }
+
+  return {
+    title: `${transactions.length} nouvelles transactions`,
+    body: lines.join("\n"),
+  };
+}

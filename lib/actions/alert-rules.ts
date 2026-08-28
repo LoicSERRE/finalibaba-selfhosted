@@ -109,7 +109,31 @@ function buildCreateData(formData: FormData) {
     if (!holdingId || !pctRaw) throw new Error("Position et seuil requis.");
     return { kind: "REBALANCING_DRIFT" as const, holdingId, gainThresholdPct: Number.parseFloat(pctRaw), message };
   }
+  if (kind === "NEW_TRANSACTION") {
+    return buildNewTransactionData(formData, message);
+  }
   throw new Error("Invalid rule kind.");
+}
+
+// NEW_TRANSACTION: every field is optional, unlike every other kind -
+// "notify me on any new transaction anywhere" is a legitimate configuration
+// on its own, not a malformed one. accountId empty = every account (same
+// "null is valid input" precedent as UNREALIZED_GAIN); balanceThreshold
+// empty = no minimum amount; transactionDirection empty = both debits and
+// credits.
+function buildNewTransactionData(formData: FormData, message: string | null) {
+  const accountId = (formData.get("accountId") as string) || "";
+  const thresholdRaw = (formData.get("balanceThreshold") as string) || "";
+  const direction = (formData.get("transactionDirection") as string) || "";
+  const transactionDirection: "DEBIT" | "CREDIT" | null =
+    direction === "DEBIT" || direction === "CREDIT" ? direction : null;
+  return {
+    kind: "NEW_TRANSACTION" as const,
+    accountId: accountId || null,
+    balanceThresholdCents: thresholdRaw ? parseCents(thresholdRaw) : null,
+    transactionDirection,
+    message,
+  };
 }
 
 // Server Actions are directly invocable regardless of what the UI picker
@@ -137,9 +161,10 @@ export async function createAlertRule(formData: FormData) {
 
 type UpdateData = {
   message: string | null;
-  balanceThresholdCents?: bigint;
+  balanceThresholdCents?: bigint | null;
   gainThresholdPct?: number;
   balanceLastAbove?: null;
+  transactionDirection?: "DEBIT" | "CREDIT" | null;
 };
 
 // Changing a threshold invalidates the old crossing baseline - without
@@ -170,6 +195,21 @@ function applyGainThresholdPctUpdate(data: UpdateData, pctRaw: string, currentPc
   }
 }
 
+// NEW_TRANSACTION only - unlike every other kind's threshold, both fields
+// here are genuinely optional filters, so a blank submission means "clear
+// it," not "leave unchanged" (the other kinds' thresholds are required at
+// creation, so blank there can only mean "user didn't retype it"). Always
+// sets both from the form, never conditionally. Deliberately does NOT touch
+// lastNotifiedTransactionAt - see schema.prisma's AlertRule comment for why
+// this cursor must survive a filter edit unlike every other kind's own
+// dedup flag.
+function applyNewTransactionUpdate(data: UpdateData, formData: FormData) {
+  const thresholdRaw = (formData.get("balanceThreshold") as string) || "";
+  const direction = (formData.get("transactionDirection") as string) || "";
+  data.balanceThresholdCents = thresholdRaw ? parseCents(thresholdRaw) : null;
+  data.transactionDirection = direction === "DEBIT" || direction === "CREDIT" ? direction : null;
+}
+
 // Only message and each kind's own threshold are editable after creation -
 // kind/account/holding/category/gainUnit are fixed at creation time, same
 // "immutable, delete and recreate instead" simplification ShareLink applies
@@ -191,6 +231,8 @@ export async function updateAlertRule(id: string, formData: FormData) {
     applyGainThresholdPctUpdate(data, (formData.get("gainThresholdPct") as string) || "", current.gainThresholdPct);
   } else if (current.kind === "UNREALIZED_GAIN") {
     applyThresholdCentsUpdate(data, (formData.get("balanceThreshold") as string) || "", current.balanceThresholdCents);
+  } else if (current.kind === "NEW_TRANSACTION") {
+    applyNewTransactionUpdate(data, formData);
   }
 
   await prisma.alertRule.update({ where: { id }, data });
