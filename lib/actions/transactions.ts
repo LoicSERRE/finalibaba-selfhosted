@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertTransactionsWritable, assertOwned } from "@/lib/auth-context";
 import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
@@ -10,6 +11,9 @@ import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/d
 type ImportRow = { date: string; label: string; amountCents: number };
 
 export async function importTransactions(accountId: string, rows: ImportRow[]) {
+  // assertCsvImportEligible below now also checks ownership, but the guard
+  // is repeated here so this entry point can't be re-wired later to a
+  // different eligibility check and silently lose it.
   if (rows.length === 0) return { imported: 0 };
   await assertCsvImportEligible(accountId);
 
@@ -45,6 +49,13 @@ export async function setTransactionCategory(
   transactionId: string,
   categoryId: string | null
 ): Promise<{ siblingCount: number }> {
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, [transactionId]);
+  // The category has to be the viewer's own too - otherwise a transaction
+  // could be filed under someone else's category, which would then count
+  // toward that person's budget.
+  if (categoryId) await assertOwned("category", categoryId, viewer.id);
+
   const before = await prisma.transaction.findUnique({
     where: { id: transactionId },
     select: { categoryId: true, label: true },
@@ -124,6 +135,10 @@ export async function applyCategoryToSimilarTransactions(
   transactionId: string,
   categoryId: string | null
 ): Promise<{ updated: number }> {
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, [transactionId]);
+  if (categoryId) await assertOwned("category", categoryId, viewer.id);
+
   const source = await prisma.transaction.findUnique({
     where: { id: transactionId },
     select: { accountId: true, label: true },
@@ -166,6 +181,14 @@ export async function applyCategoryToSimilarTransactions(
 // label" is needed here.
 export async function bulkAssignCategory(transactionIds: string[], categoryId: string | null) {
   if (transactionIds.length === 0) return { updated: 0 };
+
+  // Every id in the batch must resolve inside the viewer's own accounts -
+  // this is the one action taking an arbitrary caller-supplied id array, so
+  // a single forged id riding along with legitimate ones is exactly the
+  // shape to guard against.
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, transactionIds);
+  if (categoryId) await assertOwned("category", categoryId, viewer.id);
 
   const accountIds = await prisma.transaction.findMany({
     where: { id: { in: transactionIds } },

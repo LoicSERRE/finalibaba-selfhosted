@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import Link from "next/link";
 import { AddAccountDialog } from "@/components/accounts/add-account-dialog";
@@ -50,10 +51,15 @@ export default async function AccountsPage({
   const { tab: rawTab = "liquidites" } = await searchParams;
   const tab = (TABS.some((tb) => tb.id === rawTab) ? rawTab : "liquidites") as AccountsTabId;
 
+  // Scoped to the viewer's visible accounts (own + co-owned); institutions
+  // to the ones they own. Mono mode resolves to the owner, i.e. everything.
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+
   const [fiatAccounts, investAccounts, realEstateAccounts, automobileAccounts, loanAccounts, institutions] =
     await Promise.all([
       prisma.account.findMany({
-        where: { type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
+        where: { id: { in: accountIds }, type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
         include: {
           institution: true,
           history: { orderBy: { recordedAt: "desc" }, take: 14 },
@@ -61,7 +67,7 @@ export default async function AccountsPage({
         orderBy: [{ institution: { name: "asc" } }, { name: "asc" }],
       }),
       prisma.account.findMany({
-        where: { type: { in: ["INVESTMENT", "CRYPTO"] } },
+        where: { id: { in: accountIds }, type: { in: ["INVESTMENT", "CRYPTO"] } },
         include: {
           institution: true,
           holdings: { orderBy: { ticker: "asc" } },
@@ -69,21 +75,21 @@ export default async function AccountsPage({
         orderBy: [{ type: "asc" }, { name: "asc" }],
       }),
       prisma.account.findMany({
-        where: { type: "REAL_ESTATE" },
+        where: { id: { in: accountIds }, type: "REAL_ESTATE" },
         include: { institution: true },
         orderBy: { name: "asc" },
       }),
       prisma.account.findMany({
-        where: { type: "AUTOMOBILE" },
+        where: { id: { in: accountIds }, type: "AUTOMOBILE" },
         include: { institution: true },
         orderBy: { name: "asc" },
       }),
       prisma.account.findMany({
-        where: { type: "LOAN" },
+        where: { id: { in: accountIds }, type: "LOAN" },
         include: { institution: true },
         orderBy: { name: "asc" },
       }),
-      prisma.institution.findMany({ orderBy: { name: "asc" } }),
+      prisma.institution.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" } }),
     ]);
 
   const now = new Date();

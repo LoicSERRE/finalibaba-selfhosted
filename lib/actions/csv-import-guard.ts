@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 
 const FIAT_TYPES = new Set(["CHECKING", "SAVINGS", "MEAL_VOUCHER"]);
 
@@ -7,6 +8,12 @@ const FIAT_TYPES = new Set(["CHECKING", "SAVINGS", "MEAL_VOUCHER"]);
 // reachable directly regardless of what's on screen, so the same rule must
 // be enforced here too before writing anything.
 export async function assertCsvImportEligible(accountId: string): Promise<void> {
+  // Ownership first: this guard already argued that a Server Action is
+  // reachable regardless of the UI, and that reasoning applies just as much
+  // to *whose* account it is as to whether the type is eligible.
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
+
   const account = await prisma.account.findUnique({
     where: { id: accountId },
     select: { type: true, syncId: true, gocardlessAccountId: true },

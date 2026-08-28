@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { TransactionCategoryCell } from "@/components/shared/transaction-category-cell";
@@ -71,15 +72,21 @@ export default async function TransactionsPage({
   ]);
   const intlLocale = localeToIntl(locale);
 
-  const where = buildTransactionWhere(filters);
+  // The account-set filter wraps the user-supplied filters rather than being
+  // spread into them: buildTransactionWhere already owns the top-level AND
+  // (see its comment), and a filter the visitor controls must never be able
+  // to widen the scope back out.
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+  const where = { AND: [buildTransactionWhere(filters), { accountId: { in: accountIds } }] };
 
   const [accounts, categories, totalCount, transactions] = await Promise.all([
     prisma.account.findMany({
-      where: { transactions: { some: {} } },
+      where: { id: { in: accountIds }, transactions: { some: {} } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
+    prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,

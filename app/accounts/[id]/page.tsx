@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -38,9 +39,16 @@ export default async function AccountDetailPage({
   ]);
   const intlLocale = localeToIntl(locale);
 
+  // findFirst with an id-set filter, not findUnique by id: this page used to
+  // render ANY account id handed to it. Resolving through the viewer's own
+  // visible set means someone else's account 404s exactly like a nonexistent
+  // one, leaking nothing about whether it exists.
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+
   const [account, categories] = await Promise.all([
-    prisma.account.findUnique({
-      where: { id },
+    prisma.account.findFirst({
+      where: { id, AND: { id: { in: accountIds } } },
       include: {
         institution: true,
         history: { orderBy: { recordedAt: "desc" }, take: 120 },
@@ -52,7 +60,7 @@ export default async function AccountDetailPage({
         },
       },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
+    prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
   ]);
 
   if (!account) notFound();

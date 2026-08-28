@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
 import {
@@ -43,27 +44,31 @@ export default async function AnalyticsPage() {
   const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
   const startOfNextYear = new Date(Date.UTC(currentYear + 1, 0, 1));
 
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+
   const [accounts, allBalances, settings, goals, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History] = await Promise.all([
     prisma.account.findMany({
+      where: { id: { in: accountIds } },
       include: {
         institution: true,
         holdings: true,
         history: { orderBy: { recordedAt: "desc" }, take: 1 },
       },
     }),
-    prisma.historicalBalance.findMany({ orderBy: { recordedAt: "asc" } }),
-    prisma.userSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} }),
+    prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
+    prisma.userSettings.upsert({ where: { userId: viewer.id }, create: { userId: viewer.id }, update: {} }),
     // v1.14 - N independent goals (replaces the old single global
     // UserSettings.savingsGoalCents figure). No include needed -
     // computeAnalytics resolves each goal's linked account name/value
     // itself from the already-fetched `accounts` above.
-    prisma.goal.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.goal.findMany({ where: { userId: viewer.id }, orderBy: { createdAt: "asc" } }),
     // Fetch Yahoo Finance in parallel - ex-div dates + real yields (1h cache)
     fetchYFDividends(Object.values(ISIN_TO_YF_SYMBOL)),
     // Real tracked income (IncomeEvent) - separate from the estimate below,
     // which still feeds the dividend calendar further down this page.
     prisma.incomeEvent.findMany({
-      where: { date: { gte: startOfYear, lt: startOfNextYear } },
+      where: { accountId: { in: accountIds }, date: { gte: startOfYear, lt: startOfNextYear } },
       select: { type: true, amountCents: true, taxWithheldCents: true },
     }),
     // Benchmark comparison - historical closes for the 3 reference indices (1h cache)

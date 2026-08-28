@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 import { fetchExchangeRateToEur } from "@/lib/services/exchange-rate";
 import { HoldingCurrency } from "@/app/generated/prisma/enums";
@@ -24,6 +25,8 @@ function applyFxRate(nativeCents: bigint, fxRateToEur: number): bigint {
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export async function upsertHolding(formData: FormData) {
   const accountId = formData.get("accountId") as string;
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
   const ticker = (formData.get("ticker") as string).trim().toUpperCase();
   const name = (formData.get("name") as string).trim();
   const quantity = new Decimal(formData.get("quantity") as string);
@@ -111,7 +114,12 @@ export async function upsertHolding(formData: FormData) {
 }
 
 export async function deleteHolding(id: string, accountId: string) {
-  await prisma.holding.delete({ where: { id } });
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
+  // deleteMany scoped to the account, not delete-by-id: without it a valid
+  // accountId of one's own would authorize deleting any holding id at all.
+  const { count } = await prisma.holding.deleteMany({ where: { id, accountId } });
+  if (count === 0) throw new Error("Position introuvable.");
   await refreshAccountBalance(accountId);
   revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/accounts");
@@ -130,6 +138,8 @@ export async function deleteHolding(id: string, accountId: string) {
 export async function refreshHoldingExchangeRate(holdingId: string) {
   const holding = await prisma.holding.findUnique({ where: { id: holdingId } });
   if (!holding) throw new Error("Position introuvable.");
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, holding.accountId);
   if (holding.currency === "EUR" || holding.nativePriceCents === null) {
     throw new Error("Cette position n'est pas dans une devise étrangère.");
   }
@@ -157,6 +167,16 @@ export async function refreshHoldingExchangeRate(holdingId: string) {
   revalidatePath("/");
 }
 
+// Internal helper, deliberately NOT ownership-guarded: it's also called
+// server-to-server by app/api/investments/snapshot-balances (the 4h cron),
+// which has no session to resolve a viewer from. Safe to leave open - every
+// caller that acts on user input guards first (upsertHolding, deleteHolding,
+// recordSale), and this function is a pure recompute: it derives an
+// account's balance from that account's own holdings and writes nothing the
+// caller controls, so invoking it against another account can neither
+// disclose nor corrupt anything. Flagged for the security-audit phase all
+// the same, since being exported from a "use server" module makes it
+// directly invocable.
 export async function refreshAccountBalance(accountId: string) {
   const holdings = await prisma.holding.findMany({ where: { accountId } });
   const totalCents = holdings.reduce((sum, h) => {

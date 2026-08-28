@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertOwned } from "@/lib/auth-context";
 import { generateShareToken } from "@/lib/domain/share-links";
 
 export async function getShareLinks() {
-  return prisma.shareLink.findMany({ orderBy: { createdAt: "desc" } });
+  const viewer = await getViewer();
+  return prisma.shareLink.findMany({ where: { userId: viewer.id }, orderBy: { createdAt: "desc" } });
 }
 
 // expiresInDays is resolved to a concrete Date here, at creation time - not
@@ -24,8 +26,10 @@ export async function createShareLink(
 ) {
   const expiresAt = expiresInDays !== null ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000) : null;
 
+  const viewer = await getViewer();
   await prisma.shareLink.create({
-    data: { token: generateShareToken(), label: label?.trim() || null, expiresAt, includeHoldings, includeTransactions },
+    data: {
+      userId: viewer.id, token: generateShareToken(), label: label?.trim() || null, expiresAt, includeHoldings, includeTransactions },
   });
 
   revalidatePath("/settings");
@@ -34,6 +38,8 @@ export async function createShareLink(
 // Hard delete - no soft-delete/history value for a revoked share link, unlike
 // e.g. Sale's record-only deletion (lib/actions/sales.ts).
 export async function revokeShareLink(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("shareLink", id, viewer.id);
   await prisma.shareLink.delete({ where: { id } });
   revalidatePath("/settings");
 }

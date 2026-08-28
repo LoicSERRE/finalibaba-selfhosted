@@ -867,7 +867,10 @@
       "emptyDescription": "Ajoute un objectif pour suivre sa progression sur la page Analytique.",
       "delete": "Supprimer",
       "deleteDescription": "Cet objectif sera définitivement supprimé."
-    }
+    },
+    "gcConnected": "Connexion bancaire établie. Les comptes ont été importés.",
+    "gcError": "La connexion bancaire a échoué. Réessaie depuis l'institution concernée.",
+    "gcAlreadyConnected": "Ce compte bancaire est déjà connecté par un autre utilisateur de cette instance. Demande-lui de te le partager en copropriété plutôt que de le reconnecter."
   },
   "shared": {
     "readOnlyBanner": "Vue en lecture seule partagée par le propriétaire — aucune modification possible.",

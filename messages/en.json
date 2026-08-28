@@ -867,7 +867,10 @@
       "emptyDescription": "Add a goal to track its progress on the Analytics page.",
       "delete": "Delete",
       "deleteDescription": "This goal will be permanently deleted."
-    }
+    },
+    "gcConnected": "Bank connection established. Accounts have been imported.",
+    "gcError": "The bank connection failed. Try again from the institution concerned.",
+    "gcAlreadyConnected": "This bank account is already connected by another user on this instance. Ask them to share it with you as a co-owner instead of reconnecting it."
   },
   "shared": {
     "readOnlyBanner": "Read-only view shared by the owner — no changes possible.",

@@ -34,6 +34,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Deliberately instance-wide, unlike the other two cron routes (alerts and
+  // auto-categorization both loop per user). This one writes nothing that
+  // belongs to anyone: it recomputes each investment account's balance from
+  // that account's OWN holdings and records the result. There is no per-user
+  // config to read, no notification to address to somebody, and no way for
+  // one user's pass to produce a different number than another's - so a
+  // per-user loop would be the same work split into more queries.
   const accounts = await prisma.account.findMany({
     where: { type: { in: ["INVESTMENT", "CRYPTO"] } },
     select: { id: true },

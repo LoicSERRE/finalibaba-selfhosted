@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { baseAccountIds } from "@/lib/auth-context";
 import type { UserSettingsModel } from "@/app/generated/prisma/models";
 import { localeToIntl } from "@/lib/utils/format";
 import { computeDashboard } from "@/lib/domain/dashboard";
@@ -35,11 +36,12 @@ function isAuthorized(req: NextRequest): boolean {
   return !!expected && auth === `Bearer ${expected}`;
 }
 
-async function checkNetWorthAlert(settings: UserSettingsModel): Promise<boolean> {
+async function checkNetWorthAlert(settings: UserSettingsModel, accountIds: string[]): Promise<boolean> {
   if (settings.netWorthAlertThresholdCents === null) return false;
 
   const [accounts, allBalances] = await Promise.all([
     prisma.account.findMany({
+      where: { id: { in: accountIds } },
       include: {
         institution: true,
         holdings: true,
@@ -47,7 +49,7 @@ async function checkNetWorthAlert(settings: UserSettingsModel): Promise<boolean>
       },
       orderBy: { name: "asc" },
     }),
-    prisma.historicalBalance.findMany({ orderBy: { recordedAt: "asc" } }),
+    prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
   ]);
   const { netWorth } = computeDashboard({
     accounts,
@@ -74,7 +76,7 @@ async function checkNetWorthAlert(settings: UserSettingsModel): Promise<boolean>
 
   if (isAbove !== settings.netWorthAlertLastAbove) {
     await prisma.userSettings.update({
-      where: { id: "singleton" },
+      where: { userId: settings.userId },
       data: { netWorthAlertLastAbove: isAbove },
     });
   }
@@ -82,12 +84,12 @@ async function checkNetWorthAlert(settings: UserSettingsModel): Promise<boolean>
   return shouldFire;
 }
 
-async function checkLoanAlerts(settings: UserSettingsModel): Promise<string[]> {
+async function checkLoanAlerts(settings: UserSettingsModel, accountIds: string[]): Promise<string[]> {
   if (!settings.loanAlertsEnabled) return [];
 
   const fired: string[] = [];
   const loanAccounts = await prisma.account.findMany({
-    where: { type: "LOAN", loanPaidOffAlertSent: false },
+    where: { id: { in: accountIds }, type: "LOAN", loanPaidOffAlertSent: false },
   });
 
   for (const account of loanAccounts) {
@@ -336,9 +338,9 @@ async function checkSectorDataHealth(settings: UserSettingsModel): Promise<strin
 
 type CustomAlertRule = Awaited<ReturnType<typeof findActiveAlertRules>>[number];
 
-function findActiveAlertRules() {
+function findActiveAlertRules(userId: string) {
   return prisma.alertRule.findMany({
-    where: { active: true },
+    where: { userId, active: true },
     include: {
       account: {
         include: {
@@ -537,12 +539,21 @@ async function checkUnrealizedGainAmount(
 // the same "compute gain, evaluate, dispatch, dedup" shape but over a
 // different unit, so folding them into one function double-counts that
 // shape's branching twice over.
-async function checkUnrealizedGainRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+async function checkUnrealizedGainRule(
+  rule: CustomAlertRule,
+  settings: UserSettingsModel,
+  accountIds: string[],
+): Promise<string | null> {
   if (rule.gainUnit === null) return null;
 
+  // accountId null on this kind alone means "aggregate across my whole
+  // portfolio" (not a malformed row) - which is the runner's own base
+  // account set, never every INVESTMENT/CRYPTO holding in the instance.
   const holdings = rule.account
     ? rule.account.holdings
-    : await prisma.holding.findMany({ where: { account: { type: { in: ["INVESTMENT", "CRYPTO"] } } } });
+    : await prisma.holding.findMany({
+        where: { accountId: { in: accountIds }, account: { type: { in: ["INVESTMENT", "CRYPTO"] } } },
+      });
   const { gainCents, gainPct } = computeUnrealizedGain(holdings);
   const scopeLabel = rule.account ? `du compte "${rule.account.name}"` : "de l'ensemble du portefeuille";
 
@@ -559,7 +570,8 @@ async function checkBudgetOverrunRule(
   rule: CustomAlertRule,
   settings: UserSettingsModel,
   period: string,
-  monthRange: { start: Date; end: Date }
+  monthRange: { start: Date; end: Date },
+  accountIds: string[],
 ): Promise<string | null> {
   if (rule.category?.budgetCents == null) return null;
 
@@ -576,6 +588,7 @@ async function checkBudgetOverrunRule(
   const [spend, splitSpend] = await Promise.all([
     prisma.transaction.aggregate({
       where: excludeInternalTransfers({
+        accountId: { in: accountIds },
         categoryId: rule.category.id,
         amountCents: { lt: BigInt(0) },
         date: { gte: monthRange.start, lt: monthRange.end },
@@ -585,7 +598,7 @@ async function checkBudgetOverrunRule(
     prisma.transactionSplit.aggregate({
       where: excludeInternalTransfersOnSplit(
         { categoryId: rule.category.id, amountCents: { lt: BigInt(0) } },
-        { date: { gte: monthRange.start, lt: monthRange.end } },
+        { accountId: { in: accountIds }, date: { gte: monthRange.start, lt: monthRange.end } },
       ),
       _sum: { amountCents: true },
     }),
@@ -636,9 +649,15 @@ const MAX_NEW_TRANSACTION_DIGEST = 20;
 // reused as a minimum absolute amount, not a crossing value. Internal
 // transfers are unconditionally excluded, same as every other transaction
 // query in this app - not a rule option.
-async function checkNewTransactionRule(rule: CustomAlertRule, settings: UserSettingsModel): Promise<string | null> {
+async function checkNewTransactionRule(
+  rule: CustomAlertRule,
+  settings: UserSettingsModel,
+  accountIds: string[],
+): Promise<string | null> {
   const where = excludeInternalTransfers({
-    ...(rule.accountId ? { accountId: rule.accountId } : {}),
+    // A rule with no accountId watches every account the user has - their
+    // own base set, not the instance's.
+    accountId: rule.accountId ? rule.accountId : { in: accountIds },
     ...buildNewTransactionAmountFilter(rule.transactionDirection, rule.balanceThresholdCents),
   });
 
@@ -684,7 +703,8 @@ function dispatchAlertRuleCheck(
   rule: CustomAlertRule,
   settings: UserSettingsModel,
   period: string,
-  monthRange: { start: Date; end: Date }
+  monthRange: { start: Date; end: Date },
+  accountIds: string[],
 ): Promise<string | null> {
   switch (rule.kind) {
     case "ACCOUNT_BALANCE":
@@ -697,11 +717,11 @@ function dispatchAlertRuleCheck(
     case "REBALANCING_DRIFT":
       return checkRebalancingDriftRule(rule, settings);
     case "UNREALIZED_GAIN":
-      return checkUnrealizedGainRule(rule, settings);
+      return checkUnrealizedGainRule(rule, settings, accountIds);
     case "BUDGET_OVERRUN":
-      return checkBudgetOverrunRule(rule, settings, period, monthRange);
+      return checkBudgetOverrunRule(rule, settings, period, monthRange, accountIds);
     case "NEW_TRANSACTION":
-      return checkNewTransactionRule(rule, settings);
+      return checkNewTransactionRule(rule, settings, accountIds);
     default:
       return Promise.resolve(null);
   }
@@ -713,8 +733,8 @@ function dispatchAlertRuleCheck(
  * CLAUDE.md's "Alerts & webhooks" and AlertRule in schema.prisma. Dispatches
  * each rule to its own per-kind checker via dispatchAlertRuleCheck above.
  */
-async function checkCustomAlertRules(settings: UserSettingsModel): Promise<string[]> {
-  const rules = await findActiveAlertRules();
+async function checkCustomAlertRules(settings: UserSettingsModel, accountIds: string[]): Promise<string[]> {
+  const rules = await findActiveAlertRules(settings.userId);
   if (rules.length === 0) return [];
 
   const now = new Date();
@@ -724,7 +744,9 @@ async function checkCustomAlertRules(settings: UserSettingsModel): Promise<strin
     end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
   };
 
-  const results = await Promise.all(rules.map((rule) => dispatchAlertRuleCheck(rule, settings, period, monthRange)));
+  const results = await Promise.all(
+    rules.map((rule) => dispatchAlertRuleCheck(rule, settings, period, monthRange, accountIds))
+  );
 
   return results.filter((id): id is string => id !== null);
 }
@@ -734,25 +756,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const settings = await prisma.userSettings.upsert({
-    where: { id: "singleton" },
-    create: {},
-    update: {},
-  });
+  // One evaluation pass per user (v2.0). Everything this route reads is
+  // per-user now - the thresholds and channel config on UserSettings, the
+  // AlertRule rows, the (userId, source) sync-failure dedup state - and
+  // every figure it computes has to come from that user's own accounts, or
+  // an alert would quote a net worth its recipient can't see anywhere in
+  // their own app. In mono mode this loops exactly once, over the owner.
+  //
+  // baseAccountIds (own + co-owned), never viewAccountIds: a portfolio
+  // merely granted to someone for reading must not start generating alerts
+  // in their name, and must stop being visible the moment it's revoked -
+  // which a notification already sent never could.
+  const users = await prisma.user.findMany({ select: { id: true } });
+  const fired: string[] = [];
 
-  const netWorthFired = await checkNetWorthAlert(settings);
-  const loansFired = await checkLoanAlerts(settings);
-  const syncFailuresFired = await checkSyncFailures(settings);
-  const sectorDataFired = await checkSectorDataHealth(settings);
-  const customRulesFired = await checkCustomAlertRules(settings);
+  for (const user of users) {
+    const [settings, accountIds] = await Promise.all([
+      prisma.userSettings.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id },
+        update: {},
+      }),
+      baseAccountIds(user.id),
+    ]);
 
-  const fired = [
-    ...(netWorthFired ? ["net_worth_threshold"] : []),
-    ...loansFired.map((id) => `loan_nearly_paid_off:${id}`),
-    ...syncFailuresFired.map((source) => `sync_failure:${source}`),
-    ...sectorDataFired.map((source) => `sync_failure:${source}`),
-    ...customRulesFired,
-  ];
+    const netWorthFired = await checkNetWorthAlert(settings, accountIds);
+    const loansFired = await checkLoanAlerts(settings, accountIds);
+    const syncFailuresFired = await checkSyncFailures(settings);
+    const sectorDataFired = await checkSectorDataHealth(settings);
+    const customRulesFired = await checkCustomAlertRules(settings, accountIds);
+
+    fired.push(
+      ...(netWorthFired ? ["net_worth_threshold"] : []),
+      ...loansFired.map((id) => `loan_nearly_paid_off:${id}`),
+      ...syncFailuresFired.map((source) => `sync_failure:${source}`),
+      ...sectorDataFired.map((source) => `sync_failure:${source}`),
+      ...customRulesFired,
+    );
+  }
 
   return NextResponse.json({ ok: true, fired });
 }

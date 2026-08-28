@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertTransactionsWritable, assertOwned } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 import { validateSplitLines } from "@/lib/domain/transaction-splits";
 
@@ -36,6 +37,15 @@ async function revalidateForTransaction(accountId: string, categoryIdsAffected: 
 // guard, so this transaction doesn't silently get swept back into
 // automatic single-category assignment.
 export async function setTransactionSplits(transactionId: string, lines: SplitLineForm[]): Promise<void> {
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, [transactionId]);
+  // Each line's category must belong to the viewer - a split is the one
+  // place several categories are written at once, so every one of them
+  // needs checking, not just the first.
+  for (const categoryId of new Set(lines.map((l) => l.categoryId).filter((c): c is string => !!c))) {
+    await assertOwned("category", categoryId, viewer.id);
+  }
+
   const tx = await prisma.transaction.findUniqueOrThrow({
     where: { id: transactionId },
     select: { accountId: true, amountCents: true, categoryId: true },
@@ -78,6 +88,9 @@ export async function setTransactionSplits(transactionId: string, lines: SplitLi
 // (which also calls this) so the split-dialog's own "remove split" action
 // doesn't need to go through the plain category <select> at all.
 export async function clearTransactionSplits(transactionId: string): Promise<void> {
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, [transactionId]);
+
   const existing = await prisma.transactionSplit.findMany({
     where: { transactionId },
     select: { categoryId: true },

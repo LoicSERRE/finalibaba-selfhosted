@@ -10,22 +10,28 @@ import { prisma } from "@/lib/db/prisma";
 // leaked or retired integration can be cut off without rotating
 // NEXTAUTH_SECRET (which would also kill every logged-in session).
 //
-// Returns the matched key's id on success (so a route can skip the
-// lastUsedAt bookkeeping write if it wants to, though none currently do) or
-// null on failure - never throws, callers respond 401 themselves so every
-// route's error shape stays consistent JSON, not a framework default.
-export async function authenticateApiKey(req: NextRequest): Promise<string | null> {
+// Returns the matched key's id AND its owner on success, or null on failure -
+// never throws, callers respond 401 themselves so every route's error shape
+// stays consistent JSON, not a framework default.
+//
+// The userId is what every v1 route scopes its queries by (v2.0). Before that
+// an API key granted the ENTIRE instance's data regardless of who created it,
+// which in multi-user would make a key minted by any member a full read of
+// everyone's finances.
+export async function authenticateApiKey(
+  req: NextRequest,
+): Promise<{ id: string; userId: string } | null> {
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return null;
   const token = auth.slice("Bearer ".length);
   if (!token) return null;
 
-  const key = await prisma.apiKey.findUnique({ where: { token }, select: { id: true } });
+  const key = await prisma.apiKey.findUnique({ where: { token }, select: { id: true, userId: true } });
   if (!key) return null;
 
   // Fire-and-forget: a failed lastUsedAt write shouldn't fail the actual
   // request the caller is waiting on.
   prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
 
-  return key.id;
+  return key;
 }

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { Coins } from "lucide-react";
 import Link from "next/link";
 import { AddIncomeDialog } from "@/components/income/add-income-dialog";
@@ -23,13 +24,20 @@ export default async function IncomePage() {
   const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const startOfNextYear = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
 
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+
   const [events, accounts, incomeCategories, categoryTotals, splitCategoryTotals] = await Promise.all([
+    // IncomeEvent is account-transitive, so a co-owned account's dividends
+    // show up for both co-owners - documented as intended ("per-viewer view,
+    // not a fiscal filing"; one partner declares).
     prisma.incomeEvent.findMany({
+      where: { accountId: { in: accountIds } },
       include: { account: { select: { name: true } } },
       orderBy: { date: "desc" },
     }),
     prisma.account.findMany({
-      where: { type: { in: [...INCOME_ACCOUNT_TYPES] } },
+      where: { id: { in: accountIds }, type: { in: [...INCOME_ACCOUNT_TYPES] } },
       select: { id: true, name: true, type: true },
       orderBy: { name: "asc" },
     }),
@@ -41,10 +49,11 @@ export default async function IncomePage() {
     // CLAUDE.md), while a category like "Salaire" has no business showing
     // up there. This section is the category-based half of the same
     // page's "everything that came in" picture.
-    prisma.category.findMany({ where: { kind: "INCOME" }, orderBy: { name: "asc" } }),
+    prisma.category.findMany({ where: { userId: viewer.id, kind: "INCOME" }, orderBy: { name: "asc" } }),
     prisma.transaction.groupBy({
       by: ["categoryId"],
       where: excludeInternalTransfers({
+        accountId: { in: accountIds },
         amountCents: { gt: BigInt(0) },
         date: { gte: startOfYear, lt: startOfNextYear },
         category: { kind: "INCOME" },
@@ -60,7 +69,7 @@ export default async function IncomePage() {
       by: ["categoryId"],
       where: excludeInternalTransfersOnSplit(
         { amountCents: { gt: BigInt(0) }, category: { kind: "INCOME" } },
-        { date: { gte: startOfYear, lt: startOfNextYear } },
+        { accountId: { in: accountIds }, date: { gte: startOfYear, lt: startOfNextYear } },
       ),
       _sum: { amountCents: true },
     }),

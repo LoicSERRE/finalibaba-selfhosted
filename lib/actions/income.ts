@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { IncomeType } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
@@ -23,7 +24,13 @@ const ELIGIBLE_ACCOUNT_TYPES: Record<IncomeType, Set<string>> = {
   INTEREST: new Set(["CHECKING", "SAVINGS"]),
 };
 
+// Ownership is checked here too, not just account-type eligibility: this is
+// the chokepoint every income-writing action already goes through, so the
+// two rules stay together instead of each call site remembering both.
 async function assertIncomeEventEligible(accountId: string, type: IncomeType): Promise<void> {
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
+
   const account = await prisma.account.findUnique({ where: { id: accountId }, select: { type: true } });
   if (!account) throw new Error("Account not found.");
   if (!ELIGIBLE_ACCOUNT_TYPES[type].has(account.type)) {
@@ -105,6 +112,14 @@ export async function updateIncomeEvent(id: string, formData: FormData) {
 }
 
 export async function deleteIncomeEvent(id: string) {
+  // The only income action that doesn't route through
+  // assertIncomeEventEligible (there's no account/type pair to validate),
+  // so it carries its own ownership check.
+  const event = await prisma.incomeEvent.findUnique({ where: { id }, select: { accountId: true } });
+  if (!event) throw new Error("Not found.");
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, event.accountId);
+
   await prisma.incomeEvent.delete({ where: { id } });
   revalidateAll();
 }

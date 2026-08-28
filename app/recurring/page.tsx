@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { Repeat, AlertTriangle, Bot } from "lucide-react";
 import { AddRecurringDialog } from "@/components/recurring/add-recurring-dialog";
 import { SuggestionCard } from "@/components/recurring/suggestion-card";
@@ -35,19 +36,26 @@ export default async function RecurringPage() {
   const detectionCutoff = new Date(now);
   detectionCutoff.setUTCMonth(detectionCutoff.getUTCMonth() - DETECTION_WINDOW_MONTHS);
 
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+
   const [recurring, categories, accounts, recentTransactions] = await Promise.all([
     prisma.recurringTransaction.findMany({
+      where: { accountId: { in: accountIds } },
       include: { category: true, account: { select: { name: true } } },
       orderBy: { label: "asc" },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
+    prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
     prisma.account.findMany({
-      where: { type: { in: [...FIAT_TYPES] } },
+      where: { id: { in: accountIds }, type: { in: [...FIAT_TYPES] } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.transaction.findMany({
-      where: { date: { gte: detectionCutoff } },
+      // Detection groups by (accountId, label), so feeding it only the
+      // viewer's own accounts also keeps suggestions from being derived
+      // across users who happen to share a merchant name.
+      where: { accountId: { in: accountIds }, date: { gte: detectionCutoff } },
       select: { accountId: true, label: true, amountCents: true, date: true, categoryId: true },
     }),
   ]);

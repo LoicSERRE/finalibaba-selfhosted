@@ -75,13 +75,17 @@ export default async function RootLayout({
   // Per-user as of v2.0 (app-lock moved from the settings singleton to the
   // User row). getViewer() resolves to the instance owner in mono mode, so
   // this behaves exactly as before when AUTH_ENABLED is off.
+  //
+  // The viewer id is also what namespaces the service worker's runtime cache
+  // and the app-lock's own sessionStorage key - both are per-browser stores
+  // that would otherwise be shared between two accounts using the same
+  // browser. See ServiceWorkerRegistration and AppLockGate.
+  const viewer = await getViewer();
   const appLockEnabled =
     process.env.DEMO_MODE === "true"
       ? false
-      : await getViewer()
-          .then((viewer) =>
-            prisma.user.findUnique({ where: { id: viewer.id }, select: { appLockEnabled: true } })
-          )
+      : await prisma.user
+          .findUnique({ where: { id: viewer.id }, select: { appLockEnabled: true } })
           .then((user) => user?.appLockEnabled ?? false);
 
   return (
@@ -106,7 +110,7 @@ export default async function RootLayout({
           >
             Skip to content
           </a>
-          <AppLockGate enabled={appLockEnabled}>
+          <AppLockGate enabled={appLockEnabled} userId={viewer.id}>
             <SidebarWrapper />
             <main id="main-content" className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8">
               <div className="sticky top-0 z-10">
@@ -116,7 +120,7 @@ export default async function RootLayout({
             </main>
           </AppLockGate>
           {process.env.DEMO_MODE !== "true" && <AutoSync />}
-          <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} />
+          <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} userId={viewer.id} />
           <RealtimeRefresh />
         </NextIntlClientProvider>
       </body>

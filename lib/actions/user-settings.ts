@@ -12,11 +12,17 @@ export async function getUserSettings() {
 }
 
 /**
- * One settings row per user, created on first read. Split out from
- * getUserSettings() so server-to-server callers that already resolved a user
- * (the alert cron loops over every user) don't have to go through the session.
+ * One settings row per user, created on first read.
+ *
+ * NOT exported, deliberately: every export of a "use server" module is
+ * directly invocable from the browser with attacker-chosen arguments, and this
+ * returns the row holding `smtpPassword` and `ntfyAuthToken` in plaintext (see
+ * schema.prisma) - exporting a userId-parameterized version of it would hand
+ * any authenticated user every other user's alert credentials. Callers with a
+ * session use getUserSettings() above; the alert cron, which has no session,
+ * runs its own scoped upsert per user in app/api/alerts/check/route.ts.
  */
-export async function getUserSettingsFor(userId: string) {
+async function getUserSettingsFor(userId: string) {
   return prisma.userSettings.upsert({
     where: { userId },
     create: { userId },

@@ -120,3 +120,71 @@ export async function assertAccountWritable(userId: string, accountId: string): 
   ]);
   if (owned === 0 && coOwned === 0) throw new Error("Account not found.");
 }
+
+/**
+ * The viewer plus their writable account set, resolved together - the shape
+ * almost every Server Action needs. Actions that touch accounts should filter
+ * their own queries on `accountIds` rather than re-querying ownership per id.
+ */
+export async function getWritableContext(): Promise<{ userId: string; accountIds: string[] }> {
+  const viewer = await getViewer();
+  return { userId: viewer.id, accountIds: await baseAccountIds(viewer.id) };
+}
+
+/**
+ * Prisma `where` fragment restricting a query to accounts the viewer may
+ * touch. Returned as a fragment rather than applied by a wrapper so each
+ * call site stays a plain, readable Prisma query.
+ */
+export function accountScope(accountIds: string[]): { accountId: { in: string[] } } {
+  return { accountId: { in: accountIds } };
+}
+
+/**
+ * Ownership guard for entities owned directly by a user rather than through
+ * an account (categories, goals, alert rules, share links, API keys...).
+ *
+ * Throws the same generic "not found" for both "doesn't exist" and "belongs
+ * to someone else" - an error that distinguishes them would confirm the
+ * existence of another user's data to anyone probing ids.
+ */
+export async function assertOwned(
+  model: "category" | "goal" | "alertRule" | "shareLink" | "apiKey" | "institution",
+  id: string,
+  userId: string
+): Promise<void> {
+  // Each branch is its own delegate call: Prisma's per-model types don't
+  // unify into a single indexed call without casting away the safety that
+  // makes these guards worth having.
+  const found = await (async () => {
+    switch (model) {
+      case "category":
+        return prisma.category.count({ where: { id, userId } });
+      case "goal":
+        return prisma.goal.count({ where: { id, userId } });
+      case "alertRule":
+        return prisma.alertRule.count({ where: { id, userId } });
+      case "shareLink":
+        return prisma.shareLink.count({ where: { id, userId } });
+      case "apiKey":
+        return prisma.apiKey.count({ where: { id, userId } });
+      case "institution":
+        return prisma.institution.count({ where: { id, userId } });
+    }
+  })();
+  if (found === 0) throw new Error("Not found.");
+}
+
+/**
+ * Same guard for a batch of ids (bulk categorization, split writes...) -
+ * verifies every one of them resolves inside the viewer's own accounts, so a
+ * forged id smuggled into an array can't ride along with legitimate ones.
+ */
+export async function assertTransactionsWritable(userId: string, transactionIds: string[]): Promise<void> {
+  if (transactionIds.length === 0) return;
+  const accountIds = await baseAccountIds(userId);
+  const reachable = await prisma.transaction.count({
+    where: { id: { in: transactionIds }, accountId: { in: accountIds } },
+  });
+  if (reachable !== new Set(transactionIds).size) throw new Error("Not found.");
+}

@@ -7,7 +7,9 @@ import { startAuthentication, browserSupportsWebAuthn } from "@simplewebauthn/br
 import { Button } from "@/components/ui/button";
 import { startAppLockAuthentication, verifyAppLockAuthentication } from "@/lib/actions/app-lock";
 
-const SESSION_KEY = "finalibaba-applock-unlocked";
+// Namespaced per user (v2.0) - a shared browser where two accounts both use
+// app-lock must not let one user's unlock satisfy the other's lock screen.
+const sessionKeyFor = (userId: string) => `finalibaba-applock-unlocked:${userId}`;
 
 // A fast LOCAL unlock layer for an already-installed, already-trusted PWA -
 // deliberately not a network/security boundary the way AUTH_ENABLED's
@@ -30,8 +32,10 @@ const SESSION_KEY = "finalibaba-applock-unlocked";
 // login session - the point is a per-open unlock, not a second sign-in.
 export function AppLockGate({
   enabled,
+  userId,
   children,
-}: Readonly<{ enabled: boolean; children: React.ReactNode }>) {
+}: Readonly<{ enabled: boolean; userId: string; children: React.ReactNode }>) {
+  const sessionKey = sessionKeyFor(userId);
   const t = useTranslations("appLock");
   const [unlocked, setUnlocked] = useState(!enabled);
   const [checking, setChecking] = useState(false);
@@ -40,7 +44,7 @@ export function AppLockGate({
 
   useEffect(() => {
     if (!enabled) return;
-    if (sessionStorage.getItem(SESSION_KEY) === "1") {
+    if (sessionStorage.getItem(sessionKey) === "1") {
       setUnlocked(true);
       return;
     }
@@ -49,7 +53,7 @@ export function AppLockGate({
     // biometric prompt the instant the page loads (before the user has
     // even seen why) is jarring; a visible "Unlock" button makes the
     // prompt an expected response to a real tap, not a surprise.
-  }, [enabled]);
+  }, [enabled, sessionKey]);
 
   async function handleUnlock() {
     setChecking(true);
@@ -58,7 +62,7 @@ export function AppLockGate({
       const optionsJSON = await startAppLockAuthentication();
       const response = await startAuthentication({ optionsJSON });
       await verifyAppLockAuthentication(response);
-      sessionStorage.setItem(SESSION_KEY, "1");
+      sessionStorage.setItem(sessionKey, "1");
       setUnlocked(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("unknownError"));

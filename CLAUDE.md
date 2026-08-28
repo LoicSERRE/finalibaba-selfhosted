@@ -218,6 +218,36 @@ proxy.ts              Next.js middleware (root) - auth bypass + demo POST-blocki
 
 Selfhosted-specific points below.
 
+### Multi-user architecture (v2.0)
+
+The app was single-user by design until v2.0. Everything below exists so that stays true for anyone who wants it - **an instance with `AUTH_ENABLED` unset behaves exactly as it did before**, no login, no user management UI, no per-user anything visible.
+
+**One always-present owner, never a nullable user.** The v2 migration creates a fixed-id row (`OWNER_USER_ID = "user-owner"`, `lib/domain/users.ts`) with no credentials and backfills every pre-existing row to it. `getViewer()` (`lib/auth-context.ts`) resolves to that row without a session in mono mode. This is the single decision the whole design rests on: there is no `userId | null` branching anywhere, no "is multi-user enabled" check inside a query, and switching an existing instance to multi-user later attaches its history to the admin **by construction** - the bootstrap screen only sets credentials on a row that already owns everything. `lib/domain/users.ts` exists as its own module solely to break the `lib/auth.ts` ↔ `lib/auth-context.ts` import cycle.
+
+**Two account sets, deliberately distinct** - the distinction that prevents privilege escalation, not a convenience:
+
+- `baseAccountIds(userId)` = own ∪ co-owned. The **only** set allowed to back a derived artifact: share-link content, API-key responses, alert evaluation, internal-transfer detection, exports, net worth. Never includes a portfolio merely granted for reading, so a read-only guest can't mint a public link or an API key over the grantor's data - one that would keep working after the grant was revoked, since those tokens carry no grant check of their own.
+- `viewAccountIds(userId, viewedGrantorId?)` = the above, or the grantor's set when a real `PortfolioGrant` exists. Request-scoped page reads only. A stale/revoked grant falls back to "own" silently rather than erroring - the switcher's selection is caller-supplied state, not a claim.
+
+**Guards, not hidden buttons.** `assertAccountWritable` / `assertOwned` / `assertTransactionsWritable` (`lib/auth-context.ts`) mirror the pre-existing `assert*Eligible` family and exist for the same stated reason: a Server Action is directly invocable regardless of what the UI renders. `assertOwned` throws an identical `"Not found."` for a missing row and for someone else's row - a distinguishing error would confirm the existence of another user's data to anyone enumerating ids. `assertTransactionsWritable` compares against the **distinct** id count, so a duplicated id can't pad a forged batch up to passing.
+
+**A userId parameter on a `"use server"` export is an impersonation primitive.** Every export of such a module is directly invocable from the browser with attacker-chosen arguments. Two real instances were found and fixed while doing this:
+
+- `getUserSettingsFor(userId)` was exported and returns the row holding `smtpPassword`/`ntfyAuthToken` in **plaintext** - it would have handed any authenticated user every other user's alert credentials. Now un-exported.
+- `autoCategorizeTransactions` needed a userId to work per user, so the engine moved to `lib/services/auto-categorize-runner.ts` (a plain module) and the action file kept only a thin session-resolving wrapper. The two internal cron routes import the engine directly and loop over users themselves.
+
+A scripted check for this shape is worth re-running whenever an action file gains a parameter - it's an easy mistake to make and an invisible one to review.
+
+**Cron routes loop per user.** `/api/alerts/check` and `/api/transactions/auto-categorize` each iterate `prisma.user.findMany()`; in mono mode that's exactly one iteration over the owner. Alerts must be per-user or a notification would quote a net worth its recipient can't see anywhere in their own app. `/api/investments/snapshot-balances` deliberately stays one instance-wide pass - it recomputes each account's balance from that account's own holdings, reads no per-user config, and addresses no notification to anyone, so a per-user loop would be the same work split into more queries.
+
+**Internal-transfer detection had to stop being global.** `lib/domain/internal-transfers.ts`'s header states the assumption it was built on: every account in the database belongs to the same person, so any same-amount cross-account pair is safe to treat as a transfer. That's false in multi-user, and a global pass becomes a cross-user false-positive generator - user A's €500 debit and user B's unrelated €500 credit two days apart would be paired and both silently excluded from their owners' budgets and income. The pass now pools `baseAccountIds(runner)`. Safe to run from several users' passes over a co-owned account: the write only ever sets the flag to `true` (monotonic), so two passes can't thrash a row.
+
+**Per-browser stores are namespaced too**, since neither is reachable by a server-side check: the service worker's runtime cache (`public/sw.js`, keyed by a `u=` registration param - a different value is a different worker URL, so it installs and its `activate` handler evicts every other bucket) and the app-lock unlock flag in `sessionStorage`.
+
+**Same physical bank account, two users** (`app/api/gocardless/callback/route.ts`): `Account.gocardlessAccountId` is globally unique, so the upsert would silently rewrite the first user's row and append a balance snapshot to it. The callback now skips a conflicting account and redirects with `?gc=already-connected`, pointing the user at co-ownership instead. Attribution comes from `institution.userId`, never the session - this is a redirect back from the bank and can legitimately arrive without a cookie, which is also why the ownership check for starting a connection lives in `app/api/gocardless/connect/route.ts` instead.
+
+**Accepted, documented constraints**: `.env` sync credentials (`LCL_LOGIN`/`TR_PHONE`) stay the owner's, so a second user cannot env-sync LCL/Trade Republic - and since Woob has no Trade Republic module, a second user cannot sync Trade Republic at all. The *data* is unaffected: an env-synced account is co-ownable and grant-viewable exactly like a manual one. `sync/` needs **zero code changes** - `Account.userId` and `SyncLog.userId` carry a permanent DB-level default of the owner precisely because `sync/db.py` INSERTs those two tables via raw SQL with explicit column lists that know nothing about the column. That default is scaffolding for the sidecar only: every app-side `create` passes `userId` explicitly, and `__tests__/institutions-actions.test.ts` asserts it does.
+
 ### Authentication
 
 **Disabled by default** (`AUTH_ENABLED` unset or anything other than `"true"`). Self-hosted = private network, network-level trust is sufficient.
