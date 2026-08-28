@@ -14,7 +14,7 @@ import logging
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import psycopg2
 import psycopg2.extras
@@ -248,8 +248,24 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _keepalive_tr)
 
+    # Real-time Trade Republic listener - opt-in (TR_REALTIME_ENABLED, on top
+    # of TR_PHONE being set), a genuinely new pattern for this codebase: a
+    # long-lived asyncio.create_task that keeps a websocket open for the
+    # process's whole lifetime, unlike every other sync path here which is a
+    # bounded executor-thread job. See CLAUDE.md's "Trade Republic real-time
+    # tracking" for the full design and why this is off by default.
+    tr_realtime_task = None
+    if os.environ.get("TR_PHONE") and os.environ.get("TR_REALTIME_ENABLED") == "true":
+        from sync_tr_realtime import listen_forever
+        tr_realtime_task = asyncio.create_task(listen_forever())
+        log.info("Trade Republic real-time listener started")
+
     yield
     scheduler.shutdown()
+    if tr_realtime_task:
+        tr_realtime_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await tr_realtime_task
 
 
 app = FastAPI(lifespan=lifespan)

@@ -745,6 +745,73 @@ def _get_or_create_account(cur, institution_id: str, acc_type: str) -> str:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+def _fetch_and_write_once(
+    api, cur, *, institution_id: str, sec_accounts: dict[str, list[str]], has_crypto: bool,
+    cash_account_id: str, known_tx_ids: set[str], source: str = "trade_republic",
+) -> tuple[dict, set[str]]:
+    """One fetch-from-TR-and-write-to-DB cycle, given an already-connected
+    `api` and already-resolved account/institution ids. Extracted from the
+    body of `run()` below so both the batch (`run()`, one cycle then close)
+    and the real-time listener (`sync_tr_realtime.py`, many cycles on the
+    same open connection) share this exact logic - a fetch/write bug fixed
+    here is fixed for both. Does not commit `cur`'s connection - the caller
+    decides when, same convention as every other DB helper in this file.
+
+    `source` lets the real-time listener write its own SyncLog identity
+    ("trade_republic_realtime") instead of the batch cron's "trade_republic"
+    - see sync_tr_realtime.py for why: an independent dedup/failure identity,
+    not competing with the cron's own SyncFailureState tracking.
+
+    Returns (summary_dict, updated_known_tx_ids) - the caller should carry
+    the updated id set into its next cycle so `_fetch_timeline_feed`'s own
+    "stop once a whole page is already-known" pagination shortcut keeps
+    working across repeated calls, the same way it already does across
+    separate `run()` invocations 4h apart.
+    """
+    try:
+        positions_by_type, cash_accounts, prices, neon_quantities, timeline_items = asyncio.run(
+            _fetch_all(api, sec_accounts, has_crypto, known_tx_ids)
+        )
+    except Exception as e:
+        if _is_auth_error(e):
+            api._cookies_file.unlink(missing_ok=True)
+        raise
+
+    # Sync each account type to DB
+    total_positions = 0
+    summary_parts = []
+    for acc_type, positions in positions_by_type.items():
+        account_id = _get_or_create_account(cur, institution_id, acc_type)
+        count_cents = _sync_positions(cur, positions, account_id, acc_type, prices, neon_quantities)
+        total_positions += len(positions)
+        summary_parts.append(f"{acc_type}: {len(positions)} pos ({count_cents/100:.0f}€)")
+
+    # Cash balance (account itself already created by the caller, before the fetch)
+    cash_eur = sum(a.get("amount", 0) for a in cash_accounts if a.get("currencyId") == "EUR")
+    cash_cents = int(Decimal(str(cash_eur)) * 100)
+    record_balance(cur, cash_account_id, cash_cents)
+    summary_parts.append(f"cash: {cash_eur:.2f}€")
+    log.info("TR cash - %d cts", cash_cents)
+
+    tx_count = _sync_transactions(cur, cash_account_id, timeline_items)
+    if tx_count:
+        summary_parts.append(f"{tx_count} transaction(s)")
+
+    # XF000* ISINs (TR crypto) always belong in the CRYPTO account, never in CTO.
+    # Purge unconditionally so stale entries from previous syncs are removed.
+    cur.execute(
+        'DELETE FROM "Holding" WHERE "accountId" IN (SELECT id FROM "Account" WHERE "syncId" = %s) AND ticker LIKE \'XF0%%\'',
+        ("tr:cto",),
+    )
+    log.info("TR: purged XF000* crypto holdings from CTO")
+
+    msg = " | ".join(summary_parts) if summary_parts else f"cash {cash_eur:.2f}€ (0 position)"
+    write_sync_log(cur, source, "success", msg)
+
+    updated_known_tx_ids = known_tx_ids | {item["id"] for item in timeline_items}
+    return {"positions": total_positions, "cash_cents": cash_cents, "tx_count": tx_count}, updated_known_tx_ids
+
+
 def run(interactive: bool = False) -> dict:
     phone_no = os.environ["TR_PHONE"]
     pin = os.environ["TR_PIN"]
@@ -787,51 +854,22 @@ def run(interactive: bool = False) -> dict:
     known_tx_ids = {row["syncId"].split(":", 1)[1] for row in cur.fetchall() if row["syncId"]}
 
     try:
-        positions_by_type, cash_accounts, prices, neon_quantities, timeline_items = asyncio.run(
-            _fetch_all(api, sec_accounts, has_crypto, known_tx_ids)
+        summary, _ = _fetch_and_write_once(
+            api, cur,
+            institution_id=institution_id, sec_accounts=sec_accounts, has_crypto=has_crypto,
+            cash_account_id=cash_account_id, known_tx_ids=known_tx_ids,
         )
     except Exception as e:
         if _is_auth_error(e):
-            api._cookies_file.unlink(missing_ok=True)
             conn.commit()
             _mark_auth_required("Session expirée - reconnecte depuis Paramètres → Trade Republic")
             raise AuthRequiredError("Trade Republic: session expired. Run --setup")
         raise
 
-    # Sync each account type to DB
-    total_positions = 0
-    summary_parts = []
-    for acc_type, positions in positions_by_type.items():
-        account_id = _get_or_create_account(cur, institution_id, acc_type)
-        count_cents = _sync_positions(cur, positions, account_id, acc_type, prices, neon_quantities)
-        total_positions += len(positions)
-        summary_parts.append(f"{acc_type}: {len(positions)} pos ({count_cents/100:.0f}€)")
-
-    # Cash balance (account itself already created above, before the fetch)
-    cash_eur = sum(a.get("amount", 0) for a in cash_accounts if a.get("currencyId") == "EUR")
-    cash_cents = int(Decimal(str(cash_eur)) * 100)
-    record_balance(cur, cash_account_id, cash_cents)
-    summary_parts.append(f"cash: {cash_eur:.2f}€")
-    log.info("TR cash - %d cts", cash_cents)
-
-    tx_count = _sync_transactions(cur, cash_account_id, timeline_items)
-    if tx_count:
-        summary_parts.append(f"{tx_count} transaction(s)")
-
-    # XF000* ISINs (TR crypto) always belong in the CRYPTO account, never in CTO.
-    # Purge unconditionally so stale entries from previous syncs are removed.
-    cur.execute(
-        'DELETE FROM "Holding" WHERE "accountId" IN (SELECT id FROM "Account" WHERE "syncId" = %s) AND ticker LIKE \'XF0%%\'',
-        ("tr:cto",),
-    )
-    log.info("TR: purged XF000* crypto holdings from CTO")
-
-    msg = " | ".join(summary_parts) if summary_parts else f"cash {cash_eur:.2f}€ (0 position)"
-    write_sync_log(cur, "trade_republic", "success", msg)
     conn.commit()
     cur.close()
     conn.close()
-    return {"positions": total_positions, "cash_cents": cash_cents}
+    return {"positions": summary["positions"], "cash_cents": summary["cash_cents"]}
 
 
 def _mark_auth_required(msg: str) -> None:
