@@ -2,7 +2,20 @@ import "dotenv/config";
 import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { OWNER_USER_ID } from "../lib/domain/users";
+
+// Declared here rather than imported from lib/domain/users.ts: the production
+// image ships prisma/ but deliberately not lib/ (see the runner stage in
+// Dockerfile), so `import { OWNER_USER_ID } from "../lib/domain/users"` throws
+// MODULE_NOT_FOUND the moment this runs inside a container. It did, on the
+// v2.0.0 demo deploy.
+//
+// The value is already a literal in schema.prisma's own @default() 15 times
+// over - Prisma cannot reference TypeScript - so this is one more copy of a
+// string that has no single source of truth to begin with.
+// __tests__/owner-id-consistency.test.ts fails if any of them drift apart, and
+// the "No owner user found" guard below turns a mismatch into an immediate,
+// explicit error rather than silently seeding orphaned rows.
+const OWNER_USER_ID = "user-owner";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
 const adapter = new PrismaPg(pool);
