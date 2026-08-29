@@ -243,9 +243,23 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 *Breaking architectural change: all data gains user ownership, requiring a migration. Planned as a dedicated, focused push once the single-user feature set (everything above) is mature and well-tested, rather than interleaved with it - multi-user plus a full security audit belong together, since every new sharing/permission boundary this adds is exactly the kind of surface a security review needs to cover anyway. A native mobile app may fold into this same push too, but only if it turns out to be genuinely worth the build effort relative to the PWA that already exists - not committed as of this writing, needs its own scoping pass first.*
 
-- [ ] **Multi-user support** - independent portfolios for multiple users on the same instance; role-based access (owner / read-only guest)
-- [ ] **Security audit** - a dedicated review pass once multi-user support lands, covering the new account-boundary/permission surface specifically, not just a repeat of the existing release-boundary audit's own checklist
+- [X] **Multi-user support** - independent portfolios for multiple users on the same instance; admin-generated single-use invitations; whole-portfolio read-only sharing and per-account co-ownership. See `CLAUDE.md`'s "Multi-user architecture" for the full design and `README.md`'s "Multiple users" for the user-facing story
+- [ ] **Security audit** - a dedicated review pass now that multi-user support has landed, covering the new account-boundary/permission surface specifically, not just a repeat of the existing release-boundary audit's own checklist. Start from the handoff notes at the end of `CLAUDE.md`'s "Multi-user architecture" section - they list the known-open items this build deliberately did not close (GoCardless callback CSRF, the instance-wide backup primitive, the plaintext-credential inventory, per-user rate limiting)
 - [ ] **Native mobile app** *(conditional, not committed)* - only if a real scoping pass finds a concrete gap the existing installable PWA (see `CLAUDE.md`'s "PWA / offline support") doesn't already cover, and only if the remaining budget for this phase justifies it
+
+**Retrospective on the multi-user build.** Shipped in four gated lots (identity and migration; per-user isolation; sharing; documentation), each verified against a real two-user database rather than only unit-tested.
+
+The decision everything else rests on: the migration creates a **fixed-id owner row and backfills every existing row to it**, so there is no `userId | null` anywhere and no "is multi-user on?" branch inside any query. Mono mode resolves to that row without a login. That single choice is what makes the mono-mode guarantee provable instead of hopeful, and it makes the day-180 switch (an instance that ran solo for months and only now turns auth on) attach its history to the admin *by construction* - the bootstrap screen only sets credentials on a row that already owns everything.
+
+Three real security holes were found and fixed **while building**, not by the audit that follows:
+
+- `getUserSettingsFor(userId)` was exported from a `"use server"` module and returned the row holding `smtpPassword` and `ntfyAuthToken` in plaintext. Every export of such a module is directly invocable from the browser with attacker-chosen arguments, so this would have handed any authenticated user every other user's alert credentials.
+- `/api/gocardless/connect` had no ownership check at all - anyone with a session could start a bank-consent flow against another user's institution.
+- The read-only share view (`/shared/[token]`) queried balances instance-wide, so a link minted by one user would have exposed everyone's net worth.
+
+The generalizable lesson is the first one: **a userId parameter on a `"use server"` export is an impersonation primitive.** A scripted check for that shape is worth re-running whenever an action file gains a parameter.
+
+Two things were deliberately *not* built, and are scoped out rather than forgotten: fractional ownership of a co-owned account (each co-owner counts the full value in their own view - this is a per-viewer dashboard, not a fiscal filing), and per-account grants to non-co-owners (sharing is whole-portfolio or nothing). Open self-registration is also deliberately absent; revisit after the security audit, not before.
 
 ---
 
