@@ -115,6 +115,30 @@ export async function viewAccountIds(userId: string, viewedGrantorId?: string | 
 }
 
 /**
+ * Portfolios other users have granted this viewer read access to, resolved to
+ * display labels for the sidebar switcher.
+ *
+ * Lives here rather than in the component that renders it: this repo's layering
+ * rule is that components never import prisma directly (business logic and DB
+ * access belong in lib/actions or the access layer), and the release-boundary
+ * audit greps for exactly that. Read-only and viewer-scoped, so it belongs with
+ * the other access primitives rather than in a "use server" action module.
+ */
+export async function grantedPortfolios(
+  userId: string
+): Promise<{ userId: string; label: string }[]> {
+  const grants = await prisma.portfolioGrant.findMany({
+    where: { granteeUserId: userId },
+    select: { grantorUserId: true, grantor: { select: { username: true, displayName: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  return grants.map((g) => ({
+    userId: g.grantorUserId,
+    label: g.grantor.displayName ?? g.grantor.username ?? g.grantorUserId,
+  }));
+}
+
+/**
  * Everything a READ surface needs, resolved in one call: who is asking, whose
  * portfolio is on screen, which accounts that means, and whether the viewer may
  * change any of it.

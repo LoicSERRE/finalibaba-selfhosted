@@ -1,7 +1,11 @@
-import { SidebarDynamic } from "@/components/layout/sidebar-dynamic";
-import { prisma } from "@/lib/db/prisma";
-import { getViewer, isAuthEnabled, VIEWING_PORTFOLIO_COOKIE } from "@/lib/auth-context";
 import { cookies } from "next/headers";
+import { SidebarDynamic } from "@/components/layout/sidebar-dynamic";
+import {
+  getViewer,
+  grantedPortfolios,
+  isAuthEnabled,
+  VIEWING_PORTFOLIO_COOKIE,
+} from "@/lib/auth-context";
 
 export async function SidebarWrapper() {
   const showLogout = isAuthEnabled();
@@ -14,15 +18,7 @@ export async function SidebarWrapper() {
 
   if (showLogout) {
     const viewer = await getViewer();
-    const grants = await prisma.portfolioGrant.findMany({
-      where: { granteeUserId: viewer.id },
-      select: { grantorUserId: true, grantor: { select: { username: true, displayName: true } } },
-      orderBy: { createdAt: "asc" },
-    });
-    portfolios = grants.map((g) => ({
-      userId: g.grantorUserId,
-      label: g.grantor.displayName ?? g.grantor.username ?? g.grantorUserId,
-    }));
+    portfolios = await grantedPortfolios(viewer.id);
 
     // Only reflect the cookie when it names a portfolio still in the list -
     // otherwise the switcher would show a stale selection while the pages,
