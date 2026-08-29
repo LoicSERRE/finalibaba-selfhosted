@@ -8,19 +8,27 @@ import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
+// See app/accounts/page.tsx's own readOnly note: a granted portfolio is
+// read-only, so the add/edit affordances are dropped rather than left to
+// fail against the Server Action's own ownership guard.
 export function AutomobileTab({
   t,
   institutions,
   rows,
+  readOnly = false,
 }: Readonly<{
   t: T;
   institutions: { id: string; name: string }[];
   rows: AutomobileRow[];
+  /** True when a granted (read-only) portfolio is on screen. */
+  readOnly?: boolean;
 }>) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
+        {!readOnly && (
         <AddAutomobileDialog institutions={institutions} />
+        )}
       </div>
 
       {rows.length === 0 ? (

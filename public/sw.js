@@ -22,21 +22,45 @@
 // concern at all.
 let offlinePagesEnabled = false;
 
-self.addEventListener("install", () => {
-  offlinePagesEnabled = new URL(self.location.href).searchParams.get("offlinePages") === "1";
-  self.skipWaiting();
-});
-
 // Bump this on any change to the fetch strategy below, so activate's own
 // cleanup evicts everything cached under the old logic instead of mixing
 // old and new cache-control decisions.
-const CACHE_NAME = "finalibaba-v1";
+const CACHE_VERSION = "v2";
+
+// The cache is namespaced per user (v2.0). It used to be one flat
+// "finalibaba-v1" bucket, which in multi-user means user B, on the same
+// browser as user A, could be served A's cached pages - real financial data,
+// out of any session check, since a cache hit never reaches the server. The
+// userId comes from the registration query string, the same mechanism (and
+// for the same reason) as offlinePages: a static file has no other way to
+// learn a server-side fact short of a network round-trip on every install.
+// components/layout/service-worker-registration.tsx re-registers whenever it
+// changes, so logging in as someone else lands on a different bucket.
+let cacheName = `finalibaba-${CACHE_VERSION}-anon`;
+
+function readParams() {
+  const params = new URL(self.location.href).searchParams;
+  offlinePagesEnabled = params.get("offlinePages") === "1";
+  cacheName = `finalibaba-${CACHE_VERSION}-${params.get("u") || "anon"}`;
+}
+
+// Both lifecycle events read the params: `install` only fires for a
+// genuinely new script URL, but `activate` fires on every worker startup, so
+// a page reloaded long after install still resolves the right bucket.
+self.addEventListener("install", () => {
+  readParams();
+  self.skipWaiting();
+});
 
 self.addEventListener("activate", (event) => {
+  readParams();
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      // Drops every bucket but this user's own - so switching accounts on a
+      // shared browser evicts the previous user's cached pages rather than
+      // leaving them sitting in Cache Storage.
+      .then((keys) => Promise.all(keys.filter((key) => key !== cacheName).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -68,7 +92,7 @@ async function cacheFirst(request) {
   if (cached) return cached;
   const response = await fetch(request);
   if (response.ok) {
-    const cache = await caches.open(CACHE_NAME);
+    const cache = await caches.open(cacheName);
     cache.put(request, response.clone());
   }
   return response;
@@ -78,7 +102,7 @@ async function networkFirstWithFallback(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await caches.open(cacheName);
       cache.put(request, response.clone());
     }
     return response;
@@ -98,7 +122,7 @@ async function networkFirstWithFallback(request) {
 async function networkOnlyButCache(request) {
   const response = await fetch(request);
   if (response.ok) {
-    const cache = await caches.open(CACHE_NAME);
+    const cache = await caches.open(cacheName);
     cache.put(request, response.clone());
   }
   return response;
@@ -117,14 +141,33 @@ self.addEventListener("push", (event) => {
     // rather than dropping the notification entirely.
   }
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "/icon-512",
-      badge: "/icon-512",
-      tag: "finalibaba-alert",
-    })
+    Promise.all([
+      self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: "/icon-512",
+        badge: "/icon-512",
+        tag: "finalibaba-alert",
+      }),
+      // A dot on the installed app icon, cleared when the app is next opened
+      // (see components/layout/service-worker-registration.tsx). Called with no
+      // argument on purpose: that means "something is waiting" without a count,
+      // which is all this app can honestly claim - it dispatches alerts but
+      // stores no read/unread state, so any number here would be invented.
+      //
+      // Supported on iOS 16.4+ for home-screen web apps, the same gate Web Push
+      // already requires, and on desktop Chrome/Edge. Android shows its own
+      // badge for unread notifications and ignores this. Feature-detected
+      // because the API is absent in Firefox and in a plain browser tab.
+      setBadge(),
+    ])
   );
 });
+
+function setBadge() {
+  return self.navigator?.setAppBadge
+    ? self.navigator.setAppBadge().catch(() => {})
+    : Promise.resolve();
+}
 
 // Focuses an already-open tab instead of always opening a new one - a
 // user tapping the notification almost certainly already has the PWA

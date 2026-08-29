@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertOwned } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 import { CategoryKind } from "@/app/generated/prisma/enums";
 
@@ -48,8 +49,10 @@ export async function createCategory(formData: FormData) {
   const budgetCents = kind === "INCOME" ? undefined : parseOptionalCents(formData.get("budget"));
   const rolloverEnabled = parseRolloverEnabled(formData, kind);
 
+  const viewer = await getViewer();
   await prisma.category.create({
     data: {
+      userId: viewer.id,
       name,
       color,
       kind,
@@ -76,6 +79,8 @@ export async function updateCategory(id: string, formData: FormData) {
   // while already enabled must not reset an accumulated carry back to
   // zero. `undefined` in the update payload below means "leave this field
   // untouched", same convention Prisma uses everywhere else in this file.
+  const viewer = await getViewer();
+  await assertOwned("category", id, viewer.id);
   const existing = await prisma.category.findUniqueOrThrow({ where: { id }, select: { budgetRolloverEnabled: true } });
   let budgetRolloverEnabledAt: Date | null | undefined;
   if (!rolloverEnabled) {
@@ -94,6 +99,8 @@ export async function updateCategory(id: string, formData: FormData) {
 }
 
 export async function deleteCategory(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("category", id, viewer.id);
   await prisma.category.delete({ where: { id } });
   revalidateAll();
 }

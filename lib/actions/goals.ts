@@ -2,10 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 
 export async function getGoals() {
+  const viewer = await getViewer();
   return prisma.goal.findMany({
+    where: { userId: viewer.id },
     include: { account: { select: { id: true, name: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -20,8 +23,13 @@ export async function getGoals() {
 // explanation: lib/domain/analytics.ts's assetRows deliberately excludes
 // LOAN accounts (a liability, not an asset), so such a goal's
 // assetValueById lookup would always miss and fall back to 0.
+// Ownership rides along with the LOAN-eligibility rule for the same reason
+// the comment above gives: this is the chokepoint both goal-writing actions
+// already go through.
 async function assertGoalAccountEligible(accountId: string | null) {
-  if (accountId === null) return;
+  if (accountId === null) return; // "track my whole net worth" - no account to own
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
   const account = await prisma.account.findUnique({ where: { id: accountId }, select: { type: true } });
   if (!account) throw new Error("Compte introuvable.");
   if (account.type === "LOAN") throw new Error("Un prêt ne peut pas être lié à un objectif d'épargne.");
@@ -57,18 +65,23 @@ function buildGoalData(formData: FormData) {
 export async function createGoal(formData: FormData) {
   const data = buildGoalData(formData);
   await assertGoalAccountEligible(data.accountId);
-  await prisma.goal.create({ data });
+  const viewer = await getViewer();
+  await prisma.goal.create({ data: { ...data, userId: viewer.id } });
   revalidateGoals();
 }
 
 export async function updateGoal(id: string, formData: FormData) {
   const data = buildGoalData(formData);
   await assertGoalAccountEligible(data.accountId);
+  const viewer = await getViewer();
+  await assertOwned("goal", id, viewer.id);
   await prisma.goal.update({ where: { id }, data });
   revalidateGoals();
 }
 
 export async function deleteGoal(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("goal", id, viewer.id);
   await prisma.goal.delete({ where: { id } });
   revalidateGoals();
 }

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
+import { baseAccountIds } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
@@ -40,8 +41,17 @@ export default async function SharedDashboardPage({
 
   await prisma.shareLink.update({ where: { id: link.id }, data: { lastAccessedAt: new Date() } });
 
+  // Strictly the LINK OWNER's own portfolio (their accounts + co-owned
+  // ones) - baseAccountIds, never viewAccountIds. A read-only guest must not
+  // be able to mint a public link over the portfolio someone merely shared
+  // with them: such a link carries no grant check of its own and would keep
+  // working after the grant was revoked. This query used to be entirely
+  // unscoped, exposing every account in the instance to any token holder.
+  const sharedAccountIds = await baseAccountIds(link.userId);
+
   const [accounts, allBalances, sharedTransactions, t, locale] = await Promise.all([
     prisma.account.findMany({
+      where: { id: { in: sharedAccountIds } },
       include: {
         institution: true,
         holdings: true,
@@ -49,13 +59,13 @@ export default async function SharedDashboardPage({
       },
       orderBy: { name: "asc" },
     }),
-    prisma.historicalBalance.findMany({ orderBy: { recordedAt: "asc" } }),
+    prisma.historicalBalance.findMany({ where: { accountId: { in: sharedAccountIds } }, orderBy: { recordedAt: "asc" } }),
     // Skip the query entirely when the link doesn't opt into it - no reason
     // to pull real transaction rows out of the DB for a link that will never
     // render them.
     link.includeTransactions
       ? prisma.transaction.findMany({
-          where: { isInternalTransfer: false },
+          where: { accountId: { in: sharedAccountIds }, isInternalTransfer: false },
           orderBy: { date: "desc" },
           take: MAX_SHARED_TRANSACTIONS,
           include: { category: { select: { name: true, color: true } }, account: { select: { name: true } } },

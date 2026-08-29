@@ -31,9 +31,138 @@ enum TaxTreatment {
   TAXABLE  // taxed now, at this account's own taxRatePct
 }
 
+// ── v2.0 multi-user ─────────────────────────────────────────────────────────
+// See CLAUDE.md's "Multi-user architecture" for the full design. Key
+// invariants:
+// - A fixed-id owner row (OWNER_USER_ID = "user-owner",
+//   lib/auth-context.ts) is created by the v2 migration itself and every
+//   pre-existing row is backfilled to it. Mono mode (AUTH_ENABLED unset)
+//   resolves the viewer to this row without any login - one uniform code
+//   path, no nullable-owner states, and switching an existing instance to
+//   multi-user later attaches its history to the admin automatically by
+//   construction (the bootstrap screen just sets credentials ON this row).
+// - Every userId column below carries @default("user-owner") during the
+//   foundation phase. For Account and SyncLog the default is PERMANENT and
+//   load-bearing: sync/db.py INSERTs those two tables via raw SQL with
+//   explicit column lists that don't know about userId - the DB-level
+//   default is what keeps the Python sidecar working with zero code
+//   changes, and env-synced (LCL/TR) data belonging to the owner is
+//   exactly the intended semantics. For every other table the default is
+//   scaffolding to be dropped once all app-side creates pass an explicit
+//   userId (isolation phase).
+
+enum UserRole {
+  ADMIN  // full instance control: user management, invitations, backup/restore
+  MEMBER // a regular user - full control over their own portfolio only
+}
+
+model User {
+  id           String   @id @default(cuid()) // owner row uses the fixed id "user-owner"
+  // Null until the bootstrap/invitation flow completes - the migration
+  // creates the owner with no credentials at all (mono mode never needs
+  // them). Unique once set; Postgres allows multiple NULLs so this doesn't
+  // constrain un-bootstrapped rows.
+  username     String?  @unique
+  displayName  String?
+  // bcrypt. Null = this user can't log in with a DB password yet. For the
+  // owner specifically, the env AUTH_PASSWORD/AUTH_PASSWORD_HASH fallback
+  // in lib/auth.ts applies ONLY while this is null - once set, the DB hash
+  // wins absolutely and env credentials are ignored (see authorize()).
+  passwordHash String?
+  role         UserRole @default(MEMBER)
+  // Per-user TOTP - moved from the UserSettings singleton (fields there are
+  // now vestigial, see UserSettings). Same plaintext-secret/bcrypt-backup-
+  // codes trust model documented on the original fields.
+  totpSecret      String?
+  totpEnabled     Boolean  @default(false)
+  totpBackupCodes String[] @default([])
+  // Per-user app-lock (WebAuthn) - moved from the UserSettings singleton
+  // (vestigial there too). The WebAuthn userHandle becomes this row's id,
+  // replacing the old hardcoded single-instance constant.
+  appLockEnabled   Boolean @default(false)
+  appLockChallenge String?
+  createdAt DateTime @default(now())
+
+  institutions       Institution[]
+  accounts           Account[]
+  categories         Category[]
+  goals              Goal[]
+  alertRules         AlertRule[]
+  shareLinks         ShareLink[]
+  apiKeys            ApiKey[]
+  pushSubscriptions  PushSubscription[]
+  appLockCredentials AppLockCredential[]
+  syncLogs           SyncLog[]
+  syncFailureStates  SyncFailureState[]
+  settings           UserSettings?
+  coOwnedAccounts    AccountCoOwner[]
+  invitationsCreated Invitation[]
+  grantsGiven        PortfolioGrant[] @relation("grantor")
+  grantsReceived     PortfolioGrant[] @relation("grantee")
+}
+
+// Single-use, admin-generated invitation (see CLAUDE.md - the admin never
+// chooses anyone's password; the invitee sets their own on arrival, on the
+// same screen component as the first-boot bootstrap flow). Grants zero
+// access until used; expired/used tokens are rejected server-side.
+model Invitation {
+  id              String    @id @default(cuid())
+  token           String    @unique
+  createdBy       User      @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+// Instance-level (not per-user) settings. VAPID keys identify the SERVER to
+// push services, not a person - they moved here from the UserSettings
+// singleton (vestigial there), where they only ever made sense while the
+// whole app was single-user. Regenerating them would invalidate every
+// registered PushSubscription across all users, same warning as before.
+model InstanceSettings {
+  id              String  @id @default("singleton")
+  vapidPublicKey  String?
+  vapidPrivateKey String?
+}
+
+// Account-level co-ownership (joint Livret A, an account managed for a
+// child...) - the co-owned account appears in each co-owner's portfolio
+// pointing at the same underlying rows, no duplication. The account's own
+// Account.userId stays its primary owner; rows here add further users with
+// full write access. `role` is forward-compat (only OWNER exists today).
+model AccountCoOwner {
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      String   @default("OWNER")
+  createdAt DateTime @default(now())
+
+  @@id([accountId, userId])
+}
+
+// Whole-portfolio read-only grant ("invités lecture seule") - the grantee
+// can VIEW everything in the grantor's portfolio (own + co-owned accounts)
+// but never write, and never derive artifacts from it (share links, API
+// keys and alerts are always scoped to a user's own portfolio, see
+// lib/auth-context.ts's baseAccountIds vs viewAccountIds split). `role` is
+// forward-compat (only READ exists today).
+model PortfolioGrant {
+  grantor       User     @relation("grantor", fields: [grantorUserId], references: [id], onDelete: Cascade)
+  grantorUserId String
+  grantee       User     @relation("grantee", fields: [granteeUserId], references: [id], onDelete: Cascade)
+  granteeUserId String
+  role          String   @default("READ")
+  createdAt     DateTime @default(now())
+
+  @@id([grantorUserId, granteeUserId])
+}
+
 model Institution {
   id                      String    @id @default(cuid())
-  name                    String    @unique
+  // Unique per user, not globally - two users can each have their own "LCL".
+  name                    String
   logoUrl                 String?
   accounts                Account[]
   createdAt               DateTime  @default(now())
@@ -42,6 +171,11 @@ model Institution {
   woobModule              String?   // Woob backend module name, e.g. "bnporc", "caissedepargne"
   woobLogin               String?
   woobPassword            String?
+  userId                  String    @default("user-owner")
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 model Account {
@@ -90,7 +224,24 @@ model Account {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   gocardlessAccountId String?             @unique
+  // Deliberately GLOBALLY unique, not per-user, in v2.0 - see CLAUDE.md's
+  // "Multi-user architecture". The env-driven sources (LCL/Trade Republic)
+  // are the owner's alone, and TR in particular writes fixed ids
+  // ("tr:cash", "tr:cto"...) that only one user can ever produce; Woob ids
+  // are already namespaced by an institution cuid. The one real collision
+  // left - two users connecting the same physical bank account via
+  // GoCardless - is caught at requisition-link time with an explicit
+  // "already connected by another user" error rather than silently
+  // merging or dropping data.
   syncId              String?             @unique // e.g. "lcl:FR76XXXX" or "tr:ISIN"
+  // PERMANENT default (unlike the scaffolding defaults elsewhere):
+  // sync/db.py's raw-SQL INSERT doesn't know about this column, and
+  // env-synced accounts belonging to the owner is the intended semantics.
+  userId              String              @default("user-owner")
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coOwners            AccountCoOwner[]
+
+  @@index([userId])
 }
 
 model Holding {
@@ -116,12 +267,18 @@ model Holding {
 
 model SyncLog {
   id        String   @id @default(cuid())
-  source    String   // "lcl" | "trade_republic"
+  source    String   // "lcl" | "trade_republic" | "woob:<institutionId>"
   status    String   // "success" | "error" | "auth_required"
   message   String?
   createdAt DateTime @default(now())
+  // PERMANENT default, same reason as Account.userId: sync/db.py writes
+  // this table via raw SQL. A Woob-source log belongs to the institution's
+  // owner; the env-driven lcl/trade_republic sources belong to the owner.
+  userId    String   @default("user-owner")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([source, createdAt])
+  @@index([userId, source, createdAt])
 }
 
 // Tracks, per sync source, whether it's currently in an unresolved broken
@@ -136,10 +293,18 @@ model SyncLog {
 // a while (every failed attempt, whether from the 4h cron or repeated
 // AutoSync-triggered retries, used to write its own SyncLog row that all
 // got alerted on the very first check after being unblocked).
+// Keyed per (user, source), not source alone: two users each syncing their
+// own LCL would otherwise share one dedup row, so one user's alert would
+// silence the other's. App-written only - sync/db.py never touches this
+// table, so unlike Account/SyncLog it needs no DB-level default.
 model SyncFailureState {
-  source        String   @id
+  source        String
   brokenSince   DateTime @default(now())
   lastAlertedAt DateTime @default(now())
+  userId        String   @default("user-owner")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, source])
 }
 
 enum AlertRuleKind {
@@ -257,8 +422,15 @@ model AlertRule {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  // Direct owner, not transitive via accountId: accountId is legitimately
+  // null for UNREALIZED_GAIN ("across every investment/crypto account") and
+  // NEW_TRANSACTION ("every account"), which must mean "every account *I*
+  // can see", so the rule needs its own owner regardless.
+  userId    String   @default("user-owner")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([active])
+  @@index([userId])
 }
 
 // One row per user-defined savings goal (v1.14) - replaces
@@ -293,6 +465,12 @@ model Goal {
   accountId   String?
   account     Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
+  // Direct owner for the same reason as AlertRule: a null accountId means
+  // "track my whole net worth", which is inherently per-user.
+  userId      String    @default("user-owner")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model HistoricalBalance {
@@ -390,7 +568,12 @@ enum CategoryKind {
 
 model Category {
   id                      String                 @id @default(cuid())
-  name                    String                 @unique
+  // Unique per user, not globally - each user has their own category set.
+  // On a co-owned account, whichever co-owner categorizes a transaction
+  // does so with THEIR category (last write wins); budgets therefore
+  // aggregate strictly per category owner. See CLAUDE.md's "Multi-user
+  // architecture" for why that beats a per-user assignment junction.
+  name                    String
   color                   String                 // hex, e.g. "#6366f1"
   kind                    CategoryKind           @default(EXPENSE)
   budgetCents             BigInt?                // monthly envelope - null means no budget set, and meaningless for an INCOME category (no cap concept for income)
@@ -401,6 +584,11 @@ model Category {
   recurringTransactions   RecurringTransaction[]
   alertRules              AlertRule[]
   createdAt               DateTime               @default(now())
+  userId                  String                 @default("user-owner")
+  user                    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 enum RecurringFrequency {
@@ -470,8 +658,13 @@ model Sale {
   @@index([accountId, date])
 }
 
+// One row per user as of v2.0 (was a single "singleton" row). The legacy
+// singleton row is re-pointed to the owner by the v2 migration, keeping its
+// id so nothing that stored a reference to it breaks.
 model UserSettings {
-  id                   String   @id @default("singleton")
+  id                   String   @id @default(cuid())
+  userId               String   @unique @default("user-owner")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   salaryNetCents       BigInt   @default(0)
   monthlyExpensesCents BigInt   @default(0)
   // VESTIGIAL as of v1.14 - superseded by the Goal model (see its own
@@ -482,19 +675,19 @@ model UserSettings {
   taxRatePea           Float    @default(0.172)
   taxRateCto           Float    @default(0.314)
   taxRateCrypto        Float    @default(0.314)
-  // Base32 secret, plaintext - must stay reversible to keep generating
-  // codes (unlike a password, there's no way to hash a TOTP secret). Same
-  // no-field-level-encryption trust model as Institution.woobPassword.
-  // Recovery if a self-hoster loses both their authenticator app and every
-  // backup code: connect directly to the DB (psql/Prisma Studio) and set
-  // totpEnabled=false, totpSecret=NULL - same "you have shell access to
-  // your own server" recovery story as resetting AUTH_PASSWORD.
+  // VESTIGIAL as of v2.0 - TOTP moved to User (per-user 2FA). Kept, not
+  // dropped, per this repo's non-destructive-migration convention; the v2
+  // migration copies these values onto the owner's User row. No longer read
+  // or written anywhere in app code.
   totpSecret           String?
   totpEnabled          Boolean  @default(false)
-  // bcrypt hashes, one per unused backup code - a consumed code is removed
-  // from the array (not just flagged), so its length is also "codes remaining".
   totpBackupCodes      String[] @default([])
-  // App-lock (WebAuthn) - deliberately independent of AUTH_ENABLED/totp
+  // VESTIGIAL as of v2.0 - app-lock moved to User (per-user), same
+  // non-destructive convention as the TOTP fields above; the v2 migration
+  // copies these onto the owner's User row.
+  //
+  // (Original rationale, kept for context.) App-lock (WebAuthn) -
+  // deliberately independent of AUTH_ENABLED/totp
   // above, same "independent of AUTH_ENABLED" precedent as ShareLink: a
   // fast local unlock for an already-installed, already-trusted PWA, not a
   // replacement for the server-side session AUTH_ENABLED provides.
@@ -537,6 +730,11 @@ model UserSettings {
   // PushSubscription row exists, same "meaningless when unconfigured"
   // convention as ntfyEnabled/emailAlertsEnabled above.
   webPushEnabled       Boolean  @default(true)
+  // VESTIGIAL as of v2.0 - VAPID keys identify the SERVER, not a person,
+  // so they moved to InstanceSettings. Kept per the non-destructive
+  // convention; the v2 migration copies them there. Regenerating them
+  // would still invalidate every registered subscription, now across all
+  // users.
   vapidPublicKey       String?
   vapidPrivateKey      String?
   // Net worth alert - blank threshold = disabled. netWorthAlertLastAbove is
@@ -579,6 +777,15 @@ model ShareLink {
   // same convention as label/expiresAt above.
   includeHoldings     Boolean @default(false)
   includeTransactions Boolean @default(false)
+  // The link exposes exactly its owner's OWN portfolio (their accounts +
+  // co-owned ones), never a portfolio merely granted to them for reading -
+  // otherwise a read-only guest could mint a public link over someone
+  // else's data that outlives the grant. See baseAccountIds() in
+  // lib/auth-context.ts.
+  userId              String  @default("user-owner")
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Read-only REST API key (Settings -> API, see CLAUDE.md's "Public REST
@@ -599,6 +806,11 @@ model ApiKey {
   label      String?
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
+  // Same own-portfolio-only scoping rule as ShareLink above.
+  userId     String    @default("user-owner")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // One row per registered WebAuthn authenticator (Settings -> "Verrouillage
@@ -618,6 +830,13 @@ model AppLockCredential {
   deviceLabel  String
   createdAt    DateTime  @default(now())
   lastUsedAt   DateTime?
+  // As of v2.0 the WebAuthn userHandle is this user's id rather than a
+  // hardcoded instance-wide constant, so each user registers and revokes
+  // their own authenticators independently.
+  userId       String    @default("user-owner")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // One row per browser/device subscribed to Web Push (Settings -> "Alertes"),
@@ -630,10 +849,18 @@ model AppLockCredential {
 // laptop each get their own independently-revocable row.
 model PushSubscription {
   id          String    @id @default(cuid())
+  // Still globally unique: a browser endpoint is one physical destination,
+  // so it can only belong to one user at a time. The subscribe action
+  // re-points an existing row to the current user rather than failing,
+  // which is the correct behavior for a shared browser.
   endpoint    String    @unique
   p256dh      String
   auth        String
   deviceLabel String?
   createdAt   DateTime  @default(now())
   lastUsedAt  DateTime?
+  userId      String    @default("user-owner")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

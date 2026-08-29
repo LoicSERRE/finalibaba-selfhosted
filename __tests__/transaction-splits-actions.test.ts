@@ -34,6 +34,19 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth-context", () => ({
+  // These tests exercise this action file's own logic (validation, write
+  // shape), not the multi-user access layer - which has its own coverage in
+  // __tests__/auth-context.test.ts. Mocking the guards to always pass keeps
+  // each test asserting the thing it was written to assert.
+  getViewer: vi.fn(async () => ({ id: "user-owner", role: "ADMIN", isMonoMode: true })),
+  assertOwned: vi.fn(async () => {}),
+  assertAccountWritable: vi.fn(async () => {}),
+  assertTransactionsWritable: vi.fn(async () => {}),
+  baseAccountIds: vi.fn(async () => []),
+  viewAccountIds: vi.fn(async () => []),
+}));
+
 import { setTransactionSplits, clearTransactionSplits } from "@/lib/actions/transaction-splits";
 
 beforeEach(() => {

@@ -24,14 +24,45 @@ export function TransactionCategoryCell({
   amountCents,
   categories,
   splits,
+  readOnly = false,
 }: Readonly<{
   transactionId: string;
   categoryId: string | null;
   amountCents: bigint;
   categories: Category[];
   splits: SplitLine[];
+  /** True when a granted (read-only) portfolio is on screen - renders the
+   *  current category as a static chip instead of an editable control. The
+   *  Server Actions behind both branches already refuse a guest; this only
+   *  keeps the UI from offering an action that could not succeed. */
+  readOnly?: boolean;
 }>) {
   const t = useTranslations("categories");
+
+  if (readOnly) {
+    // Same static-badge treatment /budgets/[categoryId] already gives split
+    // rows: show what the category IS, offer no way to change it.
+    if (splits.length > 0) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-[var(--muted)]">
+          <Split size={12} aria-hidden="true" />
+          {t("splitBadgeCount", { count: splits.length })}
+        </span>
+      );
+    }
+    const current = categories.find((c) => c.id === categoryId);
+    if (!current) return <span className="text-xs text-[var(--muted)]">-</span>;
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-[var(--foreground)]">
+        <span
+          aria-hidden="true"
+          className="inline-block w-2 h-2 rounded-full shrink-0"
+          style={{ backgroundColor: current.color }}
+        />
+        {current.name}
+      </span>
+    );
+  }
 
   if (splits.length > 0) {
     return (

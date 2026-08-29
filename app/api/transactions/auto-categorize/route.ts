@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
+import { prisma } from "@/lib/db/prisma";
+import { baseAccountIds } from "@/lib/auth-context";
+import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
 
 /**
  * Called by sync/main.py at the end of every automatic 4h sync run, right
@@ -22,7 +24,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await autoCategorizeTransactions();
+  // One pass per user, not one global pass (v2.0). Categorization creates
+  // and assigns categories, and both are per-user now - a single global run
+  // would file one user's transactions under whichever user's identically-
+  // named category happened to be found first. Each pass is scoped to that
+  // user's own base account set (own + co-owned), so a co-owned account is
+  // legitimately visited by both stakeholders' passes; the engine only ever
+  // touches categoryId:null rows, so the second pass simply finds nothing
+  // left to do rather than overwriting the first.
+  //
+  // This has no session to resolve a viewer from (it's the sync container
+  // calling in with the shared bearer token), which is why it imports the
+  // engine directly instead of going through lib/actions/auto-categorize.ts.
+  const users = await prisma.user.findMany({ select: { id: true } });
+  let categorized = 0;
+  for (const user of users) {
+    const accountIds = await baseAccountIds(user.id);
+    if (accountIds.length === 0) continue;
+    const result = await autoCategorizeForUser(user.id, accountIds);
+    categorized += result.categorized;
+  }
 
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, categorized });
 }

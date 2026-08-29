@@ -3,7 +3,7 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…",
-    "offlineNotice": "Offline — the data shown may be from your last visit.",
+    "offlineNotice": "Offline: the data shown may be from your last visit.",
     "delete": "Delete",
     "deleting": "Deleting…",
     "deleteForever": "Delete permanently",
@@ -16,7 +16,7 @@
     "configure": "Configure",
     "sync": "Sync",
     "loading": "Loading…",
-    "noData": "—",
+    "noData": "-",
     "personal": "Personal",
     "unknown": "Unknown",
     "optional": "optional",
@@ -40,11 +40,19 @@
     "ariaMain": "Main navigation",
     "ariaMobile": "Mobile navigation",
     "skipToContent": "Skip to content",
-    "language": "Language"
+    "language": "Language",
+    "myPortfolio": "My portfolio",
+    "viewingPortfolio": "Portfolio shown",
+    "readOnlyView": "Read-only"
   },
   "auth": {
     "subtitle": "Your wealth, at a glance",
     "password": "Password",
+    "username": "Username",
+    "usernameOptional": "Username (leave blank if not set)",
+    "confirmPassword": "Confirm password",
+    "passwordHint": "{min} characters minimum",
+    "passwordMismatch": "The two passwords don't match",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "submit": "Sign in",
@@ -53,7 +61,15 @@
     "totpLabel": "Verification code",
     "totpHint": "Open your authenticator app, or use a backup code",
     "errorInvalidWithCode": "Incorrect password or code",
-    "footer": "Your data stays on your server"
+    "footer": "Your data stays on your server",
+    "setupError": "Could not create the account. The username may already be taken.",
+    "bootstrapTitle": "Create your admin account",
+    "bootstrapSubtitle": "Authentication has just been enabled on this instance",
+    "bootstrapNotice": "All your existing data (accounts, transactions, budgets…) will be attached to this account. Nothing is lost or moved.",
+    "bootstrapSubmit": "Create account",
+    "inviteTitle": "Create your account",
+    "inviteSubtitle": "You've been invited to join this Finalibaba instance",
+    "inviteSubmit": "Create my account"
   },
   "accountTypes": {
     "CHECKING": "Checking",
@@ -94,11 +110,11 @@
   },
   "accounts": {
     "title": "Accounts",
-    "noAccount": "No accounts yet — add one with the button above.",
+    "noAccount": "No accounts yet. Add one with the button above.",
     "noHoldings": "No positions.",
-    "noRealEstate": "No properties yet — use the button above to add one.",
-    "noVehicle": "No vehicles yet — use the button above to add one.",
-    "noLoan": "No loans yet — use the button above to add one.",
+    "noRealEstate": "No properties yet. Use the button above to add one.",
+    "noVehicle": "No vehicles yet. Use the button above to add one.",
+    "noLoan": "No loans yet. Use the button above to add one.",
     "taxes": "taxes",
     "tabs": {
       "cash": "Cash",
@@ -207,7 +223,7 @@
       "suggestBuy": "Buy",
       "suggestSell": "Sell",
       "approxShares": "≈ {count} share(s)",
-      "footnote": "Targets don't need to add up to 100% — a position with no target set is simply excluded from the rebalancing plan."
+      "footnote": "Targets don't need to add up to 100%: a position with no target set is simply excluded from the rebalancing plan."
     },
     "loanDetail": {
       "amountBorrowed": "Borrowed amount",
@@ -226,6 +242,16 @@
       "totalInsurance": "Total insurance",
       "totalCost": "Total loan cost",
       "repaymentProgress": "Repayment · {elapsed} months elapsed of {total}"
+    },
+    "coOwners": {
+      "title": "Co-owners",
+      "description": "A co-owner sees this account in their own portfolio and can change it (categorize, import, record a sale). For read-only access to all your accounts, use portfolio sharing in settings instead.",
+      "usernameLabel": "Their username",
+      "usernamePlaceholder": "e.g. marie",
+      "add": "Add",
+      "adding": "Adding…",
+      "remove": "Remove",
+      "removeConfirm": "Remove {name} from this account? Their alert rules and goals tied to it will be deleted."
     }
   },
   "budgets": {
@@ -424,8 +450,8 @@
       "good": "Good",
       "declaredSavings": "{saved} declared / {salary} salary",
       "momSavings": "{mom} MOM / {salary} salary",
-      "hintDeclared": "Declared amount — excluding inter-account transfers and market performance",
-      "hintMom": "MOM net worth change — may include transfers and market movements"
+      "hintDeclared": "Declared amount: excluding inter-account transfers and market performance",
+      "hintMom": "MOM net worth change: may include transfers and market movements"
     },
     "runway": {
       "title": "Runway · Months of survival",
@@ -434,7 +460,7 @@
       "detail": "{savings} savings / {expenses} / month",
       "safe": "Solid safety net",
       "ok": "Acceptable buffer",
-      "warning": "Warning — build up emergency savings"
+      "warning": "Warning: build up emergency savings"
     },
     "goal": {
       "title": "{name} · target {amount}",
@@ -459,7 +485,7 @@
       "exDivUnknown": "Date unknown",
       "perShare": "{amount} $/share",
       "withholding": "15% withholding + 17.2% social charges (tax credit)",
-      "bruteFootnote": "Gross = TTM yield × position value (Yahoo Finance) · Net = estimate under flat tax, French resident — not contractual"
+      "bruteFootnote": "Gross = TTM yield × position value (Yahoo Finance) · Net = estimate under flat tax, French resident: not contractual"
     },
     "performance": {
       "title": "Portfolio performance · CTO / PEA",
@@ -477,7 +503,7 @@
       "colNetGain": "Net gain",
       "colCagr": "CAGR",
       "since": "since {date}",
-      "cagr": "CAGR = compound annual return since start date · Net = gross after latent taxes (PEA {pea}% · CTO {cto}%) — not yet realized.",
+      "cagr": "CAGR = compound annual return since start date · Net = gross after latent taxes (PEA {pea}% · CTO {cto}%): not yet realized.",
       "addDateHint": "Set the start date on each account page to enable CAGR."
     },
     "benchmark": {
@@ -498,7 +524,7 @@
     "sectorExposure": {
       "title": "Sector exposure",
       "ariaLabel": "Portfolio breakdown by sector",
-      "footnote": "Based on Yahoo Finance sector classifications (stocks via an ISIN search, ETFs via their detailed composition) — cryptocurrencies get their own category (they have no GICS sector). \"Unclassified\" only covers the rare positions Yahoo Finance (and an optional FMP/Alpha Vantage fallback key) couldn't identify.",
+      "footnote": "Based on Yahoo Finance sector classifications (stocks via an ISIN search, ETFs via their detailed composition): cryptocurrencies get their own category (they have no GICS sector). \"Unclassified\" only covers the rare positions Yahoo Finance (and an optional FMP/Alpha Vantage fallback key) couldn't identify.",
       "totalClassified": "{amount} classified by sector",
       "andMore": "+ more positions",
       "sectors": {
@@ -547,7 +573,7 @@
       "colEquity": "Equity",
       "colLtv": "LTV"
     },
-    "noDataIntro": "No data — add accounts in",
+    "noDataIntro": "No data. Add accounts in",
     "noDataLink": "Accounts."
   },
   "settings": {
@@ -568,11 +594,11 @@
       "salary": "Monthly net salary",
       "expenses": "Fixed monthly expenses",
       "saved": "Declared monthly savings",
-      "savedHint": "Savings accounts + investments — excluding inter-account transfers and market performance"
+      "savedHint": "Savings accounts + investments: excluding inter-account transfers and market performance"
     },
     "tax": {
       "title": "Tax rates",
-      "subtitle": "Capital gains tax rates on unrealized gains — used to compute net worth",
+      "subtitle": "Capital gains tax rates on unrealized gains: used to compute net worth",
       "pea": "PEA",
       "cto": "CTO",
       "crypto": "Crypto",
@@ -606,7 +632,7 @@
       "restoreConfirm": "Restore and overwrite",
       "restoring": "Restoring…",
       "restoreError": "Restore failed. Check the server logs for details.",
-      "restarting": "Restore complete — restarting the app…"
+      "restarting": "Restore complete: restarting the app…"
     },
     "twoFactor": {
       "title": "Two-factor authentication",
@@ -626,7 +652,7 @@
       "codeLabel": "Verification code",
       "confirm": "Confirm",
       "validating": "Verifying…",
-      "backupCodesWarning": "Save these backup codes somewhere safe — they will never be shown again. Each one works once and lets you sign in if you lose your authenticator device.",
+      "backupCodesWarning": "Save these backup codes somewhere safe: they will never be shown again. Each one works once and lets you sign in if you lose your authenticator device.",
       "backupCodesDone": "I've saved my codes",
       "disableTitle": "Disable 2FA",
       "disableHint": "Enter a current verification code or a backup code to confirm.",
@@ -854,11 +880,49 @@
       "emptyDescription": "Add a goal to track its progress on the Analytics page.",
       "delete": "Delete",
       "deleteDescription": "This goal will be permanently deleted."
+    },
+    "gcConnected": "Bank connection established. Accounts have been imported.",
+    "gcError": "The bank connection failed. Try again from the institution concerned.",
+    "gcAlreadyConnected": "This bank account is already connected by another user on this instance. Ask them to share it with you as a co-owner instead of reconnecting it.",
+    "users": {
+      "title": "Users",
+      "description": "Invite other people to this instance. Each one chooses their own password: you never know it.",
+      "invite": "Invite",
+      "generating": "Generating…",
+      "copyLink": "Copy link",
+      "copied": "Copied",
+      "pendingInvitations": "Pending invitations",
+      "singleUseLink": "Single-use invitation link",
+      "expiresOn": "Expires on {date}",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke this invitation? The link will stop working immediately.",
+      "deleteUser": "Delete",
+      "deleteConfirm": "Delete {name}? All their data (accounts, transactions, history) will be permanently erased.",
+      "roleAdmin": "Admin",
+      "roleMember": "Member",
+      "you": "(you)",
+      "noUsername": "Account with no username",
+      "empty": "You're the only person on this instance. Generate an invitation to add someone."
+    },
+    "portfolioSharing": {
+      "title": "Portfolio sharing",
+      "description": "Give someone read-only access to all your accounts. They can't change anything, and you can revoke access at any time.",
+      "usernameLabel": "Their username",
+      "usernamePlaceholder": "e.g. marie",
+      "grant": "Share",
+      "granting": "Sharing…",
+      "peopleWhoCanSee": "People who can see your portfolio",
+      "readOnlyAccess": "Read-only access",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke {name}'s access? The change is immediate.",
+      "sharedWithYou": "Portfolios shared with you",
+      "switcherHint": "Use the switcher at the top of the sidebar to move between portfolios.",
+      "empty": "Nothing shared yet."
     }
   },
   "shared": {
-    "readOnlyBanner": "Read-only view shared by the owner — no changes possible.",
-    "readOnlyBannerLabeled": "Read-only view shared by the owner ({label}) — no changes possible.",
+    "readOnlyBanner": "Read-only view shared by the owner: no changes possible.",
+    "readOnlyBannerLabeled": "Read-only view shared by the owner ({label}): no changes possible.",
     "holdingsTitle": "Holdings",
     "transactionsTitle": "Recent transactions"
   },
@@ -912,12 +976,12 @@
   "projectionChart": {
     "title": "Long-term projection",
     "heroLabel": "Estimated capital",
-    "investedReturnLabel": "Return — invested",
-    "liquidReturnLabel": "Return — savings",
+    "investedReturnLabel": "Return: invested",
+    "liquidReturnLabel": "Return: savings",
     "splitNote": "{investedPct}% invested · {liquidPct}% savings",
-    "splitMethodology": "Split based on your current allocation (investments + crypto vs. savings accounts only), applied in the same proportions to your future savings — this app doesn't know where your declared savings actually go. Checking accounts are deliberately not counted as \"savings\": many earn 0%, so their balance is held at today's value instead of compounding at the same rate as a savings account. The remaining balance (checking accounts, real estate, vehicles, minus any loans not already attached to them) is held at today's value, with no growth assumption.",
+    "splitMethodology": "Split based on your current allocation (investments + crypto vs. savings accounts only), applied in the same proportions to your future savings: this app doesn't know where your declared savings actually go. Checking accounts are deliberately not counted as \"savings\": many earn 0%, so their balance is held at today's value instead of compounding at the same rate as a savings account. The remaining balance (checking accounts, real estate, vehicles, minus any loans not already attached to them) is held at today's value, with no growth assumption.",
     "contributionNote": "Based on {amount}/year of declared savings",
-    "noContributionNote": "No declared monthly savings — projection reflects current net worth growth only",
+    "noContributionNote": "No declared monthly savings: projection reflects current net worth growth only",
     "horizonSelectorLabel": "Horizon",
     "horizonOption": "{years}y",
     "horizonLabel": "In {years} years",
@@ -954,7 +1018,7 @@
   "importBalanceHistory": {
     "trigger": "Import history",
     "title": "Import balance history",
-    "hint": "CSV file with columns date and balance. Dates as YYYY-MM-DD or DD/MM/YYYY. One point per date recommended — useful for backfilling the trend chart from Excel or another tool.",
+    "hint": "CSV file with columns date and balance. Dates as YYYY-MM-DD or DD/MM/YYYY. One point per date recommended: useful for backfilling the trend chart from Excel or another tool.",
     "missingColumns": "Expected columns not found: date, balance.",
     "invalidDate": "Invalid date",
     "invalidBalance": "Missing or invalid balance",
@@ -977,10 +1041,10 @@
     "estimatedValue": "Estimated value (€)",
     "autoLiability": "Remaining auto loan (€)",
     "mortgage": "Remaining capital / mortgage (€)",
-    "noInstitution": "— No institution —",
-    "noSubtype": "— Not specified —",
-    "peaLabel": "PEA — 17.2% tax (social charges)",
-    "ctoLabel": "CTO — 31.4% capital gains tax",
+    "noInstitution": "- No institution -",
+    "noSubtype": "- Not specified -",
+    "peaLabel": "PEA: 17.2% tax (social charges)",
+    "ctoLabel": "CTO: 31.4% capital gains tax",
     "typeChecking": "Checking account",
     "typeSavings": "Savings (Livret A, ISA…)",
     "typeInvestment": "Brokerage / PEA",
@@ -998,8 +1062,8 @@
     "addFirst": "Add an institution in Settings first."
   },
   "addHolding": {
-    "editTitle": "Edit — {ticker}",
-    "addTitle": "Add position — {name}",
+    "editTitle": "Edit: {ticker}",
+    "addTitle": "Add position: {name}",
     "editAriaLabel": "Edit",
     "position": "Position",
     "ticker": "Ticker / Symbol",
@@ -1007,20 +1071,20 @@
     "qty": "Quantity",
     "currency": "Currency",
     "price": "Current unit price",
-    "costBasis": "Total cost basis — optional",
+    "costBasis": "Total cost basis: optional",
     "costBasisPlaceholder": "Total amount invested, e.g. 5000.00",
-    "nativeAmountHint": "Amounts are in the currency selected above — converted to euros automatically.",
+    "nativeAmountHint": "Amounts are in the currency selected above: converted to euros automatically.",
     "taxHint": "Used to compute gains and latent tax.",
-    "targetPct": "Target allocation (%) — optional",
+    "targetPct": "Target allocation (%): optional",
     "targetPctPlaceholder": "e.g. 30",
-    "targetPctHint": "Used for rebalancing — leave blank if this position isn't part of it.",
+    "targetPctHint": "Used for rebalancing: leave blank if this position isn't part of it.",
     "update": "Update",
     "submit": "Add",
     "refreshFx": "Refresh exchange rate",
     "unknownError": "An unexpected error occurred."
   },
   "sellHolding": {
-    "title": "Sell — {ticker}",
+    "title": "Sell: {ticker}",
     "trigger": "Sell",
     "quantitySold": "Quantity sold (of {available})",
     "proceeds": "Sale proceeds (€)",
@@ -1034,7 +1098,7 @@
     "trigger": "Add property",
     "name": "Property name",
     "institution": "Institution / Lender",
-    "noInstitution": "— No institution —",
+    "noInstitution": "- No institution -",
     "value": "Estimated value (€)",
     "liability": "Remaining capital (€)",
     "tip": "The estimated value must be updated manually (market estimate, property valuation…).",
@@ -1047,7 +1111,7 @@
     "trigger": "Add a vehicle",
     "name": "Vehicle name",
     "institution": "Organization (optional)",
-    "noOrganization": "— Cash / none —",
+    "noOrganization": "- Cash / none -",
     "value": "Current estimated value (€)",
     "purchasePrice": "Purchase price (€)",
     "insuranceMonthly": "Monthly insurance (€)",
@@ -1061,7 +1125,7 @@
     "trigger": "Add a loan",
     "name": "Loan name",
     "institution": "Lender (optional)",
-    "noOrganization": "— Not specified —",
+    "noOrganization": "- Not specified -",
     "amount": "Borrowed amount (€)",
     "rate": "APR (%)",
     "duration": "Total duration (months)",
@@ -1084,7 +1148,7 @@
     "searchAriaLabel": "Search for a bank",
     "noResults": "No bank found",
     "dedicatedEnvWarning": "This bank is already synced through a server-side (.env) configuration. Also adding a Woob configuration here will create duplicate accounts - the next sync won't recognize them as the same bank.",
-    "woobHint": "Auto-sync via Woob — unlimited history stored in your database.",
+    "woobHint": "Auto-sync via Woob: unlimited history stored in your database.",
     "login": "Login / client number",
     "password": "Password",
     "creating": "Creating…"
@@ -1096,13 +1160,13 @@
     "submit": "Save"
   },
   "updateRealEstate": {
-    "title": "Update — {name}",
+    "title": "Update: {name}",
     "value": "Estimated value (€)",
     "liability": "Remaining capital (€)",
     "submit": "Save"
   },
   "updateAutomobile": {
-    "title": "Update — {name}",
+    "title": "Update: {name}",
     "value": "Current estimated value (€)",
     "liability": "Remaining auto loan (€)",
     "insurance": "Monthly insurance (€)",
@@ -1124,7 +1188,7 @@
     "confirmConnect": "I've approved the connection"
   },
   "configureWoob": {
-    "title": "Auto-sync — {name}",
+    "title": "Auto-sync: {name}",
     "configured": "Woob configured",
     "configure": "Configure Woob",
     "dedicatedEnvWarning": "This institution is already synced through a server-side (.env) configuration. Also configuring Woob here in parallel will create duplicate accounts - the two paths don't recognize each other as the same bank.",

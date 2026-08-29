@@ -243,9 +243,41 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 *Breaking architectural change: all data gains user ownership, requiring a migration. Planned as a dedicated, focused push once the single-user feature set (everything above) is mature and well-tested, rather than interleaved with it - multi-user plus a full security audit belong together, since every new sharing/permission boundary this adds is exactly the kind of surface a security review needs to cover anyway. A native mobile app may fold into this same push too, but only if it turns out to be genuinely worth the build effort relative to the PWA that already exists - not committed as of this writing, needs its own scoping pass first.*
 
-- [ ] **Multi-user support** - independent portfolios for multiple users on the same instance; role-based access (owner / read-only guest)
-- [ ] **Security audit** - a dedicated review pass once multi-user support lands, covering the new account-boundary/permission surface specifically, not just a repeat of the existing release-boundary audit's own checklist
-- [ ] **Native mobile app** *(conditional, not committed)* - only if a real scoping pass finds a concrete gap the existing installable PWA (see `CLAUDE.md`'s "PWA / offline support") doesn't already cover, and only if the remaining budget for this phase justifies it
+- [X] **Multi-user support** - independent portfolios for multiple users on the same instance; admin-generated single-use invitations; whole-portfolio read-only sharing and per-account co-ownership. See `CLAUDE.md`'s "Multi-user architecture" for the full design and `README.md`'s "Multiple users" for the user-facing story
+- [X] **Security audit** - ran as its own phase after the multi-user build. Three real fixes: `/invite/[token]` was missing from the middleware's auth-exempt list, so **the entire invitation flow was unreachable** on an `AUTH_ENABLED=true` instance; a 64ms timing gap in `resolveUser` was a working username-enumeration oracle; and `/api/gocardless/institutions` forwarded upstream error bodies verbatim to the caller. Full findings - including what was verified sound, and the items deliberately left open with reasons - are in `CLAUDE.md`'s "Security audit (post-v2.0)" section
+- [X] **Native mobile app** *(scoped - recommendation: Capacitor, Play Store only, iOS self-built)*
+
+**Native mobile app - scoping pass.**
+
+*Brief, as set by the maintainer: one language/framework covering both platforms, published to the Play Store if the opportunity comes up, and **Apple deliberately dropped** - iOS users build it themselves from a tutorial.*
+
+**The architectural constraint that decides the framework.** This app exposes **114 Server Action exports across 27 files** and only **4 public REST endpoints**. Server Actions are an RSC-internal RPC - they need the Next.js client runtime, a per-build action id and the `Next-Action` header - so **no native client can call them**. A React Native or Flutter app would therefore need a full authenticated REST API mirroring those 114 functions *before* a single screen was written, plus re-implementing all 14 pages. That is a larger project than the entire multi-user architecture, for a client that would then have to be kept in sync with every future action.
+
+**Recommendation: Capacitor.** It wraps the existing app in a native WebView, so Server Actions, sessions, the service worker and every screen keep working unchanged - the thing being shipped is the app that already exists, not a reimplementation of it. It produces a signed Android App Bundle that Play Store accepts, and it generates a real Xcode project, which is exactly the "build it yourself" path iOS gets. Rejected alternatives: React Native/Flutter (blocked by the REST-API problem above), TWA (smaller output but Android-only and no native plugin surface).
+
+**Apple is correctly dropped, and for a documented reason**: WebView wrappers are routinely rejected under App Store Guideline 4.2 ("minimum functionality"). Capacitor's Xcode project still builds and installs on a personal device, so a tutorial is a real answer rather than a consolation.
+
+**The one piece of genuinely new work**: a self-hosted app has no single URL. One published APK must let each user point at *their own* instance, so the shell needs a first-run "enter your server address" screen persisting the URL before loading it - plus honest handling of the LAN/VPN-only and self-signed-certificate cases this project's own README already documents as normal deployments. Everything past that screen is the existing web app.
+
+**Play Store friction worth knowing before committing** (checked, not assumed): a personal developer account is $25 one-time, but accounts created after 13 November 2023 must run a **closed test with 12 testers opted in for 14 consecutive days** before a production release. Still in force in 2026. That is the real gate on "if I get the chance to publish it", not the build.
+
+**Shipped from this pass regardless of whether the app gets built**: the **Badging API** (`public/sw.js` + `service-worker-registration.tsx`), supported on iOS 16.4+ - the same gate Web Push already requires - and simply unused until now. An alert leaves a dot on the installed app icon, cleared when the app is next opened or resumed. Called with no count deliberately: this app dispatches alerts but stores no read/unread state, so any number would be invented.
+
+*Correction to an earlier draft of this section, kept as a warning.* Several 2026 guides still list "EU: push notifications disabled, standalone mode removed, badges removed" as a live iOS restriction. That was Apple's **announced-then-reversed** plan, withdrawn on 1 March 2024; home-screen web apps work normally in the EU on iOS 17.4+. Taking it at face value would have described this project's own primary audience as running a crippled PWA.
+
+**Retrospective on the multi-user build.** Shipped in four gated lots (identity and migration; per-user isolation; sharing; documentation), each verified against a real two-user database rather than only unit-tested.
+
+The decision everything else rests on: the migration creates a **fixed-id owner row and backfills every existing row to it**, so there is no `userId | null` anywhere and no "is multi-user on?" branch inside any query. Mono mode resolves to that row without a login. That single choice is what makes the mono-mode guarantee provable instead of hopeful, and it makes the day-180 switch (an instance that ran solo for months and only now turns auth on) attach its history to the admin *by construction* - the bootstrap screen only sets credentials on a row that already owns everything.
+
+Three real security holes were found and fixed **while building**, not by the audit that follows:
+
+- `getUserSettingsFor(userId)` was exported from a `"use server"` module and returned the row holding `smtpPassword` and `ntfyAuthToken` in plaintext. Every export of such a module is directly invocable from the browser with attacker-chosen arguments, so this would have handed any authenticated user every other user's alert credentials.
+- `/api/gocardless/connect` had no ownership check at all - anyone with a session could start a bank-consent flow against another user's institution.
+- The read-only share view (`/shared/[token]`) queried balances instance-wide, so a link minted by one user would have exposed everyone's net worth.
+
+The generalizable lesson is the first one: **a userId parameter on a `"use server"` export is an impersonation primitive.** A scripted check for that shape is worth re-running whenever an action file gains a parameter.
+
+Two things were deliberately *not* built, and are scoped out rather than forgotten: fractional ownership of a co-owned account (each co-owner counts the full value in their own view - this is a per-viewer dashboard, not a fiscal filing), and per-account grants to non-co-owners (sharing is whole-portfolio or nothing). Open self-registration is also deliberately absent; revisit after the security audit, not before.
 
 ---
 

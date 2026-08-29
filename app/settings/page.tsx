@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, baseAccountIds, isAuthEnabled, OWNER_USER_ID } from "@/lib/auth-context";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
@@ -28,6 +29,10 @@ import { AppLockSection } from "@/components/settings/app-lock-section";
 import { getAppLockStatus } from "@/lib/actions/app-lock";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
+import { UsersSection } from "@/components/settings/users-section";
+import { PortfolioSharingSection } from "@/components/settings/portfolio-sharing-section";
+import { listUsers, listInvitations } from "@/lib/actions/users";
+import { listPortfolioGrants } from "@/lib/actions/sharing";
 import { getShareLinks } from "@/lib/actions/share-links";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
 import { getApiKeys } from "@/lib/actions/api-keys";
@@ -55,14 +60,49 @@ function dedicatedEnvNames(): Set<string> {
   return names;
 }
 
-export default async function SettingsPage() {
+// The GoCardless callback has always redirected back here with a ?gc= status,
+// but nothing ever read it - the three outcomes (connected / error /
+// already-connected-by-someone-else) were silently indistinguishable. The
+// third one only became possible in v2.0 (see the H7 note in
+// app/api/gocardless/callback/route.ts) and genuinely needs an explanation,
+// so the banner below covers all three rather than just the new one.
+const GC_STATUS_KEYS = {
+  connected: { key: "gcConnected", tone: "positive" },
+  error: { key: "gcError", tone: "negative" },
+  "already-connected": { key: "gcAlreadyConnected", tone: "warning" },
+} as const;
+
+export default async function SettingsPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<{ gc?: string }> }>) {
+  const gcStatus = GC_STATUS_KEYS[(await searchParams).gc as keyof typeof GC_STATUS_KEYS];
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
   const dedicatedSyncNames = dedicatedEnvNames();
   const theme = resolveThemePreference((await cookies()).get("THEME")?.value);
 
+  // Settings only ever configures the viewer's OWN portfolio (pickers here
+  // feed alert rules, goals and share links, all of which are per-user
+  // artifacts), so these use baseAccountIds - never a granted view.
+  const viewer = await getViewer();
+  const accountIds = await baseAccountIds(viewer.id);
+
+  // Multi-user surfaces, only meaningful with auth on: in mono mode there is
+  // no login, so there is nobody to invite and nobody to share with. Fetched
+  // conditionally rather than rendered-and-hidden so a mono instance doesn't
+  // pay for three queries it can never use.
+  const isMulti = isAuthEnabled();
+  const [users, invitations, grants] = isMulti
+    ? await Promise.all([
+        viewer.role === "ADMIN" ? listUsers() : Promise.resolve([]),
+        viewer.role === "ADMIN" ? listInvitations() : Promise.resolve([]),
+        listPortfolioGrants(),
+      ])
+    : [[], [], { given: [], received: [] }];
+
   const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
     await Promise.all([
       prisma.institution.findMany({
+        where: { userId: viewer.id },
         include: {
           _count: { select: { accounts: true } },
           // syncId is fetched for every account (not gocardless-filtered
@@ -82,7 +122,7 @@ export default async function SettingsPage() {
       getApiKeys(),
       getAlertRules(),
       prisma.account.findMany({
-        where: { type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
+        where: { id: { in: accountIds }, type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
@@ -93,7 +133,7 @@ export default async function SettingsPage() {
       // the component can filter to only the holdings REBALANCING_DRIFT can
       // actually evaluate (see computeHoldingDriftPts's own null guard).
       prisma.account.findMany({
-        where: { type: { in: ["INVESTMENT", "CRYPTO"] } },
+        where: { id: { in: accountIds }, type: { in: ["INVESTMENT", "CRYPTO"] } },
         select: {
           id: true,
           name: true,
@@ -102,7 +142,7 @@ export default async function SettingsPage() {
         orderBy: { name: "asc" },
       }),
       prisma.category.findMany({
-        where: { budgetCents: { not: null } },
+        where: { userId: viewer.id, budgetCents: { not: null } },
         select: { id: true, name: true, budgetCents: true },
         orderBy: { name: "asc" },
       }),
@@ -114,7 +154,7 @@ export default async function SettingsPage() {
       // components/settings/goals-section.tsx and the Goal model's own
       // schema comment for why.
       prisma.account.findMany({
-        where: { type: { not: "LOAN" } },
+        where: { id: { in: accountIds }, type: { not: "LOAN" } },
         select: { id: true, name: true, type: true },
         orderBy: { name: "asc" },
       }),
@@ -144,6 +184,20 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("settings.title")}</h1>
         <p className="text-sm text-[var(--muted)] mt-1">{t("settings.subtitle")}</p>
       </div>
+
+      {gcStatus && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            gcStatus.tone === "positive"
+              ? "border-[var(--positive)]/40 bg-[var(--positive)]/10 text-[var(--positive)]"
+              : gcStatus.tone === "negative"
+                ? "border-[var(--negative)]/40 bg-[var(--negative)]/10 text-[var(--negative)]"
+                : "border-[var(--warning)]/40 bg-[var(--warning)]/10 text-[var(--warning)]"
+          }`}
+        >
+          {t(`settings.${gcStatus.key}` as Parameters<typeof t>[0])}
+        </div>
+      )}
 
       {/* Institutions */}
       <section className="space-y-4">
@@ -518,7 +572,11 @@ export default async function SettingsPage() {
       )}
 
       {/* Backup & restore - hidden in demo mode (restore mutations are blocked anyway) */}
-      {process.env.DEMO_MODE !== "true" && <BackupRestoreSection />}
+      {/* Admin-only since v2.0: this wraps pg_dump/psql over the WHOLE
+          database, so a restore replaces every user's data (and the user table
+          itself). app/api/backup/route.ts enforces it - this just doesn't
+          offer a member a section whose every button returns 403. */}
+      {process.env.DEMO_MODE !== "true" && viewer.role === "ADMIN" && <BackupRestoreSection />}
 
       {/* 2FA - meaningless without built-in auth active, and hidden in demo
           mode (setup/disable mutations are blocked anyway) */}
@@ -543,6 +601,23 @@ export default async function SettingsPage() {
           off for the trusted private network). Hidden in demo mode only
           (create/revoke mutations are blocked anyway). */}
       {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
+
+      {/* Read-only guests (v2.0) - sits next to share links because they answer
+          the same question ("let someone else see this"), with a different
+          trust model: a grant is tied to a real account on this instance and is
+          revocable per person, a share link is an anonymous URL. */}
+      {isMulti && process.env.DEMO_MODE !== "true" && (
+        <PortfolioSharingSection given={grants.given} received={grants.received} />
+      )}
+
+      {isMulti && viewer.role === "ADMIN" && process.env.DEMO_MODE !== "true" && (
+        <UsersSection
+          users={users}
+          invitations={invitations}
+          currentUserId={viewer.id}
+          ownerUserId={OWNER_USER_ID}
+        />
+      )}
 
       {/* Public REST API keys - same demo-mode gate as share links above
           (create/revoke mutations blocked anyway in demo mode), same

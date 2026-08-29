@@ -70,7 +70,7 @@ def _sync_account_transactions(w, account, account_db_id, cur):
                     account_id=account_db_id,
                     sync_id=sync_id,
                     date=tx.date,
-                    label=(tx.label or tx.raw or "").strip() or "—",
+                    label=(tx.label or tx.raw or "").strip() or "-",
                     amount_cents=amount_cents,
                 )
                 tx_count += 1

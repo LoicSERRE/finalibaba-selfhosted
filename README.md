@@ -27,6 +27,7 @@
 - **Installable, works offline** - add it to your home screen on mobile or desktop; pages you've already visited stay viewable without a connection (when built-in auth is off - see the PWA section below for why)
 - **Dark or light theme** - switchable in Settings, dark by default
 - **English & French UI** - language auto-detected from browser, switchable in Settings
+- **Multi-user** (optional) - invite others to the same instance, each with their own isolated portfolio; share a whole portfolio read-only, or co-own individual accounts. Off unless you turn authentication on - a single-user instance behaves exactly as it always has
 - **100% self-hosted** - your data stays on your server
 
 ## Tech stack
@@ -255,11 +256,11 @@ AUTH_PASSWORD_HASH=<generated hash>
 
 With `AUTH_ENABLED=true`, optionally enable TOTP-based 2FA from Settings → Two-factor authentication - scan the QR code with any authenticator app (Google Authenticator, Aegis, etc.), confirm with a code, and save the 8 one-time backup codes shown once. No extra env vars needed.
 
-**Locked out** (lost your authenticator device and all backup codes)? Connect directly to the database and clear it, then restart:
+**Locked out** (lost your authenticator device and all backup codes)? Connect directly to the database and clear it, then restart. 2FA is per user, so pass the username of the account to unlock (the instance owner's row is `user-owner` if it never got a username):
 
 ```bash
 docker compose exec db psql -U appuser -d finalibaba -c \
-  "UPDATE \"UserSettings\" SET \"totpEnabled\" = false, \"totpSecret\" = NULL, \"totpBackupCodes\" = '{}' WHERE id = 'singleton';"
+  "UPDATE \"User\" SET \"totpEnabled\" = false, \"totpSecret\" = NULL, \"totpBackupCodes\" = '{}' WHERE username = 'yourusername';"
 ```
 
 Same idea as resetting `AUTH_PASSWORD` - this app trusts whoever has shell access to your own server.
@@ -276,6 +277,54 @@ Any of these work out of the box:
 ### VPN (simplest)
 
 Use **Tailscale**, WireGuard, or OpenVPN - no auth config needed.
+
+---
+
+## Multiple users (optional)
+
+Everything below needs `AUTH_ENABLED=true`. **With authentication off, none of it exists** - no login, no user list, no sharing UI - and the app behaves exactly as it did before v2.0. That's deliberate: a single-user instance on a private network shouldn't have to think about any of this.
+
+### Turning it on for an existing instance
+
+Set `AUTH_ENABLED=true` and restart. On first visit you'll be asked to choose a username and password:
+
+> **Create your admin account** - your existing data will be attached to it.
+
+That sentence is literal. Every account, transaction and setting already belongs to a hidden owner row created when you upgraded; this screen only sets credentials on that row. Nothing is moved, copied or re-assigned, so there is no half-migrated state to recover from if it goes wrong.
+
+If you were already using `AUTH_PASSWORD` / `AUTH_PASSWORD_HASH`, login keeps working unchanged and Settings shows a "finish setting up your account" banner instead. Once you set a password in the app, **the DB password wins and the env var is ignored** - two valid passwords for one account is a weakest-link problem, not a convenience.
+
+### Inviting someone
+
+Settings → **Users** → *Invite*. You get a single-use link, valid 48 hours, that grants nothing until it's used. The invitee opens it and picks their own username and password.
+
+**You never choose anyone else's password**, and it never travels through a second channel. Each new user starts with a completely empty portfolio.
+
+### Sharing
+
+Two different things, on purpose:
+
+| | **Portfolio sharing** | **Account co-ownership** |
+|---|---|---|
+| Where | Settings → Portfolio sharing | The account's own page |
+| Scope | Everything you own | One account |
+| Access | Read-only | Read **and write** |
+| For | "My partner can see my net worth" | A genuinely joint account |
+
+**Portfolio sharing** puts a switcher at the top of the other person's sidebar. When they select your portfolio, the dashboard, accounts, analytics and transactions show *your* data with every edit control gone. They can't change anything, and revoking is immediate - even for a tab they already had open.
+
+**Co-ownership** makes a joint account appear in both portfolios, pointing at the same underlying data. Either of you can categorize a transaction on it or import a CSV. Only the account's original owner can add or remove co-owners. Removing someone also deletes their alert rules and goals for that account - otherwise they'd keep getting notified about a balance they can no longer see.
+
+Both are invitation-based: you share with a username, so the person has to already exist on your instance.
+
+### What stays with the first user
+
+> [!WARNING]
+> **Don't turn `AUTH_ENABLED` back off once you have several users.** With no login, the app resolves every visitor to the owner account - admin rights included. Other people's portfolios aren't exposed (nobody can authenticate as them any more), but they do become unreachable, and yours becomes readable by anyone who can reach the app.
+
+Bank credentials in `.env` (`LCL_LOGIN`, `TR_PHONE`) belong to the instance owner, so only they can run or re-authenticate those syncs. **The imported data is unaffected** - an env-synced account is co-ownable and shareable exactly like a manual one. A second user can connect their own banks through Woob or GoCardless; Trade Republic specifically is owner-only, since Woob has no module for it.
+
+Database backup and restore are admin-only: they cover the entire instance, including other people's data.
 
 ---
 

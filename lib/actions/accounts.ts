@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { AccountType, TaxTreatment } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 
@@ -90,8 +91,10 @@ export async function createAccount(formData: FormData) {
     initialLiabilityCents = loanAmountCents; // initial capital = liability for loan accounts
   }
 
+  const viewer = await getViewer();
   const account = await prisma.account.create({
     data: {
+      userId: viewer.id,
       name,
       type,
       institutionId,
@@ -136,6 +139,8 @@ export async function createAccount(formData: FormData) {
 }
 
 export async function deleteAccount(id: string) {
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
   await prisma.account.delete({ where: { id } });
   revalidateAll();
 }
@@ -154,6 +159,8 @@ export async function renameAccount(formData: FormData) {
   const name = (formData.get("name") as string)?.trim();
   if (!name) throw new Error("Le nom ne peut pas être vide.");
 
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
   await prisma.account.update({ where: { id }, data: { name } });
   revalidatePath(`/accounts/${id}`);
   revalidateAll();
@@ -164,6 +171,8 @@ export async function updateRealEstateAccount(formData: FormData) {
   const valueCents = parseCents(formData.get("value") as string);
   const liabilityCents = parseCents(formData.get("liability") as string);
 
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
   await prisma.account.update({
     where: { id },
     data: { manualValueCents: valueCents, liabilityCents },
@@ -182,6 +191,8 @@ export async function updateInvestmentStartDate(formData: FormData) {
   const dateStr = (formData.get("investmentStartDate") as string | null)?.trim();
   const investmentStartDate = dateStr ? new Date(dateStr) : null;
 
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
   await prisma.account.update({
     where: { id },
     data: { investmentStartDate },
@@ -196,6 +207,8 @@ export async function updateAccountTaxTreatment(formData: FormData) {
   const taxTreatment = parseTaxTreatment(formData);
   const taxRatePct = parseTaxRatePct(formData.get("taxRatePct"));
 
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
   await prisma.account.update({
     where: { id },
     data: {
@@ -216,6 +229,8 @@ export async function updateAutomobileAccount(formData: FormData) {
   const liabilityCents = parseCents(formData.get("liability") as string);
   const insuranceMonthlyCents = parseOptionalCents(formData.get("insuranceMonthly"));
 
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
   await prisma.account.update({
     where: { id },
     data: {

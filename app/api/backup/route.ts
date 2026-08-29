@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth-context";
 import { spawn } from "node:child_process";
 import { createGzip, gunzipSync } from "node:zlib";
 
@@ -15,7 +16,27 @@ function buildConnectionString(databaseUrl: string): { connStr: string; password
 
 const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
 
+// Both handlers operate on the WHOLE database - every user's data, by design
+// (this wraps pg_dump/psql, not a per-user export). That makes it a
+// full-instance takeover primitive in multi-user: a GET reads everyone's
+// finances, a POST replaces the entire instance including the user table.
+// Admin-only as of v2.0; before that the route had no auth of its own at all,
+// relying entirely on proxy.ts's blanket session gate, which in multi-user
+// any member passes. In mono mode the viewer is the owner, who is ADMIN, so
+// this never fires.
+async function assertBackupAllowed(): Promise<NextResponse | null> {
+  try {
+    await requireAdmin();
+    return null;
+  } catch {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
+}
+
 export async function GET() {
+  const denied = await assertBackupAllowed();
+  if (denied) return denied;
+
   const { connStr, password } = buildConnectionString(process.env.DATABASE_URL!);
 
   // sonarjs flags resolving pg_dump via PATH rather than an absolute path.
@@ -94,6 +115,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await assertBackupAllowed();
+  if (denied) return denied;
+
   let formData: FormData;
   try {
     formData = await req.formData();

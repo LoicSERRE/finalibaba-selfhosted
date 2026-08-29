@@ -6,6 +6,7 @@ import { Eye, EyeOff, TrendingUp } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +22,10 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
 
     const { signIn } = await import("next-auth/react");
     const result = await signIn("credentials", {
+      // Blank is valid and means "the owner" - an instance still using the
+      // env AUTH_PASSWORD has no username to type. See resolveUser() in
+      // lib/auth.ts.
+      username,
       password,
       totpCode,
       redirect: false,
@@ -58,6 +63,21 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
 
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="username" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                {t("usernameOptional")}
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                autoCapitalize="none"
+                className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm text-[var(--foreground)] placeholder-[var(--muted)]/40 focus:outline-none focus:border-[var(--accent)] transition-colors"
+              />
+            </div>
+
             <div className="space-y-1.5">
               <label htmlFor="password" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
                 {t("password")}

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 
 // No getAlertSettings() here - lib/actions/user-settings.ts's
@@ -41,9 +42,10 @@ export async function updateAlertChannels(formData: FormData) {
 
   const data = { ntfyTopicUrl, ntfyAuthToken, ntfyEnabled, alertEmailTo, smtpHost, smtpPort, smtpUser, smtpFrom, emailAlertsEnabled };
 
+  const viewer = await getViewer();
   await prisma.userSettings.upsert({
-    where: { id: "singleton" },
-    create: { ...data, smtpPassword: smtpPasswordInput || null },
+    where: { userId: viewer.id },
+    create: { userId: viewer.id, ...data, smtpPassword: smtpPasswordInput || null },
     update: smtpPasswordInput ? { ...data, smtpPassword: smtpPasswordInput } : data,
   });
 
@@ -62,8 +64,9 @@ export async function updateAlertTriggers(formData: FormData) {
   const syncFailureAlertsEnabled = formData.get("syncFailureAlertsEnabled") === "on";
   const sectorDataAlertsEnabled = formData.get("sectorDataAlertsEnabled") === "on";
 
+  const viewer = await getViewer();
   const current = await prisma.userSettings.findUnique({
-    where: { id: "singleton" },
+    where: { userId: viewer.id },
     select: { netWorthAlertThresholdCents: true },
   });
   // Changing the threshold invalidates the old crossing baseline - without
@@ -81,8 +84,8 @@ export async function updateAlertTriggers(formData: FormData) {
   };
 
   await prisma.userSettings.upsert({
-    where: { id: "singleton" },
-    create: data,
+    where: { userId: viewer.id },
+    create: { userId: viewer.id, ...data },
     update: data,
   });
 

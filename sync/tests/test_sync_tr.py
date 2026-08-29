@@ -251,7 +251,7 @@ def test_timeline_item_to_transaction_omits_subtitle_when_absent():
 
 def test_timeline_item_to_transaction_falls_back_to_placeholder_when_no_title_or_subtitle():
     resolved = _timeline_item_to_transaction(_tl_item(title="", subtitle=""))
-    assert resolved["label"] == "—"
+    assert resolved["label"] == "-"
 
 
 def test_timeline_item_to_transaction_returns_none_for_cancelled_items():

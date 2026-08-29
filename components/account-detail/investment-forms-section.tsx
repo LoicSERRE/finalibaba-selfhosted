@@ -10,13 +10,23 @@ export function InvestmentFormsSection({
   investmentStartDate,
   taxTreatment,
   taxRatePct,
+  readOnly = false,
 }: Readonly<{
   td: T;
   accountId: string;
   investmentStartDate: Date | null;
   taxTreatment: string;
   taxRatePct: number | null;
+  /** True when a granted (read-only) portfolio is on screen. The Server
+   *  Actions behind these controls guard ownership themselves; this only
+   *  avoids rendering buttons that could not succeed. */
+  readOnly?: boolean;
 }>) {
+  // Both children are bare <form action={serverAction}> - there is nothing
+  // read-only to show here, so the whole section is dropped rather than
+  // rendered inert.
+  if (readOnly) return null;
+
   return (
     <>
       {/* Date de début d'investissement */}

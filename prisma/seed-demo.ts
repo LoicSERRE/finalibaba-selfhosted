@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { PrismaClient } from "../app/generated/prisma/client";
+import { OWNER_USER_ID } from "../lib/domain/users";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
@@ -31,37 +32,55 @@ function inYear(monthIndex: number, day = 15): Date {
 }
 
 async function main() {
+  // Everything this script writes belongs to the instance owner, and every
+  // delete below is scoped to them (v2.0). Both halves matter: without the
+  // explicit userId a create would silently ride on the column's DB-level
+  // default, which is scaffolding rather than intent; without the scope, a
+  // `pnpm run db:seed:demo` on an instance that has other users would wipe
+  // their real data too, which for a "fill my dev database with fake
+  // accounts" command would be catastrophic and completely unexpected.
+  const owner = await prisma.user.findUnique({ where: { id: OWNER_USER_ID }, select: { id: true } });
+  if (!owner) {
+    throw new Error(
+      "No owner user found - run `pnpm exec prisma migrate deploy` first (the v2.0 multi-user migration creates it)."
+    );
+  }
+  const userId = OWNER_USER_ID;
+  const ownAccounts = { account: { userId } };
+
   console.log("Clearing existing data…");
-  await prisma.syncLog.deleteMany();
-  await prisma.recurringTransaction.deleteMany();
-  await prisma.transaction.deleteMany();
-  await prisma.historicalBalance.deleteMany();
-  await prisma.incomeEvent.deleteMany();
-  await prisma.sale.deleteMany();
-  await prisma.holding.deleteMany();
-  await prisma.goal.deleteMany();
-  await prisma.userSettings.deleteMany();
-  await prisma.account.deleteMany();
-  await prisma.institution.deleteMany();
-  await prisma.category.deleteMany();
+  // Ordered children-first: every FK below points at Account, which is
+  // deleted last.
+  await prisma.syncLog.deleteMany({ where: { userId } });
+  await prisma.recurringTransaction.deleteMany({ where: ownAccounts });
+  await prisma.transaction.deleteMany({ where: ownAccounts });
+  await prisma.historicalBalance.deleteMany({ where: ownAccounts });
+  await prisma.incomeEvent.deleteMany({ where: ownAccounts });
+  await prisma.sale.deleteMany({ where: ownAccounts });
+  await prisma.holding.deleteMany({ where: ownAccounts });
+  await prisma.goal.deleteMany({ where: { userId } });
+  await prisma.userSettings.deleteMany({ where: { userId } });
+  await prisma.account.deleteMany({ where: { userId } });
+  await prisma.institution.deleteMany({ where: { userId } });
+  await prisma.category.deleteMany({ where: { userId } });
 
   // ── Institutions ─────────────────────────────────────────────────────────
   console.log("Creating institutions…");
-  const bank = await prisma.institution.create({ data: { name: "LCL" } });
-  const tr   = await prisma.institution.create({ data: { name: "Trade Republic" } });
-  const cb   = await prisma.institution.create({ data: { name: "Coinbase" } });
+  const bank = await prisma.institution.create({ data: { userId, name: "LCL" } });
+  const tr   = await prisma.institution.create({ data: { userId, name: "Trade Republic" } });
+  const cb   = await prisma.institution.create({ data: { userId, name: "Coinbase" } });
 
   // ── Accounts ──────────────────────────────────────────────────────────────
   console.log("Creating accounts…");
 
   // Fiat
-  const checking = await prisma.account.create({ data: { name: "Compte courant", type: "CHECKING",     institutionId: bank.id } });
-  const ldds     = await prisma.account.create({ data: { name: "LDDS",           type: "SAVINGS",      institutionId: bank.id } });
-  const livretA  = await prisma.account.create({ data: { name: "Livret A",       type: "SAVINGS",      institutionId: bank.id } });
-  const tickets  = await prisma.account.create({ data: { name: "Tickets Restaurant", type: "MEAL_VOUCHER", institutionId: bank.id, manualValueCents: EUR(425) } });
+  const checking = await prisma.account.create({ data: { userId, name: "Compte courant", type: "CHECKING",     institutionId: bank.id } });
+  const ldds     = await prisma.account.create({ data: { userId, name: "LDDS",           type: "SAVINGS",      institutionId: bank.id } });
+  const livretA  = await prisma.account.create({ data: { userId, name: "Livret A",       type: "SAVINGS",      institutionId: bank.id } });
+  const tickets  = await prisma.account.create({ data: { userId, name: "Tickets Restaurant", type: "MEAL_VOUCHER", institutionId: bank.id, manualValueCents: EUR(425) } });
 
   // Investments
-  const pea = await prisma.account.create({ data: {
+  const pea = await prisma.account.create({ data: { userId,
     name: "PEA",
     type: "INVESTMENT",
     institutionId: tr.id,
@@ -74,7 +93,7 @@ async function main() {
     // which stays TAXABLE (the schema default).
     taxTreatment: "EXEMPT",
   }});
-  const cto = await prisma.account.create({ data: {
+  const cto = await prisma.account.create({ data: { userId,
     name: "CTO",
     type: "INVESTMENT",
     institutionId: tr.id,
@@ -98,14 +117,14 @@ async function main() {
   }});
 
   // Crypto
-  const cryptoTR = await prisma.account.create({ data: {
+  const cryptoTR = await prisma.account.create({ data: { userId,
     name: "Crypto",
     type: "CRYPTO",
     institutionId: tr.id,
     investmentStartDate: new Date("2023-01-10"),
     taxRatePct: 0.314, // this app's own suggested crypto default
   }});
-  const btcCB = await prisma.account.create({ data: {
+  const btcCB = await prisma.account.create({ data: { userId,
     name: "Bitcoin",
     type: "CRYPTO",
     institutionId: cb.id,
@@ -114,11 +133,11 @@ async function main() {
   }});
 
   // Immobilier & auto (IDs capturés pour l'historique)
-  const appart  = await prisma.account.create({ data: { name: "Appartement - Paris 11e", type: "REAL_ESTATE", manualValueCents: EUR(295_000) } });
-  const voiture = await prisma.account.create({ data: { name: "Hyundai i30N", type: "AUTOMOBILE", manualValueCents: EUR(24_000), purchasePriceCents: EUR(31_500) } });
+  const appart  = await prisma.account.create({ data: { userId, name: "Appartement - Paris 11e", type: "REAL_ESTATE", manualValueCents: EUR(295_000) } });
+  const voiture = await prisma.account.create({ data: { userId, name: "Hyundai i30N", type: "AUTOMOBILE", manualValueCents: EUR(24_000), purchasePriceCents: EUR(31_500) } });
 
   // Prêts (IDs capturés pour l'historique)
-  const pretImmo = await prisma.account.create({ data: {
+  const pretImmo = await prisma.account.create({ data: { userId,
     name: "Prêt immobilier",
     type: "LOAN",
     loanAmountCents:    EUR(180_000),
@@ -128,7 +147,7 @@ async function main() {
     loanStartDate:      new Date("2022-06-01"),
     insuranceMonthlyCents: EUR(45),
   }});
-  const pretAuto = await prisma.account.create({ data: {
+  const pretAuto = await prisma.account.create({ data: { userId,
     name: "Prêt auto",
     type: "LOAN",
     loanAmountCents:    EUR(12_000),
@@ -144,10 +163,10 @@ async function main() {
   // "no budget set" state - see the spend math in the transactions section
   // below (courses + edf/assurance/resto amounts are chosen to land there).
   console.log("Creating categories…");
-  const catAlimentation = await prisma.category.create({ data: { name: "Alimentation", color: "#22c55e", budgetCents: EUR(220) } });
-  const catLogement      = await prisma.category.create({ data: { name: "Logement",      color: "#3b82f6", budgetCents: EUR(200) } });
-  const catAbonnements   = await prisma.category.create({ data: { name: "Abonnements",   color: "#a855f7" } }); // no budget set on purpose
-  const catLoisirs       = await prisma.category.create({ data: { name: "Loisirs",       color: "#ec4899", budgetCents: EUR(150) } });
+  const catAlimentation = await prisma.category.create({ data: { userId, name: "Alimentation", color: "#22c55e", budgetCents: EUR(220) } });
+  const catLogement      = await prisma.category.create({ data: { userId, name: "Logement",      color: "#3b82f6", budgetCents: EUR(200) } });
+  const catAbonnements   = await prisma.category.create({ data: { userId, name: "Abonnements",   color: "#a855f7" } }); // no budget set on purpose
+  const catLoisirs       = await prisma.category.create({ data: { userId, name: "Loisirs",       color: "#ec4899", budgetCents: EUR(150) } });
 
   // ── Holdings ──────────────────────────────────────────────────────────────
   // lastPriceCents = prix de seed réaliste (mis à jour ensuite par Yahoo Finance)
@@ -385,14 +404,14 @@ async function main() {
   // comment).
   console.log("Creating user settings…");
   await prisma.userSettings.upsert({
-    where:  { id: "singleton" },
+    where:  { userId },
     update: {
       salaryNetCents:       EUR(3_800),
       monthlyExpensesCents: EUR(2_350),
       monthlySavedCents:    EUR(950),
     },
     create: {
-      id: "singleton",
+      userId,
       salaryNetCents:       EUR(3_800),
       monthlyExpensesCents: EUR(2_350),
       monthlySavedCents:    EUR(950),
@@ -407,9 +426,9 @@ async function main() {
   // the ROADMAP's own "down payment"/"emergency fund" framing.
   console.log("Creating savings goals…");
   await prisma.goal.createMany({ data: [
-    { name: "Patrimoine",       targetCents: EUR(350_000) },
-    { name: "Fonds d'urgence",  targetCents: EUR(20_000), accountId: livretA.id },
-    { name: "Objectif CTO",     targetCents: EUR(10_000), accountId: cto.id },
+    { userId, name: "Patrimoine",       targetCents: EUR(350_000) },
+    { userId, name: "Fonds d'urgence",  targetCents: EUR(20_000), accountId: livretA.id },
+    { userId, name: "Objectif CTO",     targetCents: EUR(10_000), accountId: cto.id },
   ]});
 
   console.log("Done - demo data seeded.");

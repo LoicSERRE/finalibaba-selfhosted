@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -24,14 +25,17 @@ export default async function TaxReportPage({
   const startOfYear = new Date(Date.UTC(year, 0, 1));
   const startOfNextYear = new Date(Date.UTC(year + 1, 0, 1));
 
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+
   const [sales, incomeEvents] = await Promise.all([
     prisma.sale.findMany({
-      where: { date: { gte: startOfYear, lt: startOfNextYear } },
+      where: { accountId: { in: accountIds }, date: { gte: startOfYear, lt: startOfNextYear } },
       include: { account: { select: { name: true, taxTreatment: true, taxRatePct: true } } },
       orderBy: { date: "desc" },
     }),
     prisma.incomeEvent.findMany({
-      where: { date: { gte: startOfYear, lt: startOfNextYear } },
+      where: { accountId: { in: accountIds }, date: { gte: startOfYear, lt: startOfNextYear } },
       include: { account: { select: { name: true } } },
       orderBy: { date: "desc" },
     }),

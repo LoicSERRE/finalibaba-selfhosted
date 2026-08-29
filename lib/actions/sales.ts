@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 import Decimal from "decimal.js";
 import { refreshAccountBalance } from "@/lib/actions/holdings";
@@ -16,6 +17,8 @@ function revalidateAll(accountId: string) {
 
 export async function recordSale(formData: FormData) {
   const accountId = formData.get("accountId") as string;
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
   const ticker = (formData.get("ticker") as string).trim().toUpperCase();
   const quantitySold = new Decimal(formData.get("quantitySold") as string);
   const proceedsCents = parseCents(formData.get("proceeds") as string);
@@ -72,6 +75,10 @@ export async function recordSale(formData: FormData) {
 // that). Correcting a mistaken sale means deleting it here *and* manually
 // fixing the Holding via the existing edit dialog.
 export async function deleteSale(id: string) {
-  const sale = await prisma.sale.delete({ where: { id } });
+  const sale = await prisma.sale.findUnique({ where: { id }, select: { accountId: true } });
+  if (!sale) throw new Error("Vente introuvable.");
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, sale.accountId);
+  await prisma.sale.delete({ where: { id } });
   revalidateAll(sale.accountId);
 }

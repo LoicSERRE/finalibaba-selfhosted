@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
 import { RecurringFrequency } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 
@@ -33,6 +34,16 @@ function parseAnchorDate(formData: FormData): Date {
   return new Date(`${raw}T12:00:00.000Z`);
 }
 
+// Ownership for an existing row, resolved through its account (a
+// RecurringTransaction is account-transitive, so a co-owner of a joint
+// account can manage its recurring templates too).
+async function assertRecurringWritable(id: string): Promise<void> {
+  const row = await prisma.recurringTransaction.findUnique({ where: { id }, select: { accountId: true } });
+  if (!row) throw new Error("Not found.");
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, row.accountId);
+}
+
 export async function createRecurringTransaction(formData: FormData) {
   const label = (formData.get("label") as string).trim();
   if (!label) throw new Error("Label required");
@@ -46,6 +57,10 @@ export async function createRecurringTransaction(formData: FormData) {
   const anchorDate = parseAnchorDate(formData);
   const categoryId = (formData.get("categoryId") as string | null)?.trim() || null;
   const autoDetected = formData.get("autoDetected") === "true";
+
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
+  if (categoryId) await assertOwned("category", categoryId, viewer.id);
 
   await prisma.recurringTransaction.create({
     data: { accountId, label, amountCents, categoryId, frequency, intervalCount, anchorDate, autoDetected },
@@ -66,6 +81,14 @@ export async function updateRecurringTransaction(id: string, formData: FormData)
   const anchorDate = parseAnchorDate(formData);
   const categoryId = (formData.get("categoryId") as string | null)?.trim() || null;
 
+  // Both sides: the row as it stands, and the account it's being moved to -
+  // otherwise an edit could reassign one's own recurring template onto
+  // someone else's account.
+  await assertRecurringWritable(id);
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
+  if (categoryId) await assertOwned("category", categoryId, viewer.id);
+
   await prisma.recurringTransaction.update({
     where: { id },
     data: { accountId, label, amountCents, categoryId, frequency, intervalCount, anchorDate },
@@ -74,6 +97,7 @@ export async function updateRecurringTransaction(id: string, formData: FormData)
 }
 
 export async function deleteRecurringTransaction(id: string) {
+  await assertRecurringWritable(id);
   await prisma.recurringTransaction.delete({ where: { id } });
   revalidateAll();
 }
@@ -85,6 +109,9 @@ export async function dismissSuggestion(candidate: {
   frequency: RecurringFrequency;
   anchorDate: string; // ISO date, YYYY-MM-DD
 }) {
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, candidate.accountId);
+
   await prisma.recurringTransaction.create({
     data: {
       accountId: candidate.accountId,
@@ -100,6 +127,7 @@ export async function dismissSuggestion(candidate: {
 }
 
 export async function toggleRecurringActive(id: string, active: boolean) {
+  await assertRecurringWritable(id);
   await prisma.recurringTransaction.update({ where: { id }, data: { active } });
   revalidateAll();
 }

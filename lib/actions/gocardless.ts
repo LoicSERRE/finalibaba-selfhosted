@@ -4,9 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getAccountBalances, getTransactions, pickBalance, type GCTransaction } from "@/lib/services/gocardless";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
+import { getViewer, assertOwned } from "@/lib/auth-context";
 
 /** Refresh balances for all GoCardless-linked accounts of an institution */
 export async function syncGocardlessBalances(institutionId: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", institutionId, viewer.id);
   const accounts = await prisma.account.findMany({
     where: { institutionId, gocardlessAccountId: { not: null } },
   });
@@ -38,7 +41,7 @@ function gcTransactionToRow(accountId: string, tx: GCTransaction) {
   const dateStr = tx.bookingDate ?? tx.valueDate;
   if (!dateStr) return null;
 
-  const label = tx.remittanceInformationUnstructured || tx.creditorName || tx.debtorName || "—";
+  const label = tx.remittanceInformationUnstructured || tx.creditorName || tx.debtorName || "-";
   return {
     accountId,
     syncId: `gocardless_${tx.transactionId}`,
@@ -67,6 +70,8 @@ function gcTransactionToRow(accountId: string, tx: GCTransaction) {
  * the very same sync, not a cycle behind.
  */
 export async function syncGocardlessTransactions(institutionId: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", institutionId, viewer.id);
   const accounts = await prisma.account.findMany({
     where: { institutionId, gocardlessAccountId: { not: null } },
   });

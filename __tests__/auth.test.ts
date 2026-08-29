@@ -13,9 +13,11 @@ const { findUniqueMock, updateMock } = vi.hoisted(() => ({
   updateMock: vi.fn(),
 }));
 
+// As of v2.0 authorize() resolves a real User row (TOTP moved there from the
+// old UserSettings singleton), so the mock stands in for prisma.user.
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    userSettings: {
+    user: {
       findUnique: findUniqueMock,
       update: updateMock,
     },
@@ -49,10 +51,21 @@ function reqWithIp(ip: string) {
   return { headers: { "x-forwarded-for": ip } };
 }
 
-// Default: 2FA not enabled - keeps every pre-existing password-only test in
-// this file passing unchanged now that authorize() does a real DB read.
+// Default: the owner, with no DB password (so the env AUTH_PASSWORD/
+// AUTH_PASSWORD_HASH fallback applies, which is what these tests exercise)
+// and 2FA off - keeps every pre-existing password-only test in this file
+// passing unchanged.
+const OWNER_ROW = {
+  id: "user-owner",
+  role: "ADMIN" as const,
+  passwordHash: null,
+  totpEnabled: false,
+  totpSecret: null,
+  totpBackupCodes: [] as string[],
+};
+
 beforeEach(() => {
-  findUniqueMock.mockReset().mockResolvedValue({ totpEnabled: false, totpSecret: null, totpBackupCodes: [] });
+  findUniqueMock.mockReset().mockResolvedValue({ ...OWNER_ROW });
   updateMock.mockReset().mockResolvedValue({});
 });
 
@@ -148,7 +161,7 @@ describe("authOptions credentials provider - authorize()", () => {
       { password: "correct-horse" },
       reqWithIp(nextIp())
     );
-    expect(result).toEqual({ id: "owner", name: "owner" });
+    expect(result).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
   });
 
   it("uses AUTH_USER_NAME as the display name when set", async () => {
@@ -158,7 +171,7 @@ describe("authOptions credentials provider - authorize()", () => {
       { password: "correct-horse" },
       reqWithIp(nextIp())
     );
-    expect(result).toEqual({ id: "owner", name: "Loïc" });
+    expect(result).toEqual({ id: "user-owner", name: "Loïc", role: "ADMIN" });
   });
 
   it("prefers AUTH_PASSWORD_HASH over AUTH_PASSWORD when both are set (bcrypt path)", async () => {
@@ -169,7 +182,7 @@ describe("authOptions credentials provider - authorize()", () => {
       { password: "correct-horse" },
       reqWithIp(nextIp())
     );
-    expect(result).toEqual({ id: "owner", name: "owner" });
+    expect(result).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
   });
 
   it("returns null when the password doesn't match AUTH_PASSWORD_HASH", async () => {
@@ -207,34 +220,34 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
 
   it("skips the 2FA check when totpEnabled is false - regression, unchanged behavior", async () => {
     vi.stubEnv("AUTH_PASSWORD", "correct-horse");
-    findUniqueMock.mockResolvedValueOnce({ totpEnabled: false, totpSecret: null, totpBackupCodes: [] });
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: false, totpSecret: null, totpBackupCodes: [] });
     const result = await provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp()));
-    expect(result).toEqual({ id: "owner", name: "owner" });
+    expect(result).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
   });
 
-  it("returns null when no UserSettings row exists yet (fresh install) - must not require a code", async () => {
+  it("returns null when the owner row is missing entirely (un-migrated DB) rather than authenticating anyway", async () => {
     vi.stubEnv("AUTH_PASSWORD", "correct-horse");
     findUniqueMock.mockResolvedValueOnce(null);
     const result = await provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp()));
-    expect(result).toEqual({ id: "owner", name: "owner" });
+    expect(result).toBeNull();
   });
 
   it("returns the owner user when the password and a correct TOTP code are both provided", async () => {
     vi.stubEnv("AUTH_PASSWORD", "correct-horse");
     const secret = generateTotpSecret();
     const token = await generateTotpToken({ secret });
-    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
     const result = await provider.authorize(
       { password: "correct-horse", totpCode: token },
       reqWithIp(nextIp())
     );
-    expect(result).toEqual({ id: "owner", name: "owner" });
+    expect(result).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
   });
 
   it("returns null when the password is correct but the TOTP code is wrong", async () => {
     vi.stubEnv("AUTH_PASSWORD", "correct-horse");
     const secret = generateTotpSecret();
-    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
     const result = await provider.authorize(
       { password: "correct-horse", totpCode: "000000" },
       reqWithIp(nextIp())
@@ -245,7 +258,7 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
   it("returns null when the password is correct but no TOTP code is provided", async () => {
     vi.stubEnv("AUTH_PASSWORD", "correct-horse");
     const secret = generateTotpSecret();
-    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
     const result = await provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp()));
     expect(result).toBeNull();
   });
@@ -255,16 +268,16 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
     const secret = generateTotpSecret();
     const backupCodes = generateBackupCodes();
     const hashed = await hashBackupCodes(backupCodes);
-    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: hashed });
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: hashed });
 
     const result = await provider.authorize(
       { password: "correct-horse", totpCode: backupCodes[0] },
       reqWithIp(nextIp())
     );
 
-    expect(result).toEqual({ id: "owner", name: "owner" });
+    expect(result).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
     expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "singleton" },
+      where: { id: "user-owner" },
       data: { totpBackupCodes: hashed.filter((_, i) => i !== 0) },
     });
   });
@@ -275,7 +288,7 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
     const backupCodes = generateBackupCodes();
     const hashed = await hashBackupCodes(backupCodes);
     const remaining = hashed.slice(1); // codes[0] already consumed in a prior login
-    findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: remaining });
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: remaining });
 
     const result = await provider.authorize(
       { password: "correct-horse", totpCode: backupCodes[0] },
@@ -284,5 +297,92 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
 
     expect(result).toBeNull();
     expect(updateMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── v2.0 multi-user: password precedence & per-user resolution ──────────────
+//
+// The rule these lock in: a DB password hash wins absolutely. Once a user has
+// one, the env AUTH_PASSWORD/AUTH_PASSWORD_HASH is ignored entirely for them -
+// two simultaneously-valid passwords for one account would make the weaker one
+// the real security level, and an env credential can't be rotated per-user.
+// The env fallback therefore only ever authenticates the owner, and only while
+// the owner has no DB password of their own.
+describe("authorize() - v2.0 password precedence", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("uses the DB hash and IGNORES a conflicting env password once the user has one", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "env-password");
+    const dbHash = await bcrypt.hash("db-password", 10);
+    findUniqueMock.mockResolvedValue({ ...OWNER_ROW, username: "loic", passwordHash: dbHash });
+
+    const viaEnv = await provider.authorize(
+      { username: "loic", password: "env-password" },
+      reqWithIp(nextIp())
+    );
+    expect(viaEnv).toBeNull();
+
+    const viaDb = await provider.authorize(
+      { username: "loic", password: "db-password" },
+      reqWithIp(nextIp())
+    );
+    expect(viaDb).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
+  });
+
+  it("falls back to the env password only while the owner has no DB hash", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "env-password");
+    findUniqueMock.mockResolvedValue({ ...OWNER_ROW, passwordHash: null });
+
+    const result = await provider.authorize({ password: "env-password" }, reqWithIp(nextIp()));
+    expect(result).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
+  });
+
+  it("never lets the env password authenticate a non-owner user", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "env-password");
+    // A member with no DB password yet (invited but never completed setup):
+    // the env credential is the owner's, so it must not open their account.
+    findUniqueMock.mockResolvedValue({
+      ...OWNER_ROW,
+      id: "user-partner",
+      role: "MEMBER",
+      username: "partner",
+      passwordHash: null,
+    });
+
+    const result = await provider.authorize(
+      { username: "partner", password: "env-password" },
+      reqWithIp(nextIp())
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns the authenticated user's own id and role, not a hardcoded owner", async () => {
+    const dbHash = await bcrypt.hash("partner-password", 10);
+    findUniqueMock.mockResolvedValue({
+      ...OWNER_ROW,
+      id: "user-partner",
+      role: "MEMBER",
+      username: "partner",
+      passwordHash: dbHash,
+    });
+
+    const result = await provider.authorize(
+      { username: "partner", password: "partner-password" },
+      reqWithIp(nextIp())
+    );
+    expect(result).toEqual({ id: "user-partner", name: "owner", role: "MEMBER" });
+  });
+
+  it("returns null for an unknown username instead of falling through to the owner", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "env-password");
+    findUniqueMock.mockResolvedValue(null);
+
+    const result = await provider.authorize(
+      { username: "nobody", password: "env-password" },
+      reqWithIp(nextIp())
+    );
+    expect(result).toBeNull();
   });
 });

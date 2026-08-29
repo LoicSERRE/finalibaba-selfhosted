@@ -12,17 +12,22 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: (...args: unknown[]) => createTransportMock(...args) },
 }));
 
-const { findManyMock, deleteManyMock, sendNotificationMock, setVapidDetailsMock } = vi.hoisted(() => ({
+const { findManyMock, deleteManyMock, sendNotificationMock, setVapidDetailsMock, instanceFindUniqueMock } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
   deleteManyMock: vi.fn(),
   sendNotificationMock: vi.fn(),
   setVapidDetailsMock: vi.fn(),
+  // VAPID keys are instance-level as of v2.0 (they identify the server, not
+  // a person) and sendWebPush reads them itself rather than taking them as
+  // parameters.
+  instanceFindUniqueMock: vi.fn(async () => ({ vapidPublicKey: "pub", vapidPrivateKey: "priv" })),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     pushSubscription: { findMany: findManyMock, deleteMany: deleteManyMock },
     userSettings: { upsert: vi.fn(), update: vi.fn() },
+    instanceSettings: { findUnique: instanceFindUniqueMock, upsert: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -179,8 +184,7 @@ describe("dispatchAlert", () => {
         smtpFrom: null,
         emailAlertsEnabled: true,
         webPushEnabled: false,
-        vapidPublicKey: null,
-        vapidPrivateKey: null,
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -207,8 +211,7 @@ describe("dispatchAlert", () => {
         smtpFrom: null,
         emailAlertsEnabled: true,
         webPushEnabled: false,
-        vapidPublicKey: null,
-        vapidPrivateKey: null,
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -237,8 +240,7 @@ describe("dispatchAlert", () => {
         smtpFrom: null,
         emailAlertsEnabled: true,
         webPushEnabled: false,
-        vapidPublicKey: null,
-        vapidPrivateKey: null,
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -259,8 +261,7 @@ describe("dispatchAlert", () => {
         smtpFrom: "finalibaba@example.com",
         emailAlertsEnabled: true,
         webPushEnabled: false,
-        vapidPublicKey: null,
-        vapidPrivateKey: null,
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -285,8 +286,7 @@ describe("dispatchAlert", () => {
         smtpFrom: null,
         emailAlertsEnabled: true,
         webPushEnabled: false,
-        vapidPublicKey: null,
-        vapidPrivateKey: null,
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -311,8 +311,7 @@ describe("dispatchAlert", () => {
         smtpFrom: "finalibaba@example.com",
         emailAlertsEnabled: false,
         webPushEnabled: false,
-        vapidPublicKey: null,
-        vapidPrivateKey: null,
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -339,8 +338,7 @@ describe("dispatchAlert", () => {
         smtpFrom: "finalibaba@example.com",
         emailAlertsEnabled: true,
         webPushEnabled: false,
-        vapidPublicKey: null,
-        vapidPrivateKey: null,
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -356,7 +354,7 @@ describe("sendWebPush", () => {
 
   it("returns false without sending when there are no subscriptions", async () => {
     findManyMock.mockResolvedValueOnce([]);
-    const ok = await sendWebPush("pub", "priv", "title", "body");
+    const ok = await sendWebPush("user-owner", "title", "body");
     expect(ok).toBe(false);
     expect(sendNotificationMock).not.toHaveBeenCalled();
   });
@@ -364,7 +362,7 @@ describe("sendWebPush", () => {
   it("sends to every subscription and returns true when at least one succeeds", async () => {
     findManyMock.mockResolvedValueOnce([sub]);
     sendNotificationMock.mockResolvedValueOnce({});
-    const ok = await sendWebPush("pub", "priv", "Alerte", "Corps du message");
+    const ok = await sendWebPush("user-owner", "Alerte", "Corps du message");
     expect(ok).toBe(true);
     expect(setVapidDetailsMock).toHaveBeenCalledWith(expect.any(String), "pub", "priv");
     const [subscriptionArg, payload] = sendNotificationMock.mock.calls[0];
@@ -376,7 +374,7 @@ describe("sendWebPush", () => {
   it("prunes a subscription the push service reports as gone (410) instead of treating it as a hard failure", async () => {
     findManyMock.mockResolvedValueOnce([sub]);
     sendNotificationMock.mockRejectedValueOnce(new MockWebPushError(410));
-    const ok = await sendWebPush("pub", "priv", "title", "body");
+    const ok = await sendWebPush("user-owner", "title", "body");
     expect(ok).toBe(false);
     expect(deleteManyMock).toHaveBeenCalledWith({ where: { id: { in: [sub.id] } } });
   });
@@ -385,7 +383,7 @@ describe("sendWebPush", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     findManyMock.mockResolvedValueOnce([sub]);
     sendNotificationMock.mockRejectedValueOnce(new MockWebPushError(500));
-    const ok = await sendWebPush("pub", "priv", "title", "body");
+    const ok = await sendWebPush("user-owner", "title", "body");
     expect(ok).toBe(false);
     expect(deleteManyMock).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
@@ -394,7 +392,7 @@ describe("sendWebPush", () => {
 });
 
 describe("dispatchAlert - web push channel", () => {
-  it("dispatches web push when enabled with VAPID keys configured", async () => {
+  it("dispatches web push when the channel is enabled", async () => {
     findManyMock.mockResolvedValueOnce([{ id: "s1", endpoint: "https://push.example/y", p256dh: "p", auth: "a" }]);
     sendNotificationMock.mockResolvedValueOnce({});
 
@@ -411,8 +409,7 @@ describe("dispatchAlert - web push channel", () => {
         smtpFrom: null,
         emailAlertsEnabled: true,
         webPushEnabled: true,
-        vapidPublicKey: "pub",
-        vapidPrivateKey: "priv",
+        userId: "user-owner",
       },
       "title",
       "body"
@@ -421,7 +418,7 @@ describe("dispatchAlert - web push channel", () => {
     expect(sendNotificationMock).toHaveBeenCalledTimes(1);
   });
 
-  it("skips web push when webPushEnabled is false, even with keys configured", async () => {
+  it("skips web push entirely when webPushEnabled is false", async () => {
     await dispatchAlert(
       {
         ntfyTopicUrl: null,
@@ -435,8 +432,7 @@ describe("dispatchAlert - web push channel", () => {
         smtpFrom: null,
         emailAlertsEnabled: true,
         webPushEnabled: false,
-        vapidPublicKey: "pub",
-        vapidPrivateKey: "priv",
+        userId: "user-owner",
       },
       "title",
       "body"

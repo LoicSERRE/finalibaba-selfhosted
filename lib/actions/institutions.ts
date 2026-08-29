@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertOwned } from "@/lib/auth-context";
 
 export async function createInstitution(formData: FormData) {
   const name = (formData.get("name") as string).trim();
@@ -11,8 +12,10 @@ export async function createInstitution(formData: FormData) {
   const woobLogin = (formData.get("woobLogin") as string | null)?.trim() || null;
   const woobPassword = (formData.get("woobPassword") as string | null)?.trim() || null;
 
+  const viewer = await getViewer();
   await prisma.institution.create({
     data: {
+      userId: viewer.id,
       name,
       ...(woobModule && woobLogin && woobPassword
         ? { woobModule, woobLogin, woobPassword }
@@ -23,6 +26,8 @@ export async function createInstitution(formData: FormData) {
 }
 
 export async function setGocardlessInstitutionId(id: string, gcId: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", id, viewer.id);
   await prisma.institution.update({
     where: { id },
     data: { gocardlessInstitutionId: gcId },
@@ -45,6 +50,8 @@ export async function setGocardlessInstitutionId(id: string, gcId: string) {
 // that, so it's not offered (mirrors migrateDedicatedSyncToWoob's own
 // can't-touch-real-data guard above).
 export async function clearGocardlessConnection(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", id, viewer.id);
   const linkedAccounts = await prisma.account.count({
     where: { institutionId: id, gocardlessAccountId: { not: null } },
   });
@@ -60,6 +67,8 @@ export async function clearGocardlessConnection(id: string) {
 }
 
 export async function setWoobConfig(id: string, module: string, login: string, password: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", id, viewer.id);
   await prisma.institution.update({
     where: { id },
     data: { woobModule: module, woobLogin: login, woobPassword: password },
@@ -68,6 +77,8 @@ export async function setWoobConfig(id: string, module: string, login: string, p
 }
 
 export async function clearWoobConfig(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", id, viewer.id);
   await prisma.institution.update({
     where: { id },
     data: { woobModule: null, woobLogin: null, woobPassword: null },
@@ -76,6 +87,8 @@ export async function clearWoobConfig(id: string) {
 }
 
 export async function deleteInstitution(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", id, viewer.id);
   await prisma.institution.delete({ where: { id } });
   revalidatePath("/settings");
   revalidatePath("/accounts");
@@ -142,6 +155,8 @@ async function oldestHistoryDate(accountIds: string[]): Promise<Date | null> {
 export async function getMigrationHistoryDepth(
   institutionId: string,
 ): Promise<{ legacyOldest: Date | null; woobOldest: Date | null }> {
+  const viewer = await getViewer();
+  await assertOwned("institution", institutionId, viewer.id);
   const inst = await prisma.institution.findUnique({ where: { id: institutionId }, select: { name: true } });
   const prefix = inst ? DEDICATED_SYNC_PREFIXES[inst.name.toLowerCase()] : undefined;
   if (!prefix) return { legacyOldest: null, woobOldest: null };
@@ -158,6 +173,10 @@ export async function getMigrationHistoryDepth(
 }
 
 export async function migrateDedicatedSyncToWoob(institutionId: string): Promise<{ deleted: number }> {
+  // This one deletes accounts (and cascades to their whole history), so the
+  // ownership check matters more here than anywhere else in this file.
+  const viewer = await getViewer();
+  await assertOwned("institution", institutionId, viewer.id);
   const inst = await prisma.institution.findUnique({ where: { id: institutionId }, select: { name: true } });
   if (!inst) throw new Error("Institution not found");
 

@@ -48,6 +48,19 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth-context", () => ({
+  // These tests exercise this action file's own logic (validation, write
+  // shape), not the multi-user access layer - which has its own coverage in
+  // __tests__/auth-context.test.ts. Mocking the guards to always pass keeps
+  // each test asserting the thing it was written to assert.
+  getViewer: vi.fn(async () => ({ id: "user-owner", role: "ADMIN", isMonoMode: true })),
+  assertOwned: vi.fn(async () => {}),
+  assertAccountWritable: vi.fn(async () => {}),
+  assertTransactionsWritable: vi.fn(async () => {}),
+  baseAccountIds: vi.fn(async () => []),
+  viewAccountIds: vi.fn(async () => []),
+}));
+
 import {
   createInstitution,
   clearGocardlessConnection,
@@ -83,21 +96,25 @@ describe("createInstitution", () => {
     expect(institutionCreateMock).not.toHaveBeenCalled();
   });
 
+  // Every assertion here includes userId: the create passes it explicitly
+  // rather than leaning on the column's DB-level default, which exists only
+  // so sync/db.py's raw SQL keeps working - app-side writes must always say
+  // who they belong to (see schema.prisma's v2.0 header).
   it("trims the name and creates without Woob fields when they're absent", async () => {
     await createInstitution(formData({ name: "  LCL  " }));
-    expect(institutionCreateMock).toHaveBeenCalledWith({ data: { name: "LCL" } });
+    expect(institutionCreateMock).toHaveBeenCalledWith({ data: { userId: "user-owner", name: "LCL" } });
   });
 
   it("only attaches Woob credentials when module, login, AND password are all present", async () => {
     await createInstitution(formData({ name: "LCL", woobModule: "lcl", woobLogin: "user" }));
-    expect(institutionCreateMock).toHaveBeenCalledWith({ data: { name: "LCL" } });
+    expect(institutionCreateMock).toHaveBeenCalledWith({ data: { userId: "user-owner", name: "LCL" } });
 
     institutionCreateMock.mockClear();
     await createInstitution(
       formData({ name: "LCL", woobModule: "lcl", woobLogin: "user", woobPassword: "pw" }),
     );
     expect(institutionCreateMock).toHaveBeenCalledWith({
-      data: { name: "LCL", woobModule: "lcl", woobLogin: "user", woobPassword: "pw" },
+      data: { userId: "user-owner", name: "LCL", woobModule: "lcl", woobLogin: "user", woobPassword: "pw" },
     });
   });
 });

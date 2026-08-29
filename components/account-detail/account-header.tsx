@@ -27,6 +27,7 @@ export function AccountHeader({
   netAfterTax,
   value,
   liability,
+  readOnly = false,
 }: Readonly<{
   td: T;
   ta: T;
@@ -51,6 +52,10 @@ export function AccountHeader({
   netAfterTax: bigint;
   value: bigint;
   liability: bigint;
+  /** True when a granted (read-only) portfolio is on screen - drops every
+   *  rename/update/delete affordance. Not the access control (each of those
+   *  Server Actions guards ownership itself), just no dead buttons. */
+  readOnly?: boolean;
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
@@ -70,7 +75,7 @@ export function AccountHeader({
           </div>
           <div className="flex items-center gap-1">
             <h1 className="text-2xl font-semibold text-[var(--foreground)]">{account.name}</h1>
-            <RenameAccountDialog id={account.id} name={account.name} />
+            {!readOnly && <RenameAccountDialog id={account.id} name={account.name} />}
           </div>
           {isFiat && latestDelta !== null && latestDelta !== BigInt(0) && (
             <p
@@ -91,7 +96,7 @@ export function AccountHeader({
               {td("afterTax", { amount: formatCurrency(netAfterTax, 0) })}
             </p>
           )}
-          {isFiat && !isSynced && (
+          {!readOnly && isFiat && !isSynced && (
             <div className="mt-3 flex justify-end">
               <DeleteAccountButton
                 id={account.id}
@@ -100,7 +105,7 @@ export function AccountHeader({
               />
             </div>
           )}
-          {isInvestment && !isSynced && (
+          {!readOnly && isInvestment && !isSynced && (
             <div className="mt-3 flex justify-end">
               <DeleteAccountButton
                 id={account.id}
@@ -109,7 +114,7 @@ export function AccountHeader({
               />
             </div>
           )}
-          {isRealEstate && (
+          {!readOnly && isRealEstate && (
             <div className="flex items-center gap-2 mt-3 justify-end">
               <UpdateRealEstateDialog
                 id={account.id}
@@ -126,7 +131,7 @@ export function AccountHeader({
               )}
             </div>
           )}
-          {isAutomobile && (
+          {!readOnly && isAutomobile && (
             <div className="flex items-center gap-2 mt-3 justify-end">
               <UpdateAutomobileDialog
                 id={account.id}
@@ -144,7 +149,7 @@ export function AccountHeader({
               )}
             </div>
           )}
-          {isLoan && !isSynced && (
+          {!readOnly && isLoan && !isSynced && (
             <div className="flex items-center gap-2 mt-3 justify-end">
               <DeleteAccountButton
                 id={account.id}

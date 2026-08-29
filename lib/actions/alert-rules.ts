@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 
 // Real, pre-existing bug found while testing REBALANCING_DRIFT live (the
@@ -17,7 +18,9 @@ import { parseCents } from "@/lib/utils/format";
 // `select` matching exactly what AlertRuleRow/HoldingOption in
 // alert-rules-section.tsx actually read.
 export async function getAlertRules() {
+  const viewer = await getViewer();
   return prisma.alertRule.findMany({
+    where: { userId: viewer.id },
     include: {
       account: { select: { id: true, name: true } },
       holding: { select: { id: true, ticker: true, name: true, account: { select: { id: true, name: true } } } },
@@ -150,12 +153,33 @@ async function assertHoldingHasTarget(holdingId: string): Promise<void> {
   }
 }
 
+// A rule can only ever target what the viewer can reach - otherwise someone
+// could point a rule at another user's account or holding and receive
+// notifications describing its balance.
+async function assertRuleTargetsWritable(
+  viewerId: string,
+  data: { accountId?: string | null; holdingId?: string; categoryId?: string }
+): Promise<void> {
+  if (data.accountId) await assertAccountWritable(viewerId, data.accountId);
+  if (data.categoryId) await assertOwned("category", data.categoryId, viewerId);
+  if (data.holdingId) {
+    const holding = await prisma.holding.findUnique({
+      where: { id: data.holdingId },
+      select: { accountId: true },
+    });
+    if (!holding) throw new Error("Position introuvable.");
+    await assertAccountWritable(viewerId, holding.accountId);
+  }
+}
+
 export async function createAlertRule(formData: FormData) {
   const data = buildCreateData(formData);
+  const viewer = await getViewer();
+  await assertRuleTargetsWritable(viewer.id, data as Parameters<typeof assertRuleTargetsWritable>[1]);
   if (data.kind === "REBALANCING_DRIFT") {
     await assertHoldingHasTarget(data.holdingId);
   }
-  await prisma.alertRule.create({ data });
+  await prisma.alertRule.create({ data: { ...data, userId: viewer.id } });
   revalidatePath("/settings");
 }
 
@@ -218,6 +242,8 @@ function applyNewTransactionUpdate(data: UpdateData, formData: FormData) {
 // from Category.budgetCents) - only message changes for those two.
 export async function updateAlertRule(id: string, formData: FormData) {
   const message = ((formData.get("message") as string) || "").trim() || null;
+  const viewer = await getViewer();
+  await assertOwned("alertRule", id, viewer.id);
   const current = await prisma.alertRule.findUniqueOrThrow({ where: { id } });
 
   const data: UpdateData = { message };
@@ -240,11 +266,15 @@ export async function updateAlertRule(id: string, formData: FormData) {
 }
 
 export async function deleteAlertRule(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("alertRule", id, viewer.id);
   await prisma.alertRule.delete({ where: { id } });
   revalidatePath("/settings");
 }
 
 export async function toggleAlertRuleActive(id: string, active: boolean) {
+  const viewer = await getViewer();
+  await assertOwned("alertRule", id, viewer.id);
   await prisma.alertRule.update({ where: { id }, data: { active } });
   revalidatePath("/settings");
 }

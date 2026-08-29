@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -35,20 +36,28 @@ export default async function CategoryDetailPage({
   const [t, td, locale] = await Promise.all([getTranslations("budgets"), getTranslations("accountDetail"), getLocale()]);
   const intlLocale = localeToIntl(locale);
 
+  // The category must belong to the viewer (findFirst + userId, not
+  // findUnique by id - this drill-down used to render any category id), and
+  // its transactions are further limited to accounts they can see: a
+  // co-owner categorizing a joint transaction must not expose the rest of
+  // their own account's activity through this page.
+  const viewer = await getViewer();
+  const accountIds = await viewAccountIds(viewer.id);
+
   const [category, categories, splitLines] = await Promise.all([
-    prisma.category.findUnique({
-      where: { id: categoryId },
+    prisma.category.findFirst({
+      where: { id: categoryId, userId: viewer.id },
       include: {
         transactions: {
-          where: { splits: { none: {} } },
+          where: { splits: { none: {} }, accountId: { in: accountIds } },
           orderBy: { date: "desc" },
           include: { account: { select: { name: true } } },
         },
       },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
+    prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
     prisma.transactionSplit.findMany({
-      where: { categoryId },
+      where: { categoryId, transaction: { accountId: { in: accountIds } } },
       include: { transaction: { include: { account: { select: { name: true } } } } },
     }),
   ]);

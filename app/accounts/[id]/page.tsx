@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { getViewContext } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -22,6 +23,8 @@ import { LoanSection } from "@/components/account-detail/loan-section";
 import { TransactionsTable } from "@/components/account-detail/transactions-table";
 import { BalanceHistoryTable } from "@/components/account-detail/balance-history-table";
 import { hasLoanParams } from "@/lib/domain/loan";
+import { CoOwnersSection } from "@/components/account-detail/co-owners-section";
+import { isAuthEnabled } from "@/lib/auth-context";
 
 export default async function AccountDetailPage({
   params,
@@ -38,9 +41,15 @@ export default async function AccountDetailPage({
   ]);
   const intlLocale = localeToIntl(locale);
 
+  // findFirst with an id-set filter, not findUnique by id: this page used to
+  // render ANY account id handed to it. Resolving through the viewer's own
+  // visible set means someone else's account 404s exactly like a nonexistent
+  // one, leaking nothing about whether it exists.
+  const { viewer, ownerId, accountIds, readOnly } = await getViewContext();
+
   const [account, categories] = await Promise.all([
-    prisma.account.findUnique({
-      where: { id },
+    prisma.account.findFirst({
+      where: { id, AND: { id: { in: accountIds } } },
       include: {
         institution: true,
         history: { orderBy: { recordedAt: "desc" }, take: 120 },
@@ -52,12 +61,31 @@ export default async function AccountDetailPage({
         },
       },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
+    prisma.category.findMany({ where: { userId: ownerId }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
   ]);
 
   if (!account) notFound();
 
   const result = computeAccountDetail({ account, intlLocale, now: new Date() });
+  // canImportCsv drives every CSV-import affordance on this page (the chart
+  // section, the transactions table, the empty state). A granted portfolio is
+  // read-only, so it's forced off here rather than at each of the three call
+  // sites - assertCsvImportEligible would refuse a guest anyway, this just
+  // stops the button existing.
+  const canImportCsv = result.canImportCsv && !readOnly;
+
+  // Co-ownership is only offered to the account's DIRECT owner (a co-owner
+  // can't add further co-owners - see assertAccountOwner), and only with auth
+  // on, since mono mode has nobody to share with. Fetched here rather than in
+  // the Promise.all above because it depends on knowing the account exists.
+  const isDirectOwner = isAuthEnabled() && !readOnly && account.userId === viewer.id;
+  const coOwners = isDirectOwner
+    ? await prisma.accountCoOwner.findMany({
+        where: { accountId: account.id },
+        select: { userId: true, user: { select: { username: true, displayName: true } } },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -71,6 +99,7 @@ export default async function AccountDetailPage({
       </Link>
 
       <AccountHeader
+        readOnly={readOnly}
         td={td}
         ta={ta}
         account={account}
@@ -95,7 +124,7 @@ export default async function AccountDetailPage({
           td={td}
           accountId={account.id}
           chartData={result.chartData}
-          canImportCsv={result.canImportCsv}
+          canImportCsv={canImportCsv}
           existingBalanceDates={result.existingBalanceDates}
           isInvestment={result.isInvestment}
         />
@@ -104,6 +133,7 @@ export default async function AccountDetailPage({
       {result.isInvestment && (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
           <HoldingsTable
+            readOnly={readOnly}
             td={td}
             t={t}
             accountId={account.id}
@@ -127,6 +157,7 @@ export default async function AccountDetailPage({
           />
 
           <InvestmentFormsSection
+            readOnly={readOnly}
             td={td}
             accountId={account.id}
             investmentStartDate={account.investmentStartDate}
@@ -173,13 +204,14 @@ export default async function AccountDetailPage({
 
       {result.isFiat && account.transactions.length > 0 && (
         <TransactionsTable
+          readOnly={readOnly}
           td={td}
           intlLocale={intlLocale}
           accountId={account.id}
           accountType={account.type}
           transactions={account.transactions}
           categories={categories}
-          canImportCsv={result.canImportCsv}
+          canImportCsv={canImportCsv}
           existingFingerprints={result.existingFingerprints}
         />
       )}
@@ -190,14 +222,25 @@ export default async function AccountDetailPage({
           intlLocale={intlLocale}
           accountId={account.id}
           historyRows={result.historyRows}
-          canImportCsv={result.canImportCsv}
+          canImportCsv={canImportCsv}
           existingBalanceDates={result.existingBalanceDates}
           existingFingerprints={result.existingFingerprints}
         />
       )}
 
+      {isDirectOwner && (
+        <CoOwnersSection
+          accountId={account.id}
+          coOwners={coOwners.map((c) => ({
+            userId: c.userId,
+            username: c.user.username,
+            displayName: c.user.displayName,
+          }))}
+        />
+      )}
+
       {/* Empty state - manual fiat account with nothing recorded yet */}
-      {result.canImportCsv && account.transactions.length === 0 && result.historyRows.length === 0 && (
+      {canImportCsv && account.transactions.length === 0 && result.historyRows.length === 0 && (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl">
           <EmptyState
             icon={Upload}
