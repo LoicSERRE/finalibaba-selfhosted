@@ -96,16 +96,15 @@ export function AllocationHistoryChart({ data }: Readonly<{ data: DataPoint[] }>
               fontSize: 13,
             }}
             labelFormatter={formatShortDate}
-            formatter={(value, name) => [formatCurrency(Number(value)), tCategory(String(name))]}
+            formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
           />
-          <Legend
-            formatter={(value) => <span style={{ color: "var(--muted)", fontSize: 12 }}>{tCategory(value)}</span>}
-          />
+          <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted)" }} />
           {CATEGORIES.map((key) => (
             <Area
               key={key}
               type="monotone"
               dataKey={key}
+              name={tCategory(key)}
               stackId="allocation"
               stroke={ALLOCATION_CATEGORY_COLORS[key]}
               strokeWidth={1.5}

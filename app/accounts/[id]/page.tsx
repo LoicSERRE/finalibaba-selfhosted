@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { getViewContext } from "@/lib/auth-context";
+import { getViewContext, isAuthEnabled } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -24,7 +24,6 @@ import { TransactionsTable } from "@/components/account-detail/transactions-tabl
 import { BalanceHistoryTable } from "@/components/account-detail/balance-history-table";
 import { hasLoanParams } from "@/lib/domain/loan";
 import { CoOwnersSection } from "@/components/account-detail/co-owners-section";
-import { isAuthEnabled } from "@/lib/auth-context";
 
 export default async function AccountDetailPage({
   params,

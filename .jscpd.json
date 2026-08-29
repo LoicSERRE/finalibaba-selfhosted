@@ -1,0 +1,31 @@
+{
+  "//": [
+    "Config for the duplicate-code scan in .github/workflows/quality.yml.",
+    "",
+    "Before this file existed, jscpd ran against everything and its single",
+    "biggest reported clone was pnpm-lock.yaml against itself: 268 lines of a",
+    "generated lockfile. Generated and vendored files inflate the number",
+    "without ever being something anyone would refactor, and the workflow",
+    "gates on a ratchet against the base branch, so noise in the denominator",
+    "makes real regressions harder to see rather than easier.",
+    "",
+    "Everything excluded here is either generated, vendored, or a coverage",
+    "artifact. Real source duplication is deliberately still counted,",
+    "including the pre-existing kind: see the ROADMAP note on the CSV-import",
+    "dialogs for what is known and deliberately not refactored."
+  ],
+  "ignore": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/app/generated/**",
+    "**/coverage/**",
+    "**/pnpm-lock.yaml",
+    "**/*.lock",
+    "**/prisma/migrations/**",
+    "**/public/**",
+    "**/jscpd-out/**"
+  ],
+  "reporters": ["markdown", "json"],
+  "absolute": false,
+  "gitignore": true
+}

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   // the only place the check can happen.
   const viewer = await getViewer();
   const institution = await prisma.institution.findUnique({ where: { id: institutionId } });
-  if (!institution || institution.userId !== viewer.id) {
+  if (institution?.userId !== viewer.id) {
     return NextResponse.json({ error: "Institution not found" }, { status: 404 });
   }
   if (!institution.gocardlessInstitutionId) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isInternalRequest } from "@/lib/services/internal-auth";
 import { notify } from "@/lib/services/realtime-bus";
 import { OWNER_USER_ID } from "@/lib/domain/users";
 
@@ -15,14 +16,9 @@ import { OWNER_USER_ID } from "@/lib/domain/users";
  * defaults to the owner. That keeps the Python side byte-identical - the same
  * reasoning behind the permanent DB-level userId default on Account/SyncLog.
  */
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization");
-  const expected = process.env.NEXTAUTH_SECRET;
-  return !!expected && auth === `Bearer ${expected}`;
-}
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isInternalRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = (await req.json().catch(() => ({}))) as { userId?: string };

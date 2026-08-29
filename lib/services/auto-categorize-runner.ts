@@ -190,6 +190,11 @@ export async function autoCategorizeForUser(
   accountIds: string[],
   accountId?: string,
 ): Promise<{ categorized: number }> {
+  // A user with no accounts has nothing to categorize. The queries below would
+  // be harmless (an empty `in` matches nothing) but they would still be issued,
+  // once per user, on every pass of the cron that loops over all of them.
+  if (accountIds.length === 0) return { categorized: 0 };
+
   await flagInternalTransfers(accountIds, userId);
 
   // Always an id-set filter, never an unscoped query: a bare `{}` here would

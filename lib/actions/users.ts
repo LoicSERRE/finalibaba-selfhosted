@@ -150,7 +150,9 @@ export async function acceptInvitation(token: string, formData: FormData): Promi
       where: { token },
       select: { id: true, usedAt: true, expiresAt: true },
     });
-    if (!invitation || invitation.usedAt !== null || invitation.expiresAt <= new Date()) {
+    const spent = invitation?.usedAt !== null;
+    const expired = (invitation?.expiresAt ?? new Date(0)) <= new Date();
+    if (spent || expired) {
       throw new Error("invalid_invitation");
     }
     await tx.user.create({

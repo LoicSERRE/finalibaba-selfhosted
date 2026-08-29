@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isInternalRequest } from "@/lib/services/internal-auth";
 import { prisma } from "@/lib/db/prisma";
 import { refreshAccountBalance } from "@/lib/actions/holdings";
 
@@ -23,14 +24,9 @@ import { refreshAccountBalance } from "@/lib/actions/holdings";
  * stays as the manual "capture a snapshot right now" path alongside this
  * automatic one, not replaced by it.
  */
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization");
-  const expected = process.env.NEXTAUTH_SECRET;
-  return !!expected && auth === `Bearer ${expected}`;
-}
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isInternalRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -31,6 +31,46 @@ type SectorContributions = Record<string, { holdings: SectorContribution[]; trun
  * legend dot alone wasn't always enough to place a segment, and "where does
  * this figure come from" wasn't answerable without leaving the page.
  */
+// Hoisted out of SectorExposureSection: a component declared inside another
+// component is a new type on every render, so React remounts it instead of
+// updating it - and this one is rendered twice per sector (bar segment and
+// legend row). Its two closures become props.
+function SectorTooltip({
+  sectorKey,
+  contributions,
+  t,
+}: Readonly<{
+  sectorKey: string;
+  contributions: SectorContributions;
+  t: T;
+}>) {
+  const entry = contributions[sectorKey];
+  if (!entry || entry.holdings.length === 0) return null;
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-max max-w-[260px] -translate-x-1/2 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-xs shadow-lg group-hover:block group-focus-visible:block"
+    >
+      <p className="mb-1 font-medium text-[var(--foreground)]">
+        {t(`sectorExposure.sectors.${sectorKey}` as Parameters<typeof t>[0])}
+      </p>
+      {/* Names wrap rather than truncate with an ellipsis - a real fund
+          name plus its account suffix ("iShares Core S&P 500 ETF (CTO)")
+          is exactly the info this tooltip exists to show; cutting it off
+          mid-name would defeat the point. */}
+      <ul className="space-y-1">
+        {entry.holdings.map((h) => (
+          <li key={h.name} className="flex justify-between gap-3 text-[var(--muted)]">
+            <span className="break-words">{h.name}</span>
+            <span className="tabular-nums shrink-0">{formatCurrency(h.cents, 0)}</span>
+          </li>
+        ))}
+      </ul>
+      {entry.truncated && <p className="mt-1 text-[var(--muted)]">{t("sectorExposure.andMore")}</p>}
+    </div>
+  );
+}
+
 export function SectorExposureSection({
   t,
   breakdown,
@@ -53,33 +93,6 @@ export function SectorExposureSection({
     .filter((r) => r.cents > BigInt(0))
     .sort((a, b) => Number(b.cents - a.cents));
 
-  function Tooltip({ sectorKey }: Readonly<{ sectorKey: string }>) {
-    const entry = contributions[sectorKey];
-    if (!entry || entry.holdings.length === 0) return null;
-    return (
-      <div
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-max max-w-[260px] -translate-x-1/2 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-xs shadow-lg group-hover:block group-focus-visible:block"
-      >
-        <p className="mb-1 font-medium text-[var(--foreground)]">
-          {t(`sectorExposure.sectors.${sectorKey}` as Parameters<typeof t>[0])}
-        </p>
-        {/* Names wrap rather than truncate with an ellipsis - a real fund
-            name plus its account suffix ("iShares Core S&P 500 ETF (CTO)")
-            is exactly the info this tooltip exists to show; cutting it off
-            mid-name would defeat the point. */}
-        <ul className="space-y-1">
-          {entry.holdings.map((h) => (
-            <li key={h.name} className="flex justify-between gap-3 text-[var(--muted)]">
-              <span className="break-words">{h.name}</span>
-              <span className="tabular-nums shrink-0">{formatCurrency(h.cents, 0)}</span>
-            </li>
-          ))}
-        </ul>
-        {entry.truncated && <p className="mt-1 text-[var(--muted)]">{t("sectorExposure.andMore")}</p>}
-      </div>
-    );
-  }
 
   return (
     <div className="pt-4 border-t border-[var(--border)] space-y-4">
@@ -105,7 +118,7 @@ export function SectorExposureSection({
               style={{ width: `${pct}%`, background: SECTOR_COLORS[r.key] ?? SECTOR_COLORS.unclassified }}
               aria-label={`${label} · ${pct.toFixed(1)}%`}
             >
-              <Tooltip sectorKey={r.key} />
+              <SectorTooltip sectorKey={r.key} contributions={contributions} t={t} />
             </button>
           );
         })}
@@ -130,7 +143,7 @@ export function SectorExposureSection({
               <span className="text-xs text-[var(--muted)] tabular-nums ml-auto shrink-0">
                 {pct.toFixed(1)}%
               </span>
-              <Tooltip sectorKey={r.key} />
+              <SectorTooltip sectorKey={r.key} contributions={contributions} t={t} />
             </button>
           );
         })}

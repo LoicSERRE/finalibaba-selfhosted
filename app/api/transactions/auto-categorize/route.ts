@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isInternalRequest } from "@/lib/services/internal-auth";
 import { prisma } from "@/lib/db/prisma";
 import { baseAccountIds } from "@/lib/auth-context";
 import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
@@ -13,14 +14,9 @@ import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
  * CLAUDE.md's "Alerts & webhooks" for why that's reused rather than a new
  * secret.
  */
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization");
-  const expected = process.env.NEXTAUTH_SECRET;
-  return !!expected && auth === `Bearer ${expected}`;
-}
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isInternalRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

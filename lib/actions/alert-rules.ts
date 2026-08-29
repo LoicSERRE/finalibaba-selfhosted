@@ -148,7 +148,7 @@ function buildNewTransactionData(formData: FormData, message: string | null) {
 // close for Goal/LOAN accounts.
 async function assertHoldingHasTarget(holdingId: string): Promise<void> {
   const holding = await prisma.holding.findUnique({ where: { id: holdingId }, select: { targetPct: true } });
-  if (!holding || holding.targetPct === null) {
+  if (holding?.targetPct == null) {
     throw new Error("Cette position n'a pas de cible de répartition définie.");
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isInternalRequest } from "@/lib/services/internal-auth";
 import { prisma } from "@/lib/db/prisma";
 import { baseAccountIds } from "@/lib/auth-context";
 import type { UserSettingsModel } from "@/app/generated/prisma/models";
@@ -30,11 +31,6 @@ import { amountMagnitudeRanges, type AmountRange } from "@/lib/domain/transactio
  * maximally sensitive (session forgery), doubles as the shared bearer token
  * between the sync and app containers rather than requiring a new secret.
  */
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization");
-  const expected = process.env.NEXTAUTH_SECRET;
-  return !!expected && auth === `Bearer ${expected}`;
-}
 
 async function checkNetWorthAlert(settings: UserSettingsModel, accountIds: string[]): Promise<boolean> {
   if (settings.netWorthAlertThresholdCents === null) return false;
@@ -477,8 +473,12 @@ async function checkRebalancingDriftRule(rule: CustomAlertRule, settings: UserSe
   if (shouldFire) {
     const holdingLabel = rule.holding.name ?? rule.holding.ticker;
     const accountName = rule.holding.account.name;
+    // The over/under wording is pulled out rather than nested inside the
+    // template literal: a ternary inside a ternary is exactly as hard to read
+    // as it sounds, and this one decides the wording of a real notification.
+    const direction = driftPts > 0 ? "surpondérée" : "sous-pondérée";
     const base = isAbove
-      ? `La position "${holdingLabel}" (${accountName}) a dérivé de plus de ${rule.gainThresholdPct} points de sa cible (actuellement ${driftPts > 0 ? "surpondérée" : "sous-pondérée"} de ${Math.abs(driftPts)} points).`
+      ? `La position "${holdingLabel}" (${accountName}) a dérivé de plus de ${rule.gainThresholdPct} points de sa cible (actuellement ${direction} de ${Math.abs(driftPts)} points).`
       : `La position "${holdingLabel}" (${accountName}) est revenue dans la tolérance de ${rule.gainThresholdPct} points par rapport à sa cible.`;
     await dispatchAlert(settings, "Alerte de dérive du portefeuille", rule.message ? `${base}\n\n${rule.message}` : base);
   }
@@ -752,7 +752,7 @@ async function checkCustomAlertRules(settings: UserSettingsModel, accountIds: st
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isInternalRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
