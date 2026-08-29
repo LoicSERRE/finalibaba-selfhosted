@@ -24,6 +24,8 @@ const {
   goalCountMock,
   transactionCountMock,
   getServerSessionMock,
+  cookieGetMock,
+  cookiesMock,
 } = vi.hoisted(() => ({
   userFindUniqueMock: vi.fn(),
   accountFindManyMock: vi.fn(),
@@ -35,6 +37,8 @@ const {
   goalCountMock: vi.fn(),
   transactionCountMock: vi.fn(),
   getServerSessionMock: vi.fn(),
+  cookieGetMock: vi.fn(),
+  cookiesMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -50,6 +54,7 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 vi.mock("next-auth", () => ({ getServerSession: getServerSessionMock }));
+vi.mock("next/headers", () => ({ cookies: cookiesMock }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 
 import {
@@ -60,6 +65,7 @@ import {
   assertAccountWritable,
   assertOwned,
   assertTransactionsWritable,
+  getViewContext,
   OWNER_USER_ID,
 } from "@/lib/auth-context";
 
@@ -78,9 +84,11 @@ beforeEach(() => {
     goalCountMock,
     transactionCountMock,
     getServerSessionMock,
+    cookieGetMock,
   ]) {
     m.mockReset();
   }
+  cookiesMock.mockResolvedValue({ get: cookieGetMock });
   delete process.env.AUTH_ENABLED;
 });
 
@@ -279,5 +287,71 @@ describe("assertTransactionsWritable", () => {
     await expect(assertTransactionsWritable("user-b", ["t1", "t1", "foreign"])).rejects.toThrow(
       "Not found."
     );
+  });
+});
+
+describe("getViewContext (the portfolio switcher's read path)", () => {
+  it("returns the viewer's own portfolio, writable, when no cookie is set", async () => {
+    userFindUniqueMock.mockResolvedValue(OWNER);
+    cookieGetMock.mockReturnValue(undefined);
+    accountFindManyMock.mockResolvedValue([{ id: "a1" }]);
+    coOwnerFindManyMock.mockResolvedValue([]);
+
+    const ctx = await getViewContext();
+
+    expect(ctx.ownerId).toBe(OWNER_USER_ID);
+    expect(ctx.accountIds).toEqual(["a1"]);
+    expect(ctx.readOnly).toBe(false);
+    expect(grantFindUniqueMock).not.toHaveBeenCalled();
+  });
+
+  it("switches ownerId and accountIds to the grantor, read-only, for a real grant", async () => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue({ user: { id: "user-b" } });
+    userFindUniqueMock.mockResolvedValue(MEMBER);
+    cookieGetMock.mockReturnValue({ value: OWNER_USER_ID });
+    grantFindUniqueMock.mockResolvedValue({ grantorUserId: OWNER_USER_ID });
+    accountFindManyMock.mockResolvedValue([{ id: "owner-1" }]);
+    coOwnerFindManyMock.mockResolvedValue([]);
+
+    const ctx = await getViewContext();
+
+    // ownerId is what user-scoped reads (categories, goals, settings) follow -
+    // without it the grantor's transactions would render against the viewer's
+    // own categories and look uncategorized.
+    expect(ctx.ownerId).toBe(OWNER_USER_ID);
+    expect(ctx.accountIds).toEqual(["owner-1"]);
+    expect(ctx.readOnly).toBe(true);
+  });
+
+  it("falls back to the viewer's own writable portfolio when the grant is revoked", async () => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue({ user: { id: "user-b" } });
+    userFindUniqueMock.mockResolvedValue(MEMBER);
+    cookieGetMock.mockReturnValue({ value: OWNER_USER_ID });
+    grantFindUniqueMock.mockResolvedValue(null);
+    accountFindManyMock.mockResolvedValue([{ id: "b1" }]);
+    coOwnerFindManyMock.mockResolvedValue([]);
+
+    const ctx = await getViewContext();
+
+    // A stale cookie is an everyday state (revoked while a tab sat open), so
+    // it degrades rather than erroring - and crucially lands back in
+    // read-WRITE mode on the viewer's own data, not read-only limbo.
+    expect(ctx.ownerId).toBe("user-b");
+    expect(ctx.accountIds).toEqual(["b1"]);
+    expect(ctx.readOnly).toBe(false);
+  });
+
+  it("ignores a cookie naming the viewer themselves", async () => {
+    userFindUniqueMock.mockResolvedValue(OWNER);
+    cookieGetMock.mockReturnValue({ value: OWNER_USER_ID });
+    accountFindManyMock.mockResolvedValue([]);
+    coOwnerFindManyMock.mockResolvedValue([]);
+
+    const ctx = await getViewContext();
+
+    expect(ctx.readOnly).toBe(false);
+    expect(grantFindUniqueMock).not.toHaveBeenCalled();
   });
 });

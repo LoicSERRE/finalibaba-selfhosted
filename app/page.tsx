@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, viewAccountIds } from "@/lib/auth-context";
+import { getViewContext } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
@@ -13,8 +13,7 @@ export default async function DashboardPage() {
   // Every query on this page is scoped to the accounts this viewer may see
   // (their own plus co-owned ones). In mono mode that resolves to the
   // instance owner, i.e. everything - identical to pre-v2.0 behavior.
-  const viewer = await getViewer();
-  const accountIds = await viewAccountIds(viewer.id);
+  const { accountIds } = await getViewContext();
 
   const [accounts, allBalances, t, locale] = await Promise.all([
     prisma.account.findMany({
@@ -78,6 +77,11 @@ export default async function DashboardPage() {
       allocationSlices={allocationSlices}
       allocationHistory={allocationHistory}
       institutions={institutions}
+      // The per-account links into /accounts/[id] stay live for a granted
+      // portfolio - that page is scoped by the same view context and renders
+      // read-only too. interactive=false is for the anonymous /shared/[token]
+      // route, which must not expose them at all.
+      interactive
     />
   );
 }

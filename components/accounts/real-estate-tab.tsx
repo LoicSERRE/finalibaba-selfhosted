@@ -8,19 +8,27 @@ import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
+// See app/accounts/page.tsx's own readOnly note: a granted portfolio is
+// read-only, so the add/edit affordances are dropped rather than left to
+// fail against the Server Action's own ownership guard.
 export function RealEstateTab({
   t,
   institutions,
   rows,
+  readOnly = false,
 }: Readonly<{
   t: T;
   institutions: { id: string; name: string }[];
   rows: RealEstateRow[];
+  /** True when a granted (read-only) portfolio is on screen. */
+  readOnly?: boolean;
 }>) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
+        {!readOnly && (
         <AddRealEstateDialog institutions={institutions} />
+        )}
       </div>
       {rows.length === 0 ? (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-10 text-center text-sm text-[var(--muted)]">
@@ -48,7 +56,9 @@ export function RealEstateTab({
                 <p className="font-medium text-[var(--foreground)]">{p.name}</p>
               </div>
               <div className="relative z-10 flex items-center gap-2">
+                {!readOnly && (
                 <UpdateRealEstateDialog id={p.id} name={p.name} valueCents={p.valueCents} liabilityCents={p.liabilityCents} />
+                )}
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, viewAccountIds } from "@/lib/auth-context";
+import { getViewContext } from "@/lib/auth-context";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { TransactionCategoryCell } from "@/components/shared/transaction-category-cell";
@@ -76,8 +76,7 @@ export default async function TransactionsPage({
   // spread into them: buildTransactionWhere already owns the top-level AND
   // (see its comment), and a filter the visitor controls must never be able
   // to widen the scope back out.
-  const viewer = await getViewer();
-  const accountIds = await viewAccountIds(viewer.id);
+  const { ownerId, accountIds, readOnly } = await getViewContext();
   const where = { AND: [buildTransactionWhere(filters), { accountId: { in: accountIds } }] };
 
   const [accounts, categories, totalCount, transactions] = await Promise.all([
@@ -86,7 +85,7 @@ export default async function TransactionsPage({
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
+    prisma.category.findMany({ where: { userId: ownerId }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
@@ -167,6 +166,7 @@ export default async function TransactionsPage({
                           amountCents={tx.amountCents}
                           categories={categories}
                           splits={tx.splits}
+                          readOnly={readOnly}
                         />
                       </td>
                       <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">

@@ -40,7 +40,10 @@
     "ariaMain": "Navigation principale",
     "ariaMobile": "Navigation mobile",
     "skipToContent": "Aller au contenu",
-    "language": "Langue"
+    "language": "Langue",
+    "myPortfolio": "Mon portefeuille",
+    "viewingPortfolio": "Portefeuille affiché",
+    "readOnlyView": "Lecture seule"
   },
   "auth": {
     "subtitle": "Votre patrimoine, en un coup d'œil",
@@ -239,6 +242,16 @@
       "totalInsurance": "Assurance totale",
       "totalCost": "Coût total du crédit",
       "repaymentProgress": "Remboursement · {elapsed} mois écoulés sur {total}"
+    },
+    "coOwners": {
+      "title": "Copropriétaires",
+      "description": "Un copropriétaire voit ce compte dans son propre portefeuille et peut le modifier (catégoriser, importer, enregistrer une vente). Pour un accès en lecture seule à tous tes comptes, utilise plutôt le partage de portefeuille dans les paramètres.",
+      "usernameLabel": "Identifiant de la personne",
+      "usernamePlaceholder": "ex. marie",
+      "add": "Ajouter",
+      "adding": "Ajout…",
+      "remove": "Retirer",
+      "removeConfirm": "Retirer {name} de ce compte ? Ses alertes et objectifs liés à ce compte seront supprimés."
     }
   },
   "budgets": {
@@ -870,7 +883,42 @@
     },
     "gcConnected": "Connexion bancaire établie. Les comptes ont été importés.",
     "gcError": "La connexion bancaire a échoué. Réessaie depuis l'institution concernée.",
-    "gcAlreadyConnected": "Ce compte bancaire est déjà connecté par un autre utilisateur de cette instance. Demande-lui de te le partager en copropriété plutôt que de le reconnecter."
+    "gcAlreadyConnected": "Ce compte bancaire est déjà connecté par un autre utilisateur de cette instance. Demande-lui de te le partager en copropriété plutôt que de le reconnecter.",
+    "users": {
+      "title": "Utilisateurs",
+      "description": "Invite d'autres personnes sur cette instance. Chacune choisit son propre mot de passe : tu ne le connais jamais.",
+      "invite": "Inviter",
+      "generating": "Génération…",
+      "copyLink": "Copier le lien",
+      "copied": "Copié",
+      "pendingInvitations": "Invitations en attente",
+      "singleUseLink": "Lien d'invitation à usage unique",
+      "expiresOn": "Expire le {date}",
+      "revoke": "Révoquer",
+      "revokeConfirm": "Révoquer cette invitation ? Le lien cessera immédiatement de fonctionner.",
+      "deleteUser": "Supprimer",
+      "deleteConfirm": "Supprimer {name} ? Toutes ses données (comptes, transactions, historique) seront définitivement effacées.",
+      "roleAdmin": "Administrateur",
+      "roleMember": "Membre",
+      "you": "(toi)",
+      "noUsername": "Compte sans identifiant",
+      "empty": "Tu es seul·e sur cette instance. Génère une invitation pour ajouter quelqu'un."
+    },
+    "portfolioSharing": {
+      "title": "Partage de portefeuille",
+      "description": "Donne à quelqu'un un accès en lecture seule à l'ensemble de tes comptes. Cette personne ne peut rien modifier, et tu peux révoquer l'accès à tout moment.",
+      "usernameLabel": "Identifiant de la personne",
+      "usernamePlaceholder": "ex. marie",
+      "grant": "Partager",
+      "granting": "Partage…",
+      "peopleWhoCanSee": "Personnes qui voient ton portefeuille",
+      "readOnlyAccess": "Accès en lecture seule",
+      "revoke": "Révoquer",
+      "revokeConfirm": "Révoquer l'accès de {name} ? Le changement est immédiat.",
+      "sharedWithYou": "Portefeuilles partagés avec toi",
+      "switcherHint": "Utilise le sélecteur en haut de la barre latérale pour basculer entre les portefeuilles.",
+      "empty": "Aucun partage pour l'instant."
+    }
   },
   "shared": {
     "readOnlyBanner": "Vue en lecture seule partagée par le propriétaire — aucune modification possible.",

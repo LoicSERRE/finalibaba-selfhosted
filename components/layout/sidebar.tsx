@@ -4,10 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Wallet, PiggyBank, Repeat, Coins, BarChart3, Settings, LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { PortfolioSwitcher, type PortfolioOption } from "@/components/layout/portfolio-switcher";
 
-type SidebarProps = { showLogout?: boolean };
+type SidebarProps = {
+  showLogout?: boolean;
+  /** Portfolios other users have granted this viewer read-only access to.
+   *  Empty on a solo instance, which is when the switcher isn't rendered. */
+  portfolios?: PortfolioOption[];
+  viewingPortfolioId?: string;
+};
 
-export function Sidebar({ showLogout = false }: Readonly<SidebarProps>) {
+export function Sidebar({ showLogout = false, portfolios = [], viewingPortfolioId }: Readonly<SidebarProps>) {
   const rawPathname = usePathname();
   const pathname = rawPathname ?? "/";
   const t = useTranslations("nav");
@@ -49,6 +56,14 @@ export function Sidebar({ showLogout = false }: Readonly<SidebarProps>) {
             Finalibaba
           </span>
         </div>
+
+        {portfolios.length > 0 && (
+          <PortfolioSwitcher
+            options={portfolios}
+            currentId={viewingPortfolioId ?? "self"}
+            selfLabel={t("myPortfolio")}
+          />
+        )}
 
         <nav aria-label={t("ariaMain")} className="flex flex-col gap-1 flex-1">
           {navItems.map(({ href, label, icon: Icon, exact }) => {

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, viewAccountIds } from "@/lib/auth-context";
+import { getViewContext } from "@/lib/auth-context";
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import Link from "next/link";
 import { AddAccountDialog } from "@/components/accounts/add-account-dialog";
@@ -53,8 +53,7 @@ export default async function AccountsPage({
 
   // Scoped to the viewer's visible accounts (own + co-owned); institutions
   // to the ones they own. Mono mode resolves to the owner, i.e. everything.
-  const viewer = await getViewer();
-  const accountIds = await viewAccountIds(viewer.id);
+  const { ownerId, accountIds, readOnly } = await getViewContext();
 
   const [fiatAccounts, investAccounts, realEstateAccounts, automobileAccounts, loanAccounts, institutions] =
     await Promise.all([
@@ -89,7 +88,7 @@ export default async function AccountsPage({
         include: { institution: true },
         orderBy: { name: "asc" },
       }),
-      prisma.institution.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" } }),
+      prisma.institution.findMany({ where: { userId: ownerId }, orderBy: { name: "asc" } }),
     ]);
 
   const now = new Date();
@@ -128,7 +127,12 @@ export default async function AccountsPage({
               one doesn't cover, or doesn't cover at all for LOAN) - showing
               this one too would be a second, partially-broken way to create
               the same account type. */}
-          {(tab === "liquidites" || tab === "investissements") && (
+          {/* readOnly = a granted portfolio is on screen. The Server Actions
+              behind these dialogs already refuse a guest (they resolve their
+              writable set from the session alone), so hiding them isn't the
+              access control - it's so a guest is never offered a button whose
+              only possible outcome is an error. */}
+          {!readOnly && (tab === "liquidites" || tab === "investissements") && (
             <AddAccountDialog institutions={institutions} defaultType={defaultType} />
           )}
         </div>
@@ -157,9 +161,9 @@ export default async function AccountsPage({
 
       {tab === "liquidites" && <FiatTab t={t} ta={ta} rows={fiatRows} />}
       {tab === "investissements" && <InvestmentTab t={t} ta={ta} rows={investRows} />}
-      {tab === "immobilier" && <RealEstateTab t={t} institutions={institutions} rows={realEstateRows} />}
-      {tab === "credits" && <LoanTab t={t} td={td} intlLocale={intlLocale} institutions={institutions} rows={loanRows} />}
-      {tab === "automobiles" && <AutomobileTab t={t} institutions={institutions} rows={automobileRows} />}
+      {tab === "immobilier" && <RealEstateTab t={t} institutions={institutions} rows={realEstateRows} readOnly={readOnly} />}
+      {tab === "credits" && <LoanTab t={t} td={td} intlLocale={intlLocale} institutions={institutions} rows={loanRows} readOnly={readOnly} />}
+      {tab === "automobiles" && <AutomobileTab t={t} institutions={institutions} rows={automobileRows} readOnly={readOnly} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, baseAccountIds } from "@/lib/auth-context";
+import { getViewer, baseAccountIds, isAuthEnabled, OWNER_USER_ID } from "@/lib/auth-context";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
@@ -29,6 +29,10 @@ import { AppLockSection } from "@/components/settings/app-lock-section";
 import { getAppLockStatus } from "@/lib/actions/app-lock";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
+import { UsersSection } from "@/components/settings/users-section";
+import { PortfolioSharingSection } from "@/components/settings/portfolio-sharing-section";
+import { listUsers, listInvitations } from "@/lib/actions/users";
+import { listPortfolioGrants } from "@/lib/actions/sharing";
 import { getShareLinks } from "@/lib/actions/share-links";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
 import { getApiKeys } from "@/lib/actions/api-keys";
@@ -81,6 +85,19 @@ export default async function SettingsPage({
   // artifacts), so these use baseAccountIds - never a granted view.
   const viewer = await getViewer();
   const accountIds = await baseAccountIds(viewer.id);
+
+  // Multi-user surfaces, only meaningful with auth on: in mono mode there is
+  // no login, so there is nobody to invite and nobody to share with. Fetched
+  // conditionally rather than rendered-and-hidden so a mono instance doesn't
+  // pay for three queries it can never use.
+  const isMulti = isAuthEnabled();
+  const [users, invitations, grants] = isMulti
+    ? await Promise.all([
+        viewer.role === "ADMIN" ? listUsers() : Promise.resolve([]),
+        viewer.role === "ADMIN" ? listInvitations() : Promise.resolve([]),
+        listPortfolioGrants(),
+      ])
+    : [[], [], { given: [], received: [] }];
 
   const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
     await Promise.all([
@@ -555,7 +572,11 @@ export default async function SettingsPage({
       )}
 
       {/* Backup & restore - hidden in demo mode (restore mutations are blocked anyway) */}
-      {process.env.DEMO_MODE !== "true" && <BackupRestoreSection />}
+      {/* Admin-only since v2.0: this wraps pg_dump/psql over the WHOLE
+          database, so a restore replaces every user's data (and the user table
+          itself). app/api/backup/route.ts enforces it - this just doesn't
+          offer a member a section whose every button returns 403. */}
+      {process.env.DEMO_MODE !== "true" && viewer.role === "ADMIN" && <BackupRestoreSection />}
 
       {/* 2FA - meaningless without built-in auth active, and hidden in demo
           mode (setup/disable mutations are blocked anyway) */}
@@ -580,6 +601,23 @@ export default async function SettingsPage({
           off for the trusted private network). Hidden in demo mode only
           (create/revoke mutations are blocked anyway). */}
       {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
+
+      {/* Read-only guests (v2.0) - sits next to share links because they answer
+          the same question ("let someone else see this"), with a different
+          trust model: a grant is tied to a real account on this instance and is
+          revocable per person, a share link is an anonymous URL. */}
+      {isMulti && process.env.DEMO_MODE !== "true" && (
+        <PortfolioSharingSection given={grants.given} received={grants.received} />
+      )}
+
+      {isMulti && viewer.role === "ADMIN" && process.env.DEMO_MODE !== "true" && (
+        <UsersSection
+          users={users}
+          invitations={invitations}
+          currentUserId={viewer.id}
+          ownerUserId={OWNER_USER_ID}
+        />
+      )}
 
       {/* Public REST API keys - same demo-mode gate as share links above
           (create/revoke mutations blocked anyway in demo mode), same

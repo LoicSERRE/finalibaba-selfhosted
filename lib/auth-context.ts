@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
@@ -25,6 +26,13 @@ export { OWNER_USER_ID };
 export function isAuthEnabled(): boolean {
   return process.env.AUTH_ENABLED === "true";
 }
+
+/**
+ * Which granted portfolio the sidebar switcher is currently pointed at (H6).
+ * Set by lib/actions/sharing.ts's setViewingPortfolio; validated against a real
+ * PortfolioGrant on every read below, never trusted on its own.
+ */
+export const VIEWING_PORTFOLIO_COOKIE = "viewing_portfolio";
 
 export interface Viewer {
   id: string;
@@ -104,6 +112,62 @@ export async function viewAccountIds(userId: string, viewedGrantorId?: string | 
   });
   if (!grant) return baseAccountIds(userId); // stale/invalid selection - fall back to own
   return baseAccountIds(viewedGrantorId);
+}
+
+/**
+ * Everything a READ surface needs, resolved in one call: who is asking, whose
+ * portfolio is on screen, which accounts that means, and whether the viewer may
+ * change any of it.
+ *
+ * `ownerId` is the distinction that makes the portfolio switcher correct rather
+ * than half-working. `accountIds` covers everything hanging off an account
+ * (transactions, holdings, balances), but a page also reads entities owned by a
+ * PERSON - categories, goals, the UserSettings row feeding analytics. Those must
+ * follow the portfolio being displayed, not the session: rendering the grantor's
+ * transactions against the viewer's own categories would show every row
+ * uncategorized, which looks like broken data rather than a permission boundary.
+ *
+ * `readOnly` is true exactly when a granted portfolio is being displayed. Pages
+ * pass it down to suppress mutation affordances - not as the access control
+ * itself (that lives in the Server Actions, which never consult this) but so a
+ * guest is never shown a button that would only fail.
+ *
+ * MUTATIONS MUST NOT USE THIS. They resolve their writable set from
+ * getWritableContext/baseAccountIds, which know nothing about the cookie.
+ */
+export interface ViewContext {
+  viewer: Viewer;
+  /** Whose portfolio is displayed - the viewer, or a grantor they may read. */
+  ownerId: string;
+  accountIds: string[];
+  readOnly: boolean;
+}
+
+export async function getViewContext(): Promise<ViewContext> {
+  const viewer = await getViewer();
+  const requested = (await cookies()).get(VIEWING_PORTFOLIO_COOKIE)?.value;
+
+  if (!requested || requested === viewer.id) {
+    return { viewer, ownerId: viewer.id, accountIds: await baseAccountIds(viewer.id), readOnly: false };
+  }
+
+  const grant = await prisma.portfolioGrant.findUnique({
+    where: { grantorUserId_granteeUserId: { grantorUserId: requested, granteeUserId: viewer.id } },
+    select: { grantorUserId: true },
+  });
+  // Revoked or never existed: fall back to the viewer's own portfolio in full
+  // read-write mode rather than erroring. A stale cookie is an everyday state
+  // (the grantor revoked while a tab sat open), not an attack to shout about.
+  if (!grant) {
+    return { viewer, ownerId: viewer.id, accountIds: await baseAccountIds(viewer.id), readOnly: false };
+  }
+
+  return {
+    viewer,
+    ownerId: requested,
+    accountIds: await baseAccountIds(requested),
+    readOnly: true,
+  };
 }
 
 /**

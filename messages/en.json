@@ -40,7 +40,10 @@
     "ariaMain": "Main navigation",
     "ariaMobile": "Mobile navigation",
     "skipToContent": "Skip to content",
-    "language": "Language"
+    "language": "Language",
+    "myPortfolio": "My portfolio",
+    "viewingPortfolio": "Portfolio shown",
+    "readOnlyView": "Read-only"
   },
   "auth": {
     "subtitle": "Your wealth, at a glance",
@@ -239,6 +242,16 @@
       "totalInsurance": "Total insurance",
       "totalCost": "Total loan cost",
       "repaymentProgress": "Repayment · {elapsed} months elapsed of {total}"
+    },
+    "coOwners": {
+      "title": "Co-owners",
+      "description": "A co-owner sees this account in their own portfolio and can change it (categorize, import, record a sale). For read-only access to all your accounts, use portfolio sharing in settings instead.",
+      "usernameLabel": "Their username",
+      "usernamePlaceholder": "e.g. marie",
+      "add": "Add",
+      "adding": "Adding…",
+      "remove": "Remove",
+      "removeConfirm": "Remove {name} from this account? Their alert rules and goals tied to it will be deleted."
     }
   },
   "budgets": {
@@ -870,7 +883,42 @@
     },
     "gcConnected": "Bank connection established. Accounts have been imported.",
     "gcError": "The bank connection failed. Try again from the institution concerned.",
-    "gcAlreadyConnected": "This bank account is already connected by another user on this instance. Ask them to share it with you as a co-owner instead of reconnecting it."
+    "gcAlreadyConnected": "This bank account is already connected by another user on this instance. Ask them to share it with you as a co-owner instead of reconnecting it.",
+    "users": {
+      "title": "Users",
+      "description": "Invite other people to this instance. Each one chooses their own password — you never know it.",
+      "invite": "Invite",
+      "generating": "Generating…",
+      "copyLink": "Copy link",
+      "copied": "Copied",
+      "pendingInvitations": "Pending invitations",
+      "singleUseLink": "Single-use invitation link",
+      "expiresOn": "Expires on {date}",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke this invitation? The link will stop working immediately.",
+      "deleteUser": "Delete",
+      "deleteConfirm": "Delete {name}? All their data (accounts, transactions, history) will be permanently erased.",
+      "roleAdmin": "Admin",
+      "roleMember": "Member",
+      "you": "(you)",
+      "noUsername": "Account with no username",
+      "empty": "You're the only person on this instance. Generate an invitation to add someone."
+    },
+    "portfolioSharing": {
+      "title": "Portfolio sharing",
+      "description": "Give someone read-only access to all your accounts. They can't change anything, and you can revoke access at any time.",
+      "usernameLabel": "Their username",
+      "usernamePlaceholder": "e.g. marie",
+      "grant": "Share",
+      "granting": "Sharing…",
+      "peopleWhoCanSee": "People who can see your portfolio",
+      "readOnlyAccess": "Read-only access",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke {name}'s access? The change is immediate.",
+      "sharedWithYou": "Portfolios shared with you",
+      "switcherHint": "Use the switcher at the top of the sidebar to move between portfolios.",
+      "empty": "Nothing shared yet."
+    }
   },
   "shared": {
     "readOnlyBanner": "Read-only view shared by the owner — no changes possible.",

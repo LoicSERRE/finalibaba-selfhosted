@@ -24,6 +24,7 @@ export function TransactionsTable({
   categories,
   canImportCsv,
   existingFingerprints,
+  readOnly = false,
 }: Readonly<{
   td: T;
   intlLocale: string;
@@ -33,10 +34,14 @@ export function TransactionsTable({
   categories: { id: string; name: string; color: string }[];
   canImportCsv: boolean;
   existingFingerprints: string[];
+  /** True when a granted (read-only) portfolio is on screen. The Server
+   *  Actions behind these controls guard ownership themselves; this only
+   *  avoids rendering buttons that could not succeed. */
+  readOnly?: boolean;
 }>) {
   if (transactions.length === 0) return null;
 
-  const showIncomeColumn = INCOME_ELIGIBLE_ACCOUNT_TYPES.has(accountType);
+  const showIncomeColumn = !readOnly && INCOME_ELIGIBLE_ACCOUNT_TYPES.has(accountType);
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
@@ -107,6 +112,7 @@ export function TransactionsTable({
                   amountCents={tx.amountCents}
                   categories={categories}
                   splits={tx.splits}
+                  readOnly={readOnly}
                 />
               </td>
               <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">

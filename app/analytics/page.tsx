@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, viewAccountIds } from "@/lib/auth-context";
+import { getViewContext } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
 import {
@@ -30,6 +30,22 @@ import { MonthlyPerformanceSection } from "@/components/analytics/monthly-perfor
 import { TopAssetsSection } from "@/components/analytics/top-assets-section";
 import { FinancingSection } from "@/components/analytics/financing-section";
 
+// Stand-in for a grantor who has never opened Settings, used only when reading
+// someone else's portfolio (a guest's page view must not create rows in the
+// grantor's account). Every money field is 0, which computeAnalytics already
+// treats as "not declared" - the cards it feeds simply don't render, exactly as
+// they wouldn't for the grantor themselves. The tax rates mirror
+// UserSettings' own schema defaults; they're only ever displayed here, since
+// v1.x moved real tax treatment onto each Account.
+const UNCONFIGURED_SETTINGS = {
+  salaryNetCents: BigInt(0),
+  monthlyExpensesCents: BigInt(0),
+  monthlySavedCents: BigInt(0),
+  taxRatePea: 0.172,
+  taxRateCto: 0.314,
+  taxRateCrypto: 0.314,
+} as const;
+
 export default async function AnalyticsPage() {
   const [t, ta, tAlloc, tIncome, locale] = await Promise.all([
     getTranslations("analytics"),
@@ -44,8 +60,7 @@ export default async function AnalyticsPage() {
   const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
   const startOfNextYear = new Date(Date.UTC(currentYear + 1, 0, 1));
 
-  const viewer = await getViewer();
-  const accountIds = await viewAccountIds(viewer.id);
+  const { ownerId, accountIds, readOnly } = await getViewContext();
 
   const [accounts, allBalances, settings, goals, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History] = await Promise.all([
     prisma.account.findMany({
@@ -57,12 +72,18 @@ export default async function AnalyticsPage() {
       },
     }),
     prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
-    prisma.userSettings.upsert({ where: { userId: viewer.id }, create: { userId: viewer.id }, update: {} }),
+    // Read-only view of someone else's portfolio: never upsert their row.
+    // A missing row degrades to zeros, which is already this page's own
+    // "not configured yet" path (hasSalary/hasExpenses/hasDeclaredSavings
+    // all read as false), not fabricated data.
+    readOnly
+      ? prisma.userSettings.findUnique({ where: { userId: ownerId } }).then((s) => s ?? UNCONFIGURED_SETTINGS)
+      : prisma.userSettings.upsert({ where: { userId: ownerId }, create: { userId: ownerId }, update: {} }),
     // v1.14 - N independent goals (replaces the old single global
     // UserSettings.savingsGoalCents figure). No include needed -
     // computeAnalytics resolves each goal's linked account name/value
     // itself from the already-fetched `accounts` above.
-    prisma.goal.findMany({ where: { userId: viewer.id }, orderBy: { createdAt: "asc" } }),
+    prisma.goal.findMany({ where: { userId: ownerId }, orderBy: { createdAt: "asc" } }),
     // Fetch Yahoo Finance in parallel - ex-div dates + real yields (1h cache)
     fetchYFDividends(Object.values(ISIN_TO_YF_SYMBOL)),
     // Real tracked income (IncomeEvent) - separate from the estimate below,

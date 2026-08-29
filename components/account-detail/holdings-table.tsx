@@ -15,6 +15,7 @@ export function HoldingsTable({
   accountName,
   holdingsWithTax,
   isSynced,
+  readOnly = false,
 }: Readonly<{
   td: T;
   t: T;
@@ -22,6 +23,10 @@ export function HoldingsTable({
   accountName: string;
   holdingsWithTax: HoldingWithTax[];
   isSynced: boolean;
+  /** True when a granted (read-only) portfolio is on screen. The Server
+   *  Actions behind these controls guard ownership themselves; this only
+   *  avoids rendering buttons that could not succeed. */
+  readOnly?: boolean;
 }>) {
   return (
     <>
@@ -46,7 +51,7 @@ export function HoldingsTable({
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.gain")}</th>
               <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.tax")}</th>
               <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">{t("table.weight")}</th>
-              {!isSynced && <th scope="col" className="px-4 py-3 w-10" />}
+              {!isSynced && !readOnly && <th scope="col" className="px-4 py-3 w-10" />}
             </tr>
           </thead>
           <tbody>
@@ -130,7 +135,7 @@ export function HoldingsTable({
                     </span>
                   </div>
                 </td>
-                {!isSynced && (
+                {!isSynced && !readOnly && (
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap items-center gap-1">
                       {/* quantity is a Prisma Decimal - not a plain object, so it
