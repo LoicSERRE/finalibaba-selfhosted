@@ -24,5 +24,22 @@ export function ServiceWorkerRegistration({
     navigator.serviceWorker.register(`/sw.js?${params}`).catch(() => {});
   }, [offlinePages, userId]);
 
+  // Clears the app-icon badge public/sw.js sets when a push arrives. Opening
+  // the app IS the read receipt - this app stores no read/unread state, so
+  // there is nothing else that could clear it. Also on visibilitychange, not
+  // just mount: an installed PWA is resumed far more often than it is
+  // cold-started, and a badge that only cleared on a fresh load would sit
+  // there for days.
+  useEffect(() => {
+    const clear = () => {
+      if (document.visibilityState === "visible") {
+        navigator.clearAppBadge?.().catch(() => {});
+      }
+    };
+    clear();
+    document.addEventListener("visibilitychange", clear);
+    return () => document.removeEventListener("visibilitychange", clear);
+  }, []);
+
   return null;
 }

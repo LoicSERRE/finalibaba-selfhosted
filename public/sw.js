@@ -141,14 +141,33 @@ self.addEventListener("push", (event) => {
     // rather than dropping the notification entirely.
   }
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "/icon-512",
-      badge: "/icon-512",
-      tag: "finalibaba-alert",
-    })
+    Promise.all([
+      self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: "/icon-512",
+        badge: "/icon-512",
+        tag: "finalibaba-alert",
+      }),
+      // A dot on the installed app icon, cleared when the app is next opened
+      // (see components/layout/service-worker-registration.tsx). Called with no
+      // argument on purpose: that means "something is waiting" without a count,
+      // which is all this app can honestly claim - it dispatches alerts but
+      // stores no read/unread state, so any number here would be invented.
+      //
+      // Supported on iOS 16.4+ for home-screen web apps, the same gate Web Push
+      // already requires, and on desktop Chrome/Edge. Android shows its own
+      // badge for unread notifications and ignores this. Feature-detected
+      // because the API is absent in Firefox and in a plain browser tab.
+      setBadge(),
+    ])
   );
 });
+
+function setBadge() {
+  return self.navigator?.setAppBadge
+    ? self.navigator.setAppBadge().catch(() => {})
+    : Promise.resolve();
+}
 
 // Focuses an already-open tab instead of always opening a new one - a
 // user tapping the notification almost certainly already has the PWA
