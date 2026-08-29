@@ -49,6 +49,18 @@ export const config = {
     // link) that must work the same whether AUTH_ENABLED is on or off - the
     // token check inside the page is its own, independent gate. See
     // CLAUDE.md's "Read-only share links" section.
+    // invite is excluded for exactly the same reason as shared, and it is a
+    // correctness requirement rather than a nicety: app/invite/[token] is the
+    // screen where someone who has NO account yet creates one. Without this
+    // exclusion, an AUTH_ENABLED=true instance redirects every invitee to
+    // /login - a page they cannot possibly get past - making the entire
+    // invitation flow unreachable. Found by the post-v2.0 security audit, not
+    // by the multi-user build itself, whose own tests created users directly
+    // in the database and so never went through this page. Anchored the same
+    // way as api/v1 above (`invite(?:\/.*)?$`), so /invite/<token> and a bare
+    // /invite match but a prefix collision like /invite999 does not. The page
+    // is its own gate: an unknown, used or expired token is notFound(),
+    // uniformly, exactly like a share link.
     // api/alerts, api/transactions (specifically auto-categorize), and
     // api/investments (specifically snapshot-balances) are excluded for the
     // same "no browser session on this call path" reason as
@@ -104,6 +116,6 @@ export const config = {
     // `/api/v1/net-worth` alike, but not a bare-prefix collision like
     // `/api/v1999` - verified with the same live-server method as above,
     // not just reasoned through.
-    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api/realtime/notify|api\\/v1(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api/realtime/notify|api\\/v1(?:\\/.*)?$|invite(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };

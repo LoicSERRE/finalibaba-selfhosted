@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { verifyTotpCode, matchBackupCode } from "@/lib/domain/totp";
 import { OWNER_USER_ID } from "@/lib/domain/users";
@@ -24,6 +25,19 @@ export function createRateLimiter(maxAttempts = 5, windowMs = 15 * 60 * 1000) {
 }
 
 const checkRateLimit = createRateLimiter();
+
+// Compared against when no account matched, so an unknown username costs the
+// same bcrypt work as a real one. Without it, resolveUser returned
+// immediately for an unknown username and only paid for bcrypt on a real
+// one - measured at a ~64ms gap over localhost during the post-v2.0 security
+// audit, far above the noise floor and a reliable username-enumeration
+// oracle. The rate limiter bounds how fast that can be probed but does not
+// close it, since a timing probe only needs a response, not a success.
+//
+// Hashed from fresh random bytes at module load rather than a checked-in
+// constant: nothing can ever match it, and there is no literal in the repo
+// that looks like a credential.
+const UNMATCHED_USER_HASH = bcrypt.hashSync(randomBytes(32).toString("hex"), 10);
 
 // x-forwarded-for/x-real-ip are only trustworthy behind a reverse proxy that
 // sets them itself (Nginx Proxy Manager, Caddy, Traefik, Cloudflare - see
@@ -80,14 +94,21 @@ async function resolveUser(username: string | undefined, password: string): Prom
   const user = username
     ? await prisma.user.findUnique({ where: { username }, select })
     : await prisma.user.findUnique({ where: { id: OWNER_USER_ID }, select });
-  if (!user) return null;
+  if (!user) {
+    // Burn the same bcrypt cost a real account would - see UNMATCHED_USER_HASH.
+    await bcrypt.compare(password, UNMATCHED_USER_HASH);
+    return null;
+  }
 
   if (user.passwordHash) {
     return (await bcrypt.compare(password, user.passwordHash)) ? user : null;
   }
 
   // No DB password: the env fallback applies, and only to the owner.
-  if (user.id !== OWNER_USER_ID) return null;
+  if (user.id !== OWNER_USER_ID) {
+    await bcrypt.compare(password, UNMATCHED_USER_HASH);
+    return null;
+  }
 
   const storedHash = process.env.AUTH_PASSWORD_HASH;
   if (storedHash) return (await bcrypt.compare(password, storedHash)) ? user : null;

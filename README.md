@@ -319,6 +319,9 @@ Both are invitation-based: you share with a username, so the person has to alrea
 
 ### What stays with the first user
 
+> [!WARNING]
+> **Don't turn `AUTH_ENABLED` back off once you have several users.** With no login, the app resolves every visitor to the owner account - admin rights included. Other people's portfolios aren't exposed (nobody can authenticate as them any more), but they do become unreachable, and yours becomes readable by anyone who can reach the app.
+
 Bank credentials in `.env` (`LCL_LOGIN`, `TR_PHONE`) belong to the instance owner, so only they can run or re-authenticate those syncs. **The imported data is unaffected** - an env-synced account is co-ownable and shareable exactly like a manual one. A second user can connect their own banks through Woob or GoCardless; Trade Republic specifically is owner-only, since Woob has no module for it.
 
 Database backup and restore are admin-only: they cover the entire instance, including other people's data.
