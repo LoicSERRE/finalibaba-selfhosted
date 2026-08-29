@@ -3,7 +3,7 @@
     "cancel": "Annuler",
     "save": "Enregistrer",
     "saving": "Enregistrement…",
-    "offlineNotice": "Hors ligne — les données affichées peuvent dater de votre dernière visite.",
+    "offlineNotice": "Hors ligne : les données affichées peuvent dater de votre dernière visite.",
     "delete": "Supprimer",
     "deleting": "Suppression…",
     "deleteForever": "Supprimer définitivement",
@@ -16,7 +16,7 @@
     "configure": "Configurer",
     "sync": "Synchroniser",
     "loading": "Chargement…",
-    "noData": "—",
+    "noData": "-",
     "personal": "Personnel",
     "unknown": "Inconnu",
     "optional": "optionnel",
@@ -110,11 +110,11 @@
   },
   "accounts": {
     "title": "Comptes",
-    "noAccount": "Aucun compte — ajoutez-en avec le bouton ci-dessus.",
+    "noAccount": "Aucun compte. Ajoutez-en avec le bouton ci-dessus.",
     "noHoldings": "Aucune position.",
-    "noRealEstate": "Aucun bien immobilier — utilisez le bouton ci-dessus pour en ajouter un.",
-    "noVehicle": "Aucun véhicule — utilisez le bouton ci-dessus pour en ajouter un.",
-    "noLoan": "Aucun crédit — utilisez le bouton ci-dessus pour en ajouter un.",
+    "noRealEstate": "Aucun bien immobilier. Utilisez le bouton ci-dessus pour en ajouter un.",
+    "noVehicle": "Aucun véhicule. Utilisez le bouton ci-dessus pour en ajouter un.",
+    "noLoan": "Aucun crédit. Utilisez le bouton ci-dessus pour en ajouter un.",
     "taxes": "impôts",
     "tabs": {
       "cash": "Liquidités",
@@ -223,7 +223,7 @@
       "suggestBuy": "Acheter",
       "suggestSell": "Vendre",
       "approxShares": "≈ {count} part(s)",
-      "footnote": "Les cibles n'ont pas besoin de totaliser 100 % — une position sans cible définie est simplement exclue du plan de rééquilibrage."
+      "footnote": "Les cibles n'ont pas besoin de totaliser 100 % : une position sans cible définie est simplement exclue du plan de rééquilibrage."
     },
     "loanDetail": {
       "amountBorrowed": "Montant emprunté",
@@ -450,8 +450,8 @@
       "good": "Bon",
       "declaredSavings": "{saved} déclarés / {salary} salaire",
       "momSavings": "{mom} MOM / {salary} salaire",
-      "hintDeclared": "Montant déclaré — hors virements inter-comptes et perf marché",
-      "hintMom": "Variation patrimoine MOM — peut inclure transferts et marchés"
+      "hintDeclared": "Montant déclaré : hors virements inter-comptes et perf marché",
+      "hintMom": "Variation patrimoine MOM : peut inclure transferts et marchés"
     },
     "runway": {
       "title": "Runway · Mois de survie",
@@ -460,7 +460,7 @@
       "detail": "{savings} épargne / {expenses} / mois",
       "safe": "Sécurité solide",
       "ok": "Tampon acceptable",
-      "warning": "Attention — renforcer l'épargne de précaution"
+      "warning": "Attention : renforcer l'épargne de précaution"
     },
     "goal": {
       "title": "{name} · cap des {amount}",
@@ -485,7 +485,7 @@
       "exDivUnknown": "Date inconnue",
       "perShare": "{amount} $/action",
       "withholding": "Retenue à la source 15% + PS 17,2% (crédit IR)",
-      "bruteFootnote": "Brut = yield TTM × valeur de position (Yahoo Finance) · Net = estimation sous PFU, résident français — non contractuel"
+      "bruteFootnote": "Brut = yield TTM × valeur de position (Yahoo Finance) · Net = estimation sous PFU, résident français : non contractuel"
     },
     "performance": {
       "title": "Performance portefeuille · CTO / PEA",
@@ -503,7 +503,7 @@
       "colNetGain": "Plus-value nette",
       "colCagr": "CAGR",
       "since": "depuis {date}",
-      "cagr": "CAGR = rendement annuel composé depuis la date de début · Net = brut après impôts latents (PEA {pea}% · CTO {cto}%) — non encore réalisés.",
+      "cagr": "CAGR = rendement annuel composé depuis la date de début · Net = brut après impôts latents (PEA {pea}% · CTO {cto}%) : non encore réalisés.",
       "addDateHint": "Renseigne la date de début dans chaque page de compte pour activer le CAGR."
     },
     "benchmark": {
@@ -524,7 +524,7 @@
     "sectorExposure": {
       "title": "Répartition sectorielle",
       "ariaLabel": "Répartition du portefeuille par secteur",
-      "footnote": "Basé sur les classifications sectorielles Yahoo Finance (actions via une recherche par ISIN, ETF via leur composition détaillée) — les cryptomonnaies ont leur propre catégorie (elles n'ont pas de secteur GICS). « Non classé » ne regroupe que les rares positions que Yahoo Finance (et une éventuelle clé API de secours FMP/Alpha Vantage) n'a pas réussi à identifier.",
+      "footnote": "Basé sur les classifications sectorielles Yahoo Finance (actions via une recherche par ISIN, ETF via leur composition détaillée) : les cryptomonnaies ont leur propre catégorie (elles n'ont pas de secteur GICS). « Non classé » ne regroupe que les rares positions que Yahoo Finance (et une éventuelle clé API de secours FMP/Alpha Vantage) n'a pas réussi à identifier.",
       "totalClassified": "{amount} classés par secteur",
       "andMore": "+ d'autres positions",
       "sectors": {
@@ -573,7 +573,7 @@
       "colEquity": "Fonds propres",
       "colLtv": "LTV"
     },
-    "noDataIntro": "Aucune donnée — ajoutez des comptes dans",
+    "noDataIntro": "Aucune donnée. Ajoutez des comptes dans",
     "noDataLink": "Comptes."
   },
   "settings": {
@@ -594,11 +594,11 @@
       "salary": "Salaire net mensuel",
       "expenses": "Dépenses incompressibles / mois",
       "saved": "Épargne mensuelle déclarée",
-      "savedHint": "Livrets + investissements — hors virements inter-comptes et perf marché"
+      "savedHint": "Livrets + investissements : hors virements inter-comptes et perf marché"
     },
     "tax": {
       "title": "Fiscalité",
-      "subtitle": "Taux d'imposition sur les plus-values latentes — utilisé pour calculer le patrimoine net",
+      "subtitle": "Taux d'imposition sur les plus-values latentes : utilisé pour calculer le patrimoine net",
       "pea": "PEA",
       "cto": "CTO",
       "crypto": "Crypto",
@@ -632,7 +632,7 @@
       "restoreConfirm": "Restaurer et écraser",
       "restoring": "Restauration…",
       "restoreError": "La restauration a échoué. Vérifiez les logs du serveur.",
-      "restarting": "Restauration terminée — redémarrage de l'application en cours…"
+      "restarting": "Restauration terminée : redémarrage de l'application en cours…"
     },
     "twoFactor": {
       "title": "Authentification à deux facteurs",
@@ -652,7 +652,7 @@
       "codeLabel": "Code de vérification",
       "confirm": "Confirmer",
       "validating": "Vérification…",
-      "backupCodesWarning": "Note ces codes de secours dans un endroit sûr — ils ne seront plus jamais affichés. Chacun ne fonctionne qu'une seule fois et permet de se connecter en cas de perte de ton appareil d'authentification.",
+      "backupCodesWarning": "Note ces codes de secours dans un endroit sûr : ils ne seront plus jamais affichés. Chacun ne fonctionne qu'une seule fois et permet de se connecter en cas de perte de ton appareil d'authentification.",
       "backupCodesDone": "J'ai noté mes codes",
       "disableTitle": "Désactiver la 2FA",
       "disableHint": "Saisis un code de vérification actuel ou un code de secours pour confirmer.",
@@ -697,7 +697,7 @@
       "includeField": "Contenu inclus",
       "includeHoldings": "Positions (actions, crypto…)",
       "includeTransactions": "Transactions récentes",
-      "includeHint": "Désactivé par défaut — ce lien peut être accessible depuis internet. Choix fixé à la création, pas modifiable ensuite (révoque et recrée le lien pour changer).",
+      "includeHint": "Désactivé par défaut : ce lien peut être accessible depuis internet. Choix fixé à la création, pas modifiable ensuite (révoque et recrée le lien pour changer).",
       "creating": "Création…",
       "confirm": "Créer",
       "emptyTitle": "Aucun lien de partage",
@@ -736,16 +736,16 @@
     },
     "alertChannels": {
       "title": "Canaux de notification",
-      "subtitle": "Configure comment tu souhaites être notifié — push (ntfy) et/ou email. Choisis quand tu veux être notifié dans « Déclencheurs » juste en dessous.",
+      "subtitle": "Configure comment tu souhaites être notifié : push (ntfy) et/ou email. Choisis quand tu veux être notifié dans « Déclencheurs » juste en dessous.",
       "channelEnabled": "Activé",
       "ntfySectionTitle": "Push (ntfy)",
       "ntfy": "URL du sujet ntfy",
       "ntfyGenerate": "Générer",
       "ntfyCopy": "Copier",
       "ntfyCopied": "Copié !",
-      "ntfyHint": "Laisse vide pour désactiver. Clique sur « Générer » pour créer une URL avec un identifiant aléatoire impossible à deviner — sur le serveur public ntfy.sh, c'est ce qui empêche quelqu'un d'autre de lire tes notifications. N'invente jamais un nom de sujet toi-même (« finalibaba-quelquechose ») : n'importe qui peut le deviner ou tomber dessus. Pour une confidentialité totale indépendante de ntfy.sh, héberge ton propre serveur ntfy — voir « Self-hosted alerts » dans le README pour l'activer comme service optionnel de ce projet.",
+      "ntfyHint": "Laisse vide pour désactiver. Clique sur « Générer » pour créer une URL avec un identifiant aléatoire impossible à deviner : sur le serveur public ntfy.sh, c'est ce qui empêche quelqu'un d'autre de lire tes notifications. N'invente jamais un nom de sujet toi-même (« finalibaba-quelquechose ») : n'importe qui peut le deviner ou tomber dessus. Pour une confidentialité totale indépendante de ntfy.sh, héberge ton propre serveur ntfy, voir « Self-hosted alerts » dans le README pour l'activer comme service optionnel de ce projet.",
       "ntfyAuthToken": "Jeton d'authentification ntfy",
-      "ntfyAuthTokenHint": "Uniquement nécessaire pour un serveur ntfy auto-hébergé configuré en accès privé — inutile et à laisser vide avec le serveur public ntfy.sh.",
+      "ntfyAuthTokenHint": "Uniquement nécessaire pour un serveur ntfy auto-hébergé configuré en accès privé : inutile et à laisser vide avec le serveur public ntfy.sh.",
       "emailSectionTitle": "Email",
       "emailTo": "Adresse email de notification",
       "emailPreset": "Fournisseur",
@@ -756,9 +756,9 @@
       "smtpUser": "Utilisateur SMTP",
       "smtpPassword": "Mot de passe SMTP",
       "smtpPasswordPlaceholder": "Laisser vide pour ne pas changer",
-      "smtpPasswordHint": "Pour Gmail ou Outlook, utilise un mot de passe d'application (pas ton mot de passe principal) — ils l'exigent pour l'accès SMTP tiers.",
+      "smtpPasswordHint": "Pour Gmail ou Outlook, utilise un mot de passe d'application (pas ton mot de passe principal) : ils l'exigent pour l'accès SMTP tiers.",
       "smtpFrom": "Adresse d'expédition",
-      "smtpFromHint": "Pour Gmail ou Outlook, doit être la même adresse que l'utilisateur SMTP, sinon le message est rejeté ou modifié. Pour le serveur mail auto-hébergé, laisse utilisateur et mot de passe vides — la confiance passe par le réseau Docker interne, pas par des identifiants.",
+      "smtpFromHint": "Pour Gmail ou Outlook, doit être la même adresse que l'utilisateur SMTP, sinon le message est rejeté ou modifié. Pour le serveur mail auto-hébergé, laisse utilisateur et mot de passe vides : la confiance passe par le réseau Docker interne, pas par des identifiants.",
       "emailHint": "Laisse l'adresse ou le serveur SMTP vide pour désactiver les alertes par email."
     },
     "webPush": {
@@ -819,9 +819,9 @@
       "thresholdField": "Seuil (€)",
       "holdingField": "Position",
       "holdingPlaceholder": "Choisir une position",
-      "noEligibleHoldings": "Aucune position disponible — ajoute d'abord une valeur à un compte investissement ou crypto.",
+      "noEligibleHoldings": "Aucune position disponible. Ajoute d'abord une valeur à un compte investissement ou crypto.",
       "driftThresholdField": "Seuil de dérive (points)",
-      "noEligibleDriftHoldings": "Aucune position avec une cible de répartition définie — configure une cible dans le tableau de rééquilibrage d'un compte investissement ou crypto d'abord.",
+      "noEligibleDriftHoldings": "Aucune position avec une cible de répartition définie. Configure une cible dans le tableau de rééquilibrage d'un compte investissement ou crypto d'abord.",
       "gainAllAccounts": "Tous les comptes (portefeuille entier)",
       "gainUnitField": "Unité",
       "gainUnitPercent": "Pourcentage (%)",
@@ -829,7 +829,7 @@
       "gainThresholdPctField": "Seuil (%)",
       "categoryField": "Catégorie",
       "categoryPlaceholder": "Choisir une catégorie",
-      "noEligibleCategories": "Aucune catégorie avec un budget défini — configure un budget dans « Budgets » d'abord.",
+      "noEligibleCategories": "Aucune catégorie avec un budget défini. Configure un budget dans « Budgets » d'abord.",
       "newTransactionAllAccounts": "Tous les comptes",
       "minimumAmountField": "Montant minimum (€, optionnel)",
       "directionField": "Sens",
@@ -921,8 +921,8 @@
     }
   },
   "shared": {
-    "readOnlyBanner": "Vue en lecture seule partagée par le propriétaire — aucune modification possible.",
-    "readOnlyBannerLabeled": "Vue en lecture seule partagée par le propriétaire ({label}) — aucune modification possible.",
+    "readOnlyBanner": "Vue en lecture seule partagée par le propriétaire : aucune modification possible.",
+    "readOnlyBannerLabeled": "Vue en lecture seule partagée par le propriétaire ({label}) : aucune modification possible.",
     "holdingsTitle": "Positions",
     "transactionsTitle": "Transactions récentes"
   },
@@ -976,12 +976,12 @@
   "projectionChart": {
     "title": "Projection à long terme",
     "heroLabel": "Capital estimé",
-    "investedReturnLabel": "Rendement — investi",
-    "liquidReturnLabel": "Rendement — épargne",
+    "investedReturnLabel": "Rendement : investi",
+    "liquidReturnLabel": "Rendement : épargne",
     "splitNote": "{investedPct}% investi · {liquidPct}% épargne",
-    "splitMethodology": "Répartition basée sur votre allocation actuelle (investissements + crypto vs. livrets/comptes d'épargne uniquement), et appliquée dans les mêmes proportions à votre épargne future — cette appli ne sait pas où va concrètement votre épargne déclarée. Les comptes courants ne sont volontairement pas comptés comme « épargne » : beaucoup sont rémunérés à 0%, donc leur solde est conservé à sa valeur actuelle plutôt que de composer au même rendement qu'un livret. Le solde restant (comptes courants, immobilier, véhicules, moins les crédits qui n'y sont pas déjà rattachés) est conservé à sa valeur actuelle, sans hypothèse de croissance.",
+    "splitMethodology": "Répartition basée sur votre allocation actuelle (investissements + crypto vs. livrets/comptes d'épargne uniquement), et appliquée dans les mêmes proportions à votre épargne future : cette appli ne sait pas où va concrètement votre épargne déclarée. Les comptes courants ne sont volontairement pas comptés comme « épargne » : beaucoup sont rémunérés à 0%, donc leur solde est conservé à sa valeur actuelle plutôt que de composer au même rendement qu'un livret. Le solde restant (comptes courants, immobilier, véhicules, moins les crédits qui n'y sont pas déjà rattachés) est conservé à sa valeur actuelle, sans hypothèse de croissance.",
     "contributionNote": "Basé sur {amount}/an d'épargne déclarée",
-    "noContributionNote": "Aucune épargne mensuelle déclarée — projection basée uniquement sur la croissance du patrimoine actuel",
+    "noContributionNote": "Aucune épargne mensuelle déclarée : projection basée uniquement sur la croissance du patrimoine actuel",
     "horizonSelectorLabel": "Horizon",
     "horizonOption": "{years} ans",
     "horizonLabel": "Dans {years} ans",
@@ -1018,7 +1018,7 @@
   "importBalanceHistory": {
     "trigger": "Importer un historique",
     "title": "Importer un historique de solde",
-    "hint": "Fichier CSV avec les colonnes date et balance (ou solde/montant/valeur). Dates au format AAAA-MM-JJ ou JJ/MM/AAAA. Un point par date recommandé — utile pour reconstituer le graphique d'évolution depuis Excel ou un autre outil.",
+    "hint": "Fichier CSV avec les colonnes date et balance (ou solde/montant/valeur). Dates au format AAAA-MM-JJ ou JJ/MM/AAAA. Un point par date recommandé : utile pour reconstituer le graphique d'évolution depuis Excel ou un autre outil.",
     "missingColumns": "Colonnes attendues introuvables : date, balance.",
     "invalidDate": "Date invalide",
     "invalidBalance": "Solde manquant ou invalide",
@@ -1041,10 +1041,10 @@
     "estimatedValue": "Valeur estimée (€)",
     "autoLiability": "Crédit auto restant dû (€)",
     "mortgage": "Capital restant dû / emprunt (€)",
-    "noInstitution": "— Aucune institution —",
-    "noSubtype": "— Non précisé —",
-    "peaLabel": "PEA — taxe 17,2 % (prélèvements sociaux)",
-    "ctoLabel": "CTO — taxe 31,4 % sur les plus-values",
+    "noInstitution": "- Aucune institution -",
+    "noSubtype": "- Non précisé -",
+    "peaLabel": "PEA : taxe 17,2 % (prélèvements sociaux)",
+    "ctoLabel": "CTO : taxe 31,4 % sur les plus-values",
     "typeChecking": "Compte courant",
     "typeSavings": "Épargne (Livret A, LEP…)",
     "typeInvestment": "Compte-titres / PEA",
@@ -1062,8 +1062,8 @@
     "addFirst": "Ajoutez d'abord une institution dans Paramètres."
   },
   "addHolding": {
-    "editTitle": "Modifier — {ticker}",
-    "addTitle": "Ajouter une position — {name}",
+    "editTitle": "Modifier : {ticker}",
+    "addTitle": "Ajouter une position : {name}",
     "editAriaLabel": "Modifier",
     "position": "Position",
     "ticker": "Ticker / Symbole",
@@ -1071,20 +1071,20 @@
     "qty": "Quantité",
     "currency": "Devise",
     "price": "Prix unitaire actuel",
-    "costBasis": "Prix de revient total — optionnel",
+    "costBasis": "Prix de revient total : optionnel",
     "costBasisPlaceholder": "Montant total investi, ex: 5000.00",
-    "nativeAmountHint": "Montants exprimés dans la devise choisie ci-dessus — convertis en euros automatiquement.",
+    "nativeAmountHint": "Montants exprimés dans la devise choisie ci-dessus : convertis en euros automatiquement.",
     "taxHint": "Sert à calculer les plus-values et l'impôt latent.",
-    "targetPct": "Allocation cible (%) — optionnel",
+    "targetPct": "Allocation cible (%) : optionnel",
     "targetPctPlaceholder": "Ex: 30",
-    "targetPctHint": "Sert au rééquilibrage — laisse vide si cette position n'en fait pas partie.",
+    "targetPctHint": "Sert au rééquilibrage : laisse vide si cette position n'en fait pas partie.",
     "update": "Mettre à jour",
     "submit": "Ajouter",
     "refreshFx": "Actualiser le taux de change",
     "unknownError": "Une erreur inattendue s'est produite."
   },
   "sellHolding": {
-    "title": "Vendre — {ticker}",
+    "title": "Vendre : {ticker}",
     "trigger": "Vendre",
     "quantitySold": "Quantité vendue (sur {available})",
     "proceeds": "Produit de la vente (€)",
@@ -1098,7 +1098,7 @@
     "trigger": "Ajouter un bien",
     "name": "Nom du bien",
     "institution": "Institution / Organisme",
-    "noInstitution": "— Aucune institution —",
+    "noInstitution": "- Aucune institution -",
     "value": "Valeur estimée (€)",
     "liability": "Capital restant dû (€)",
     "tip": "La valeur estimée est à mettre à jour manuellement (estimation marché, Meilleurs Agents…).",
@@ -1111,7 +1111,7 @@
     "trigger": "Ajouter un véhicule",
     "name": "Nom du véhicule",
     "institution": "Organisme (optionnel)",
-    "noOrganization": "— Comptant / aucun —",
+    "noOrganization": "- Comptant / aucun -",
     "value": "Valeur actuelle estimée (€)",
     "purchasePrice": "Prix d'achat (€)",
     "insuranceMonthly": "Assurance mensuelle (€)",
@@ -1125,7 +1125,7 @@
     "trigger": "Ajouter un crédit",
     "name": "Nom du crédit",
     "institution": "Organisme prêteur (optionnel)",
-    "noOrganization": "— Non précisé —",
+    "noOrganization": "- Non précisé -",
     "amount": "Montant emprunté (€)",
     "rate": "TAEG (%)",
     "duration": "Durée totale (mois)",
@@ -1148,7 +1148,7 @@
     "searchAriaLabel": "Rechercher une banque",
     "noResults": "Aucune banque trouvée",
     "dedicatedEnvWarning": "Cette banque est déjà synchronisée via une configuration serveur (.env). Ajouter aussi une configuration Woob ici créera des comptes en double, la prochaine synchronisation ne les reconnaîtra pas comme identiques.",
-    "woobHint": "Sync automatique via Woob — historique illimité stocké dans votre base.",
+    "woobHint": "Sync automatique via Woob : historique illimité stocké dans votre base.",
     "login": "Identifiant / n° client",
     "password": "Mot de passe",
     "creating": "Création…"
@@ -1160,13 +1160,13 @@
     "submit": "Enregistrer"
   },
   "updateRealEstate": {
-    "title": "Mettre à jour — {name}",
+    "title": "Mettre à jour : {name}",
     "value": "Valeur estimée (€)",
     "liability": "Capital restant dû (€)",
     "submit": "Enregistrer"
   },
   "updateAutomobile": {
-    "title": "Mettre à jour — {name}",
+    "title": "Mettre à jour : {name}",
     "value": "Valeur actuelle estimée (€)",
     "liability": "Crédit auto restant dû (€)",
     "insurance": "Assurance mensuelle (€)",
@@ -1188,16 +1188,16 @@
     "confirmConnect": "J'ai approuvé la connexion"
   },
   "configureWoob": {
-    "title": "Sync automatique — {name}",
+    "title": "Sync automatique : {name}",
     "configured": "Woob configuré",
     "configure": "Configurer Woob",
-    "dedicatedEnvWarning": "Cette institution est déjà synchronisée via une configuration serveur (.env). Configurer aussi Woob ici en parallèle créera des comptes en double — les deux chemins ne se reconnaissent pas comme la même banque.",
-    "legacyAccountsWarning": "{count} compte(s) synchronisé(s) via une ancienne configuration .env sont toujours en base, en plus des comptes Woob ci-dessous — migre-les pour éliminer les doublons.",
+    "dedicatedEnvWarning": "Cette institution est déjà synchronisée via une configuration serveur (.env). Configurer aussi Woob ici en parallèle créera des comptes en double : les deux chemins ne se reconnaissent pas comme la même banque.",
+    "legacyAccountsWarning": "{count} compte(s) synchronisé(s) via une ancienne configuration .env sont toujours en base, en plus des comptes Woob ci-dessous : migre-les pour éliminer les doublons.",
     "migrateButton": "Migrer maintenant",
-    "migrateNoWoobDataYet": "Aucune donnée Woob synchronisée pour cette banque pour le moment — lance d'abord une synchronisation avant de migrer.",
+    "migrateNoWoobDataYet": "Aucune donnée Woob synchronisée pour cette banque pour le moment. Lance d'abord une synchronisation avant de migrer.",
     "migrateConfirmDescription": "{legacyCount} compte(s) actuellement synchronisé(s) via .env, contre {woobCount} déjà créé(s) par Woob pour cette banque. Vérifie que les soldes correspondent avant de continuer : cette action supprime définitivement les comptes .env et tout leur historique (transactions, soldes).",
-    "historyDepthWarning": "⚠ L'historique .env remonte au {legacyDate}, mais Woob n'a encore d'historique que depuis le {woobDate} — soit {days} jours d'historique réel qui seront définitivement supprimés par cette migration, pas juste des doublons.",
-    "migrateEnvReminder": "Il te reste à retirer les identifiants (.env) de cette banque et à redémarrer les conteneurs — sinon la prochaine synchronisation automatique (dans les 4h) recréera les comptes qui viennent d'être supprimés.",
+    "historyDepthWarning": "⚠ L'historique .env remonte au {legacyDate}, mais Woob n'a encore d'historique que depuis le {woobDate} : soit {days} jours d'historique réel qui seront définitivement supprimés par cette migration, pas juste des doublons.",
+    "migrateEnvReminder": "Il te reste à retirer les identifiants (.env) de cette banque et à redémarrer les conteneurs, sinon la prochaine synchronisation automatique (dans les 4h) recréera les comptes qui viennent d'être supprimés.",
     "migrateConfirmButton": "Confirmer la migration",
     "migrateSuccess": "{count} compte(s) .env supprimé(s). Les données Woob restent en place.",
     "woobHint": "Woob récupère vos soldes et transactions directement depuis votre banque. Historique illimité, stocké dans votre base de données.",

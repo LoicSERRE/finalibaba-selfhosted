@@ -514,7 +514,7 @@ def _timeline_item_to_transaction(item: dict) -> dict | None:
 
     title = (item.get("title") or "").strip()
     subtitle = (item.get("subtitle") or "").strip()
-    label = f"{title} - {subtitle}" if subtitle and subtitle != title else (title or subtitle or "—")
+    label = f"{title} - {subtitle}" if subtitle and subtitle != title else (title or subtitle or "-")
 
     return {
         "id": item["id"],

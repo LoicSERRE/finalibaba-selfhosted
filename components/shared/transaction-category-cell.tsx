@@ -51,7 +51,7 @@ export function TransactionCategoryCell({
       );
     }
     const current = categories.find((c) => c.id === categoryId);
-    if (!current) return <span className="text-xs text-[var(--muted)]">—</span>;
+    if (!current) return <span className="text-xs text-[var(--muted)]">-</span>;
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-[var(--foreground)]">
         <span

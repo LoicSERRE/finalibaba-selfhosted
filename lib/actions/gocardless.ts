@@ -41,7 +41,7 @@ function gcTransactionToRow(accountId: string, tx: GCTransaction) {
   const dateStr = tx.bookingDate ?? tx.valueDate;
   if (!dateStr) return null;
 
-  const label = tx.remittanceInformationUnstructured || tx.creditorName || tx.debtorName || "—";
+  const label = tx.remittanceInformationUnstructured || tx.creditorName || tx.debtorName || "-";
   return {
     accountId,
     syncId: `gocardless_${tx.transactionId}`,
