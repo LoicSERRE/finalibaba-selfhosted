@@ -9,6 +9,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createApiKey, revokeApiKey } from "@/lib/actions/api-keys";
+import { copyToClipboard } from "@/lib/utils/clipboard";
 
 type ApiKeyRow = {
   id: string;
@@ -26,7 +27,7 @@ function CopyButton({ token }: Readonly<{ token: string }>) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(token);
+    await copyToClipboard(token);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

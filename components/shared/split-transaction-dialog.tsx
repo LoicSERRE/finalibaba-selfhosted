@@ -12,6 +12,22 @@ import { useTranslations } from "next-intl";
 type Category = { id: string; name: string; color: string };
 type ExistingSplit = { categoryId: string | null; amountCents: bigint };
 
+// These ids are a React reconciliation key and nothing else: never sent to the
+// server, never persisted. A counter is exactly enough.
+//
+// They used to come from the Web Crypto UUID generator, which is spec'd as
+// secure-context-only and is therefore *undefined* over plain HTTP on a LAN IP:
+// this app's own documented default access pattern (see README's "Securing
+// access"). This component mounts once per transaction row via
+// TransactionCategoryCell, so that made every account-detail and /transactions
+// page throw at hydration on the most common self-hosted setup. Reported
+// against a fork of this repo, reproduced here.
+let nextRowId = 0;
+function makeRowId(): string {
+  nextRowId += 1;
+  return `split-row-${nextRowId}`;
+}
+
 function parseEuroToCents(euroString: string): number {
   const n = Number.parseFloat(euroString.replace(",", "."));
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
@@ -53,13 +69,13 @@ export function SplitTransactionDialog({
   const [rows, setRows] = useState<{ id: string; categoryId: string; amountEuro: string }[]>(() =>
     isEdit
       ? initialSplits.map((l) => ({
-          id: crypto.randomUUID(),
+          id: makeRowId(),
           categoryId: l.categoryId ?? "",
           amountEuro: (Number(l.amountCents < BigInt(0) ? -l.amountCents : l.amountCents) / 100).toFixed(2),
         }))
       : [
-          { id: crypto.randomUUID(), categoryId: "", amountEuro: "" },
-          { id: crypto.randomUUID(), categoryId: "", amountEuro: "" },
+          { id: makeRowId(), categoryId: "", amountEuro: "" },
+          { id: makeRowId(), categoryId: "", amountEuro: "" },
         ],
   );
 
@@ -77,7 +93,7 @@ export function SplitTransactionDialog({
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { id: crypto.randomUUID(), categoryId: "", amountEuro: "" }]);
+    setRows((prev) => [...prev, { id: makeRowId(), categoryId: "", amountEuro: "" }]);
   }
 
   function handleSave() {

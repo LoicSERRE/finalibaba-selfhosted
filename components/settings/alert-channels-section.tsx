@@ -7,6 +7,7 @@ import { updateAlertChannels } from "@/lib/actions/alerts";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { Button } from "@/components/ui/button";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { copyToClipboard } from "@/lib/utils/clipboard";
 
 // Client-side only - a pure "fill the field" convenience, not persisted
 // until the form's own Save button runs updateAlertChannels. 192 bits from
@@ -73,7 +74,7 @@ export function AlertChannelsSection({
   }
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(ntfyTopicUrl);
+    await copyToClipboard(ntfyTopicUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

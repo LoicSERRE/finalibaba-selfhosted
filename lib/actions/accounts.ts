@@ -113,10 +113,15 @@ export async function createAccount(formData: FormData) {
     },
   });
 
-  // Record initial balance snapshot (fiat accounts only)
+  // Record initial balance snapshot (fiat accounts only).
+  //
+  // `balanceCents !== null` rather than a truthiness check plus a > 0 floor:
+  // both 0 and a negative balance are real states a fiat account can start in
+  // (an emptied account, an overdraft - see ACCOUNT_OVERDRAFT). The old
+  // condition silently dropped the snapshot for either, leaving the account
+  // with no history at all and its balance reading as unknown everywhere.
   if (
-    balanceCents &&
-    balanceCents > BigInt(0) &&
+    balanceCents !== null &&
     type !== "INVESTMENT" &&
     type !== "CRYPTO" &&
     !isManualType(type) &&

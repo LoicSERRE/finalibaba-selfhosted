@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { createInvitation, revokeInvitation, deleteUser } from "@/lib/actions/users";
+import { copyToClipboard } from "@/lib/utils/clipboard";
 
 type UserRow = {
   id: string;
@@ -37,7 +38,7 @@ function CopyInviteButton({ token }: Readonly<{ token: string }>) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(`${window.location.origin}/invite/${token}`);
+    await copyToClipboard(`${window.location.origin}/invite/${token}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

@@ -10,6 +10,7 @@ import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createShareLink, revokeShareLink } from "@/lib/actions/share-links";
 import { isShareLinkExpired } from "@/lib/domain/share-links";
+import { copyToClipboard } from "@/lib/utils/clipboard";
 
 type ShareLinkRow = {
   id: string;
@@ -28,7 +29,7 @@ function CopyButton({ token }: Readonly<{ token: string }>) {
 
   async function handleCopy() {
     const url = `${window.location.origin}/shared/${token}`;
-    await navigator.clipboard.writeText(url);
+    await copyToClipboard(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

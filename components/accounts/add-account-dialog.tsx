@@ -103,7 +103,12 @@ export function AddAccountDialog({
             name="initialBalance"
             type="number"
             step="0.01"
-            min="0"
+            // A fiat balance can legitimately be negative: this app models an
+            // overdraft as a first-class state (AlertRule's ACCOUNT_OVERDRAFT
+            // kind exists for exactly that), so blocking the entry contradicts
+            // a shipped feature. The floor still applies to a manual valuation,
+            // where a negative estate/vehicle value is meaningless.
+            min={isManualValue ? "0" : undefined}
             placeholder="0.00"
           />
         )}

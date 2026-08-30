@@ -21,7 +21,7 @@
 - **Analytics** - savings rate, survival runway, sector exposure, passive income, CAGR per account, benchmark comparison (MSCI World / S&P 500 / CAC 40), portfolio rebalancing suggestions
 - **Annual tax report** - realized gains, dividend income, and taxable events for the year, exportable
 - **CSV import & backup/restore** - bulk-import transactions/balance history for accounts without auto-sync; one-command database export and restore
-- **Automatic sync** (optional) - Trade Republic (18 EU countries, positions + full transaction history with real labels) · French banks via Woob · GoCardless (2,200+ EU/UK banks)
+- **Automatic sync** (optional) - Trade Republic (18 EU countries, positions + full transaction history with real labels) · French and European banks via Woob · GoCardless PSD2 (2,200+ EU/UK banks, *for existing GoCardless credentials only - they closed new signups in July 2025*)
 - **Public REST API** (optional) - read-only, revocable API keys for net worth, accounts, and recent transactions - build a Home Assistant sensor or a custom dashboard widget without sharing your app password
 - **Read-only share links** - a token-gated `/shared/<token>` URL for an accountant or family member, with holdings and recent transactions as opt-in extras - no app password needed, works independently of built-in auth
 - **Installable, works offline** - add it to your home screen on mobile or desktop; pages you've already visited stay viewable without a connection (when built-in auth is off - see the PWA section below for why)
