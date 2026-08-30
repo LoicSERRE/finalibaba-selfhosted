@@ -918,6 +918,25 @@
       "sharedWithYou": "Portfolios shared with you",
       "switcherHint": "Use the switcher at the top of the sidebar to move between portfolios.",
       "empty": "Nothing shared yet."
+    },
+    "account": {
+      "title": "My account",
+      "signedInAs": "Signed in as {name} ({role})",
+      "noUsernameYet": "You are still using the password from the .env file. Choose a username and password to create your account.",
+      "setupNotice": "This instance is using the password from .env. Until you have an account you do not appear in the user list and cannot change your password from the app. Fill in the fields below once to finish setting up.",
+      "username": "Username",
+      "usernamePlaceholder": "e.g. loic",
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "passwordHint": "8 characters minimum",
+      "changePassword": "Change password",
+      "finishSetup": "Create my account",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "roleAdmin": "admin",
+      "roleMember": "member",
+      "errorWrongPassword": "Current password is incorrect.",
+      "errorUsernameRequired": "Choose a username."
     }
   },
   "shared": {

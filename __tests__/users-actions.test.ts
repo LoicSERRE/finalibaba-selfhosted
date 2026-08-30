@@ -321,7 +321,7 @@ describe("changeOwnPassword", () => {
 
   it("rejects a wrong current password", async () => {
     const bcrypt = (await import("bcryptjs")).default;
-    userFindUniqueOrThrowMock.mockResolvedValue({ passwordHash: await bcrypt.hash("realpass", 4) });
+    userFindUniqueOrThrowMock.mockResolvedValue({ username: "owner", passwordHash: await bcrypt.hash("realpass", 4) });
 
     await expect(
       changeOwnPassword(form({ currentPassword: "wrong", newPassword: "longenough1" }))
@@ -331,7 +331,7 @@ describe("changeOwnPassword", () => {
 
   it("accepts the right current password and stores a hash, not the value", async () => {
     const bcrypt = (await import("bcryptjs")).default;
-    userFindUniqueOrThrowMock.mockResolvedValue({ passwordHash: await bcrypt.hash("realpass", 4) });
+    userFindUniqueOrThrowMock.mockResolvedValue({ username: "owner", passwordHash: await bcrypt.hash("realpass", 4) });
 
     await changeOwnPassword(form({ currentPassword: "realpass", newPassword: "longenough1" }));
 
@@ -343,11 +343,41 @@ describe("changeOwnPassword", () => {
   it("lets a user still on the env password set their first DB one", async () => {
     // The owner pre-bootstrap has no hash to check against; setting one here
     // is what makes the env credential stop applying to them (see resolveUser).
-    userFindUniqueOrThrowMock.mockResolvedValue({ passwordHash: null });
+    userFindUniqueOrThrowMock.mockResolvedValue({ username: null, passwordHash: null });
 
-    await changeOwnPassword(form({ currentPassword: "", newPassword: "longenough1" }));
+    await changeOwnPassword(
+      form({ currentPassword: "", newPassword: "longenough1", username: "Loic" }),
+    );
 
-    expect(userUpdateMock).toHaveBeenCalled();
+    const data = userUpdateMock.mock.calls[0][0].data;
+    // Claiming a username is part of the same step: an owner who only ever had
+    // the env password has no account row to be attributed to otherwise.
+    expect(data.username).toBe("loic");
+    expect(data.displayName).toBe("Loic");
+    expect(data.passwordHash).toBeTruthy();
+  });
+
+  it("refuses to leave an env-password owner without a username", async () => {
+    // Setting only a password there would produce an account that can log in
+    // but cannot be named, invited by, or listed - the state this whole flow
+    // exists to get out of.
+    userFindUniqueOrThrowMock.mockResolvedValue({ username: null, passwordHash: null });
+
+    await expect(
+      changeOwnPassword(form({ currentPassword: "", newPassword: "longenough1" })),
+    ).rejects.toThrow("username_required");
+    expect(userUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not let an established user rename themselves through this form", async () => {
+    const bcrypt = (await import("bcryptjs")).default;
+    userFindUniqueOrThrowMock.mockResolvedValue({ username: "owner", passwordHash: await bcrypt.hash("realpass", 4) });
+
+    await changeOwnPassword(
+      form({ currentPassword: "realpass", newPassword: "longenough1", username: "someoneelse" }),
+    );
+
+    expect(userUpdateMock.mock.calls[0][0].data.username).toBeUndefined();
   });
 
   it("rejects a new password that fails validation", async () => {

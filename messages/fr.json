@@ -918,6 +918,25 @@
       "sharedWithYou": "Portefeuilles partagés avec toi",
       "switcherHint": "Utilise le sélecteur en haut de la barre latérale pour basculer entre les portefeuilles.",
       "empty": "Aucun partage pour l'instant."
+    },
+    "account": {
+      "title": "Mon compte",
+      "signedInAs": "Connecté en tant que {name} ({role})",
+      "noUsernameYet": "Tu utilises encore le mot de passe défini dans le fichier .env. Choisis un identifiant et un mot de passe pour créer ton compte.",
+      "setupNotice": "Ton instance utilise le mot de passe du .env. Tant que tu n'as pas de compte, tu n'apparais pas dans la liste des utilisateurs et tu ne peux pas changer ton mot de passe depuis l'application. Renseigne les champs ci-dessous une fois pour finaliser.",
+      "username": "Identifiant",
+      "usernamePlaceholder": "ex. loic",
+      "currentPassword": "Mot de passe actuel",
+      "newPassword": "Nouveau mot de passe",
+      "passwordHint": "8 caractères minimum",
+      "changePassword": "Changer le mot de passe",
+      "finishSetup": "Créer mon compte",
+      "saving": "Enregistrement…",
+      "saved": "Enregistré",
+      "roleAdmin": "administrateur",
+      "roleMember": "membre",
+      "errorWrongPassword": "Mot de passe actuel incorrect.",
+      "errorUsernameRequired": "Choisis un identifiant."
     }
   },
   "shared": {

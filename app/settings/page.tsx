@@ -30,8 +30,9 @@ import { getAppLockStatus } from "@/lib/actions/app-lock";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { UsersSection } from "@/components/settings/users-section";
+import { AccountSection } from "@/components/settings/account-section";
 import { PortfolioSharingSection } from "@/components/settings/portfolio-sharing-section";
-import { listUsers, listInvitations } from "@/lib/actions/users";
+import { listUsers, listInvitations, getOwnAccount } from "@/lib/actions/users";
 import { listPortfolioGrants } from "@/lib/actions/sharing";
 import { getShareLinks } from "@/lib/actions/share-links";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
@@ -91,13 +92,14 @@ export default async function SettingsPage({
   // conditionally rather than rendered-and-hidden so a mono instance doesn't
   // pay for three queries it can never use.
   const isMulti = isAuthEnabled();
-  const [users, invitations, grants] = isMulti
+  const [users, invitations, grants, ownAccount] = isMulti
     ? await Promise.all([
         viewer.role === "ADMIN" ? listUsers() : Promise.resolve([]),
         viewer.role === "ADMIN" ? listInvitations() : Promise.resolve([]),
         listPortfolioGrants(),
+        getOwnAccount(),
       ])
-    : [[], [], { given: [], received: [] }];
+    : [[], [], { given: [], received: [] }, null];
 
   const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
     await Promise.all([
@@ -606,6 +608,15 @@ export default async function SettingsPage({
           the same question ("let someone else see this"), with a different
           trust model: a grant is tied to a real account on this instance and is
           revocable per person, a share link is an anonymous URL. */}
+      {isMulti && ownAccount && process.env.DEMO_MODE !== "true" && (
+        <AccountSection
+          username={ownAccount.username}
+          displayName={ownAccount.displayName}
+          role={ownAccount.role}
+          needsSetup={ownAccount.needsSetup}
+        />
+      )}
+
       {isMulti && process.env.DEMO_MODE !== "true" && (
         <PortfolioSharingSection given={grants.given} received={grants.received} />
       )}

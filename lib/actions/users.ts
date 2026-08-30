@@ -177,20 +177,57 @@ export async function deleteUser(id: string): Promise<void> {
   revalidatePath("/settings");
 }
 
-/** Self-service password change for the logged-in user. */
+/** What the account section needs to render: who you are, and whether you are
+ *  still relying on the env password rather than a real account. */
+export async function getOwnAccount() {
+  const viewer = await getViewer();
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: viewer.id },
+    select: { username: true, displayName: true, role: true, passwordHash: true },
+  });
+  return {
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    isMonoMode: viewer.isMonoMode,
+    // True for the owner of an instance that turned AUTH_ENABLED on while an
+    // env password was already set: login works, but there is no DB account
+    // yet, so they have no username to be invited *by* and no password they
+    // can change from inside the app.
+    needsSetup: !user.passwordHash || !user.username,
+  };
+}
+
+/**
+ * Self-service credential change for the logged-in user.
+ *
+ * Also the completion path for an owner still on the env password: they have
+ * no DB hash to check against, so no current password is required, and they
+ * can claim a username at the same time. Once a hash exists here the env
+ * credential stops applying to them entirely (see resolveUser in lib/auth.ts),
+ * which is the point - two simultaneously-valid passwords would make the
+ * weaker one the real security level.
+ */
 export async function changeOwnPassword(formData: FormData): Promise<void> {
   const viewer = await getViewer();
   if (viewer.isMonoMode) throw new Error("Authentication is disabled on this instance.");
 
   const current = (formData.get("currentPassword") as string) || "";
   const next = (formData.get("newPassword") as string) || "";
-  const check = validateCredentials("placeholder", next);
-  if (!check.ok) throw new Error(check.error);
+  const rawUsername = ((formData.get("username") as string) || "").trim();
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: viewer.id },
-    select: { passwordHash: true },
+    select: { passwordHash: true, username: true },
   });
+
+  // Validate the username against the real rules only when one is being
+  // claimed; an established account passes a placeholder so the password
+  // rules still apply on their own.
+  const claiming = !user.username && rawUsername !== "";
+  const check = validateCredentials(claiming ? rawUsername : "placeholder", next);
+  if (!check.ok) throw new Error(check.error);
+  if (!user.username && !claiming) throw new Error("username_required");
   // A user still on the env password (owner, pre-bootstrap) has no DB hash to
   // check against - they set one here for the first time, after which the env
   // credential stops applying to them entirely (see resolveUser in lib/auth.ts).
@@ -200,7 +237,10 @@ export async function changeOwnPassword(formData: FormData): Promise<void> {
 
   await prisma.user.update({
     where: { id: viewer.id },
-    data: { passwordHash: await bcrypt.hash(next, BCRYPT_ROUNDS) },
+    data: {
+      passwordHash: await bcrypt.hash(next, BCRYPT_ROUNDS),
+      ...(claiming ? { username: normalizeUsername(rawUsername), displayName: rawUsername } : {}),
+    },
   });
   revalidatePath("/settings");
 }
