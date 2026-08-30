@@ -180,6 +180,17 @@ async function main() {
   const catLogement      = await prisma.category.create({ data: { userId, name: "Logement",      color: "#3b82f6", budgetCents: EUR(200) } });
   const catAbonnements   = await prisma.category.create({ data: { userId, name: "Abonnements",   color: "#a855f7" } }); // no budget set on purpose
   const catLoisirs       = await prisma.category.create({ data: { userId, name: "Loisirs",       color: "#ec4899", budgetCents: EUR(150) } });
+  // CategoryKind.INCOME (v1.13): salary lives as a category, not an
+  // IncomeEvent - see CLAUDE.md's "Autres revenus". Without one seeded,
+  // /income's second section renders empty and the feature is invisible.
+  const catSalaire       = await prisma.category.create({ data: { userId, name: "Salaire",       color: "#14b8a6", kind: "INCOME" } });
+  // Budget rollover (v1.14). Anchored 4 months back so real unused envelope
+  // has accumulated by the time the demo is viewed, rather than showing a
+  // carry of zero that looks identical to the feature being off.
+  const catVacances      = await prisma.category.create({ data: {
+    userId, name: "Vacances", color: "#f59e0b", budgetCents: EUR(200),
+    budgetRolloverEnabled: true, budgetRolloverEnabledAt: at(4, 1),
+  } });
 
   // ── Holdings ──────────────────────────────────────────────────────────────
   // lastPriceCents = prix de seed réaliste (mis à jour ensuite par Yahoo Finance)
@@ -320,7 +331,7 @@ async function main() {
     const mv = monthly[idx];
     txRows.push(
       // Compte courant - revenus
-      { accountId: checking.id, syncId: `demo:salary:${m}`,    date: at(m, 28), label: "VIR SALAIRE - EMPRESA SAS",          amountCents: EUR(3_800)       },
+      { accountId: checking.id, syncId: `demo:salary:${m}`,    date: at(m, 28), label: "VIR SALAIRE - EMPRESA SAS",          amountCents: EUR(3_800),      categoryId: catSalaire.id       },
       // Compte courant - dépenses fixes (transferts/prêts laissés sans catégorie
       // exprès - voir la section "bulk categorization" mise en valeur ci-dessous)
       { accountId: checking.id, syncId: `demo:ldds:${m}`,      date: at(m,  1), label: "VIR LDDS",                           amountCents: EUR(-500)        },
@@ -340,6 +351,14 @@ async function main() {
       // LDDS - virement mensuel reçu
       { accountId: ldds.id,     syncId: `demo:ldds:recv:${m}`, date: at(m,  2), label: "VIR RECU COMPTE COURANT",            amountCents: EUR(500)         },
     );
+  }
+  // Under-spending on the rollover category on purpose: the carry-in figure
+  // only appears when a month ends with unused envelope.
+  for (let m = 4; m >= 0; m--) {
+    txRows.push({
+      accountId: checking.id, syncId: `demo:vacances:${m}`, date: at(m, 18),
+      label: "AIR FRANCE", amountCents: EUR(-60), categoryId: catVacances.id,
+    });
   }
   // Remboursement impôts - ponctuel
   txRows.push(
@@ -443,6 +462,73 @@ async function main() {
     { userId, name: "Fonds d'urgence",  targetCents: EUR(20_000), accountId: livretA.id },
     { userId, name: "Objectif CTO",     targetCents: EUR(10_000), accountId: cto.id },
   ]});
+
+  // ── Split transaction (v1.13) ────────────────────────────────────────────
+  // One real supermarket run split across two categories. Without this the
+  // "Divisée (N)" badge and the split dialog never appear anywhere in the
+  // demo. The parent's own categoryId goes null - that is the invariant the
+  // rest of the app relies on (see CLAUDE.md's "Split transactions").
+  console.log("Creating a split transaction…");
+  const toSplit = await prisma.transaction.findFirst({
+    where: { accountId: checking.id, label: "CARREFOUR MARKET" },
+    orderBy: { date: "desc" },
+  });
+  if (toSplit) {
+    const groceries = (toSplit.amountCents * BigInt(70)) / BigInt(100);
+    await prisma.$transaction([
+      prisma.transaction.update({ where: { id: toSplit.id }, data: { categoryId: null } }),
+      prisma.transactionSplit.createMany({
+        data: [
+          { transactionId: toSplit.id, categoryId: catAlimentation.id, amountCents: groceries },
+          { transactionId: toSplit.id, categoryId: catLoisirs.id, amountCents: toSplit.amountCents - groceries },
+        ],
+      }),
+    ]);
+  }
+
+  // ── Internal transfers (v1.9) ────────────────────────────────────────────
+  // The monthly "VIR LDDS" debit and its matching "VIR RECU COMPTE COURANT"
+  // credit are already two halves of one transfer; flagging them is what the
+  // detection pass would do on a real instance, and it is what keeps them out
+  // of the budget totals. Seeding the flag shows the feature working instead
+  // of leaving the pairs looking like uncategorized spend.
+  console.log("Flagging internal transfers…");
+  await prisma.transaction.updateMany({
+    where: {
+      OR: [
+        { accountId: checking.id, label: "VIR LDDS" },
+        { accountId: ldds.id, label: "VIR RECU COMPTE COURANT" },
+      ],
+    },
+    data: { isInternalTransfer: true },
+  });
+
+  // ── Custom alert rules (v1.14-v1.17) ─────────────────────────────────────
+  // Settings' "Règles d'alerte personnalisées" is empty without these, and
+  // DEMO_MODE blocks every write, so a visitor cannot create one to see what
+  // the feature does. Five of the eight kinds, chosen to span the different
+  // shapes: a cash threshold, an overdraft guard, a rebalancing drift on a
+  // holding that actually has a target, an aggregate unrealized gain, and a
+  // new-transaction watch (v1.17's own kind).
+  console.log("Creating custom alert rules…");
+  const peaHoldings = await prisma.holding.findMany({
+    where: { accountId: pea.id, targetPct: { not: null } },
+    orderBy: { ticker: "asc" },
+  });
+  await prisma.alertRule.createMany({
+    data: [
+      { userId, kind: "ACCOUNT_BALANCE", accountId: checking.id, balanceThresholdCents: EUR(1_500),
+        message: "Pense à réapprovisionner le compte courant." },
+      { userId, kind: "ACCOUNT_OVERDRAFT", accountId: checking.id, balanceThresholdCents: BigInt(0) },
+      ...(peaHoldings[0]
+        ? [{ userId, kind: "REBALANCING_DRIFT" as const, holdingId: peaHoldings[0].id, gainThresholdPct: 5 }]
+        : []),
+      { userId, kind: "UNREALIZED_GAIN", gainUnit: "PERCENT", gainThresholdPct: 20 },
+      { userId, kind: "NEW_TRANSACTION", accountId: checking.id,
+        balanceThresholdCents: EUR(200), transactionDirection: "DEBIT",
+        message: "Dépense supérieure à 200 € détectée." },
+    ],
+  });
 
   console.log("Done - demo data seeded.");
   console.log("  4 categories (Alimentation over budget, Logement near limit, Loisirs ok, Abonnements no budget set)");
