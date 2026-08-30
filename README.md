@@ -1,9 +1,9 @@
 # Finalibaba - Self-Hosted
 
 > Self-hosted personal wealth dashboard. Track net worth, investments, real estate, loans, and crypto in one place.
-> Open-source alternative to Finary, with per-account tax treatment (French PEA/CTO defaults, or Exempt/Deferred/custom rate for ISA, Roth IRA, 401k, and other non-French wrappers).
+> Free, source-available alternative to Finary, with per-account tax treatment (French PEA/CTO defaults, or Exempt/Deferred/custom rate for ISA, Roth IRA, 401k, and other non-French wrappers).
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 
@@ -369,4 +369,6 @@ Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## License
 
-[AGPL-3.0](LICENSE) - free to self-host and modify. If you run a modified version as a network service, you must publish your changes under the same license.
+[PolyForm Noncommercial 1.0.0](LICENSE), from v2.1.0 onwards - free to self-host, modify and share for any noncommercial purpose, which includes running it for your own finances or your family's. Commercial use needs a separate licence; just ask.
+
+Everything up to and including **v2.0.1** was released under [AGPL-3.0](LICENSE-AGPL-3.0) and stays that way permanently - a licence already granted cannot be withdrawn.

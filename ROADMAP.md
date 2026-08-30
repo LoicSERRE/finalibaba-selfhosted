@@ -239,6 +239,22 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 ---
 
+## v2.1 - Per-user bank connections
+
+*v2.0 gave every user their own portfolio but left the bank credentials behind: `LCL_LOGIN`/`TR_PHONE` live in `.env`, so they belong to the instance owner and nobody else can sync their own accounts. That was a documented, accepted constraint of that release. It is also the first thing real users hit, because inviting family only helps if they can actually connect their own bank.*
+
+- [ ] **Per-user Trade Republic** - add a Trade Republic account from the UI, the way Woob institutions already work, so every user can connect their own (and more than one). Today this is impossible by architecture rather than configuration: `sync_tr.py` reads `TR_PHONE`/`TR_PIN` from the environment, a single value for the whole instance, and there is no per-institution equivalent of Woob's `woobLogin`/`woobPassword`.
+
+  **The blocker to solve first, before any UI**: `sync_tr.py` writes fixed account identifiers (`tr:cash`, `tr:pea`, `tr:cto`, `tr:crypto` - see `_get_or_create_account`), and `Account.syncId` is globally unique. Two users each with a Trade Republic cash account collide on the very first insert, and the second would silently overwrite the first's account. These have to become `tr:<institutionId>:cash`, mirroring `woob:<institutionId>:<id>` - **without breaking existing rows**, which is the same shape as the `lcl:` vs `woob:` split already documented in `CLAUDE.md`: the `.env` path keeps writing the legacy prefix (it is the owner's), the per-user path writes the namespaced one.
+
+  **Known unknown, to be settled by reading pytr's own source rather than assumed**: `pytr` persists its session as a cookie file at a fixed path. Two users syncing in the same container would share it. Whether that is a constructor parameter or needs process/working-directory isolation is not yet established.
+
+  The rest follows patterns this repo already has: `trPhone`/`trPin` on `Institution` (the same type-conditional-nullable-fields convention `Account` uses for its LOAN-only fields), a per-institution sync module modelled on `sync_woob.py`, the interactive 2FA flow modelled on `setup_woob.py` (already generic over `institution_id`), the existing `/sync/institution/{id}/setup/*` routes dispatching on provider, and a "Configurer Trade Republic" dialog modelled on `ConfigureWoobDialog`.
+
+- [ ] **Per-user LCL and other env-configured syncs** *(follows from the above)* - the same treatment for the remaining `.env`-driven integration, once the Trade Republic work has established the pattern. Lower priority: LCL is already reachable per-user through the generic Woob picker, so this is about removing a special case rather than unblocking anyone.
+
+---
+
 ## v2.0 - Multi-user
 
 *Breaking architectural change: all data gains user ownership, requiring a migration. Planned as a dedicated, focused push once the single-user feature set (everything above) is mature and well-tested, rather than interleaved with it - multi-user plus a full security audit belong together, since every new sharing/permission boundary this adds is exactly the kind of surface a security review needs to cover anyway. A native mobile app may fold into this same push too, but only if it turns out to be genuinely worth the build effort relative to the PWA that already exists - not committed as of this writing, needs its own scoping pass first.*
@@ -304,4 +320,4 @@ Two things were deliberately *not* built, and are scoped out rather than forgott
 - [X] CSV and PDF export
 - [X] Demo mode - pre-seeded fictional data, read-only (`DEMO_MODE=true`), cron reset
 - [X] WCAG 2.1 accessibility (keyboard navigation, screen reader, focus management)
-- [X] AGPL-3.0 open-source release
+- [X] AGPL-3.0 open-source release *(that licence governed every release through v2.0.1; see LICENSE for what applies after)*
