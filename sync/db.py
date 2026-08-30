@@ -67,6 +67,20 @@ def get_institution_id(cur, name: str) -> str | None:
     return row["id"] if row else None
 
 
+# Trade Republic account kinds - mirrors sync_tr.py's ACC_TYPE_MAP suffixes and
+# lib/domain/sync-ids.ts's TR_ACCOUNT_SUFFIXES. Kept here rather than imported
+# from sync_tr to avoid a circular import: sync_tr already imports this module.
+_TR_SUFFIXES = ("cash", "cto", "pea", "crypto")
+
+
+def _is_trade_republic_sync_id(sync_id: str) -> bool:
+    """Both TR shapes: "tr:<kind>" and "tr:<institutionId>:<kind>"."""
+    if not sync_id.startswith("tr:"):
+        return False
+    parts = sync_id[len("tr:"):].split(":")
+    return len(parts) <= 2 and parts[-1] in _TR_SUFFIXES
+
+
 def upsert_account(cur, *, sync_id: str, name: str, account_type: str, institution_id: str) -> str:
     """Create account if not exists, return its DB id.
 
@@ -97,14 +111,30 @@ def upsert_account(cur, *, sync_id: str, name: str, account_type: str, instituti
     if row:
         return row["id"]
 
-    native_id = sync_id.rsplit(":", 1)[-1]
-    cur.execute(
-        'SELECT id FROM "Account" WHERE "institutionId" = %s AND "syncId" LIKE %s',
-        (institution_id, f"%:{native_id}"),
-    )
-    row = cur.fetchone()
-    if row:
-        return row["id"]
+    # The fallback below matches on the trailing colon-delimited segment, which
+    # for LCL/Woob is a bank-generated native account id: unique per real
+    # account, which is what makes the match sound.
+    #
+    # Trade Republic's ids do not work that way. Their trailing segment is an
+    # account KIND ("cash", "pea", "cto", "crypto"), so "tr:cash" and
+    # "tr:<institutionId>:cash" both end in "cash" and the fallback merges them
+    # into one row by pure string coincidence - confirmed empirically, the
+    # scoped upsert silently returned the env-synced account's id instead of
+    # creating its own. Skipping the fallback for these keeps the per-user
+    # namespacing from v2.1 meaning anything at all.
+    if _is_trade_republic_sync_id(sync_id):
+        native_id = None
+    else:
+        native_id = sync_id.rsplit(":", 1)[-1]
+
+    if native_id is not None:
+        cur.execute(
+            'SELECT id FROM "Account" WHERE "institutionId" = %s AND "syncId" LIKE %s',
+            (institution_id, f"%:{native_id}"),
+        )
+        row = cur.fetchone()
+        if row:
+            return row["id"]
 
     account_id = str(uuid.uuid4())
     cur.execute(

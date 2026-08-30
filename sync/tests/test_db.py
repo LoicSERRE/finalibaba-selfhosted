@@ -47,3 +47,36 @@ def test_is_case_insensitive():
 
 def test_defaults_to_checking_for_an_unrecognized_label():
     assert infer_account_type("Compte Courant") == "CHECKING"
+
+
+# ── upsert_account's native-id fallback, and why Trade Republic is exempt ─────
+#
+# The fallback matches on the trailing colon-delimited segment because for
+# LCL/Woob that segment is a bank-generated native account id, unique per real
+# account. Trade Republic's trailing segment is an account KIND, so without
+# this exemption "tr:cash" and "tr:<institutionId>:cash" merge into one row by
+# string coincidence - confirmed empirically against a real database before
+# this guard existed, and it silently defeated v2.1's whole per-user
+# namespacing.
+
+from db import _is_trade_republic_sync_id
+
+
+def test_trade_republic_ids_are_recognised_under_both_shapes():
+    assert _is_trade_republic_sync_id("tr:cash")
+    assert _is_trade_republic_sync_id("tr:pea")
+    assert _is_trade_republic_sync_id("tr:inst-123:cash")
+    assert _is_trade_republic_sync_id("tr:inst-123:crypto")
+
+
+def test_bank_native_ids_still_use_the_fallback():
+    # These are the ids the fallback exists for - it must keep matching them.
+    assert not _is_trade_republic_sync_id("lcl:01835090481R")
+    assert not _is_trade_republic_sync_id("woob:inst-1:01835090481R")
+
+
+def test_unknown_tr_shapes_are_not_treated_as_trade_republic():
+    # A suffix this app never writes, and a shape with too many segments:
+    # neither should silently opt out of the dedup fallback.
+    assert not _is_trade_republic_sync_id("tr:unknown")
+    assert not _is_trade_republic_sync_id("tr:a:b:cash")

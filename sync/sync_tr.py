@@ -14,6 +14,8 @@ import base64
 import json
 import logging
 import os
+import pathlib
+import re
 import sys
 import time
 from datetime import datetime
@@ -45,11 +47,39 @@ ACC_TYPE_MAP = {
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-def _get_api(phone_no: str, pin: str, interactive: bool):
+def tr_cookies_path(scope_institution_id: str | None) -> pathlib.Path | None:
+    """Where pytr should persist this connection's session cookies.
+
+    None for the env-configured sync, which keeps pytr's own default of
+    ~/.pytr/cookies.<phone>.txt - changing it would orphan the session an
+    existing install has already established and force a re-login.
+
+    For a UI-configured institution the path is explicit and keyed by
+    institution id rather than phone number. pytr's default would already
+    separate two users (verified against the pinned commit: the default is
+    per-phone), but an explicit path means two institutions can hold the same
+    phone number - the same person connecting one TR account from two
+    instances, or re-adding after a delete - without silently sharing a
+    session file.
+    """
+    if not scope_institution_id:
+        return None
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", scope_institution_id)
+    return pathlib.Path.home() / ".pytr" / f"cookies.inst-{safe}.txt"
+
+
+def _get_api(phone_no: str, pin: str, interactive: bool, scope_institution_id: str | None = None):
     from pytr.api import TradeRepublicApi
     # save_cookies=True → pytr persists cookies to ~/.pytr/cookies.<phone>.txt
-    # (MozillaCookieJar format, WAF token excluded automatically)
-    api = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=True)
+    # (MozillaCookieJar format, WAF token excluded automatically), unless
+    # cookies_file overrides it - see tr_cookies_path above.
+    cookies_file = tr_cookies_path(scope_institution_id)
+    if cookies_file:
+        cookies_file.parent.mkdir(parents=True, exist_ok=True)
+    api = TradeRepublicApi(
+        phone_no=phone_no, pin=pin, save_cookies=True,
+        **({"cookies_file": str(cookies_file)} if cookies_file else {}),
+    )
 
     if not interactive:
         if api.resume_websession():
@@ -772,6 +802,7 @@ def _get_or_create_account(
 def _fetch_and_write_once(
     api, cur, *, institution_id: str, sec_accounts: dict[str, list[str]], has_crypto: bool,
     cash_account_id: str, known_tx_ids: set[str], source: str = "trade_republic",
+    scope_institution_id: str | None = None,
 ) -> tuple[dict, set[str]]:
     """One fetch-from-TR-and-write-to-DB cycle, given an already-connected
     `api` and already-resolved account/institution ids. Extracted from the
@@ -780,6 +811,11 @@ def _fetch_and_write_once(
     same open connection) share this exact logic - a fetch/write bug fixed
     here is fixed for both. Does not commit `cur`'s connection - the caller
     decides when, same convention as every other DB helper in this file.
+
+    `scope_institution_id` is None for the env-configured sync (the owner's,
+    writing legacy `tr:<suffix>` ids) and set for a UI-configured institution
+    (writing `tr:<institutionId>:<suffix>`) - see tr_sync_id above for why the
+    two shapes have to coexist.
 
     `source` lets the real-time listener write its own SyncLog identity
     ("trade_republic_realtime") instead of the batch cron's "trade_republic"
@@ -805,7 +841,7 @@ def _fetch_and_write_once(
     total_positions = 0
     summary_parts = []
     for acc_type, positions in positions_by_type.items():
-        account_id = _get_or_create_account(cur, institution_id, acc_type)
+        account_id = _get_or_create_account(cur, institution_id, acc_type, scope_institution_id)
         count_cents = _sync_positions(cur, positions, account_id, acc_type, prices, neon_quantities)
         total_positions += len(positions)
         summary_parts.append(f"{acc_type}: {len(positions)} pos ({count_cents/100:.0f}€)")
@@ -894,6 +930,122 @@ def run(interactive: bool = False) -> dict:
     cur.close()
     conn.close()
     return {"positions": summary["positions"], "cash_cents": summary["cash_cents"]}
+
+
+def fetch_tr_institution(institution_id: str) -> dict | None:
+    """The Trade Republic credentials stored on an Institution row, or None.
+
+    Mirrors setup_woob.py's own _fetch_institution: credentials for a
+    UI-configured connection live in the database, not the environment, which
+    is the whole point of the per-user path.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        'SELECT id, name, "trPhone", "trPin" FROM "Institution" WHERE id = %s',
+        (institution_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def run_institution(institution_id: str, interactive: bool = False) -> dict:
+    """Sync one UI-configured Trade Republic institution.
+
+    Same work as run() below, with three differences, all of them consequences
+    of this connection belonging to a user rather than to the instance:
+
+      - credentials come from the Institution row, not TR_PHONE/TR_PIN
+      - accounts are written under `tr:<institutionId>:<suffix>`, so two users
+        never collide on Account.syncId (see tr_sync_id)
+      - the SyncLog source is `tr:<institutionId>`, giving this connection its
+        own failure/dedup identity instead of sharing the cron's
+        "trade_republic" one - the same reason sync_woob uses `woob:<id>`
+    """
+    inst = fetch_tr_institution(institution_id)
+    if not inst:
+        raise RuntimeError(f"Institution {institution_id} not found")
+    if not inst["trPhone"] or not inst["trPin"]:
+        raise RuntimeError(f"Institution {inst['name']} has no Trade Republic credentials configured")
+
+    source = f"tr:{institution_id}"
+
+    try:
+        api = _get_api(inst["trPhone"], inst["trPin"], interactive, scope_institution_id=institution_id)
+    except AuthRequiredError:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        write_sync_log(cur, source, "auth_required", "Session Trade Republic absente - reconnecte depuis Paramètres")
+        conn.commit()
+        cur.close()
+        conn.close()
+        raise
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    sec_accounts, has_crypto = _get_securities_accounts(api)
+    api.save_websession()
+    if not sec_accounts:
+        log.warning("TR %s: JWT decode failed - only cash will be synced", inst["name"])
+
+    cash_account_id = upsert_account(
+        cur,
+        sync_id=tr_sync_id("cash", institution_id),
+        name="Compte espèces",
+        account_type="CHECKING",
+        institution_id=institution_id,
+    )
+    cur.execute('SELECT "syncId" FROM "Transaction" WHERE "accountId" = %s', (cash_account_id,))
+    known_tx_ids = {row["syncId"].split(":", 1)[1] for row in cur.fetchall() if row["syncId"]}
+
+    try:
+        summary, _ = _fetch_and_write_once(
+            api, cur,
+            institution_id=institution_id, sec_accounts=sec_accounts, has_crypto=has_crypto,
+            cash_account_id=cash_account_id, known_tx_ids=known_tx_ids,
+            source=source, scope_institution_id=institution_id,
+        )
+    except Exception as e:
+        if _is_auth_error(e):
+            conn.commit()
+            cur.close()
+            conn.close()
+            _mark_auth_required_for(source, "Session expirée - reconnecte depuis Paramètres")
+            _drop_session_file(institution_id)
+            raise AuthRequiredError(f"Trade Republic ({inst['name']}): session expired")
+        raise
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"positions": summary["positions"], "cash_cents": summary["cash_cents"]}
+
+
+def _drop_session_file(scope_institution_id: str) -> None:
+    """Remove a dead session so the next setup starts clean rather than
+    resuming cookies the server has already rejected."""
+    path = tr_cookies_path(scope_institution_id)
+    if path:
+        path.unlink(missing_ok=True)
+
+
+def _mark_auth_required_for(source: str, msg: str) -> None:
+    """_mark_auth_required below, for any SyncLog source - the per-institution
+    path must not write under the env sync's own "trade_republic" identity, or
+    one user's expired session would clear the other's failure state."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        write_sync_log(cur, source, "auth_required", msg)
+        conn.commit()
+        cur.close()
+        conn.close()
+        log.info("TR: auth_required written to DB for %s", source)
+    except Exception as db_err:
+        log.warning("TR: failed to write auth_required for %s - %s", source, db_err)
 
 
 def _mark_auth_required(msg: str) -> None:
