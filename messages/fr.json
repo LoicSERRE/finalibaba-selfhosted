@@ -966,7 +966,7 @@
     "connect": "Connecter",
     "confirm": "Confirmer",
     "validating": "Validation…",
-    "trCodeHint": "Ouvre l'app Trade Republic → entre le code à 4 chiffres affiché :",
+    "trCodeHint": "Ouvre l'application Trade Republic et saisis ici le code à 4 chiffres qu'elle affiche.",
     "woobApprovalHint": "Ouvre l'application ou le site de ta banque et approuve la connexion, puis clique ci-dessous :",
     "woobConfirm": "J'ai approuvé",
     "woobCodeHint": "Entre le code de vérification",
@@ -978,10 +978,13 @@
     "otpMediumMobileApp": "Un code est disponible dans l'application de ta banque",
     "otpMediumDevice": "Un code est disponible sur ton appareil de sécurité",
     "otpMediumUnknown": "Un code de vérification t'a été communiqué",
-    "trCodeAriaLabel": "Code à 4 chiffres",
+    "trCodeAriaLabel": "Code Trade Republic",
     "lclApprovalHint": "Ouvre l'app <strong>LCL</strong> → <strong>Certicode Plus</strong> → approuve la connexion, puis clique ci-dessous :",
     "lclConfirm": "J'ai approuvé dans l'app LCL",
-    "unknownError": "Erreur inconnue"
+    "unknownError": "Erreur inconnue",
+    "trCodeCountdown": "Code valable encore {seconds} s.",
+    "trCodeExpired": "Le code a expiré. Demandes-en un nouveau.",
+    "trResend": "Nouveau code"
   },
   "allocationHistoryChart": {
     "noHistory": "Aucun historique",
@@ -1235,6 +1238,21 @@
     "update": "Mettre à jour",
     "submit": "Enregistrer",
     "unknownError": "Erreur inconnue"
+  },
+  "configureTradeRepublic": {
+    "title": "Trade Republic : {name}",
+    "configure": "Configurer Trade Republic",
+    "configured": "Trade Republic configuré",
+    "intro": "Connecte ton propre compte Trade Republic à cette institution. Tes identifiants ne sont visibles que par toi, et la synchronisation crée des comptes qui n'appartiennent qu'à toi.",
+    "phone": "Numéro de téléphone",
+    "phoneHint": "Au format international, comme dans l'application Trade Republic (+33…).",
+    "pin": "Code PIN",
+    "pinHint": "Le code à 4 chiffres de ton application Trade Republic.",
+    "reconfigureHint": "Enregistrer de nouveaux identifiants invalide la session existante : il faudra te reconnecter avec un code.",
+    "dedicatedEnvWarning": "Cette instance synchronise déjà Trade Republic via une configuration serveur (.env). Configurer aussi cette institution ici créera des comptes en double : les deux chemins ne se reconnaissent pas comme le même compte.",
+    "update": "Mettre à jour",
+    "submit": "Enregistrer",
+    "deleteConfig": "Supprimer la config"
   },
   "exportButton": {
     "export": "Exporter",

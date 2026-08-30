@@ -32,6 +32,7 @@ from sync_tr import (
     _timeline_item_to_transaction,
     resolve_position,
     split_crypto_positions,
+    tr_cookies_path,
     tr_sync_id,
 )
 
@@ -383,3 +384,31 @@ def test_tr_sync_id_never_collides_with_the_env_sync():
         scoped = tr_sync_id("cash", inst or None)
         if inst:
             assert scoped != "tr:cash"
+
+
+# ── tr_cookies_path ───────────────────────────────────────────────────────────
+
+
+def test_tr_cookies_path_is_none_for_the_env_sync():
+    # The env-configured connection keeps pytr's own default location, which
+    # is already per-phone-number - passing a path there would silently move
+    # an existing install's session file and force a re-login.
+    assert tr_cookies_path(None) is None
+
+
+def test_tr_cookies_path_is_distinct_per_institution():
+    # Two users mid-setup at the same time must not overwrite each other's
+    # cookie file - that would log one of them out at random.
+    assert tr_cookies_path("inst-a") != tr_cookies_path("inst-b")
+
+
+def test_tr_cookies_path_cannot_escape_its_directory():
+    # institution_id reaches this from the database, so the sanitiser is what
+    # stops any separator or traversal sequence from being interpreted as a
+    # path rather than a name.
+    parent = tr_cookies_path("normal").parent
+    for hostile in ("../../etc/passwd", "a/b", "a\\b", "..", "a\x00b"):
+        path = tr_cookies_path(hostile)
+        assert path.parent == parent, hostile
+        assert path.name.startswith("cookies.inst-"), hostile
+        assert ".." not in path.name, hostile

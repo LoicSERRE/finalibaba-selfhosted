@@ -66,6 +66,9 @@ import {
   clearGocardlessConnection,
   getMigrationHistoryDepth,
   migrateDedicatedSyncToWoob,
+  setWoobConfig,
+  setTradeRepublicConfig,
+  clearTradeRepublicConfig,
 } from "@/lib/actions/institutions";
 
 beforeEach(() => {
@@ -229,5 +232,82 @@ describe("migrateDedicatedSyncToWoob", () => {
     expect(accountDeleteManyMock).toHaveBeenCalledWith({
       where: { institutionId: "inst-1", syncId: { startsWith: "lcl:" } },
     });
+  });
+});
+
+// An institution carries exactly one sync provider (v2.1 added Trade Republic
+// alongside Woob). The sync service dispatches on which credential set is
+// populated, so an institution left holding both would run whichever backend
+// its `if` chain tests first - a silent, order-dependent choice the user never
+// made. These assert the write shape actually clears the other side rather
+// than only setting its own fields.
+describe("provider config is mutually exclusive", () => {
+  it("setWoobConfig clears any Trade Republic credentials", async () => {
+    await setWoobConfig("inst-1", "lcl", "user", "secret");
+
+    expect(institutionUpdateMock).toHaveBeenCalledWith({
+      where: { id: "inst-1" },
+      data: {
+        woobModule: "lcl",
+        woobLogin: "user",
+        woobPassword: "secret",
+        trPhone: null,
+        trPin: null,
+      },
+    });
+  });
+
+  it("setTradeRepublicConfig clears any Woob credentials", async () => {
+    await setTradeRepublicConfig("inst-1", "+33612345678", "1234");
+
+    expect(institutionUpdateMock).toHaveBeenCalledWith({
+      where: { id: "inst-1" },
+      data: {
+        trPhone: "+33612345678",
+        trPin: "1234",
+        woobModule: null,
+        woobLogin: null,
+        woobPassword: null,
+      },
+    });
+  });
+});
+
+describe("setTradeRepublicConfig", () => {
+  it.each([
+    ["", "1234", "no phone"],
+    ["+33612345678", "", "no PIN"],
+    ["   ", "1234", "whitespace-only phone"],
+    ["+33612345678", "   ", "whitespace-only PIN"],
+  ])("rejects %s / %s (%s)", async (phone, pin, why) => {
+    // Writing a half-configured institution would make it look connected in
+    // Settings while every sync fails with a Python-side credential error.
+    await expect(setTradeRepublicConfig("inst-1", phone, pin), why).rejects.toThrow(
+      "Numéro de téléphone et code PIN requis.",
+    );
+    expect(institutionUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("trims what it stores", async () => {
+    await setTradeRepublicConfig("inst-1", "  +33612345678 ", " 1234 ");
+
+    expect(institutionUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ trPhone: "+33612345678", trPin: "1234" }) }),
+    );
+  });
+});
+
+describe("clearTradeRepublicConfig", () => {
+  it("only nulls the credentials, never touches accounts", async () => {
+    // Disconnecting a sync must never destroy the history it already
+    // imported - same contract as clearWoobConfig.
+    await clearTradeRepublicConfig("inst-1");
+
+    expect(institutionUpdateMock).toHaveBeenCalledWith({
+      where: { id: "inst-1" },
+      data: { trPhone: null, trPin: null },
+    });
+    expect(accountDeleteManyMock).not.toHaveBeenCalled();
+    expect(institutionDeleteMock).not.toHaveBeenCalled();
   });
 });

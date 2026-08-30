@@ -17,6 +17,8 @@ import { ConnectOpenBankingDialog } from "@/components/settings/connect-open-ban
 import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog";
 import { InstitutionSyncButton } from "@/components/settings/institution-sync-button";
 import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
+import { ConfigureTradeRepublicDialog } from "@/components/settings/configure-trade-republic-dialog";
+import { TradeRepublicSetupPrompt } from "@/components/settings/tr-setup-prompt";
 import { SyncStatus } from "@/components/settings/sync-status";
 import { getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
@@ -284,48 +286,84 @@ export default async function SettingsPage({
                       Institution row (keyed by env vars + fixed syncStatus
                       source strings), so nothing here needs to special-case it -
                       inst.woobModule being set is already the correct, unambiguous
-                      signal for "this institution has real Woob sync to manage". */}
+                      signal for "this institution has real Woob sync to manage".
+
+                      v2.1 added a second per-user provider alongside Woob:
+                      Trade Republic, signalled by inst.trPhone the same way.
+                      An institution carries at most one of the two (each
+                      config action clears the other's fields, see
+                      setWoobConfig/setTradeRepublicConfig), so the status
+                      icon, sync button and setup prompt below are shared
+                      between them and only the sync-log key and the setup
+                      prompt's own component differ. */}
                   {(() => {
-                    const woobLog = syncStatus[`woob:${inst.id}`] ?? null;
+                    const isTr = !!inst.trPhone;
+                    const isWoob = !isTr && !!inst.woobModule;
+                    const configured = isTr || isWoob;
+                    const syncLog = syncStatus[isTr ? `tr:${inst.id}` : `woob:${inst.id}`] ?? null;
                     return (
                       <>
-                        {inst.woobModule && woobLog && (
+                        {configured && syncLog && (
                           <output
                             className={`flex items-center gap-1 text-xs ${
-                              woobLog.status === "success" ? "text-[var(--positive)]" :
-                              woobLog.status === "auth_required" ? "text-[var(--warning)]" :
+                              syncLog.status === "success" ? "text-[var(--positive)]" :
+                              syncLog.status === "auth_required" ? "text-[var(--warning)]" :
                               "text-[var(--negative)]"
                             }`}
                             aria-label={
-                              woobLog.status === "success"
+                              syncLog.status === "success"
                                 ? t("syncStatus.success")
-                                : woobLog.status === "auth_required"
+                                : syncLog.status === "auth_required"
                                 ? t("syncStatus.authRequired")
                                 : t("syncStatus.error")
                             }
                           >
-                            {woobLog.status === "success"
+                            {syncLog.status === "success"
                               ? <CheckCircle size={12} aria-hidden="true" />
                               : <AlertTriangle size={12} aria-hidden="true" />}
                           </output>
                         )}
-                        {inst.woobModule && !woobLog && (
+                        {configured && !syncLog && (
                           <Clock size={12} className="text-[var(--muted)]" role="status" aria-label={t("syncStatus.neverSynced")} />
                         )}
-                        {inst.woobModule && <InstitutionSyncButton institutionId={inst.id} />}
-                        {inst.woobModule && <WoobSetupPrompt institutionId={inst.id} log={woobLog} />}
-                        <ConfigureWoobDialog
-                          institutionId={inst.id}
-                          institutionName={inst.name}
-                          currentModule={inst.woobModule}
-                          modules={woobModules}
-                          hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
-                          legacyAccountCount={inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length}
-                          woobAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length}
-                          legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
-                          woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}
-                          onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
-                        />
+                        {configured && <InstitutionSyncButton institutionId={inst.id} />}
+                        {isWoob && <WoobSetupPrompt institutionId={inst.id} log={syncLog} />}
+                        {isTr && <TradeRepublicSetupPrompt institutionId={inst.id} log={syncLog} />}
+                        {/* Only the configured provider's dialog is offered once
+                            one is set up, so a configured institution shows a
+                            single, unambiguous "manage this connection" button.
+                            Both appear while nothing is configured yet - that's
+                            the actual choice being made. */}
+                        {!isTr && (
+                          <ConfigureWoobDialog
+                            institutionId={inst.id}
+                            institutionName={inst.name}
+                            currentModule={inst.woobModule}
+                            modules={woobModules}
+                            hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
+                            legacyAccountCount={inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length}
+                            woobAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length}
+                            legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
+                            woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}
+                            onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
+                          />
+                        )}
+                        {!isWoob && (
+                          <ConfigureTradeRepublicDialog
+                            institutionId={inst.id}
+                            institutionName={inst.name}
+                            isConfigured={isTr}
+                            /* Only TR_PHONE matters here: the env-configured
+                               Trade Republic sync writes its accounts under the
+                               institution literally named "Trade Republic", so
+                               that is the one row where both paths would
+                               produce a duplicate set. LCL_LOGIN is irrelevant
+                               to this dialog. */
+                            hasDedicatedEnvSync={
+                              !!process.env.TR_PHONE && inst.name.toLowerCase() === "trade republic"
+                            }
+                          />
+                        )}
                       </>
                     );
                   })()}

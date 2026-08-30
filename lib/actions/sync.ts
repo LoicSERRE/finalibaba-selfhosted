@@ -182,13 +182,28 @@ export async function getWoobBankModules(): Promise<WoobBankModule[]> {
   }
 }
 
-export type WoobSetupResult =
-  | { status: "already_connected"; accounts: number }
+// Shared by both institution setup backends: /sync/institution/{id}/setup/*
+// dispatches on whether the institution carries Woob or Trade Republic
+// credentials, so a caller gets one of these either way. Named for the route
+// rather than for Woob (which it was, before v2.1) precisely because it is no
+// longer one provider's shape. The optional fields are what differs between
+// them - Woob reports the medium it used ("SMS to 06 12..."), Trade Republic
+// reports how long its pushed code stays valid, and neither knows about the
+// other's.
+export type InstitutionSetupResult =
+  | { status: "already_connected"; accounts?: number }
   | { status: "pending_approval"; medium_type: string | null; medium_label: string | null; message: string | null }
-  | { status: "code_required"; medium_type: string | null; medium_label: string | null; message: string | null }
+  | {
+      status: "code_required";
+      medium_type?: string | null;
+      medium_label?: string | null;
+      message?: string | null;
+      /** Trade Republic only: seconds its pushed code stays valid. */
+      countdown?: number;
+    }
   | { status: "unsupported"; message: string };
 
-export async function startInstitutionSetup(institutionId: string): Promise<WoobSetupResult> {
+export async function startInstitutionSetup(institutionId: string): Promise<InstitutionSetupResult> {
   await assertOwnsInstitution(institutionId);
   const res = await fetchSync(`/sync/institution/${institutionId}/setup/start`, { method: "POST" });
   if (!res.ok) {
@@ -198,7 +213,14 @@ export async function startInstitutionSetup(institutionId: string): Promise<Woob
   return res.json();
 }
 
-export async function completeInstitutionSetup(institutionId: string, code?: string): Promise<{ accounts: number }> {
+/** Woob reports how many accounts it found; Trade Republic just reports that
+ *  the session is now established, so both fields are optional. */
+export type InstitutionSetupCompletion = { accounts?: number; status?: "connected" };
+
+export async function completeInstitutionSetup(
+  institutionId: string,
+  code?: string,
+): Promise<InstitutionSetupCompletion> {
   await assertOwnsInstitution(institutionId);
   const res = await fetchSync(`/sync/institution/${institutionId}/setup/complete`, {
     method: "POST",

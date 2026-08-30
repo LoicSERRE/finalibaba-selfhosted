@@ -7,7 +7,7 @@ import {
   startInstitutionSetup,
   completeInstitutionSetup,
   triggerInstitutionSync,
-  type WoobSetupResult,
+  type InstitutionSetupResult,
 } from "@/lib/actions/sync";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -66,7 +66,7 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
     });
   };
 
-  const applyResult = (result: WoobSetupResult) => {
+  const applyResult = (result: InstitutionSetupResult) => {
     if (result.status === "already_connected") {
       reset();
       triggerSync();

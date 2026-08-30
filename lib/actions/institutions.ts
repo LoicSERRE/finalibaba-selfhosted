@@ -69,9 +69,71 @@ export async function clearGocardlessConnection(id: string) {
 export async function setWoobConfig(id: string, module: string, login: string, password: string) {
   const viewer = await getViewer();
   await assertOwned("institution", id, viewer.id);
+  // Clears any Trade Republic config for the same reason
+  // setTradeRepublicConfig clears the Woob fields: one provider per
+  // institution, decided explicitly here rather than by whichever branch the
+  // sync service happens to test first.
   await prisma.institution.update({
     where: { id },
-    data: { woobModule: module, woobLogin: login, woobPassword: password },
+    data: {
+      woobModule: module,
+      woobLogin: login,
+      woobPassword: password,
+      trPhone: null,
+      trPin: null,
+    },
+  });
+  revalidatePath("/settings");
+}
+
+/**
+ * Trade Republic credentials for one institution (v2.1), the per-user
+ * counterpart to setWoobConfig above.
+ *
+ * An institution carries one provider or the other, never both: the sync
+ * service dispatches on which set is populated, so leaving Woob config in
+ * place would make which backend runs depend on the order of two `if`s
+ * rather than on what the user chose. Clearing it here makes the choice
+ * explicit at the point it is made.
+ *
+ * trPin is stored in plaintext, the same trust model as woobPassword right
+ * above it - see the schema comment and SECURITY.md.
+ */
+export async function setTradeRepublicConfig(id: string, phone: string, pin: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", id, viewer.id);
+
+  const trimmedPhone = phone.trim();
+  const trimmedPin = pin.trim();
+  if (!trimmedPhone || !trimmedPin) throw new Error("Numéro de téléphone et code PIN requis.");
+
+  await prisma.institution.update({
+    where: { id },
+    data: {
+      trPhone: trimmedPhone,
+      trPin: trimmedPin,
+      woobModule: null,
+      woobLogin: null,
+      woobPassword: null,
+    },
+  });
+  revalidatePath("/settings");
+}
+
+/**
+ * Removes the Trade Republic connection from an institution.
+ *
+ * Deliberately leaves the Account rows and their whole history in place, the
+ * same as clearWoobConfig below: disconnecting a sync must never destroy the
+ * data it already imported. The accounts simply stop updating, and reconnecting
+ * later picks them back up by syncId.
+ */
+export async function clearTradeRepublicConfig(id: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", id, viewer.id);
+  await prisma.institution.update({
+    where: { id },
+    data: { trPhone: null, trPin: null },
   });
   revalidatePath("/settings");
 }

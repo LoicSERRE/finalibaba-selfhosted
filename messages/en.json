@@ -966,7 +966,7 @@
     "connect": "Connect",
     "confirm": "Confirm",
     "validating": "Validating…",
-    "trCodeHint": "Open the Trade Republic app → enter the 4-digit code shown:",
+    "trCodeHint": "Open the Trade Republic app and enter the 4-digit code it shows here.",
     "woobApprovalHint": "Open your bank's app or website and approve the connection, then click below:",
     "woobConfirm": "I've approved it",
     "woobCodeHint": "Enter the verification code",
@@ -978,10 +978,13 @@
     "otpMediumMobileApp": "A code is available in your bank's app",
     "otpMediumDevice": "A code is available on your security device",
     "otpMediumUnknown": "You were given a verification code",
-    "trCodeAriaLabel": "4-digit code",
+    "trCodeAriaLabel": "Trade Republic code",
     "lclApprovalHint": "Open the <strong>LCL</strong> app → <strong>Certicode Plus</strong> → approve the connection, then click below:",
     "lclConfirm": "I've approved in the LCL app",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "trCodeCountdown": "Code valid for another {seconds}s.",
+    "trCodeExpired": "The code has expired. Request a new one.",
+    "trResend": "New code"
   },
   "allocationHistoryChart": {
     "noHistory": "No history yet",
@@ -1235,6 +1238,21 @@
     "update": "Update",
     "submit": "Save",
     "unknownError": "Unknown error"
+  },
+  "configureTradeRepublic": {
+    "title": "Trade Republic: {name}",
+    "configure": "Configure Trade Republic",
+    "configured": "Trade Republic configured",
+    "intro": "Connect your own Trade Republic account to this institution. Your credentials are visible to you only, and syncing creates accounts that belong to you alone.",
+    "phone": "Phone number",
+    "phoneHint": "In international format, as in the Trade Republic app (+33…).",
+    "pin": "PIN code",
+    "pinHint": "The 4-digit code from your Trade Republic app.",
+    "reconfigureHint": "Saving new credentials invalidates the existing session: you will have to sign in again with a code.",
+    "dedicatedEnvWarning": "This instance already syncs Trade Republic through a server-side (.env) configuration. Also configuring this institution here will create duplicate accounts - the two paths don't recognize each other as the same account.",
+    "update": "Update",
+    "submit": "Save",
+    "deleteConfig": "Delete config"
   },
   "exportButton": {
     "export": "Export",
