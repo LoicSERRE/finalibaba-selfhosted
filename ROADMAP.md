@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v2.0.0**
+Current stable release: **v2.1.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -228,7 +228,7 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 ---
 
-## v1.17 - Sync freshness
+## v1.17 - Sync freshness - Released ✓
 
 *Scoped live during the v1.16.1 retrospective, not assumed - checked pytr's actual API, GoCardless's actual docs, and Powens' actual sync cadence before committing to anything here. The headline finding: true instant "just spent 5€" notifications only turn out to be achievable for Trade Republic, because its own API is genuinely push-capable (a persistent websocket, not batch polling) - LCL and every other Woob-scraped or GoCardless-synced bank has no equivalent mechanism to tap into, PSD2 aggregation being fundamentally batch/rate-limited on the bank's own side, not something this app's own engineering effort can route around. Scope here is set accordingly: real for Trade Republic, honestly partial for everything else.*
 
@@ -239,23 +239,7 @@ Before starting a new version's work (or right before tagging one), run the rele
 
 ---
 
-## v2.1 - Per-user bank connections
-
-*v2.0 gave every user their own portfolio but left the bank credentials behind: `LCL_LOGIN`/`TR_PHONE` live in `.env`, so they belong to the instance owner and nobody else can sync their own accounts. That was a documented, accepted constraint of that release. It is also the first thing real users hit, because inviting family only helps if they can actually connect their own bank.*
-
-- [ ] **Per-user Trade Republic** - add a Trade Republic account from the UI, the way Woob institutions already work, so every user can connect their own (and more than one). Today this is impossible by architecture rather than configuration: `sync_tr.py` reads `TR_PHONE`/`TR_PIN` from the environment, a single value for the whole instance, and there is no per-institution equivalent of Woob's `woobLogin`/`woobPassword`.
-
-  **The blocker to solve first, before any UI**: `sync_tr.py` writes fixed account identifiers (`tr:cash`, `tr:pea`, `tr:cto`, `tr:crypto` - see `_get_or_create_account`), and `Account.syncId` is globally unique. Two users each with a Trade Republic cash account collide on the very first insert, and the second would silently overwrite the first's account. These have to become `tr:<institutionId>:cash`, mirroring `woob:<institutionId>:<id>` - **without breaking existing rows**, which is the same shape as the `lcl:` vs `woob:` split already documented in `CLAUDE.md`: the `.env` path keeps writing the legacy prefix (it is the owner's), the per-user path writes the namespaced one.
-
-  **That unknown is now settled, and favourably.** Read against the exact commit `requirements.txt` pins (`1cff3d70`), not a local install: `TradeRepublicApi.__init__` takes a `cookies_file` parameter, and when it is omitted the path defaults to `cookies.<phone_no>.txt` rather than a single fixed file. So two users never share a session even by accident, and passing the parameter explicitly gives deterministic per-institution control if wanted. No process or working-directory isolation is needed.
-
-  The rest follows patterns this repo already has: `trPhone`/`trPin` on `Institution` (the same type-conditional-nullable-fields convention `Account` uses for its LOAN-only fields), a per-institution sync module modelled on `sync_woob.py`, the interactive 2FA flow modelled on `setup_woob.py` (already generic over `institution_id`), the existing `/sync/institution/{id}/setup/*` routes dispatching on provider, and a "Configurer Trade Republic" dialog modelled on `ConfigureWoobDialog`.
-
-- [ ] **Per-user LCL and other env-configured syncs** *(follows from the above)* - the same treatment for the remaining `.env`-driven integration, once the Trade Republic work has established the pattern. Lower priority: LCL is already reachable per-user through the generic Woob picker, so this is about removing a special case rather than unblocking anyone.
-
----
-
-## v2.0 - Multi-user
+## v2.0 - Multi-user - Released ✓
 
 *Breaking architectural change: all data gains user ownership, requiring a migration. Planned as a dedicated, focused push once the single-user feature set (everything above) is mature and well-tested, rather than interleaved with it - multi-user plus a full security audit belong together, since every new sharing/permission boundary this adds is exactly the kind of surface a security review needs to cover anyway. A native mobile app may fold into this same push too, but only if it turns out to be genuinely worth the build effort relative to the PWA that already exists - not committed as of this writing, needs its own scoping pass first.*
 
@@ -294,6 +278,28 @@ Three real security holes were found and fixed **while building**, not by the au
 The generalizable lesson is the first one: **a userId parameter on a `"use server"` export is an impersonation primitive.** A scripted check for that shape is worth re-running whenever an action file gains a parameter.
 
 Two things were deliberately *not* built, and are scoped out rather than forgotten: fractional ownership of a co-owned account (each co-owner counts the full value in their own view - this is a per-viewer dashboard, not a fiscal filing), and per-account grants to non-co-owners (sharing is whole-portfolio or nothing). Open self-registration is also deliberately absent; revisit after the security audit, not before.
+
+---
+
+## v2.1 - Per-user bank connections - Released ✓
+
+*v2.0 gave every user their own portfolio but left the bank credentials behind: `LCL_LOGIN`/`TR_PHONE` live in `.env`, so they belong to the instance owner and nobody else can sync their own accounts. That was a documented, accepted constraint of that release. It is also the first thing real users hit, because inviting family only helps if they can actually connect their own bank.*
+
+- [X] **Per-user Trade Republic** - add a Trade Republic account from Settings, the way Woob institutions already work, so every user can connect their own (and more than one). Before this it was impossible by architecture rather than configuration: `sync_tr.py` read `TR_PHONE`/`TR_PIN` from the environment, a single value for the whole instance, with no per-institution equivalent of Woob's `woobLogin`/`woobPassword`. See `CLAUDE.md`'s "Per-user Trade Republic" for the full design.
+
+  **The blocker, solved first and before any UI**: `sync_tr.py` wrote fixed account identifiers (`tr:cash`, `tr:pea`, `tr:cto`, `tr:crypto`), and `Account.syncId` is globally unique - two users each with a Trade Republic cash account collide on the very first insert, and the second silently overwrites the first's. They are now `tr:<institutionId>:cash` on the per-user path, mirroring `woob:<institutionId>:<id>`, while the `.env` path keeps writing the legacy two-segment id so existing rows are untouched. `lib/domain/sync-ids.ts` is the one place that shape is parsed, precisely so the next reader of a `syncId` cannot get it subtly wrong.
+
+  **The unknown that could have sunk this settled favourably.** Read against the exact commit `requirements.txt` pins (`1cff3d70`), not a local install: `TradeRepublicApi.__init__` takes a `cookies_file` parameter, and when it is omitted the path defaults to `cookies.<phone_no>.txt` rather than a single fixed file. So two users never share a session even by accident, and passing the parameter explicitly (which the per-institution path does) gives deterministic control. No process or working-directory isolation was needed.
+
+- [ ] **Per-user LCL and other env-configured syncs** *(follows from the above)* - the same treatment for the remaining `.env`-driven integration, now that the Trade Republic work has established the pattern. Lower priority: LCL is already reachable per-user through the generic Woob picker, so this is about removing a special case rather than unblocking anyone.
+
+**Retrospective.** Shipped in five gated lots: the syncId namespacing (with its own tests before a single line of sync code changed), the per-institution sync path, the interactive setup flow and route dispatch, the Settings UI, and documentation.
+
+**The namespacing alone did not actually fix the collision, and only a real database proved it.** After `sync_tr.py` was writing `tr:<institutionId>:cash`, a two-user test still produced **one shared row**. The cause was `upsert_account`'s native-id fallback in `sync/db.py` - a `LIKE '%:<native_id>'` lookup added after the v1.11 LCL/Woob duplicate-account incident, which matches on the trailing colon segment. For Woob that segment is a unique bank-side account id, which is what makes the fallback correct there. For Trade Republic it is an account *kind* (`cash`), shared by every user on the instance, so the fallback confidently matched two different people's accounts as the same one. Fixed by exempting Trade Republic ids from that fallback specifically, and re-verified that the LCL/Woob dedup it exists for still works. A unit test would not have caught this: both writes were individually correct, and the bug lived in the third function that read them back.
+
+**One provider per institution, decided at the point of choice.** `setWoobConfig` and `setTradeRepublicConfig` each clear the other's credential fields. Without that, an institution could hold both, and which backend actually ran would depend on the order of two `if`s in the sync service rather than on anything the user chose - a silent, order-dependent outcome nobody selected. The Settings row follows the same rule: both configuration buttons appear while nothing is set up (that is the real choice), and only the configured provider's remains afterwards.
+
+**What deliberately did not change**: `setup_tr.py`, `sync_tr.py`'s `run()`, and the `TR_PHONE`/`TR_PIN` environment path all keep working exactly as before, the same way `setup_lcl.py` was left alone when `setup_woob.py` generalised the Woob path in v1.12. An instance that never touches the new UI cannot tell this release happened.
 
 ---
 

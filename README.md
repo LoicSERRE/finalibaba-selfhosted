@@ -93,14 +93,16 @@ All sync modules are **optional** - the app works fully without them. Leave cred
 
 Available in 18 EU countries: AT, BE, DE, EE, ES, FI, FR, GR, IE, IT, LT, LU, LV, NL, PL, PT, SI, SK.
 
-Set `TR_PHONE` and `TR_PIN` in `.env`. First-time setup (interactive, required once):
+**From the interface (recommended).** In **Settings → Institutions**, add an institution and click **Configure Trade Republic**: enter your phone number and PIN, then **Connect** and type the 4-digit code the Trade Republic app shows you. Nothing to put in `.env`, no terminal, and every user on a multi-user instance can connect their own account this way - see [Multiple users](#multiple-users-optional).
+
+**From `.env` (the original path, still supported).** Set `TR_PHONE` and `TR_PIN`, then run the interactive setup once:
 
 ```bash
 docker compose exec -it sync python setup_tr.py
 # Approve the notification in the TR app, then enter the 4-digit code
 ```
 
-The session persists in a Docker volume. Renew it when it expires (every few weeks).
+Either way the session persists in a Docker volume. Renew it when it expires (every few weeks) - from Settings for a UI-configured account, or by re-running the command above for the `.env` one.
 
 Syncs positions, cash balance, **and** the cash account's full transaction history (card payments, transfers, trades, dividends, interest - real merchant/description labels, not just amounts) - so budget categorization and recurring-transaction detection work for Trade Republic the same way they do for a Woob-synced bank. The first sync after connecting pulls your full available history; every sync after that only fetches what's new.
 
@@ -322,7 +324,9 @@ Both are invitation-based: you share with a username, so the person has to alrea
 > [!WARNING]
 > **Don't turn `AUTH_ENABLED` back off once you have several users.** With no login, the app resolves every visitor to the owner account - admin rights included. Other people's portfolios aren't exposed (nobody can authenticate as them any more), but they do become unreachable, and yours becomes readable by anyone who can reach the app.
 
-Bank credentials in `.env` (`LCL_LOGIN`, `TR_PHONE`) belong to the instance owner, so only they can run or re-authenticate those syncs. **The imported data is unaffected** - an env-synced account is co-ownable and shareable exactly like a manual one. A second user can connect their own banks through Woob or GoCardless; Trade Republic specifically is owner-only, since Woob has no module for it.
+Bank credentials in `.env` (`LCL_LOGIN`, `TR_PHONE`) belong to the instance owner, so only they can run or re-authenticate those syncs. **The imported data is unaffected** - an env-synced account is co-ownable and shareable exactly like a manual one.
+
+This doesn't limit what anyone else can connect: every user adds their own banks from Settings, through Woob, GoCardless, or (since v2.1) Trade Republic, each with their own credentials and their own accounts.
 
 Database backup and restore are admin-only: they cover the entire instance, including other people's data.
 
