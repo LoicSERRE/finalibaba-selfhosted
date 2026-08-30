@@ -60,3 +60,7 @@ __pycache__/
 
 # Local-only scratch notes (manual QA checklists etc.) - never pushed
 /TEST_PROTOCOL.md
+
+# Python coverage report for the local SonarQube scan (sync/requirements-dev.txt)
+sync/coverage.xml
+sync/.coverage

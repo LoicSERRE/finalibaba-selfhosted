@@ -1,0 +1,19 @@
+# Python coverage settings for the sync/ service.
+#
+# Lives at the repo root rather than in sync/ because coverage.py reads its
+# config from the *current* directory, and the report has to be generated from
+# here: `python -m pytest sync/tests -c sync/pytest.ini --cov=sync
+# --cov-report=xml:sync/coverage.xml`.
+#
+# Running it from inside sync/ instead produces filenames relative to sync/
+# (`db.py`), which SonarQube then resolves against the project base directory
+# and fails to find - "Cannot resolve 14 file paths, ignoring coverage measures
+# for those files", a silent 0% rather than an error. Running from the root
+# with relative_files makes <source> the relative `sync`, which resolves
+# wherever the repo is checked out - including inside the scanner container,
+# where the absolute path this file was generated under does not exist.
+[run]
+relative_files = True
+# Keep the raw data file next to the service it measures rather than dropping
+# a stray .coverage at the root of what is otherwise a TypeScript project.
+data_file = sync/.coverage

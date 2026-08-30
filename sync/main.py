@@ -523,6 +523,23 @@ def _run_tr_institution(inst_id: str):
             log.exception("TR sync: failed to write the error to SyncLog")
 
 
+# The one message every setup failure surfaces to the client. Deliberately
+# fixed and generic: the branches below catch anything that was never
+# translated into a SetupError, so the real exception could carry a
+# connection string, a file path or library internals that have no business
+# reaching an HTTP client. Full detail goes to the service logs instead -
+# CodeQL flagged the previous str(e) here as information exposure (alerts
+# #1345-#1348), the same class of fix as the backup route's pg_dump/psql
+# stderr handling.
+SETUP_FAILURE_MESSAGE = "Échec de la configuration - vérifie les logs du service sync"
+
+
+def _setup_failure_response(context: str, institution_id: str) -> JSONResponse:
+    """Log the real failure, return the generic message. See above."""
+    log.exception("%s failed for institution %s", context, institution_id)
+    return JSONResponse({"error": SETUP_FAILURE_MESSAGE}, status_code=500)
+
+
 @app.post("/sync/institution/{institution_id}/setup/start")
 async def institution_setup_start(institution_id: str):
     import asyncio
@@ -550,18 +567,9 @@ async def institution_setup_start(institution_id: str):
         log.exception("Woob setup/start failed for institution %s", institution_id)
         return JSONResponse({"error": e.user_message[:300]}, status_code=500)
     except Exception:
-        # Anything else (a DB error, a raw Woob/library exception never
-        # translated by setup_woob.py into a SetupError) could carry
-        # internal detail - a connection string, a file path, library
-        # internals - that has no business reaching an HTTP client. Full
-        # detail still goes to the service logs via log.exception; CodeQL
-        # flagged the previous str(e) here as information exposure
-        # (alert #1345/#1346, then #1347/#1348 once str(e) on the
-        # RuntimeError branch above was still tainted by its own rule) -
-        # same class of fix as the backup route's pg_dump/psql stderr
-        # handling.
-        log.exception("Woob setup/start failed for institution %s", institution_id)
-        return JSONResponse({"error": "Échec de la configuration - vérifie les logs du service sync"}, status_code=500)
+        # Anything not translated into a SetupError above - see
+        # _setup_failure_response.
+        return _setup_failure_response("Woob setup/start", institution_id)
 
 
 @app.post("/sync/institution/{institution_id}/setup/complete")
@@ -585,11 +593,7 @@ async def institution_setup_complete(institution_id: str, request: Request):
             log.exception("TR setup/complete failed for institution %s", institution_id)
             return JSONResponse({"error": e.user_message[:300]}, status_code=500)
         except Exception:
-            log.exception("TR setup/complete failed for institution %s", institution_id)
-            return JSONResponse(
-                {"error": "Échec de la configuration - vérifie les logs du service sync"},
-                status_code=500,
-            )
+            return _setup_failure_response("TR setup/complete", institution_id)
     try:
         result = await loop.run_in_executor(executor, setup_woob.complete_setup, institution_id, code)
         return result
@@ -600,8 +604,7 @@ async def institution_setup_complete(institution_id: str, request: Request):
         log.exception("Woob setup/complete failed for institution %s", institution_id)
         return JSONResponse({"error": e.user_message[:300]}, status_code=500)
     except Exception:
-        log.exception("Woob setup/complete failed for institution %s", institution_id)
-        return JSONResponse({"error": "Échec de la configuration - vérifie les logs du service sync"}, status_code=500)
+        return _setup_failure_response("Woob setup/complete", institution_id)
 
 
 @app.post("/sync/institution/{institution_id}")

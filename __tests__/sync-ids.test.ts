@@ -50,8 +50,8 @@ describe("parseTrSuffix", () => {
     [null, "null"],
     [undefined, "undefined"],
     ["", "empty"],
-  ])("%s is not a Trade Republic account (%s)", (syncId, _why) => {
-    expect(parseTrSuffix(syncId as string | null | undefined)).toBeNull();
+  ])("%s is not a Trade Republic account (%s)", (syncId, why) => {
+    expect(parseTrSuffix(syncId as string | null | undefined), why).toBeNull();
   });
 });
 
@@ -79,10 +79,10 @@ describe("isLegacyEnvSyncId", () => {
     ["tr:inst-123:cash", "per-user Trade Republic"],
     ["woob:inst-1:9876", "per-user Woob"],
     [null, "no sync id at all"],
-  ])("%s is not (%s)", (id, _why) => {
+  ])("%s is not (%s)", (id, why) => {
     // This set is what migrateDedicatedSyncToWoob deletes. A per-user Trade
     // Republic account landing in it would be offered up for migration and
     // then cascade-deleted with its whole history.
-    expect(isLegacyEnvSyncId(id as string | null)).toBe(false);
+    expect(isLegacyEnvSyncId(id as string | null), why).toBe(false);
   });
 });
