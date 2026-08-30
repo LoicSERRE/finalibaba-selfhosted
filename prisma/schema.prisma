@@ -26,9 +26,9 @@ enum HoldingCurrency {
 }
 
 enum TaxTreatment {
-  EXEMPT   // never taxed on gains (foreign ISA/Roth IRA equivalents)
+  EXEMPT // never taxed on gains (foreign ISA/Roth IRA equivalents)
   DEFERRED // taxed only on withdrawal (PER/401k) - not taxed for latent/net-worth purposes today
-  TAXABLE  // taxed now, at this account's own taxRatePct
+  TAXABLE // taxed now, at this account's own taxRatePct
 }
 
 // ── v2.0 multi-user ─────────────────────────────────────────────────────────
@@ -52,36 +52,36 @@ enum TaxTreatment {
 //   userId (isolation phase).
 
 enum UserRole {
-  ADMIN  // full instance control: user management, invitations, backup/restore
+  ADMIN // full instance control: user management, invitations, backup/restore
   MEMBER // a regular user - full control over their own portfolio only
 }
 
 model User {
-  id           String   @id @default(cuid()) // owner row uses the fixed id "user-owner"
+  id               String   @id @default(cuid()) // owner row uses the fixed id "user-owner"
   // Null until the bootstrap/invitation flow completes - the migration
   // creates the owner with no credentials at all (mono mode never needs
   // them). Unique once set; Postgres allows multiple NULLs so this doesn't
   // constrain un-bootstrapped rows.
-  username     String?  @unique
-  displayName  String?
+  username         String?  @unique
+  displayName      String?
   // bcrypt. Null = this user can't log in with a DB password yet. For the
   // owner specifically, the env AUTH_PASSWORD/AUTH_PASSWORD_HASH fallback
   // in lib/auth.ts applies ONLY while this is null - once set, the DB hash
   // wins absolutely and env credentials are ignored (see authorize()).
-  passwordHash String?
-  role         UserRole @default(MEMBER)
+  passwordHash     String?
+  role             UserRole @default(MEMBER)
   // Per-user TOTP - moved from the UserSettings singleton (fields there are
   // now vestigial, see UserSettings). Same plaintext-secret/bcrypt-backup-
   // codes trust model documented on the original fields.
-  totpSecret      String?
-  totpEnabled     Boolean  @default(false)
-  totpBackupCodes String[] @default([])
+  totpSecret       String?
+  totpEnabled      Boolean  @default(false)
+  totpBackupCodes  String[] @default([])
   // Per-user app-lock (WebAuthn) - moved from the UserSettings singleton
   // (vestigial there too). The WebAuthn userHandle becomes this row's id,
   // replacing the old hardcoded single-instance constant.
-  appLockEnabled   Boolean @default(false)
+  appLockEnabled   Boolean  @default(false)
   appLockChallenge String?
-  createdAt DateTime @default(now())
+  createdAt        DateTime @default(now())
 
   institutions       Institution[]
   accounts           Account[]
@@ -97,8 +97,8 @@ model User {
   settings           UserSettings?
   coOwnedAccounts    AccountCoOwner[]
   invitationsCreated Invitation[]
-  grantsGiven        PortfolioGrant[] @relation("grantor")
-  grantsReceived     PortfolioGrant[] @relation("grantee")
+  grantsGiven        PortfolioGrant[]    @relation("grantor")
+  grantsReceived     PortfolioGrant[]    @relation("grantee")
 }
 
 // Single-use, admin-generated invitation (see CLAUDE.md - the admin never
@@ -166,11 +166,27 @@ model Institution {
   logoUrl                 String?
   accounts                Account[]
   createdAt               DateTime  @default(now())
-  gocardlessInstitutionId String?   // e.g. LCL_CRLYFRPP
-  gocardlessRequisitionId String?   // set after OAuth completion
-  woobModule              String?   // Woob backend module name, e.g. "bnporc", "caissedepargne"
+  gocardlessInstitutionId String? // e.g. LCL_CRLYFRPP
+  gocardlessRequisitionId String? // set after OAuth completion
+  woobModule              String? // Woob backend module name, e.g. "bnporc", "caissedepargne"
   woobLogin               String?
   woobPassword            String?
+  // Per-user Trade Republic (v2.1). Same type-conditional-nullable-fields
+  // convention as the woob* trio above and as Account's own LOAN-only
+  // columns: an institution carries either a Woob config, a Trade Republic
+  // one, or neither, never both - enforced in lib/actions, not by the schema,
+  // exactly like the Woob fields already are.
+  //
+  // trPin is stored in plaintext, the same trust model as woobPassword,
+  // UserSettings.smtpPassword and User.totpSecret: this database is not
+  // hardened against a compromised host, so encrypting one field of several
+  // buys little. See SECURITY.md's "Multi-user boundaries".
+  //
+  // These do NOT replace the LCL_LOGIN/TR_PHONE environment variables, which
+  // stay the instance owner's and keep working untouched - the same way
+  // configuring Woob on an institution never disabled the env path.
+  trPhone                 String?
+  trPin                   String?
   userId                  String    @default("user-owner")
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -179,10 +195,10 @@ model Institution {
 }
 
 model Account {
-  id                  String              @id @default(cuid())
-  name                String
-  type                AccountType
-  institutionId       String?             // nullable - cars and loans may have no associated bank
+  id                    String                 @id @default(cuid())
+  name                  String
+  type                  AccountType
+  institutionId         String? // nullable - cars and loans may have no associated bank
   // onDelete: Cascade - deleteInstitution's own confirmation dialog
   // (messages/*.json's deleteInstitution.description) explicitly promises
   // "the institution and all its associated accounts will be permanently
@@ -196,34 +212,34 @@ model Account {
   // supposedly-deleted LCL account's balance on the dashboard. Every other
   // FK in this schema pointing at Account already writes onDelete: Cascade
   // explicitly; this was the one left on Prisma's silent default instead.
-  institution         Institution?        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  manualValueCents    BigInt?
-  liabilityCents      BigInt?
-  purchasePriceCents  BigInt?             // AUTOMOBILE: original purchase price
-  insuranceMonthlyCents BigInt?           // AUTOMOBILE + LOAN: monthly insurance premium
-  investmentSubtype   String?             // "PEA" | "CTO" - only for INVESTMENT type
-  investmentStartDate DateTime?           // Investment start date (manual entry)
-  taxTreatment        TaxTreatment        @default(TAXABLE) // INVESTMENT/CRYPTO only - see TaxTreatment
-  taxRatePct          Float?              // 0-1 ratio, meaningful only when taxTreatment = TAXABLE
-  loanAmountCents     BigInt?             // LOAN: initial borrowed amount
-  loanTaeg            Float?              // LOAN: annual interest rate in % (e.g. 5.47)
-  loanDurationMonths  Int?                // LOAN: total duration in months
-  loanDeferralMonths  Int?                // LOAN: deferral period in months (0 = none)
-  loanStartDate       DateTime?           // LOAN: repayment start date
+  institution           Institution?           @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  manualValueCents      BigInt?
+  liabilityCents        BigInt?
+  purchasePriceCents    BigInt? // AUTOMOBILE: original purchase price
+  insuranceMonthlyCents BigInt? // AUTOMOBILE + LOAN: monthly insurance premium
+  investmentSubtype     String? // "PEA" | "CTO" - only for INVESTMENT type
+  investmentStartDate   DateTime? // Investment start date (manual entry)
+  taxTreatment          TaxTreatment           @default(TAXABLE) // INVESTMENT/CRYPTO only - see TaxTreatment
+  taxRatePct            Float? // 0-1 ratio, meaningful only when taxTreatment = TAXABLE
+  loanAmountCents       BigInt? // LOAN: initial borrowed amount
+  loanTaeg              Float? // LOAN: annual interest rate in % (e.g. 5.47)
+  loanDurationMonths    Int? // LOAN: total duration in months
+  loanDeferralMonths    Int? // LOAN: deferral period in months (0 = none)
+  loanStartDate         DateTime? // LOAN: repayment start date
   // LOAN: dedup flag for the "nearly paid off" alert - one-way, a loan only
   // crosses the threshold once. See lib/domain/alerts.ts.
-  loanPaidOffAlertSent Boolean            @default(false)
-  holdings            Holding[]
-  history             HistoricalBalance[]
-  transactions        Transaction[]
+  loanPaidOffAlertSent  Boolean                @default(false)
+  holdings              Holding[]
+  history               HistoricalBalance[]
+  transactions          Transaction[]
   recurringTransactions RecurringTransaction[]
-  incomeEvents        IncomeEvent[]
-  sales               Sale[]
-  alertRules          AlertRule[]
-  goals               Goal[]
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  gocardlessAccountId String?             @unique
+  incomeEvents          IncomeEvent[]
+  sales                 Sale[]
+  alertRules            AlertRule[]
+  goals                 Goal[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  gocardlessAccountId   String?                @unique
   // Deliberately GLOBALLY unique, not per-user, in v2.0 - see CLAUDE.md's
   // "Multi-user architecture". The env-driven sources (LCL/Trade Republic)
   // are the owner's alone, and TR in particular writes fixed ids
@@ -233,42 +249,42 @@ model Account {
   // GoCardless - is caught at requisition-link time with an explicit
   // "already connected by another user" error rather than silently
   // merging or dropping data.
-  syncId              String?             @unique // e.g. "lcl:FR76XXXX" or "tr:ISIN"
+  syncId                String?                @unique // e.g. "lcl:FR76XXXX" or "tr:ISIN"
   // PERMANENT default (unlike the scaffolding defaults elsewhere):
   // sync/db.py's raw-SQL INSERT doesn't know about this column, and
   // env-synced accounts belonging to the owner is the intended semantics.
-  userId              String              @default("user-owner")
-  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  coOwners            AccountCoOwner[]
+  userId                String                 @default("user-owner")
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coOwners              AccountCoOwner[]
 
   @@index([userId])
 }
 
 model Holding {
-  id             String   @id @default(cuid())
-  accountId      String
-  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  ticker         String
-  name           String?
-  quantity       Decimal  @db.Decimal(24, 10)
-  lastPriceCents BigInt   @default(0)
-  costBasisCents BigInt?  // total acquisition cost in cents (null = unknown)
-  targetPct      Float?   // 0-1 ratio, target share of the account's total value - null means not part of the rebalancing plan
+  id                   String          @id @default(cuid())
+  accountId            String
+  account              Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ticker               String
+  name                 String?
+  quantity             Decimal         @db.Decimal(24, 10)
+  lastPriceCents       BigInt          @default(0)
+  costBasisCents       BigInt? // total acquisition cost in cents (null = unknown)
+  targetPct            Float? // 0-1 ratio, target share of the account's total value - null means not part of the rebalancing plan
   currency             HoldingCurrency @default(EUR)
-  nativePriceCents     BigInt?         // price as entered, in `currency` - null when currency = EUR (lastPriceCents IS the native price)
-  nativeCostBasisCents BigInt?         // cost basis as entered, in `currency` - same null convention
-  fxRateToEur          Float?          // EUR per 1 unit of `currency`, captured at entry time - null when currency = EUR
-  alertRules     AlertRule[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  nativePriceCents     BigInt? // price as entered, in `currency` - null when currency = EUR (lastPriceCents IS the native price)
+  nativeCostBasisCents BigInt? // cost basis as entered, in `currency` - same null convention
+  fxRateToEur          Float? // EUR per 1 unit of `currency`, captured at entry time - null when currency = EUR
+  alertRules           AlertRule[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   @@unique([accountId, ticker])
 }
 
 model SyncLog {
   id        String   @id @default(cuid())
-  source    String   // "lcl" | "trade_republic" | "woob:<institutionId>"
-  status    String   // "success" | "error" | "auth_required"
+  source    String // "lcl" | "trade_republic" | "woob:<institutionId>"
+  status    String // "success" | "error" | "auth_required"
   message   String?
   createdAt DateTime @default(now())
   // PERMANENT default, same reason as Account.userId: sync/db.py writes
@@ -362,7 +378,7 @@ model AlertRule {
   // was deleted has no purpose left; a nulled-out rule would sit dead in
   // the list instead of just disappearing with it.
   accountId             String?
-  account               Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account               Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
   balanceThresholdCents BigInt?
   // Edge-triggered dedup, same semantics as UserSettings.netWorthAlertLastAbove
   // (null = never evaluated, fires only when the crossing direction flips).
@@ -393,8 +409,8 @@ model AlertRule {
 
   // BUDGET_OVERRUN only. Threshold comes from Category.budgetCents itself,
   // not duplicated here.
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId                   String?
+  category                     Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   // Re-arms every calendar month, unlike the one-way loan flag or the
   // two-way balance/net-worth flip - stores which period ("YYYY-MM", UTC)
   // this rule last fired for, so a rule that fired in July can fire again
@@ -407,7 +423,7 @@ model AlertRule {
   // "null is valid input" precedent as UNREALIZED_GAIN's aggregate mode);
   // balanceThresholdCents above is reused as a minimum absolute amount to
   // alert on (null = no minimum), not a crossing value.
-  transactionDirection TransactionAlertDirection?
+  transactionDirection      TransactionAlertDirection?
   // The cursor: transactions with createdAt after this are "new" and
   // eligible to fire. null means never evaluated - the rule's first-ever
   // check sets this to the latest already-matching transaction's createdAt
@@ -484,15 +500,15 @@ model HistoricalBalance {
 }
 
 model Transaction {
-  id          String    @id @default(cuid())
-  accountId   String
-  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  syncId      String    @unique // woob transaction id - used for deduplication
-  date        DateTime
-  label       String
-  amountCents BigInt    // positive = credit, negative = debit
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  id                   String             @id @default(cuid())
+  accountId            String
+  account              Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  syncId               String             @unique // woob transaction id - used for deduplication
+  date                 DateTime
+  label                String
+  amountCents          BigInt // positive = credit, negative = debit
+  categoryId           String?
+  category             Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   // GoCardless-only (PSD2's Berlin Group schema) - the card network's own
   // 4-digit merchant classification, when the account's bank actually
   // populates it (optional per the spec, so this is null for most
@@ -502,11 +518,11 @@ model Transaction {
   // when present, since it's assigned by the card network at merchant
   // registration time rather than guessed from a label substring.
   merchantCategoryCode String?
-  createdAt   DateTime  @default(now())
+  createdAt            DateTime           @default(now())
   // Reverse side of IncomeEvent.transactionId - lets "Mark as income"
   // (see IncomeEvent below) tell whether this transaction already has one,
   // so the same real-world payment can't be double-recorded.
-  incomeEvent IncomeEvent?
+  incomeEvent          IncomeEvent?
   // Set by detectInternalTransferPairs (lib/domain/internal-transfers.ts)
   // when this transaction is matched with an opposite-signed transaction
   // of the same absolute amount on a different account within a few days -
@@ -517,14 +533,14 @@ model Transaction {
   // flagged true, autoCategorizeTransactions never assigns it a category
   // automatically (it isn't real income or spending) - the flag doesn't
   // block a manual categorization, only the automatic sources.
-  isInternalTransfer Boolean @default(false)
+  isInternalTransfer   Boolean            @default(false)
   // A transaction with splits has categoryId = null at the top level - the
   // category breakdown lives entirely in these rows instead. Enforced by
   // setTransactionSplits (lib/actions/transaction-splits.ts), never a raw
   // write. See CLAUDE.md's "Split transactions" for why every
   // "categoryId: null" query elsewhere in the app that means "genuinely
   // uncategorized" also needs a "splits: { none: {} }" guard alongside it.
-  splits TransactionSplit[]
+  splits               TransactionSplit[]
 
   @@index([accountId, date])
   @@index([categoryId])
@@ -574,11 +590,11 @@ model Category {
   // aggregate strictly per category owner. See CLAUDE.md's "Multi-user
   // architecture" for why that beats a per-user assignment junction.
   name                    String
-  color                   String                 // hex, e.g. "#6366f1"
+  color                   String // hex, e.g. "#6366f1"
   kind                    CategoryKind           @default(EXPENSE)
-  budgetCents             BigInt?                // monthly envelope - null means no budget set, and meaningless for an INCOME category (no cap concept for income)
+  budgetCents             BigInt? // monthly envelope - null means no budget set, and meaningless for an INCOME category (no cap concept for income)
   budgetRolloverEnabled   Boolean                @default(false) // unused envelope carries into next month instead of resetting to zero - meaningless without budgetCents set, same as above
-  budgetRolloverEnabledAt DateTime?              // anchor for the carry computation - only months from here onward count, so re-enabling after a pause doesn't resurrect a stale carry. Reset to null whenever rollover is turned off; set to now() on the off->on transition, left untouched while already on (see lib/actions/categories.ts)
+  budgetRolloverEnabledAt DateTime? // anchor for the carry computation - only months from here onward count, so re-enabling after a pause doesn't resurrect a stale carry. Reset to null whenever rollover is turned off; set to now() on the off->on transition, left untouched while already on (see lib/actions/categories.ts)
   transactions            Transaction[]
   transactionSplits       TransactionSplit[]
   recurringTransactions   RecurringTransaction[]
@@ -602,12 +618,12 @@ model RecurringTransaction {
   accountId     String
   account       Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
   label         String
-  amountCents   BigInt             // positive = income, negative = expense
+  amountCents   BigInt // positive = income, negative = expense
   categoryId    String?
   category      Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   frequency     RecurringFrequency @default(MONTHLY)
   intervalCount Int                @default(1) // e.g. frequency=WEEKLY, intervalCount=2 → every 2 weeks
-  anchorDate    DateTime           // a real known occurrence - day/weekday/month is derived from this
+  anchorDate    DateTime // a real known occurrence - day/weekday/month is derived from this
   active        Boolean            @default(true)
   autoDetected  Boolean            @default(false) // created by confirming a detected suggestion vs manually
   createdAt     DateTime           @default(now())
@@ -621,15 +637,15 @@ enum IncomeType {
 }
 
 model IncomeEvent {
-  id               String     @id @default(cuid())
+  id               String       @id @default(cuid())
   accountId        String
-  account          Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account          Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   type             IncomeType
-  ticker           String?    // e.g. "AAPL" - ties a DIVIDEND to a specific holding; null for INTEREST or an unattributed dividend
-  amountCents      BigInt     // gross amount received
-  taxWithheldCents BigInt?    // foreign withholding tax (e.g. 15% US treaty rate) - null means none withheld
+  ticker           String? // e.g. "AAPL" - ties a DIVIDEND to a specific holding; null for INTEREST or an unattributed dividend
+  amountCents      BigInt // gross amount received
+  taxWithheldCents BigInt? // foreign withholding tax (e.g. 15% US treaty rate) - null means none withheld
   date             DateTime
-  createdAt        DateTime   @default(now())
+  createdAt        DateTime     @default(now())
   // Set when this row was created via "Mark as income" from an actual
   // Transaction row (amount/date pre-filled from it) rather than typed
   // from scratch - null for pre-existing rows and for anyone who still
@@ -638,7 +654,7 @@ model IncomeEvent {
   // source transaction (or its account) shouldn't destroy an already
   // fiscally-relevant income record - the record just loses its
   // provenance link.
-  transactionId    String?     @unique
+  transactionId    String?      @unique
   transaction      Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   @@index([accountId, date])
@@ -650,8 +666,8 @@ model Sale {
   account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   ticker         String
   quantity       Decimal  @db.Decimal(24, 10)
-  proceedsCents  BigInt   // gross sale proceeds
-  costBasisCents BigInt   // cost basis of the sold portion (average-cost method)
+  proceedsCents  BigInt // gross sale proceeds
+  costBasisCents BigInt // cost basis of the sold portion (average-cost method)
   date           DateTime
   createdAt      DateTime @default(now())
 
@@ -662,26 +678,26 @@ model Sale {
 // singleton row is re-pointed to the owner by the v2 migration, keeping its
 // id so nothing that stored a reference to it breaks.
 model UserSettings {
-  id                   String   @id @default(cuid())
-  userId               String   @unique @default("user-owner")
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  salaryNetCents       BigInt   @default(0)
-  monthlyExpensesCents BigInt   @default(0)
+  id                          String   @id @default(cuid())
+  userId                      String   @unique @default("user-owner")
+  user                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salaryNetCents              BigInt   @default(0)
+  monthlyExpensesCents        BigInt   @default(0)
   // VESTIGIAL as of v1.14 - superseded by the Goal model (see its own
   // comment). Kept, not dropped, per this repo's non-destructive-migration
   // convention; no longer read or written anywhere in app code.
-  savingsGoalCents     BigInt   @default(5000000)
-  monthlySavedCents    BigInt   @default(0)
-  taxRatePea           Float    @default(0.172)
-  taxRateCto           Float    @default(0.314)
-  taxRateCrypto        Float    @default(0.314)
+  savingsGoalCents            BigInt   @default(5000000)
+  monthlySavedCents           BigInt   @default(0)
+  taxRatePea                  Float    @default(0.172)
+  taxRateCto                  Float    @default(0.314)
+  taxRateCrypto               Float    @default(0.314)
   // VESTIGIAL as of v2.0 - TOTP moved to User (per-user 2FA). Kept, not
   // dropped, per this repo's non-destructive-migration convention; the v2
   // migration copies these values onto the owner's User row. No longer read
   // or written anywhere in app code.
-  totpSecret           String?
-  totpEnabled          Boolean  @default(false)
-  totpBackupCodes      String[] @default([])
+  totpSecret                  String?
+  totpEnabled                 Boolean  @default(false)
+  totpBackupCodes             String[] @default([])
   // VESTIGIAL as of v2.0 - app-lock moved to User (per-user), same
   // non-destructive convention as the TOTP fields above; the v2 migration
   // copies these onto the owner's User row.
@@ -695,23 +711,23 @@ model UserSettings {
   // authentication, never both at once for a single-user app) - same
   // "single reusable slot, safe to overwrite an abandoned attempt" trust
   // model as totpSecret above during setup.
-  appLockEnabled       Boolean  @default(false)
-  appLockChallenge     String?
+  appLockEnabled              Boolean  @default(false)
+  appLockChallenge            String?
   // Alert channels - blank/null = that channel is disabled, same "leave
   // blank to disable" convention as every optional integration in
   // .env.example. smtpPassword is plaintext, same trust model as
   // totpSecret above.
-  ntfyTopicUrl         String?
+  ntfyTopicUrl                String?
   // Bearer token for a self-hosted ntfy server with auth-default-access=deny-all
   // (see README's "Self-hosted alerts" section) - blank when pointed at the
   // public ntfy.sh anonymously, which has no auth to send.
-  ntfyAuthToken        String?
-  alertEmailTo         String?
-  smtpHost             String?
-  smtpPort             Int?
-  smtpUser             String?
-  smtpPassword         String?
-  smtpFrom             String?
+  ntfyAuthToken               String?
+  alertEmailTo                String?
+  smtpHost                    String?
+  smtpPort                    Int?
+  smtpUser                    String?
+  smtpPassword                String?
+  smtpFrom                    String?
   // Independent on/off per channel, layered on top of "is it configured"
   // above - a user with both ntfy and email filled in couldn't previously
   // choose to receive through only one of them (dispatchAlert fanned out to
@@ -719,8 +735,8 @@ model UserSettings {
   // install with a channel already configured keeps firing through it
   // exactly as before; unlike the config fields themselves, these two are
   // meaningless (never read) when their own channel isn't configured at all.
-  ntfyEnabled          Boolean  @default(true)
-  emailAlertsEnabled   Boolean  @default(true)
+  ntfyEnabled                 Boolean  @default(true)
+  emailAlertsEnabled          Boolean  @default(true)
   // Web Push - a 3rd alert channel alongside ntfy/email, same independent
   // on/off toggle convention as the two above. vapidPublicKey/vapidPrivateKey
   // are generated once by the app itself on first use (lib/services/
@@ -729,14 +745,14 @@ model UserSettings {
   // precedent as totpSecret. Meaningless (never read) until at least one
   // PushSubscription row exists, same "meaningless when unconfigured"
   // convention as ntfyEnabled/emailAlertsEnabled above.
-  webPushEnabled       Boolean  @default(true)
+  webPushEnabled              Boolean  @default(true)
   // VESTIGIAL as of v2.0 - VAPID keys identify the SERVER, not a person,
   // so they moved to InstanceSettings. Kept per the non-destructive
   // convention; the v2 migration copies them there. Regenerating them
   // would still invalidate every registered subscription, now across all
   // users.
-  vapidPublicKey       String?
-  vapidPrivateKey      String?
+  vapidPublicKey              String?
+  vapidPrivateKey             String?
   // Net worth alert - blank threshold = disabled. netWorthAlertLastAbove is
   // dedup state (null = never evaluated yet): the alert only fires when the
   // crossing direction actually flips, not on every check while it stays
@@ -747,15 +763,15 @@ model UserSettings {
   // net worth's off-switch is its blank threshold above. Default true so
   // existing installs keep today's behavior (both were always-on before
   // these fields existed).
-  loanAlertsEnabled        Boolean  @default(true)
-  syncFailureAlertsEnabled Boolean  @default(true)
+  loanAlertsEnabled           Boolean  @default(true)
+  syncFailureAlertsEnabled    Boolean  @default(true)
   // Degradation alert for the Analytics sector-exposure chart's Yahoo Finance
   // crumb-based ETF path (see CLAUDE.md's "Full sector-exposure breakdown") -
   // default false, unlike the two toggles above, since this is a brand new
   // notification category with no pre-existing always-on behavior to
   // preserve for existing installs.
-  sectorDataAlertsEnabled Boolean  @default(false)
-  updatedAt            DateTime @updatedAt
+  sectorDataAlertsEnabled     Boolean  @default(false)
+  updatedAt                   DateTime @updatedAt
 }
 
 // Plaintext token, same trust model as UserSettings.totpSecret above - the
@@ -764,26 +780,26 @@ model UserSettings {
 // entropy (32 random bytes, see lib/domain/share-links.ts), not from hiding
 // it server-side.
 model ShareLink {
-  id             String    @id @default(cuid())
-  token          String    @unique
-  label          String?
-  createdAt      DateTime  @default(now())
-  expiresAt      DateTime?
-  lastAccessedAt DateTime?
+  id                  String    @id @default(cuid())
+  token               String    @unique
+  label               String?
+  createdAt           DateTime  @default(now())
+  expiresAt           DateTime?
+  lastAccessedAt      DateTime?
   // Deliberate opt-in, default false: both surface more detail than the
   // dashboard-only view this link originally shipped with, and this link
   // may be reachable from the public internet - see "Read-only share links"
   // in CLAUDE.md. Set once at creation (createShareLink), no edit path -
   // same convention as label/expiresAt above.
-  includeHoldings     Boolean @default(false)
-  includeTransactions Boolean @default(false)
+  includeHoldings     Boolean   @default(false)
+  includeTransactions Boolean   @default(false)
   // The link exposes exactly its owner's OWN portfolio (their accounts +
   // co-owned ones), never a portfolio merely granted to them for reading -
   // otherwise a read-only guest could mint a public link over someone
   // else's data that outlives the grant. See baseAccountIds() in
   // lib/auth-context.ts.
-  userId              String  @default("user-owner")
-  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String    @default("user-owner")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

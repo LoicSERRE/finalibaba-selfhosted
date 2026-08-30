@@ -32,6 +32,7 @@ from sync_tr import (
     _timeline_item_to_transaction,
     resolve_position,
     split_crypto_positions,
+    tr_sync_id,
 )
 
 # ── _position_isin ────────────────────────────────────────────────────────────
@@ -351,3 +352,34 @@ def test_fetch_crypto_positions_returns_empty_list_after_exhausting_retries(monk
 
     assert result == []
     assert api.attempts == sync_tr.POSITIONS_FETCH_RETRIES + 1
+
+
+# ── tr_sync_id ────────────────────────────────────────────────────────────────
+#
+# Account.syncId is globally unique, so these strings are what stop two users
+# from overwriting each other's Trade Republic accounts. The equivalent parser
+# lives in lib/domain/sync-ids.ts and is covered by __tests__/sync-ids.test.ts:
+# the two must agree, so any change here needs the same change there.
+
+def test_tr_sync_id_keeps_the_legacy_shape_for_the_env_sync():
+    # Existing installs already hold these exact ids. Changing them would
+    # orphan every Trade Republic account and its whole history.
+    assert tr_sync_id("cash") == "tr:cash"
+    assert tr_sync_id("pea", None) == "tr:pea"
+
+
+def test_tr_sync_id_namespaces_a_ui_configured_institution():
+    assert tr_sync_id("cash", "inst-123") == "tr:inst-123:cash"
+
+
+def test_tr_sync_id_separates_two_users_with_the_same_account_kind():
+    assert tr_sync_id("cash", "inst-a") != tr_sync_id("cash", "inst-b")
+
+
+def test_tr_sync_id_never_collides_with_the_env_sync():
+    # An institution-scoped account must never be able to produce the owner's
+    # own id, whatever the institution id happens to be.
+    for inst in ("inst-1", "cash", "tr", ""):
+        scoped = tr_sync_id("cash", inst or None)
+        if inst:
+            assert scoped != "tr:cash"

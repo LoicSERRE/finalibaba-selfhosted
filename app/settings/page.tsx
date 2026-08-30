@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { deleteInstitution, migrateDedicatedSyncToWoob, getMigrationHistoryDepth } from "@/lib/actions/institutions";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
+import { isLegacyEnvSyncId } from "@/lib/domain/sync-ids";
 import { ConnectOpenBankingButton, SyncOpenBankingButton, DisconnectOpenBankingButton } from "@/components/settings/open-banking-buttons";
 import { ConnectOpenBankingDialog } from "@/components/settings/connect-open-banking-dialog";
 import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog";
@@ -171,7 +172,7 @@ export default async function SettingsPage({
   // not for every institution on the page, since it's an extra couple of
   // queries per institution and only matters in this one specific case.
   const migrationCandidates = institutions.filter((inst) => {
-    const legacyCount = inst.accounts.filter((a) => a.syncId?.startsWith("lcl:") || a.syncId?.startsWith("tr:")).length;
+    const legacyCount = inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length;
     const woobCount = inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length;
     return legacyCount > 0 && woobCount > 0;
   });
@@ -319,7 +320,7 @@ export default async function SettingsPage({
                           currentModule={inst.woobModule}
                           modules={woobModules}
                           hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
-                          legacyAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith("lcl:") || a.syncId?.startsWith("tr:")).length}
+                          legacyAccountCount={inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length}
                           woobAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length}
                           legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
                           woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}

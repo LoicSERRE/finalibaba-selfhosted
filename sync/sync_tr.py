@@ -711,12 +711,36 @@ def _sync_positions(cur, positions: list, account_id: str, acc_type_label: str, 
     return total_cents
 
 
-def _get_or_create_account(cur, institution_id: str, acc_type: str) -> str:
-    db_type, subtype, display_name, sync_suffix = ACC_TYPE_MAP[acc_type]
-    sync_id = f"tr:{sync_suffix}"
+def tr_sync_id(sync_suffix: str, scope_institution_id: str | None = None) -> str:
+    """Account.syncId for a Trade Republic account.
 
-    # Migrate legacy "tr:portfolio" → "tr:cto" on first run
-    if acc_type == "default":
+    Two shapes, deliberately - see lib/domain/sync-ids.ts, which parses both:
+
+        tr:<suffix>                   the env-configured sync (TR_PHONE), which
+                                      belongs to the instance owner
+        tr:<institutionId>:<suffix>   an institution configured from the UI, so
+                                      each user gets their own
+
+    syncId is globally unique. Without the second shape, two users each with a
+    Trade Republic cash account collide on the very first insert and the second
+    sync silently takes over the first user's account. The env path keeps the
+    legacy two-segment id so existing installs are untouched, exactly the way
+    "lcl:" and "woob:<id>:" already coexist.
+    """
+    return f"tr:{scope_institution_id}:{sync_suffix}" if scope_institution_id else f"tr:{sync_suffix}"
+
+
+def _get_or_create_account(
+    cur, institution_id: str, acc_type: str, scope_institution_id: str | None = None
+) -> str:
+    db_type, subtype, display_name, sync_suffix = ACC_TYPE_MAP[acc_type]
+    sync_id = tr_sync_id(sync_suffix, scope_institution_id)
+
+    # Migrate legacy "tr:portfolio" → "tr:cto" on first run. Only ever applies
+    # to the env-configured path: those two ids predate per-user sync entirely,
+    # so an institution-scoped run must not claim them - it would steal the
+    # owner's account.
+    if acc_type == "default" and scope_institution_id is None:
         cur.execute('SELECT id FROM "Account" WHERE "syncId" IN (%s, %s)', ("tr:portfolio", "tr:standard"))
         row = cur.fetchone()
         if row:

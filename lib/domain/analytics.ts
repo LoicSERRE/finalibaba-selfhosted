@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
+import { isTrCashAccount } from "@/lib/domain/sync-ids";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
 import { computeGoalProgress } from "@/lib/domain/goals";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
@@ -539,7 +540,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
       } else {
         allocation["cash"] += value;
         // Trade Republic cash account: 2% gross → 1.372% net (flat tax 31.4%: 12.8% income tax withheld at source + 17.2% social levies + 0.2% exceptional contribution)
-        if (account.syncId === "tr:cash") {
+        if (isTrCashAccount(account.syncId)) {
           annualInterestCents += BigInt(Math.round(Number(value) * 0.01372));
         }
       }
