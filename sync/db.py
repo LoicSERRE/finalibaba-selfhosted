@@ -61,6 +61,25 @@ def get_woob_institutions(cur) -> list[dict]:
     return cur.fetchall()
 
 
+def get_tr_institutions(cur) -> list[dict]:
+    """Institutions with UI-configured Trade Republic credentials (v2.1).
+
+    The counterpart to get_woob_institutions above. The two sets are disjoint
+    by construction: an institution carries one provider's credentials or the
+    other's, so the Woob filter (woobModule IS NOT NULL) already excludes
+    these, and this one excludes those.
+
+    Says nothing about the TR_PHONE/TR_PIN connection configured in the
+    environment - that one belongs to the instance owner, has no Institution
+    row driving it, and keeps being synced by its own code path.
+    """
+    cur.execute(
+        'SELECT id, name FROM "Institution" '
+        'WHERE "trPhone" IS NOT NULL AND "trPin" IS NOT NULL'
+    )
+    return cur.fetchall()
+
+
 def get_institution_id(cur, name: str) -> str | None:
     cur.execute('SELECT id FROM "Institution" WHERE name = %s', (name,))
     row = cur.fetchone()

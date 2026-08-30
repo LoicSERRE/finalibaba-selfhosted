@@ -135,6 +135,30 @@ def _run_all_woob():
         _run_woob_institution(inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
 
 
+def _run_all_tr_institutions():
+    """Sync every UI-configured Trade Republic institution.
+
+    Runs alongside the env-configured TR sync rather than replacing it: the
+    two are independent connections, and an instance can legitimately have
+    both (the owner's from .env, a family member's from the UI).
+    """
+    from db import get_conn, get_tr_institutions
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        institutions = get_tr_institutions(cur)
+        cur.close()
+        conn.close()
+    except psycopg2.Error:
+        log.exception("Failed to fetch Trade Republic institutions (DB error)")
+        return
+    except Exception:
+        log.exception("Failed to fetch Trade Republic institutions")
+        return
+    for inst in institutions:
+        _run_tr_institution(inst["id"])
+
+
 def _check_alerts():
     # Scoped to this automatic 4h job only, not on-demand "Sync now" clicks -
     # a manual sync's failure is already visible right there in the UI to
@@ -248,6 +272,11 @@ def _run_all():
     _run_woob_sources as of v1.17 - not duplicated here."""
     log.info("=== Full sync started ===")
     _run_tr()
+    # UI-configured Trade Republic connections (v2.1), one per user. Same
+    # cadence as the env one above rather than the 30-min Woob job: TR is a
+    # real API, so the anti-automation caution that set that interval does not
+    # apply, and each user's own real-time listener is not affected either way.
+    _run_all_tr_institutions()
     _snapshot_investment_balances()
     _auto_categorize()
     _check_alerts()
@@ -435,15 +464,83 @@ async def tr_setup_complete(request: Request):
         return JSONResponse({"error": "TR setup failed - check service logs"}, status_code=500)
 
 
+def _institution_provider(institution_id: str) -> str | None:
+    """Which sync backend an institution is configured for: "tr", "woob", or
+    None if neither.
+
+    An institution carries at most one, enforced in lib/actions/institutions.ts
+    rather than by the schema - the same convention the woob* columns already
+    followed before Trade Republic joined them. Checked here so the three
+    routes below dispatch identically instead of each re-deriving it.
+    """
+    import psycopg2.extras
+
+    from db import get_conn
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        'SELECT "woobModule", "trPhone" FROM "Institution" WHERE id = %s',
+        (institution_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    if row["trPhone"]:
+        return "tr"
+    if row["woobModule"]:
+        return "woob"
+    return None
+
+
+def _run_tr_institution(inst_id: str):
+    """Sync one UI-configured Trade Republic institution, mirroring
+    _run_woob_institution's own error handling: an auth failure has already
+    written its own SyncLog row inside sync_tr, anything else is written here
+    so the UI shows something rather than failing silently."""
+    try:
+        import sync_tr
+        result = sync_tr.run_institution(inst_id)
+        log.info("TR sync done for institution %s: %s", inst_id, result)
+    except Exception as e:
+        import sync_tr
+        if isinstance(e, sync_tr.AuthRequiredError):
+            return  # already written to SyncLog by run_institution
+        log.exception("TR sync failed for institution %s", inst_id)
+        try:
+            import psycopg2.extras
+
+            from db import get_conn, write_sync_log
+            conn = get_conn()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            write_sync_log(cur, f"tr:{inst_id}", "error", str(e)[:300])
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception:
+            log.exception("TR sync: failed to write the error to SyncLog")
+
+
 @app.post("/sync/institution/{institution_id}/setup/start")
 async def institution_setup_start(institution_id: str):
     import asyncio
 
+    import setup_tr_institution
     import setup_woob
     loop = asyncio.get_event_loop()
+    provider = _institution_provider(institution_id)
+    module = setup_tr_institution if provider == "tr" else setup_woob
     try:
-        result = await loop.run_in_executor(executor, setup_woob.start_setup, institution_id)
+        result = await loop.run_in_executor(executor, module.start_setup, institution_id)
         return result
+    except setup_tr_institution.SetupError as e:
+        # Same reasoning as the setup_woob.SetupError branch below: this
+        # message was written for the user at raise time, not derived from a
+        # library exception.
+        log.exception("TR setup/start failed for institution %s", institution_id)
+        return JSONResponse({"error": e.user_message[:300]}, status_code=500)
     except setup_woob.SetupError as e:
         # e.user_message was written by setup_woob.py itself at raise time
         # ("Institution introuvable", "Code manquant"...) - never derived
@@ -473,8 +570,26 @@ async def institution_setup_complete(institution_id: str, request: Request):
     code = (body.get("code") or "").strip() or None
     import asyncio
 
+    import setup_tr_institution
     import setup_woob
     loop = asyncio.get_event_loop()
+    provider = _institution_provider(institution_id)
+    if provider == "tr":
+        if not code:
+            return JSONResponse({"error": "Code manquant"}, status_code=400)
+        try:
+            return await loop.run_in_executor(
+                executor, setup_tr_institution.complete_setup, institution_id, code
+            )
+        except setup_tr_institution.SetupError as e:
+            log.exception("TR setup/complete failed for institution %s", institution_id)
+            return JSONResponse({"error": e.user_message[:300]}, status_code=500)
+        except Exception:
+            log.exception("TR setup/complete failed for institution %s", institution_id)
+            return JSONResponse(
+                {"error": "Échec de la configuration - vérifie les logs du service sync"},
+                status_code=500,
+            )
     try:
         result = await loop.run_in_executor(executor, setup_woob.complete_setup, institution_id, code)
         return result
@@ -502,7 +617,7 @@ async def trigger_institution_sync(institution_id: str):
         conn = get_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
-            'SELECT id, name, "woobModule", "woobLogin", "woobPassword" FROM "Institution" WHERE id = %s',
+            'SELECT id, name, "woobModule", "woobLogin", "woobPassword", "trPhone" FROM "Institution" WHERE id = %s',
             (institution_id,),
         )
         inst = cur.fetchone()
@@ -517,10 +632,21 @@ async def trigger_institution_sync(institution_id: str):
 
     if not inst:
         return JSONResponse({"error": "Institution not found"}, status_code=404)
-    if not inst["woobModule"]:
-        return JSONResponse({"error": "No Woob module configured for this institution"}, status_code=400)
 
     loop = asyncio.get_event_loop()
+
+    # Trade Republic first: an institution carries one provider or the other,
+    # never both, so this order only decides which error a misconfigured row
+    # gets - not which sync a valid one runs.
+    if inst["trPhone"]:
+        await loop.run_in_executor(executor, _run_tr_institution, inst["id"])
+        return {"status": "ok", "institution": inst["name"]}
+
+    if not inst["woobModule"]:
+        return JSONResponse(
+            {"error": "No sync backend configured for this institution"}, status_code=400
+        )
+
     await loop.run_in_executor(
         executor,
         _run_woob_institution,
