@@ -3,9 +3,15 @@
 import { useEffect, useState } from "react";
 import { Lock, RefreshCw, AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { startAuthentication, browserSupportsWebAuthn } from "@simplewebauthn/browser";
+import { startAuthentication, startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { Button } from "@/components/ui/button";
-import { startAppLockAuthentication, verifyAppLockAuthentication } from "@/lib/actions/app-lock";
+import {
+  startAppLockAuthentication,
+  verifyAppLockAuthentication,
+  startAppLockRegistration,
+  verifyAppLockRegistration,
+} from "@/lib/actions/app-lock";
+import { isAppLockDevice, markAppLockDevice } from "@/lib/domain/app-lock-device";
 
 // Namespaced per user (v2.0) - a shared browser where two accounts both use
 // app-lock must not let one user's unlock satisfy the other's lock screen.
@@ -41,9 +47,19 @@ export function AppLockGate({
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState(false);
+  const [canRegister, setCanRegister] = useState(false);
 
   useEffect(() => {
     if (!enabled) return;
+    // The lock is per device. A browser that never registered an
+    // authenticator has nothing to unlock with, and Settings - where it would
+    // register one - sits behind this very screen. Locking it is a dead end,
+    // which is exactly what a user hit: app-lock on the laptop locked the
+    // phone out of the app entirely. See lib/domain/app-lock-device.ts.
+    if (!isAppLockDevice(userId)) {
+      setUnlocked(true);
+      return;
+    }
     if (sessionStorage.getItem(sessionKey) === "1") {
       setUnlocked(true);
       return;
@@ -53,7 +69,7 @@ export function AppLockGate({
     // biometric prompt the instant the page loads (before the user has
     // even seen why) is jarring; a visible "Unlock" button makes the
     // prompt an expected response to a real tap, not a surprise.
-  }, [enabled, sessionKey]);
+  }, [enabled, sessionKey, userId]);
 
   async function handleUnlock() {
     setChecking(true);
@@ -62,6 +78,29 @@ export function AppLockGate({
       const optionsJSON = await startAppLockAuthentication();
       const response = await startAuthentication({ optionsJSON });
       await verifyAppLockAuthentication(response);
+      sessionStorage.setItem(sessionKey, "1");
+      setUnlocked(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("unknownError"));
+      // The credential this browser registered may have been revoked from
+      // another device, or its authenticator reset. Without a way back it
+      // would be locked out for good, so offer to register it again - which
+      // is no weaker than the lock itself, since reaching this screen already
+      // required whatever authentication the instance is configured with.
+      setCanRegister(true);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function handleRegisterThisDevice() {
+    setChecking(true);
+    setError(null);
+    try {
+      const optionsJSON = await startAppLockRegistration();
+      const response = await startRegistration({ optionsJSON });
+      await verifyAppLockRegistration(response, t("thisDevice"));
+      markAppLockDevice(userId);
       sessionStorage.setItem(sessionKey, "1");
       setUnlocked(true);
     } catch (e) {
@@ -101,6 +140,19 @@ export function AppLockGate({
               )}
             </Button>
             {error && <p role="alert" className="text-xs text-[var(--negative)]">{error}</p>}
+            {canRegister && (
+              <>
+                <p className="text-xs text-[var(--muted)]">{t("registerAgainHint")}</p>
+                <Button
+                  variant="outline"
+                  onClick={handleRegisterThisDevice}
+                  disabled={checking}
+                  className="w-full justify-center"
+                >
+                  {t("registerAgain")}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>

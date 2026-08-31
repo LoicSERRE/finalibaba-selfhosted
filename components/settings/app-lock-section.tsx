@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, ShieldOff, Plus, RefreshCw, Smartphone } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { formatDateShort, localeToIntl } from "@/lib/utils/format";
+import { markAppLockDevice, forgetAppLockDevice } from "@/lib/domain/app-lock-device";
+import { useLocale, useTranslations } from "next-intl";
 import { startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -26,8 +28,10 @@ type Credential = {
 export function AppLockSection({
   enabled,
   credentials,
-}: Readonly<{ enabled: boolean; credentials: Credential[] }>) {
+  userId,
+}: Readonly<{ enabled: boolean; credentials: Credential[]; userId: string }>) {
   const t = useTranslations("settings.appLock");
+  const intlLocale = localeToIntl(useLocale());
   const tc = useTranslations("common");
   const router = useRouter();
   const [supported, setSupported] = useState(true);
@@ -48,6 +52,10 @@ export function AppLockSection({
       const optionsJSON = await startAppLockRegistration();
       const response = await startRegistration({ optionsJSON });
       await verifyAppLockRegistration(response, deviceLabel);
+      // Marks THIS browser as one the lock screen applies to. Without it the
+      // account flag would lock every device the user owns, including ones
+      // with no credential to unlock with - see lib/domain/app-lock-device.ts.
+      markAppLockDevice(userId);
       setAddOpen(false);
       setDeviceLabel("");
       router.refresh();
@@ -65,6 +73,10 @@ export function AppLockSection({
 
   async function handleDisable() {
     await disableAppLock();
+    // Turning it off account-wide should also stop this browser claiming to
+    // be a registered one, or re-enabling later would lock it before it has
+    // registered again.
+    forgetAppLockDevice(userId);
     router.refresh();
   }
 
@@ -162,9 +174,9 @@ export function AppLockSection({
               <div>
                 <p className="text-sm font-medium text-[var(--foreground)]">{cred.deviceLabel}</p>
                 <p className="text-xs text-[var(--muted)] mt-0.5">
-                  {t("registeredOn", { date: cred.createdAt.toLocaleDateString() })}
+                  {t("registeredOn", { date: formatDateShort(cred.createdAt, intlLocale) })}
                   {" · "}
-                  {cred.lastUsedAt ? t("lastUsedOn", { date: cred.lastUsedAt.toLocaleDateString() }) : t("neverUsed")}
+                  {cred.lastUsedAt ? t("lastUsedOn", { date: formatDateShort(cred.lastUsedAt, intlLocale) }) : t("neverUsed")}
                 </p>
               </div>
               <DeleteButton

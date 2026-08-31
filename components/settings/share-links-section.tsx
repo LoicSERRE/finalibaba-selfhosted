@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Link2, Copy, Check, Plus } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { formatDateShort, localeToIntl } from "@/lib/utils/format";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
@@ -43,6 +44,7 @@ function CopyButton({ token }: Readonly<{ token: string }>) {
 }
 
 export function ShareLinksSection({ links }: Readonly<{ links: ShareLinkRow[] }>) {
+  const intlLocale = localeToIntl(useLocale());
   const t = useTranslations("settings.shareLinks");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -202,11 +204,11 @@ export function ShareLinksSection({ links }: Readonly<{ links: ShareLinkRow[] }>
                     )}
                   </div>
                   <p className="text-xs text-[var(--muted)] mt-0.5">
-                    {t("createdOn", { date: link.createdAt.toLocaleDateString() })}
-                    {link.expiresAt && ` · ${t("expiresOn", { date: link.expiresAt.toLocaleDateString() })}`}
+                    {t("createdOn", { date: formatDateShort(link.createdAt, intlLocale) })}
+                    {link.expiresAt && ` · ${t("expiresOn", { date: formatDateShort(link.expiresAt, intlLocale) })}`}
                     {" · "}
                     {link.lastAccessedAt
-                      ? t("lastViewedOn", { date: link.lastAccessedAt.toLocaleDateString() })
+                      ? t("lastViewedOn", { date: formatDateShort(link.lastAccessedAt, intlLocale) })
                       : t("neverViewed")}
                   </p>
                 </div>

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, BellOff, Plus, RefreshCw } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { formatDateShort, localeToIntl } from "@/lib/utils/format";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
@@ -38,6 +39,7 @@ export function WebPushSection({
   subscriptions,
 }: Readonly<{ enabled: boolean; publicKey: string; subscriptions: Subscription[] }>) {
   const t = useTranslations("settings.webPush");
+  const intlLocale = localeToIntl(useLocale());
   const tc = useTranslations("common");
   const router = useRouter();
   const [supported, setSupported] = useState(true);
@@ -186,9 +188,9 @@ export function WebPushSection({
               <div>
                 <p className="text-sm font-medium text-[var(--foreground)]">{sub.deviceLabel || t("unlabeled")}</p>
                 <p className="text-xs text-[var(--muted)] mt-0.5">
-                  {t("registeredOn", { date: sub.createdAt.toLocaleDateString() })}
+                  {t("registeredOn", { date: formatDateShort(sub.createdAt, intlLocale) })}
                   {" · "}
-                  {sub.lastUsedAt ? t("lastUsedOn", { date: sub.lastUsedAt.toLocaleDateString() }) : t("neverUsed")}
+                  {sub.lastUsedAt ? t("lastUsedOn", { date: formatDateShort(sub.lastUsedAt, intlLocale) }) : t("neverUsed")}
                 </p>
               </div>
               <DeleteButton

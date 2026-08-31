@@ -16,6 +16,15 @@ import {
 // Separate from lib/actions/user-settings.ts - this is a multi-step
 // interactive setup/teardown flow, not a single form-submit-and-revalidate
 // mutation like the rest of that file.
+//
+// Every expected failure here is RETURNED, never thrown. Next replaces a
+// thrown Server Action error with an opaque digest in production, so "Invalid
+// code" reached the user in dev and nothing at all once deployed - which is
+// how a real report of "2FA does not work at all" arrived with no way to tell
+// a wrong code from a broken flow. Next's own guidance is to model expected
+// errors as return values; see lib/actions/sync.ts for the same treatment.
+// Keys are stable strings rather than sentences so the UI can translate them.
+export type TotpFailure = { ok: false; error: "invalid_code" | "not_enabled" | "no_pending_setup" };
 
 export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: string }> {
   const secret = generateTotpSecret();
@@ -34,14 +43,16 @@ export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: str
   return { qrDataUrl, secret };
 }
 
-export async function confirmTotpSetup(code: string): Promise<{ backupCodes: string[] }> {
+export async function confirmTotpSetup(
+  code: string,
+): Promise<{ ok: true; backupCodes: string[] } | TotpFailure> {
   const viewer = await getViewer();
   const settings = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: { totpSecret: true },
   });
-  if (!settings?.totpSecret) throw new Error("No pending 2FA setup");
-  if (!(await verifyTotpCode(settings.totpSecret, code))) throw new Error("Invalid code");
+  if (!settings?.totpSecret) return { ok: false, error: "no_pending_setup" };
+  if (!(await verifyTotpCode(settings.totpSecret, code))) return { ok: false, error: "invalid_code" };
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);
@@ -50,40 +61,43 @@ export async function confirmTotpSetup(code: string): Promise<{ backupCodes: str
     data: { totpEnabled: true, totpBackupCodes: hashed },
   });
   revalidatePath("/settings");
-  return { backupCodes }; // plaintext, shown once - never persisted
+  return { ok: true, backupCodes }; // plaintext, shown once - never persisted
 }
 
-export async function disableTotp(code: string): Promise<void> {
+export async function disableTotp(code: string): Promise<{ ok: true } | TotpFailure> {
   const viewer = await getViewer();
   const settings = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: { totpEnabled: true, totpSecret: true, totpBackupCodes: true },
   });
-  if (!settings?.totpEnabled || !settings.totpSecret) throw new Error("2FA is not enabled");
+  if (!settings?.totpEnabled || !settings.totpSecret) return { ok: false, error: "not_enabled" };
 
   const ok =
     (await verifyTotpCode(settings.totpSecret, code)) ||
     (await matchBackupCode(code, settings.totpBackupCodes)) !== -1;
-  if (!ok) throw new Error("Invalid code");
+  if (!ok) return { ok: false, error: "invalid_code" };
 
   await prisma.user.update({
     where: { id: viewer.id },
     data: { totpEnabled: false, totpSecret: null, totpBackupCodes: [] },
   });
   revalidatePath("/settings");
+  return { ok: true };
 }
 
-export async function regenerateBackupCodes(code: string): Promise<{ backupCodes: string[] }> {
+export async function regenerateBackupCodes(
+  code: string,
+): Promise<{ ok: true; backupCodes: string[] } | TotpFailure> {
   const viewer = await getViewer();
   const settings = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: { totpEnabled: true, totpSecret: true },
   });
-  if (!settings?.totpEnabled || !settings.totpSecret) throw new Error("2FA is not enabled");
+  if (!settings?.totpEnabled || !settings.totpSecret) return { ok: false, error: "not_enabled" };
   // A live TOTP code only, never a backup code here - otherwise a single
   // backup code could mint itself an endless supply of replacements
   // without ever proving possession of the authenticator app.
-  if (!(await verifyTotpCode(settings.totpSecret, code))) throw new Error("Invalid code");
+  if (!(await verifyTotpCode(settings.totpSecret, code))) return { ok: false, error: "invalid_code" };
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);
@@ -92,5 +106,5 @@ export async function regenerateBackupCodes(code: string): Promise<{ backupCodes
     data: { totpBackupCodes: hashed },
   });
   revalidatePath("/settings");
-  return { backupCodes };
+  return { ok: true, backupCodes };
 }

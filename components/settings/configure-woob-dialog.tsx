@@ -18,7 +18,8 @@ import {
   bankPickerEntries,
   isTradeRepublicModule,
 } from "@/lib/domain/sync-providers";
-import { useTranslations } from "next-intl";
+import { formatDateShort, localeToIntl } from "@/lib/utils/format";
+import { useLocale, useTranslations } from "next-intl";
 
 /**
  * Configure how one institution syncs - whichever backend reaches it.
@@ -117,6 +118,7 @@ export function ConfigureWoobDialog({
   const [adoptError, setAdoptError] = useState<string | null>(null);
   const [adoptPending, startAdoptTransition] = useTransition();
   const t = useTranslations("configureWoob");
+  const intlLocale = localeToIntl(useLocale());
   const tc = useTranslations("common");
 
   const banks = useMemo(() => bankPickerEntries(modules), [modules]);
@@ -265,8 +267,8 @@ export function ConfigureWoobDialog({
                   {historyLossDays !== null && legacyOldestDate && woobOldestDate && (
                     <p className="text-xs font-medium text-[var(--negative)]">
                       {t("historyDepthWarning", {
-                        legacyDate: legacyOldestDate.toLocaleDateString(),
-                        woobDate: woobOldestDate.toLocaleDateString(),
+                        legacyDate: formatDateShort(legacyOldestDate, intlLocale),
+                        woobDate: formatDateShort(woobOldestDate, intlLocale),
                         days: historyLossDays,
                       })}
                     </p>

@@ -662,7 +662,10 @@
       "disableConfirm": "Désactiver",
       "regenerateTitle": "Régénérer les codes de secours",
       "regenerateHint": "Les anciens codes de secours seront invalidés. Saisis un code de vérification actuel pour confirmer (les codes de secours ne sont pas acceptés ici).",
-      "unknownError": "Une erreur inattendue s'est produite."
+      "unknownError": "Une erreur inattendue s'est produite.",
+      "errorInvalidCode": "Code incorrect. Vérifie l'heure de ton téléphone si le problème persiste.",
+      "errorNotEnabled": "La double authentification n'est pas activée.",
+      "errorNoPendingSetup": "Aucune configuration en cours. Recommence depuis le début."
     },
     "appLock": {
       "title": "Verrouillage de l'appli",
@@ -1322,7 +1325,10 @@
     "unlockButton": "Déverrouiller",
     "unlocking": "Vérification…",
     "unsupported": "Ce navigateur ne supporte pas le déverrouillage rapide sur cette page (HTTPS ou localhost requis).",
-    "unknownError": "Échec du déverrouillage."
+    "unknownError": "Échec du déverrouillage.",
+    "thisDevice": "Cet appareil",
+    "registerAgainHint": "Cet appareil n'est plus reconnu. Enregistre-le à nouveau pour le déverrouiller.",
+    "registerAgain": "Enregistrer cet appareil"
   },
   "exportAnalytics": {
     "button": "Exporter",

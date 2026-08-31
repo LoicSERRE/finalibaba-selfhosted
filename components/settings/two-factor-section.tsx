@@ -21,6 +21,16 @@ function BackupCodesGrid({ codes }: Readonly<{ codes: string[] }>) {
   );
 }
 
+// A returned failure carries a stable key, not a sentence: a thrown Server
+// Action error is replaced by an opaque digest in production, so the reason
+// had to become part of the result rather than the exception. See
+// lib/actions/totp.ts.
+const FAILURE_KEYS = {
+  invalid_code: "errorInvalidCode",
+  not_enabled: "errorNotEnabled",
+  no_pending_setup: "errorNoPendingSetup",
+} as const;
+
 export function TwoFactorSection({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
   const t = useTranslations("settings.twoFactor");
   const tc = useTranslations("common");
@@ -63,6 +73,11 @@ export function TwoFactorSection({ totpEnabled }: Readonly<{ totpEnabled: boolea
     setEnableError(null);
     try {
       const result = await confirmTotpSetup(confirmCode);
+      if (!result.ok) {
+        setEnableError(t(FAILURE_KEYS[result.error]));
+        setEnableStep("awaiting_confirmation");
+        return;
+      }
       setBackupCodes(result.backupCodes);
       setEnableStep("showing_backup_codes");
     } catch (e) {
@@ -93,7 +108,12 @@ export function TwoFactorSection({ totpEnabled }: Readonly<{ totpEnabled: boolea
     setDisableStep("submitting");
     setDisableError(null);
     try {
-      await disableTotp(disableCode);
+      const result = await disableTotp(disableCode);
+      if (!result.ok) {
+        setDisableError(t(FAILURE_KEYS[result.error]));
+        setDisableStep("awaiting_code");
+        return;
+      }
       setDisableOpen(false);
       resetDisable();
       router.refresh();
@@ -122,6 +142,11 @@ export function TwoFactorSection({ totpEnabled }: Readonly<{ totpEnabled: boolea
     setRegenError(null);
     try {
       const result = await regenerateBackupCodes(regenCode);
+      if (!result.ok) {
+        setRegenError(t(FAILURE_KEYS[result.error]));
+        setRegenStep("awaiting_code");
+        return;
+      }
       setRegenBackupCodes(result.backupCodes);
       setRegenStep("showing_backup_codes");
     } catch (e) {

@@ -615,7 +615,7 @@ export default async function SettingsPage({
           mutations would be blocked anyway, and a public demo has no real
           device-pairing story). */}
       {process.env.DEMO_MODE !== "true" && (
-        <AppLockSection enabled={appLockStatus.enabled} credentials={appLockStatus.credentials} />
+        <AppLockSection userId={viewer.id} enabled={appLockStatus.enabled} credentials={appLockStatus.credentials} />
       )}
 
       {/* Read-only share links - deliberately NOT gated by AUTH_ENABLED like

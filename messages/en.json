@@ -662,7 +662,10 @@
       "disableConfirm": "Disable",
       "regenerateTitle": "Regenerate backup codes",
       "regenerateHint": "Old backup codes will be invalidated. Enter a current verification code to confirm (backup codes aren't accepted here).",
-      "unknownError": "An unexpected error occurred."
+      "unknownError": "An unexpected error occurred.",
+      "errorInvalidCode": "Incorrect code. Check your phone's clock if this keeps happening.",
+      "errorNotEnabled": "Two-factor authentication is not enabled.",
+      "errorNoPendingSetup": "No setup in progress. Start again from the beginning."
     },
     "appLock": {
       "title": "App lock",
@@ -1322,7 +1325,10 @@
     "unlockButton": "Unlock",
     "unlocking": "Verifying…",
     "unsupported": "This browser doesn't support quick unlock on this page (HTTPS or localhost required).",
-    "unknownError": "Unlock failed."
+    "unknownError": "Unlock failed.",
+    "thisDevice": "This device",
+    "registerAgainHint": "This device is no longer recognised. Register it again to unlock.",
+    "registerAgain": "Register this device"
   },
   "exportAnalytics": {
     "button": "Export",

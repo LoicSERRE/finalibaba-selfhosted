@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Copy, Check, Plus } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { formatDateShort, localeToIntl } from "@/lib/utils/format";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
@@ -41,6 +42,7 @@ function CopyButton({ token }: Readonly<{ token: string }>) {
 }
 
 export function ApiKeysSection({ keys }: Readonly<{ keys: ApiKeyRow[] }>) {
+  const intlLocale = localeToIntl(useLocale());
   const t = useTranslations("settings.apiKeys");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -122,9 +124,9 @@ export function ApiKeysSection({ keys }: Readonly<{ keys: ApiKeyRow[] }>) {
               <div>
                 <p className="text-sm font-medium text-[var(--foreground)]">{key.label || t("unlabeled")}</p>
                 <p className="text-xs text-[var(--muted)] mt-0.5">
-                  {t("createdOn", { date: key.createdAt.toLocaleDateString() })}
+                  {t("createdOn", { date: formatDateShort(key.createdAt, intlLocale) })}
                   {" · "}
-                  {key.lastUsedAt ? t("lastUsedOn", { date: key.lastUsedAt.toLocaleDateString() }) : t("neverUsed")}
+                  {key.lastUsedAt ? t("lastUsedOn", { date: formatDateShort(key.lastUsedAt, intlLocale) }) : t("neverUsed")}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">

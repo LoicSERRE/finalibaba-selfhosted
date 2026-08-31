@@ -42,15 +42,19 @@ afterEach(() => {
 });
 
 describe("confirmTotpSetup", () => {
-  it("throws when there is no pending setup (no stored secret)", async () => {
+  // These failures are RETURNED, not thrown: Next replaces a thrown Server
+  // Action error with an opaque digest in production, so the reason never
+  // reached the user. A real report of "2FA does not work at all" was exactly
+  // that, with no way to tell a wrong code from a broken flow.
+  it("reports no pending setup instead of throwing", async () => {
     findUniqueMock.mockResolvedValueOnce(null);
-    await expect(confirmTotpSetup("123456")).rejects.toThrow("No pending 2FA setup");
+    await expect(confirmTotpSetup("123456")).resolves.toEqual({ ok: false, error: "no_pending_setup" });
   });
 
-  it("throws on a wrong code and does not enable 2FA", async () => {
+  it("reports a wrong code and does not enable 2FA", async () => {
     const secret = generateTotpSecret();
     findUniqueMock.mockResolvedValueOnce({ totpSecret: secret });
-    await expect(confirmTotpSetup("000000")).rejects.toThrow("Invalid code");
+    await expect(confirmTotpSetup("000000")).resolves.toEqual({ ok: false, error: "invalid_code" });
     expect(updateMock).not.toHaveBeenCalled();
   });
 
@@ -61,7 +65,8 @@ describe("confirmTotpSetup", () => {
 
     const result = await confirmTotpSetup(token);
 
-    expect(result.backupCodes).toHaveLength(8);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.backupCodes).toHaveLength(8);
     expect(updateMock).toHaveBeenCalledTimes(1);
     const call = updateMock.mock.calls[0][0];
     expect(call.where).toEqual({ id: "user-owner" });
@@ -71,15 +76,15 @@ describe("confirmTotpSetup", () => {
 });
 
 describe("disableTotp", () => {
-  it("throws when 2FA is not currently enabled", async () => {
+  it("reports that 2FA is not enabled instead of throwing", async () => {
     findUniqueMock.mockResolvedValueOnce({ totpEnabled: false, totpSecret: null, totpBackupCodes: [] });
-    await expect(disableTotp("123456")).rejects.toThrow("2FA is not enabled");
+    await expect(disableTotp("123456")).resolves.toEqual({ ok: false, error: "not_enabled" });
   });
 
-  it("throws on a wrong code and does not clear anything", async () => {
+  it("reports a wrong code and does not clear anything", async () => {
     const secret = generateTotpSecret();
     findUniqueMock.mockResolvedValueOnce({ totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
-    await expect(disableTotp("000000")).rejects.toThrow("Invalid code");
+    await expect(disableTotp("000000")).resolves.toEqual({ ok: false, error: "invalid_code" });
     expect(updateMock).not.toHaveBeenCalled();
   });
 
@@ -98,9 +103,9 @@ describe("disableTotp", () => {
 });
 
 describe("regenerateBackupCodes", () => {
-  it("throws when 2FA is not currently enabled", async () => {
+  it("reports that 2FA is not enabled instead of throwing", async () => {
     findUniqueMock.mockResolvedValueOnce({ totpEnabled: false, totpSecret: null });
-    await expect(regenerateBackupCodes("123456")).rejects.toThrow("2FA is not enabled");
+    await expect(regenerateBackupCodes("123456")).resolves.toEqual({ ok: false, error: "not_enabled" });
   });
 
   it("returns 8 new codes on a correct live TOTP code", async () => {
@@ -110,7 +115,8 @@ describe("regenerateBackupCodes", () => {
 
     const result = await regenerateBackupCodes(token);
 
-    expect(result.backupCodes).toHaveLength(8);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.backupCodes).toHaveLength(8);
     expect(updateMock).toHaveBeenCalledTimes(1);
   });
 });
