@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, Wallet, PiggyBank, Repeat, Coins, BarChart3, Settings, LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { PortfolioSwitcher, type PortfolioOption } from "@/components/layout/portfolio-switcher";
+import { isBareRoute } from "@/lib/domain/bare-routes";
 
 type SidebarProps = {
   showLogout?: boolean;
@@ -19,11 +20,13 @@ export function Sidebar({ showLogout = false, portfolios = [], viewingPortfolioI
   const pathname = rawPathname ?? "/";
   const t = useTranslations("nav");
 
-  // A share-link visitor has no session and no business navigating into the
-  // real (editable) app - see app/shared/[token]/page.tsx and CLAUDE.md's
-  // "Read-only share links" section for why this has to be structural, not
+  // Pre-app screens render bare: no nav next to a login form, an invitation,
+  // or a share link. For the share link that is an isolation requirement, not
+  // a cosmetic one - a visitor has no session and no business navigating into
+  // the real, editable app. See lib/domain/bare-routes.ts, and CLAUDE.md's
+  // "Read-only share links" for why this has to be structural rather than
   // just "we didn't add a link to it".
-  if (pathname.startsWith("/shared/")) return null;
+  if (isBareRoute(pathname)) return null;
 
   const navItems = [
     { href: "/", label: t("dashboard"), icon: LayoutDashboard, exact: true },

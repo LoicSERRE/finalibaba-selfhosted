@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { autoTriggerSync, getSyncStatus } from "@/lib/actions/sync";
 import { useTranslations } from "next-intl";
+import { isBareRoute } from "@/lib/domain/bare-routes";
 
 /**
  * Déclenche un sync TR+LCL en arrière-plan au chargement de la page (si données
@@ -19,10 +20,14 @@ export function AutoSync() {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    // A share-link visitor is anonymous and must never be able to trigger a
-    // real bank sync just by opening the page - see components/layout/
-    // sidebar.tsx's identical guard and CLAUDE.md's "Read-only share links".
-    if (pathname?.startsWith("/shared/")) return;
+    // Nobody outside the app triggers a real bank sync just by opening a page.
+    // That was already true of a share-link visitor (see CLAUDE.md's
+    // "Read-only share links" - the one real correctness bug a naive version
+    // of that feature would have shipped) and is true for the same reason of
+    // someone sitting at the login screen or redeeming an invitation: they are
+    // anonymous, and a sync spinner on a page they cannot get past is a
+    // scraping run nobody asked for. Shares the sidebar's own predicate.
+    if (isBareRoute(pathname ?? "/")) return;
 
     mountedAt.current = Date.now();
     let attempts = 0;

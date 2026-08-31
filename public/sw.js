@@ -84,7 +84,27 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(offlinePagesEnabled ? networkFirstWithFallback(request) : networkOnlyButCache(request));
+  // With offline pages disabled there is nothing useful to do here, so this
+  // does not intercept at all - it lets the browser make the request itself.
+  //
+  // The previous version called fetch() and returned whatever came back, on
+  // the theory that caching successful responses made repeat visits faster.
+  // It did not: nothing ever reads those entries, since only cacheFirst
+  // (_next/static) and networkFirstWithFallback (offline pages on) consult
+  // the cache. So it was a cache nobody read, and it broke real page loads.
+  //
+  // Once respondWith has been called the service worker owns the response,
+  // and a fetch() that rejects becomes a hard network error the browser
+  // cannot recover from - which is exactly what happened in production
+  // behind Cloudflare Access. An expired Access session answers a navigation
+  // with a cross-origin redirect to the login host; this file is served with
+  // the app's own `connect-src 'self'` CSP, so following it from inside the
+  // worker is blocked, fetch() rejects, and the page fails with "the promise
+  // was rejected" until a manual refresh. Not intercepting means the browser
+  // follows that redirect at the top level, where it is perfectly allowed.
+  if (!offlinePagesEnabled) return;
+
+  event.respondWith(networkFirstWithFallback(request));
 });
 
 async function cacheFirst(request) {
@@ -111,21 +131,6 @@ async function networkFirstWithFallback(request) {
     if (cached) return cached;
     throw new Error("offline and not cached");
   }
-}
-
-// AUTH_ENABLED=true path: still caches successful responses (so a repeat
-// visit loads faster once the network round-trip - and its session check -
-// has actually happened), but never reads from the cache to answer a
-// request that failed. A network failure here surfaces as a normal
-// connection error, exactly what would happen without this service worker
-// at all.
-async function networkOnlyButCache(request) {
-  const response = await fetch(request);
-  if (response.ok) {
-    const cache = await caches.open(cacheName);
-    cache.put(request, response.clone());
-  }
-  return response;
 }
 
 // Web Push (Settings -> "Alertes") - a 3rd alert channel alongside ntfy/
