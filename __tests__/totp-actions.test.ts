@@ -65,8 +65,8 @@ describe("confirmTotpSetup", () => {
 
     const result = await confirmTotpSetup(token);
 
-    expect(result.ok).toBe(true);
-    expect(result.ok && result.backupCodes).toHaveLength(8);
+    if (!result.ok) throw new Error("expected the TOTP call to succeed");
+    expect(result.backupCodes).toHaveLength(8);
     expect(updateMock).toHaveBeenCalledTimes(1);
     const call = updateMock.mock.calls[0][0];
     expect(call.where).toEqual({ id: "user-owner" });
@@ -115,8 +115,8 @@ describe("regenerateBackupCodes", () => {
 
     const result = await regenerateBackupCodes(token);
 
-    expect(result.ok).toBe(true);
-    expect(result.ok && result.backupCodes).toHaveLength(8);
+    if (!result.ok) throw new Error("expected the TOTP call to succeed");
+    expect(result.backupCodes).toHaveLength(8);
     expect(updateMock).toHaveBeenCalledTimes(1);
   });
 });

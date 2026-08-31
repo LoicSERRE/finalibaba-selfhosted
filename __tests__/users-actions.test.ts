@@ -309,13 +309,17 @@ describe("createInvitation", () => {
   });
 });
 
+// Failures are RETURNED, not thrown. Next replaces a thrown Server Action
+// error with an opaque digest in production, so the keys this form maps to
+// translated sentences never actually arrived - "wrong current password" was
+// only ever visible in development.
 describe("changeOwnPassword", () => {
   it("refuses in mono mode - there is no password to change", async () => {
     getViewerMock.mockResolvedValue({ ...ADMIN, isMonoMode: true });
 
     await expect(
       changeOwnPassword(form({ currentPassword: "x", newPassword: "longenough1" }))
-    ).rejects.toThrow(/disabled/i);
+    ).resolves.toEqual({ ok: false, error: "auth_disabled" });
     expect(userUpdateMock).not.toHaveBeenCalled();
   });
 
@@ -325,7 +329,7 @@ describe("changeOwnPassword", () => {
 
     await expect(
       changeOwnPassword(form({ currentPassword: "wrong", newPassword: "longenough1" }))
-    ).rejects.toThrow("invalid_current_password");
+    ).resolves.toEqual({ ok: false, error: "invalid_current_password" });
     expect(userUpdateMock).not.toHaveBeenCalled();
   });
 
@@ -365,7 +369,7 @@ describe("changeOwnPassword", () => {
 
     await expect(
       changeOwnPassword(form({ currentPassword: "", newPassword: "longenough1" })),
-    ).rejects.toThrow("username_required");
+    ).resolves.toEqual({ ok: false, error: "username_required" });
     expect(userUpdateMock).not.toHaveBeenCalled();
   });
 
@@ -380,10 +384,28 @@ describe("changeOwnPassword", () => {
     expect(userUpdateMock.mock.calls[0][0].data.username).toBeUndefined();
   });
 
-  it("rejects a new password that fails validation", async () => {
-    await expect(
-      changeOwnPassword(form({ currentPassword: "realpass", newPassword: "short" }))
-    ).rejects.toThrow();
+  it("rejects a new password that fails validation, with the reason attached", async () => {
+    // The user row has to be mocked here. Without it this test used to pass
+    // on a TypeError from the unmocked findUniqueOrThrow rather than on the
+    // validation it claims to check - `rejects.toThrow()` with no argument
+    // accepts any throw at all, which is exactly how that stayed hidden.
+    const bcrypt = (await import("bcryptjs")).default;
+    userFindUniqueOrThrowMock.mockResolvedValue({
+      username: "owner",
+      passwordHash: await bcrypt.hash("realpass", 4),
+    });
+
+    const result = await changeOwnPassword(
+      form({ currentPassword: "realpass", newPassword: "short" }),
+    );
+    // The validator's message is already written for a human, so it rides
+    // along rather than being flattened into one generic key.
+    // A guard rather than a second assertion: it narrows the union so the
+    // check below is about `detail` alone, and a failure names which half
+    // went wrong instead of collapsing both into one falsy value.
+    if (result.ok) throw new Error("expected changeOwnPassword to fail");
+    expect(result.error).toBe("invalid_current_password");
+    expect(result.detail).toBeTruthy();
     expect(userUpdateMock).not.toHaveBeenCalled();
   });
 });

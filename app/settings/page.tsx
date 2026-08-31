@@ -89,6 +89,15 @@ export default async function SettingsPage({
   const viewer = await getViewer();
   const accountIds = await baseAccountIds(viewer.id);
 
+  // From User, not UserSettings. v2.0 moved TOTP onto User and left the old
+  // column behind as vestigial, but this read was never moved with it - so
+  // enabling 2FA worked (login asked for the code) while Settings showed
+  // "Désactivée" forever, because nothing writes that column any more.
+  // Reported from a real instance exactly that way.
+  const viewerTotpEnabled = await prisma.user
+    .findUnique({ where: { id: viewer.id }, select: { totpEnabled: true } })
+    .then((u) => u?.totpEnabled ?? false);
+
   // Multi-user surfaces, only meaningful with auth on: in mono mode there is
   // no login, so there is nobody to invite and nobody to share with. Fetched
   // conditionally rather than rendered-and-hidden so a mono instance doesn't
@@ -604,7 +613,7 @@ export default async function SettingsPage({
       {/* 2FA - meaningless without built-in auth active, and hidden in demo
           mode (setup/disable mutations are blocked anyway) */}
       {process.env.AUTH_ENABLED === "true" && process.env.DEMO_MODE !== "true" && (
-        <TwoFactorSection totpEnabled={userSettings.totpEnabled} />
+        <TwoFactorSection totpEnabled={viewerTotpEnabled} />
       )}
 
       {/* App-lock - deliberately NOT gated by AUTH_ENABLED like 2FA above,

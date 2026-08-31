@@ -91,7 +91,27 @@ export async function startAppLockRegistration() {
     // Excludes already-registered devices from being re-registered as a
     // second credential for the same authenticator.
     excludeCredentials: existing.map((c) => ({ id: c.credentialId })),
-    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+    authenticatorSelection: {
+      residentKey: "preferred",
+      userVerification: "preferred",
+      // Pinned to the device's OWN authenticator - Touch ID, Windows Hello,
+      // the Android biometric. That is what app-lock is: a local unlock for
+      // an already-installed PWA, not a portable passkey.
+      //
+      // Leaving it unset let Chrome offer the cross-device options too (a
+      // phone by QR, a security key), and with a phone already registered it
+      // sat on that choice indefinitely rather than going straight to Windows
+      // Hello - reported as "registering a second device spins forever".
+      // Pinning it also makes excludeCredentials resolve without probing:
+      // another device's platform credential cannot be present here, so there
+      // is nothing to reach out and check.
+      authenticatorAttachment: "platform",
+    },
+    // Explicit rather than left to the library default, so a ceremony the
+    // user never completes fails with an error the dialog can show instead of
+    // spinning indefinitely. Not a fix for the cross-device chooser above, a
+    // floor under it.
+    timeout: 60_000,
   });
   // Single reusable slot - see the schema comment on appLockChallenge.
   await prisma.user.update({ where: { id: viewer.id }, data: { appLockChallenge: options.challenge } });

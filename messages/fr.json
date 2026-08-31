@@ -72,7 +72,8 @@
     "inviteSubmit": "Créer mon compte",
     "sessionEndedTitle": "Session terminée",
     "sessionEndedBody": "Ce compte n'existe plus. Vous allez être redirigé vers la page de connexion.",
-    "sessionEndedLink": "Aller à la connexion"
+    "sessionEndedLink": "Aller à la connexion",
+    "continue": "Continuer"
   },
   "accountTypes": {
     "CHECKING": "Courant",
@@ -942,7 +943,8 @@
       "roleAdmin": "administrateur",
       "roleMember": "membre",
       "errorWrongPassword": "Mot de passe actuel incorrect.",
-      "errorUsernameRequired": "Choisis un identifiant."
+      "errorUsernameRequired": "Choisis un identifiant.",
+      "errorAuthDisabled": "L'authentification est désactivée sur cette instance."
     }
   },
   "shared": {

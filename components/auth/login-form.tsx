@@ -12,11 +12,23 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Two visual steps rather than three fields at once. The code field used to
+  // sit under the password from the first paint, which reads as "type all of
+  // this now" when the code is only obtainable after you have decided to sign
+  // in - and a code typed early can expire before the form is submitted.
+  // No extra round trip and nothing new is revealed: the field's presence
+  // already told anyone looking that this account uses 2FA.
+  const [askingCode, setAskingCode] = useState(false);
   const router = useRouter();
   const t = useTranslations("auth");
 
   async function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault();
+    if (totpEnabled && !askingCode) {
+      setAskingCode(true);
+      setError("");
+      return;
+    }
     setError("");
     setLoading(true);
 
@@ -40,6 +52,9 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
       setError(totpEnabled ? t("errorInvalidWithCode") : t("errorInvalid"));
       setPassword("");
       setTotpCode("");
+      // Back to the password, since that is the field most likely wrong and
+      // the code has to be read again from the app anyway.
+      setAskingCode(false);
     }
   }
 
@@ -103,7 +118,7 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
               </div>
             </div>
 
-            {totpEnabled && (
+            {totpEnabled && askingCode && (
               <div className="space-y-1.5">
                 <label htmlFor="totpCode" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
                   {t("totpLabel")}
@@ -132,7 +147,7 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
 
             <button
               type="submit"
-              disabled={loading || !password}
+              disabled={loading || !password || (askingCode && !totpCode)}
               className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
               style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-strong))" }}
             >
@@ -144,7 +159,7 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
                   </svg>
                   {t("loading")}
                 </span>
-              ) : t("submit")}
+              ) : (totpEnabled && !askingCode ? t("continue") : t("submit"))}
             </button>
           </form>
         </div>

@@ -208,9 +208,20 @@ export async function getOwnAccount() {
  * which is the point - two simultaneously-valid passwords would make the
  * weaker one the real security level.
  */
-export async function changeOwnPassword(formData: FormData): Promise<void> {
+/**
+ * Expected failures are returned, not thrown: Next replaces a thrown Server
+ * Action error with an opaque digest in production, so "wrong current
+ * password" reached the user in development and nothing once deployed. The
+ * component already mapped these keys to translated sentences - it just never
+ * received them. Same treatment as lib/actions/totp.ts and sync.ts.
+ */
+export type ChangePasswordResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_current_password" | "username_required" | "auth_disabled"; detail?: string };
+
+export async function changeOwnPassword(formData: FormData): Promise<ChangePasswordResult> {
   const viewer = await getViewer();
-  if (viewer.isMonoMode) throw new Error("Authentication is disabled on this instance.");
+  if (viewer.isMonoMode) return { ok: false, error: "auth_disabled" };
 
   const current = (formData.get("currentPassword") as string) || "";
   const next = (formData.get("newPassword") as string) || "";
@@ -226,13 +237,15 @@ export async function changeOwnPassword(formData: FormData): Promise<void> {
   // rules still apply on their own.
   const claiming = !user.username && rawUsername !== "";
   const check = validateCredentials(claiming ? rawUsername : "placeholder", next);
-  if (!check.ok) throw new Error(check.error);
-  if (!user.username && !claiming) throw new Error("username_required");
+  // The validator's own message is already written for a human, so it rides
+  // along as `detail` rather than being flattened into one generic key.
+  if (!check.ok) return { ok: false, error: "invalid_current_password", detail: check.error };
+  if (!user.username && !claiming) return { ok: false, error: "username_required" };
   // A user still on the env password (owner, pre-bootstrap) has no DB hash to
   // check against - they set one here for the first time, after which the env
   // credential stops applying to them entirely (see resolveUser in lib/auth.ts).
   if (user.passwordHash && !(await bcrypt.compare(current, user.passwordHash))) {
-    throw new Error("invalid_current_password");
+    return { ok: false, error: "invalid_current_password" };
   }
 
   await prisma.user.update({
@@ -243,4 +256,5 @@ export async function changeOwnPassword(formData: FormData): Promise<void> {
     },
   });
   revalidatePath("/settings");
+  return { ok: true };
 }

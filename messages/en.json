@@ -72,7 +72,8 @@
     "inviteSubmit": "Create my account",
     "sessionEndedTitle": "Session ended",
     "sessionEndedBody": "This account no longer exists. You are being redirected to the login page.",
-    "sessionEndedLink": "Go to login"
+    "sessionEndedLink": "Go to login",
+    "continue": "Continue"
   },
   "accountTypes": {
     "CHECKING": "Checking",
@@ -942,7 +943,8 @@
       "roleAdmin": "admin",
       "roleMember": "member",
       "errorWrongPassword": "Current password is incorrect.",
-      "errorUsernameRequired": "Choose a username."
+      "errorUsernameRequired": "Choose a username.",
+      "errorAuthDisabled": "Authentication is disabled on this instance."
     }
   },
   "shared": {

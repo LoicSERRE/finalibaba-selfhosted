@@ -40,18 +40,22 @@ export function AccountSection({
     setError(null);
     setDone(false);
     try {
-      await changeOwnPassword(formData);
+      const result = await changeOwnPassword(formData);
+      if (!result.ok) {
+        // Returned, not thrown: production replaces a thrown Server Action
+        // error with an opaque digest, so these keys never arrived.
+        const known = {
+          invalid_current_password: t("errorWrongPassword"),
+          username_required: t("errorUsernameRequired"),
+          auth_disabled: t("errorAuthDisabled"),
+        } as const;
+        setError(result.detail ?? known[result.error]);
+        return;
+      }
       setDone(true);
       router.refresh();
     } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
-      // The action throws stable keys for the two expected failures so they
-      // can be translated rather than surfaced as raw English.
-      const known: Record<string, string> = {
-        invalid_current_password: t("errorWrongPassword"),
-        username_required: t("errorUsernameRequired"),
-      };
-      setError(known[raw] ?? raw);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -89,6 +93,14 @@ export function AccountSection({
             credential, so there is nothing to verify against - asking for a
             "current password" there would be asking for the .env value, which
             is not what this field means. */}
+        {/* Chrome warns that a password form without a username field cannot
+            be filled or saved correctly ("Password forms should have
+            (optionally hidden) username fields"). Once the account has one it
+            is not asked for again, so it is supplied hidden - password
+            managers need it to know WHICH credential is being changed. */}
+        {username && (
+          <input type="text" name="username" value={username} autoComplete="username" readOnly hidden />
+        )}
         {!needsSetup && (
           <Input
             label={t("currentPassword")}
