@@ -13,6 +13,7 @@ const {
   institutionUpdateMock,
   institutionDeleteMock,
   institutionFindUniqueMock,
+  institutionFindFirstMock,
   accountCountMock,
   accountFindManyMock,
   accountDeleteManyMock,
@@ -23,6 +24,7 @@ const {
   institutionUpdateMock: vi.fn(),
   institutionDeleteMock: vi.fn(),
   institutionFindUniqueMock: vi.fn(),
+  institutionFindFirstMock: vi.fn(),
   accountCountMock: vi.fn(),
   accountFindManyMock: vi.fn(),
   accountDeleteManyMock: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock("@/lib/db/prisma", () => ({
       update: institutionUpdateMock,
       delete: institutionDeleteMock,
       findUnique: institutionFindUniqueMock,
+      findFirst: institutionFindFirstMock,
     },
     account: {
       count: accountCountMock,
@@ -76,6 +79,8 @@ beforeEach(() => {
   institutionUpdateMock.mockReset().mockResolvedValue({});
   institutionDeleteMock.mockReset().mockResolvedValue({});
   institutionFindUniqueMock.mockReset();
+  // No same-named institution unless a test says otherwise - the common case.
+  institutionFindFirstMock.mockReset().mockResolvedValue(null);
   accountCountMock.mockReset();
   accountFindManyMock.mockReset().mockResolvedValue([]);
   accountDeleteManyMock.mockReset().mockResolvedValue({ count: 0 });
@@ -159,12 +164,38 @@ describe("getMigrationHistoryDepth", () => {
     expect(accountFindManyMock).not.toHaveBeenCalled();
   });
 
-  it("matches the 'trade republic' name case-insensitively against the tr: prefix", async () => {
+  it("matches Trade Republic's legacy accounts by exact id, never by the tr: prefix", async () => {
+    // `startsWith: "tr:"` also matches the per-user tr:<institutionId>: shape,
+    // so this query feeding a deleteMany would take the accounts the migration
+    // just created. Exact ids are the only safe way to name the env sync's own.
     institutionFindUniqueMock.mockResolvedValueOnce({ name: "Trade Republic" });
     accountFindManyMock.mockResolvedValue([]);
+
     await getMigrationHistoryDepth("inst-1");
+
     expect(accountFindManyMock).toHaveBeenCalledWith({
-      where: { institutionId: "inst-1", syncId: { startsWith: "tr:" } },
+      where: { institutionId: "inst-1", syncId: { in: ["tr:cash", "tr:cto", "tr:pea", "tr:crypto"] } },
+      select: { id: true },
+    });
+  });
+
+  it("counts either backend as the destination, so a move to per-user Trade Republic qualifies", async () => {
+    // Only `woob:` used to count, so someone moving off TR_PHONE onto their
+    // own Trade Republic credentials could never satisfy the guard and the
+    // migration refused forever.
+    institutionFindUniqueMock.mockResolvedValueOnce({ name: "Trade Republic" });
+    accountFindManyMock.mockResolvedValue([]);
+
+    await getMigrationHistoryDepth("inst-1");
+
+    expect(accountFindManyMock).toHaveBeenCalledWith({
+      where: {
+        institutionId: "inst-1",
+        OR: [
+          { syncId: { startsWith: "woob:inst-1:" } },
+          { syncId: { startsWith: "tr:inst-1:" } },
+        ],
+      },
       select: { id: true },
     });
   });
@@ -216,7 +247,7 @@ describe("migrateDedicatedSyncToWoob", () => {
     institutionFindUniqueMock.mockResolvedValueOnce({ name: "LCL" });
     accountCountMock.mockResolvedValueOnce(0);
     await expect(migrateDedicatedSyncToWoob("inst-1")).rejects.toThrow(
-      "No Woob-synced accounts found yet for this institution - run a Woob sync first",
+      "No accounts from the new sync found yet for this institution - run it once first",
     );
     expect(accountDeleteManyMock).not.toHaveBeenCalled();
   });
@@ -309,5 +340,88 @@ describe("clearTradeRepublicConfig", () => {
     });
     expect(accountDeleteManyMock).not.toHaveBeenCalled();
     expect(institutionDeleteMock).not.toHaveBeenCalled();
+  });
+});
+
+// prisma/seed.ts ships credential-less reference rows for the common banks
+// ("Trade Republic", "LCL", "Coinbase"), and Institution names are unique per
+// user - so on a seeded install, which is the documented default, picking one
+// of those from the bank list is a name collision. Before v2.1 that only
+// happened to whoever picked a seeded Woob bank; making Trade Republic a
+// picker entry put the headline feature straight onto that path.
+describe("createInstitution against an existing name", () => {
+  it("attaches credentials to a credential-less row instead of failing on the unique name", async () => {
+    institutionFindFirstMock.mockResolvedValueOnce({
+      id: "inst-seeded",
+      woobModule: null,
+      trPhone: null,
+    });
+
+    await createInstitution(
+      formData({ name: "Trade Republic", trPhone: "+33612345678", trPin: "1234" }),
+    );
+
+    expect(institutionCreateMock).not.toHaveBeenCalled();
+    expect(institutionUpdateMock).toHaveBeenCalledWith({
+      where: { id: "inst-seeded" },
+      data: { trPhone: "+33612345678", trPin: "1234" },
+    });
+  });
+
+  it.each([
+    [{ woobModule: "lcl", trPhone: null }, "already syncs through Woob"],
+    [{ woobModule: null, trPhone: "+33612345678" }, "already syncs through Trade Republic"],
+  ])("refuses to repoint one that %s (%s)", async (state, why) => {
+    // Silently rewriting a working connection under the same name is the one
+    // outcome nobody could have meant by "add a bank".
+    institutionFindFirstMock.mockResolvedValueOnce({ id: "inst-1", ...state });
+
+    await expect(
+      createInstitution(formData({ name: "LCL", woobModule: "lcl", woobLogin: "u", woobPassword: "p" })),
+      why,
+    ).rejects.toThrow("est déjà configurée");
+    expect(institutionUpdateMock).not.toHaveBeenCalled();
+    expect(institutionCreateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("createInstitution provider selection", () => {
+  it("writes Trade Republic credentials when the picked bank is Trade Republic", async () => {
+    await createInstitution(
+      formData({ name: "Trade Republic", trPhone: "+33612345678", trPin: "1234" }),
+    );
+    expect(institutionCreateMock).toHaveBeenCalledWith({
+      data: { userId: "user-owner", name: "Trade Republic", trPhone: "+33612345678", trPin: "1234" },
+    });
+  });
+
+  it("never writes both providers onto one row", async () => {
+    // The picker only ever offers one, but this is a Server Action and the
+    // form payload is whatever the caller sends. An institution holding both
+    // would run whichever backend the sync service tests first.
+    await createInstitution(
+      formData({
+        name: "Confused",
+        trPhone: "+33612345678",
+        trPin: "1234",
+        woobModule: "lcl",
+        woobLogin: "u",
+        woobPassword: "p",
+      }),
+    );
+    const { data } = institutionCreateMock.mock.calls[0][0];
+    expect(data).toEqual({
+      userId: "user-owner",
+      name: "Confused",
+      trPhone: "+33612345678",
+      trPin: "1234",
+    });
+  });
+
+  it("ignores a half-filled Trade Republic payload rather than storing it", async () => {
+    await createInstitution(formData({ name: "Half", trPhone: "+33612345678" }));
+    expect(institutionCreateMock).toHaveBeenCalledWith({
+      data: { userId: "user-owner", name: "Half" },
+    });
   });
 });

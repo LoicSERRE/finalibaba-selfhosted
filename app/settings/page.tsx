@@ -11,13 +11,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { deleteInstitution, migrateDedicatedSyncToWoob, getMigrationHistoryDepth } from "@/lib/actions/institutions";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
-import { isLegacyEnvSyncId } from "@/lib/domain/sync-ids";
+import { isLegacyEnvSyncId, isPerUserSyncId } from "@/lib/domain/sync-ids";
 import { ConnectOpenBankingButton, SyncOpenBankingButton, DisconnectOpenBankingButton } from "@/components/settings/open-banking-buttons";
 import { ConnectOpenBankingDialog } from "@/components/settings/connect-open-banking-dialog";
 import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog";
 import { InstitutionSyncButton } from "@/components/settings/institution-sync-button";
 import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
-import { ConfigureTradeRepublicDialog } from "@/components/settings/configure-trade-republic-dialog";
 import { TradeRepublicSetupPrompt } from "@/components/settings/tr-setup-prompt";
 import { SyncStatus } from "@/components/settings/sync-status";
 import { getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
@@ -329,41 +328,23 @@ export default async function SettingsPage({
                         {configured && <InstitutionSyncButton institutionId={inst.id} />}
                         {isWoob && <WoobSetupPrompt institutionId={inst.id} log={syncLog} />}
                         {isTr && <TradeRepublicSetupPrompt institutionId={inst.id} log={syncLog} />}
-                        {/* Only the configured provider's dialog is offered once
-                            one is set up, so a configured institution shows a
-                            single, unambiguous "manage this connection" button.
-                            Both appear while nothing is configured yet - that's
-                            the actual choice being made. */}
-                        {!isTr && (
-                          <ConfigureWoobDialog
-                            institutionId={inst.id}
-                            institutionName={inst.name}
-                            currentModule={inst.woobModule}
-                            modules={woobModules}
-                            hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
-                            legacyAccountCount={inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length}
-                            woobAccountCount={inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length}
-                            legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
-                            woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}
-                            onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
-                          />
-                        )}
-                        {!isWoob && (
-                          <ConfigureTradeRepublicDialog
-                            institutionId={inst.id}
-                            institutionName={inst.name}
-                            isConfigured={isTr}
-                            /* Only TR_PHONE matters here: the env-configured
-                               Trade Republic sync writes its accounts under the
-                               institution literally named "Trade Republic", so
-                               that is the one row where both paths would
-                               produce a duplicate set. LCL_LOGIN is irrelevant
-                               to this dialog. */
-                            hasDedicatedEnvSync={
-                              !!process.env.TR_PHONE && inst.name.toLowerCase() === "trade republic"
-                            }
-                          />
-                        )}
+                        {/* One dialog for every backend. Trade Republic is an
+                            entry in its bank list rather than a button of its
+                            own: which backend reaches a given bank is this
+                            app's problem, not something to ask the user. */}
+                        <ConfigureWoobDialog
+                          institutionId={inst.id}
+                          institutionName={inst.name}
+                          currentModule={inst.woobModule}
+                          isTradeRepublicConfigured={isTr}
+                          modules={woobModules}
+                          hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
+                          legacyAccountCount={inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length}
+                          woobAccountCount={inst.accounts.filter((a) => isPerUserSyncId(a.syncId, inst.id)).length}
+                          legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
+                          woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}
+                          onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
+                        />
                       </>
                     );
                   })()}

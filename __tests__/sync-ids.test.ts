@@ -4,6 +4,8 @@ import {
   parseTrSuffix,
   isTrCashAccount,
   isLegacyEnvSyncId,
+  legacyTrSyncIds,
+  isPerUserSyncId,
 } from "@/lib/domain/sync-ids";
 
 // Account.syncId is globally unique, so the shape of these strings is what
@@ -84,5 +86,38 @@ describe("isLegacyEnvSyncId", () => {
     // Republic account landing in it would be offered up for migration and
     // then cascade-deleted with its whole history.
     expect(isLegacyEnvSyncId(id as string | null), why).toBe(false);
+  });
+});
+
+describe("legacyTrSyncIds", () => {
+  it("lists every id the env sync can write, exactly", () => {
+    expect(legacyTrSyncIds().sort()).toEqual(["tr:cash", "tr:crypto", "tr:cto", "tr:pea"]);
+  });
+
+  it("contains no per-user id, which a `tr:` prefix match would have swept up", () => {
+    // The migration deletes this set. A `startsWith: "tr:"` filter also matches
+    // tr:<institutionId>:cash, so it would delete the accounts the migration
+    // had just created - the exact history-loss shape v1.11 already produced
+    // once with LCL.
+    expect(legacyTrSyncIds().some((id) => id.split(":").length > 2)).toBe(false);
+  });
+});
+
+describe("isPerUserSyncId", () => {
+  it.each([
+    ["tr:inst-1:cash", "inst-1"],
+    ["woob:inst-1:98765", "inst-1"],
+  ])("%s belongs to %s", (syncId, inst) => {
+    expect(isPerUserSyncId(syncId, inst)).toBe(true);
+  });
+
+  it.each([
+    ["tr:cash", "inst-1", "the env sync's own account"],
+    ["lcl:123", "inst-1", "the other env sync"],
+    ["tr:inst-2:cash", "inst-1", "another institution's account"],
+    ["woob:inst-2:9", "inst-1", "another institution's Woob account"],
+    [null, "inst-1", "no sync id"],
+  ])("%s does not belong to %s (%s)", (syncId, inst, why) => {
+    expect(isPerUserSyncId(syncId as string | null, inst), why).toBe(false);
   });
 });

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned } from "@/lib/auth-context";
+import { legacyTrSyncIds } from "@/lib/domain/sync-ids";
 
 export async function createInstitution(formData: FormData) {
   const name = (formData.get("name") as string).trim();
@@ -11,17 +12,47 @@ export async function createInstitution(formData: FormData) {
   const woobModule = (formData.get("woobModule") as string | null)?.trim() || null;
   const woobLogin = (formData.get("woobLogin") as string | null)?.trim() || null;
   const woobPassword = (formData.get("woobPassword") as string | null)?.trim() || null;
+  const trPhone = (formData.get("trPhone") as string | null)?.trim() || null;
+  const trPin = (formData.get("trPin") as string | null)?.trim() || null;
+
+  // At most one provider, the same rule setWoobConfig/setTradeRepublicConfig
+  // enforce on an existing row - the picker only ever offers one, but this is
+  // a Server Action and a form payload is whatever the caller sends.
+  // Trade Republic wins a payload carrying both rather than silently writing
+  // an institution that two backends would each claim.
+  let provider: Record<string, string> = {};
+  if (trPhone && trPin) {
+    provider = { trPhone, trPin };
+  } else if (woobModule && woobLogin && woobPassword) {
+    provider = { woobModule, woobLogin, woobPassword };
+  }
 
   const viewer = await getViewer();
-  await prisma.institution.create({
-    data: {
-      userId: viewer.id,
-      name,
-      ...(woobModule && woobLogin && woobPassword
-        ? { woobModule, woobLogin, woobPassword }
-        : {}),
-    },
+
+  // Institution names are unique per user, and prisma/seed.ts ships reference
+  // rows for the common ones - "Trade Republic", "LCL", "Coinbase" - with no
+  // credentials on them. So on a seeded install, which is the documented
+  // default, picking one of those banks from the list is a name collision, and
+  // creating blind fails. Attaching the credentials to the empty row is what
+  // the user meant anyway: they picked a bank, not a database row.
+  //
+  // An institution that already syncs is a different story - silently
+  // repointing it would swap a working connection for another under the same
+  // name, so that says so instead. Editing it stays where it belongs, on its
+  // own row in Settings.
+  const existing = await prisma.institution.findFirst({
+    where: { userId: viewer.id, name },
+    select: { id: true, woobModule: true, trPhone: true },
   });
+
+  if (existing) {
+    if (existing.woobModule || existing.trPhone) {
+      throw new Error(`"${name}" est déjà configurée - modifie sa synchronisation depuis sa ligne.`);
+    }
+    await prisma.institution.update({ where: { id: existing.id }, data: provider });
+  } else {
+    await prisma.institution.create({ data: { userId: viewer.id, name, ...provider } });
+  }
   revalidatePath("/settings");
 }
 
@@ -169,6 +200,42 @@ const DEDICATED_SYNC_PREFIXES: Record<string, string> = {
   "trade republic": "tr:",
 };
 
+/**
+ * A Prisma filter matching exactly the accounts the .env sync owns.
+ *
+ * For LCL a prefix is safe - nothing else writes `lcl:`. For Trade Republic it
+ * is not: `tr:` also matches the per-user `tr:<institutionId>:` shape, so
+ * deleting by prefix during a migration would take the accounts the migration
+ * had just created along with the ones it meant to remove. That is the same
+ * history-loss the v1.11 LCL incident produced, and it would land on whoever
+ * moves off TR_PHONE - so the two are matched differently on purpose.
+ */
+function legacyAccountFilter(institutionName: string) {
+  if (institutionName.toLowerCase() === "trade republic") {
+    return { syncId: { in: legacyTrSyncIds() } };
+  }
+  const prefix = DEDICATED_SYNC_PREFIXES[institutionName.toLowerCase()];
+  return prefix ? { syncId: { startsWith: prefix } } : null;
+}
+
+/**
+ * The per-user accounts that prove the new sync actually produced something.
+ *
+ * Either backend counts: an institution moving off `.env` goes to Woob or, for
+ * Trade Republic, to the per-user Trade Republic path added in v2.1. Before
+ * that, only `woob:` counted, so someone migrating from TR_PHONE to their own
+ * Trade Republic credentials could never satisfy the guard and the migration
+ * refused forever.
+ */
+function perUserAccountFilter(institutionId: string) {
+  return {
+    OR: [
+      { syncId: { startsWith: `woob:${institutionId}:` } },
+      { syncId: { startsWith: `tr:${institutionId}:` } },
+    ],
+  };
+}
+
 // Completes the migration warned about by ConfigureWoobDialog's
 // dedicatedEnvWarning banner: once a Woob sync has actually run for this
 // institution (proven by at least one "woob:<institutionId>:"-prefixed
@@ -220,12 +287,12 @@ export async function getMigrationHistoryDepth(
   const viewer = await getViewer();
   await assertOwned("institution", institutionId, viewer.id);
   const inst = await prisma.institution.findUnique({ where: { id: institutionId }, select: { name: true } });
-  const prefix = inst ? DEDICATED_SYNC_PREFIXES[inst.name.toLowerCase()] : undefined;
-  if (!prefix) return { legacyOldest: null, woobOldest: null };
+  const legacy = inst ? legacyAccountFilter(inst.name) : null;
+  if (!legacy) return { legacyOldest: null, woobOldest: null };
 
   const [legacyAccounts, woobAccounts] = await Promise.all([
-    prisma.account.findMany({ where: { institutionId, syncId: { startsWith: prefix } }, select: { id: true } }),
-    prisma.account.findMany({ where: { institutionId, syncId: { startsWith: `woob:${institutionId}:` } }, select: { id: true } }),
+    prisma.account.findMany({ where: { institutionId, ...legacy }, select: { id: true } }),
+    prisma.account.findMany({ where: { institutionId, ...perUserAccountFilter(institutionId) }, select: { id: true } }),
   ]);
   const [legacyOldest, woobOldest] = await Promise.all([
     oldestHistoryDate(legacyAccounts.map((a) => a.id)),
@@ -242,18 +309,20 @@ export async function migrateDedicatedSyncToWoob(institutionId: string): Promise
   const inst = await prisma.institution.findUnique({ where: { id: institutionId }, select: { name: true } });
   if (!inst) throw new Error("Institution not found");
 
-  const prefix = DEDICATED_SYNC_PREFIXES[inst.name.toLowerCase()];
-  if (!prefix) throw new Error("Not a dedicated-sync institution");
+  const legacy = legacyAccountFilter(inst.name);
+  if (!legacy) throw new Error("Not a dedicated-sync institution");
 
-  const woobAccountCount = await prisma.account.count({
-    where: { institutionId, syncId: { startsWith: `woob:${institutionId}:` } },
+  const perUserAccountCount = await prisma.account.count({
+    where: { institutionId, ...perUserAccountFilter(institutionId) },
   });
-  if (woobAccountCount === 0) {
-    throw new Error("No Woob-synced accounts found yet for this institution - run a Woob sync first");
+  if (perUserAccountCount === 0) {
+    throw new Error(
+      "No accounts from the new sync found yet for this institution - run it once first",
+    );
   }
 
   const result = await prisma.account.deleteMany({
-    where: { institutionId, syncId: { startsWith: prefix } },
+    where: { institutionId, ...legacy },
   });
 
   revalidatePath("/settings");

@@ -74,3 +74,24 @@ export function isLegacyEnvSyncId(syncId: string | null | undefined): boolean {
   if (!syncId.startsWith(TR_PREFIX)) return false;
   return !syncId.slice(TR_PREFIX.length).includes(":");
 }
+
+/**
+ * Every syncId the env-configured Trade Republic sync can ever write.
+ *
+ * An exact list, not the `tr:` prefix, and that distinction is the difference
+ * between a migration and data loss: `tr:` also matches `tr:<institutionId>:`,
+ * so deleting "everything starting with tr:" during an env-to-per-user
+ * migration would take the accounts the migration just created along with the
+ * ones it meant to remove.
+ */
+export function legacyTrSyncIds(): string[] {
+  return TR_ACCOUNT_SUFFIXES.map((suffix) => `${TR_PREFIX}${suffix}`);
+}
+
+/** True for an account created by the per-user path for this institution. */
+export function isPerUserSyncId(syncId: string | null | undefined, institutionId: string): boolean {
+  if (!syncId) return false;
+  return (
+    syncId.startsWith(`${TR_PREFIX}${institutionId}:`) || syncId.startsWith(`woob:${institutionId}:`)
+  );
+}

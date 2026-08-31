@@ -93,7 +93,7 @@ All sync modules are **optional** - the app works fully without them. Leave cred
 
 Available in 18 EU countries: AT, BE, DE, EE, ES, FI, FR, GR, IE, IT, LT, LU, LV, NL, PL, PT, SI, SK.
 
-**From the interface (recommended).** In **Settings → Institutions**, add an institution and click **Configure Trade Republic**: enter your phone number and PIN, then **Connect** and type the 4-digit code the Trade Republic app shows you. Nothing to put in `.env`, no terminal, and every user on a multi-user instance can connect their own account this way - see [Multiple users](#multiple-users-optional).
+**From the interface (recommended).** In **Settings → Institutions**, click **Add an institution**, search for **Trade Republic** in the bank list, and enter your phone number and PIN. Then **Connect** on that institution's row and type the 4-digit code the Trade Republic app shows you. Nothing to put in `.env`, no terminal, and every user on a multi-user instance can connect their own account this way - see [Multiple users](#multiple-users-optional).
 
 **From `.env` (the original path, still supported).** Set `TR_PHONE` and `TR_PIN`, then run the interactive setup once:
 

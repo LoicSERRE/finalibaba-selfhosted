@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Plus, AlertTriangle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WoobModulePicker } from "@/components/settings/woob-module-picker";
 import { createInstitution } from "@/lib/actions/institutions";
+import { bankPickerEntries, isTradeRepublicModule } from "@/lib/domain/sync-providers";
 import { useTranslations } from "next-intl";
 
 interface Props {
@@ -33,17 +34,23 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
   const [pending, startTransition] = useTransition();
   const [selectedModule, setSelectedModule] = useState("");
   const [customName, setCustomName] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const t = useTranslations("addInstitution");
   const tc = useTranslations("common");
 
-  const knownBank = modules.find((m) => m.module === selectedModule);
+  // Trade Republic sits in the same searchable list as every Woob bank -
+  // which backend reaches it is this app's problem, not the user's.
+  const banks = useMemo(() => bankPickerEntries(modules), [modules]);
+  const knownBank = banks.find((m) => m.module === selectedModule);
   const isCustom = selectedModule === "__other__";
-  const woobEnabled = !!knownBank;
+  const isTradeRepublic = isTradeRepublicModule(selectedModule);
+  const woobEnabled = !!knownBank && !isTradeRepublic;
   const hasDedicatedEnvSync = !!knownBank && dedicatedEnvNames.has(knownBank.label.toLowerCase());
 
   const reset = () => {
     setSelectedModule("");
     setCustomName("");
+    setError(null);
   };
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
@@ -51,10 +58,18 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
     const fd = new FormData(e.currentTarget);
     // Ensure name is set (auto from known bank or custom input)
     if (!fd.get("name")) return;
+    setError(null);
     startTransition(async () => {
-      await createInstitution(fd);
-      reset();
-      setOpen(false);
+      try {
+        await createInstitution(fd);
+        reset();
+        setOpen(false);
+      } catch (e) {
+        // Previously unhandled, so a rejected create - a name already in use
+        // being the realistic one - left the dialog sitting there as if
+        // nothing had been clicked.
+        setError(e instanceof Error ? e.message : t("unknownError"));
+      }
     });
   }
 
@@ -76,7 +91,7 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
           label={t("bank")}
           value={selectedModule}
           onChange={(v) => { setSelectedModule(v); setCustomName(""); }}
-          modules={modules}
+          modules={banks}
           otherValue="__other__"
           otherLabel={t("other")}
           placeholder={t("select")}
@@ -97,9 +112,23 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
             name="name"
             value={customName}
             onChange={(e) => setCustomName(e.target.value)}
-            placeholder="Revolut, Trade Republic…"
+            placeholder="Revolut, Degiro…"
             required
           />
+        )}
+
+        {isTradeRepublic && (
+          <div className="space-y-3 pt-1 border-t border-[var(--border)]">
+            {hasDedicatedEnvSync && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/40">
+                <AlertTriangle size={14} className="text-[var(--warning)] shrink-0 mt-0.5" aria-hidden="true" />
+                <p className="text-xs text-[var(--warning)]">{t("dedicatedEnvWarning")}</p>
+              </div>
+            )}
+            <p className="text-xs text-[var(--muted)] pt-1">{t("trHint")}</p>
+            <Input id="inst-tr-phone" label={t("trPhone")} type="text" name="trPhone" placeholder="+33612345678" autoComplete="off" required />
+            <Input id="inst-tr-pin" label={t("trPin")} type="password" name="trPin" placeholder="••••" autoComplete="off" required />
+          </div>
         )}
 
         {woobEnabled && (
@@ -118,6 +147,8 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
             </div>
           </>
         )}
+
+        {error && <p role="alert" className="text-xs text-[var(--negative)]">{error}</p>}
 
         {selectedModule && (
           <div className="flex justify-end gap-2 pt-2">

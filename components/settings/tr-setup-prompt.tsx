@@ -55,10 +55,23 @@ export function TradeRepublicSetupPrompt({
     return () => clearInterval(id);
   }, [secondsLeft]);
 
-  const isAuthRequired = log?.status === "auth_required";
+  // Rendered as soon as the institution is configured, not only after a sync
+  // has already failed. Trade Republic ALWAYS needs its pushed-code ceremony
+  // before any sync can work, so a freshly configured institution has no
+  // SyncLog at all and the old `auth_required`-only gate hid this button
+  // exactly when it was needed. The only way to reveal it was to click
+  // "Synchroniser" and read the error - which is what a user hit in
+  // production, reporting they could not connect a Trade Republic account
+  // through the UI at all.
+  //
+  // Deliberately not applied to WoobSetupPrompt: a Woob bank's first sync can
+  // legitimately succeed from login and password alone, so showing a connect
+  // step up front there would invent a ceremony most banks do not have.
+  // Trade Republic is the one that always does.
+  const needsConnection = !log || log.status === "auth_required";
   const inFlow = awaitingCode || busy;
 
-  if (!isAuthRequired && !inFlow) return null;
+  if (!needsConnection && !inFlow) return null;
 
   const reset = () => {
     setBusy(false);

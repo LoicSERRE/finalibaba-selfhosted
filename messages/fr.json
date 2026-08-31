@@ -69,7 +69,10 @@
     "bootstrapSubmit": "Créer le compte",
     "inviteTitle": "Créez votre compte",
     "inviteSubtitle": "Vous avez été invité à rejoindre cette instance Finalibaba",
-    "inviteSubmit": "Créer mon compte"
+    "inviteSubmit": "Créer mon compte",
+    "sessionEndedTitle": "Session terminée",
+    "sessionEndedBody": "Ce compte n'existe plus. Vous allez être redirigé vers la page de connexion.",
+    "sessionEndedLink": "Aller à la connexion"
   },
   "accountTypes": {
     "CHECKING": "Courant",
@@ -1173,7 +1176,11 @@
     "woobHint": "Sync automatique via Woob : historique illimité stocké dans votre base.",
     "login": "Identifiant / n° client",
     "password": "Mot de passe",
-    "creating": "Création…"
+    "creating": "Création…",
+    "trHint": "Finalibaba se connecte directement à Trade Republic (via pytr) et récupère tes positions, ton solde espèces et l'historique de tes opérations. Après l'enregistrement, un code te sera envoyé dans l'application Trade Republic pour établir la session.",
+    "trPhone": "Numéro de téléphone Trade Republic",
+    "trPin": "Code PIN Trade Republic",
+    "unknownError": "Erreur inconnue"
   },
   "renameAccount": {
     "trigger": "Renommer le compte",
@@ -1211,8 +1218,8 @@
   },
   "configureWoob": {
     "title": "Sync automatique : {name}",
-    "configured": "Woob configuré",
-    "configure": "Configurer Woob",
+    "configured": "Synchro configurée",
+    "configure": "Configurer la synchro",
     "dedicatedEnvWarning": "Cette institution est déjà synchronisée via une configuration serveur (.env). Configurer aussi Woob ici en parallèle créera des comptes en double : les deux chemins ne se reconnaissent pas comme la même banque.",
     "legacyAccountsWarning": "{count} compte(s) synchronisé(s) via une ancienne configuration .env sont toujours en base, en plus des comptes Woob ci-dessous : migre-les pour éliminer les doublons.",
     "migrateButton": "Migrer maintenant",
@@ -1223,7 +1230,7 @@
     "migrateConfirmButton": "Confirmer la migration",
     "migrateSuccess": "{count} compte(s) .env supprimé(s). Les données Woob restent en place.",
     "woobHint": "Woob récupère vos soldes et transactions directement depuis votre banque. Historique illimité, stocké dans votre base de données.",
-    "module": "Module Woob",
+    "module": "Banque",
     "select": "Sélectionner une banque…",
     "other": "Autre (saisir manuellement)",
     "searchPlaceholder": "Rechercher une banque…",
@@ -1237,22 +1244,10 @@
     "deleteConfig": "Supprimer la config",
     "update": "Mettre à jour",
     "submit": "Enregistrer",
-    "unknownError": "Erreur inconnue"
-  },
-  "configureTradeRepublic": {
-    "title": "Trade Republic : {name}",
-    "configure": "Configurer Trade Republic",
-    "configured": "Trade Republic configuré",
-    "intro": "Connecte ton propre compte Trade Republic à cette institution. Tes identifiants ne sont visibles que par toi, et la synchronisation crée des comptes qui n'appartiennent qu'à toi.",
-    "phone": "Numéro de téléphone",
-    "phoneHint": "Au format international, comme dans l'application Trade Republic (+33…).",
-    "pin": "Code PIN",
-    "pinHint": "Le code à 4 chiffres de ton application Trade Republic.",
-    "reconfigureHint": "Enregistrer de nouveaux identifiants invalide la session existante : il faudra te reconnecter avec un code.",
-    "dedicatedEnvWarning": "Cette instance synchronise déjà Trade Republic via une configuration serveur (.env). Configurer aussi cette institution ici créera des comptes en double : les deux chemins ne se reconnaissent pas comme le même compte.",
-    "update": "Mettre à jour",
-    "submit": "Enregistrer",
-    "deleteConfig": "Supprimer la config"
+    "unknownError": "Erreur inconnue",
+    "trHint": "Finalibaba se connecte directement à Trade Republic (via pytr) et récupère tes positions, ton solde espèces et l'historique de tes opérations. Après l'enregistrement, un code te sera envoyé dans l'application Trade Republic pour établir la session.",
+    "trPhone": "Numéro de téléphone Trade Republic",
+    "trPin": "Code PIN Trade Republic"
   },
   "exportButton": {
     "export": "Exporter",

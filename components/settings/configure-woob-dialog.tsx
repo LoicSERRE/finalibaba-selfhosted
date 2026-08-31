@@ -1,19 +1,41 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Settings2, RefreshCw, Trash2, AlertTriangle, ArrowRightLeft, CheckCircle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WoobModulePicker } from "@/components/settings/woob-module-picker";
-import { setWoobConfig, clearWoobConfig } from "@/lib/actions/institutions";
+import {
+  setWoobConfig,
+  clearWoobConfig,
+  setTradeRepublicConfig,
+  clearTradeRepublicConfig,
+} from "@/lib/actions/institutions";
 import { historyDepthLossDays } from "@/lib/domain/institutions";
+import {
+  TRADE_REPUBLIC_MODULE,
+  bankPickerEntries,
+  isTradeRepublicModule,
+} from "@/lib/domain/sync-providers";
 import { useTranslations } from "next-intl";
 
+/**
+ * Configure how one institution syncs - whichever backend reaches it.
+ *
+ * Named for Woob because that was the only per-user backend when it was
+ * written; v2.1 added Trade Republic to the same bank list rather than giving
+ * it a button of its own, since which backend a bank needs is not something
+ * the person adding their bank should have to know or choose.
+ */
 interface Props {
   institutionId: string;
   institutionName: string;
   currentModule?: string | null;
+  /** True when this institution already holds Trade Republic credentials.
+   *  Never true at the same time as currentModule: the two config actions
+   *  each clear the other's fields. */
+  isTradeRepublicConfigured?: boolean;
   // Every Woob module capable of bank sync (~96, fetched live from Woob's
   // repository by getWoobBankModules() and passed down from
   // app/settings/page.tsx) - falls back to a small fixed list of major
@@ -71,12 +93,15 @@ export function ConfigureWoobDialog({
   legacyOldestDate = null,
   woobOldestDate = null,
   onMigrate,
+  isTradeRepublicConfigured = false,
 }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [module, setModule] = useState(currentModule ?? "");
-  const [login, setLogin] = useState("");
-  const [password, setPassword] = useState("");
+  const [module, setModule] = useState(
+    currentModule ?? (isTradeRepublicConfigured ? TRADE_REPUBLIC_MODULE : ""),
+  );
+  const [identifier, setIdentifier] = useState("");
+  const [secret, setSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [migrateStep, setMigrateStep] = useState<"idle" | "confirming" | "done">("idle");
   const [migratePending, startMigrateTransition] = useTransition();
@@ -85,7 +110,9 @@ export function ConfigureWoobDialog({
   const t = useTranslations("configureWoob");
   const tc = useTranslations("common");
 
-  const isConfigured = !!currentModule;
+  const banks = useMemo(() => bankPickerEntries(modules), [modules]);
+  const isTradeRepublic = isTradeRepublicModule(module);
+  const isConfigured = !!currentModule || isTradeRepublicConfigured;
   // Deliberately independent of hasDedicatedEnvSync: that flag only reflects
   // whether LCL_LOGIN/TR_PHONE is *currently* set, but the whole point of
   // this migration is often reached after the user has already removed the
@@ -95,7 +122,11 @@ export function ConfigureWoobDialog({
   // hasDedicatedEnvSync too would hide the fix exactly when it's needed
   // most (real production case: secrets removed first, cleanup needed
   // after).
-  const canMigrate = legacyAccountCount > 0;
+  // Never offered while Trade Republic is the picked provider: this migration
+  // moves legacy .env-synced accounts onto Woob specifically, and refuses to
+  // run until "woob:"-prefixed accounts exist - which they never will here, so
+  // the block would sit there permanently saying it has nothing to work with.
+  const canMigrate = legacyAccountCount > 0 && !isTradeRepublic;
   const historyLossDays = historyDepthLossDays(legacyOldestDate, woobOldestDate);
 
   const handleMigrate = () => {
@@ -114,11 +145,18 @@ export function ConfigureWoobDialog({
 
   const handleSubmit = (e: React.SubmitEvent) => {
     e.preventDefault();
-    if (!module || !login || !password) return;
+    if (!module || !identifier || !secret) return;
     setError(null);
     startTransition(async () => {
       try {
-        await setWoobConfig(institutionId, module, login, password);
+        // Each action clears the other provider's fields, so switching an
+        // institution from one backend to the other is a single save rather
+        // than a clear-then-reconfigure.
+        if (isTradeRepublic) {
+          await setTradeRepublicConfig(institutionId, identifier, secret);
+        } else {
+          await setWoobConfig(institutionId, module, identifier, secret);
+        }
         setOpen(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : t("unknownError"));
@@ -128,10 +166,14 @@ export function ConfigureWoobDialog({
 
   const handleClear = () => {
     startTransition(async () => {
-      await clearWoobConfig(institutionId);
+      if (isTradeRepublicConfigured) {
+        await clearTradeRepublicConfig(institutionId);
+      } else {
+        await clearWoobConfig(institutionId);
+      }
       setModule("");
-      setLogin("");
-      setPassword("");
+      setIdentifier("");
+      setSecret("");
       setOpen(false);
     });
   };
@@ -205,7 +247,7 @@ export function ConfigureWoobDialog({
             </div>
           </div>
         )}
-        <p className="text-xs text-[var(--muted)]">{t("woobHint")}</p>
+        <p className="text-xs text-[var(--muted)]">{isTradeRepublic ? t("trHint") : t("woobHint")}</p>
 
         <div className="space-y-1.5">
           <WoobModulePicker
@@ -213,7 +255,7 @@ export function ConfigureWoobDialog({
             label={t("module")}
             value={module}
             onChange={setModule}
-            modules={modules}
+            modules={banks}
             otherValue="__custom__"
             otherLabel={t("other")}
             placeholder={t("select")}
@@ -230,29 +272,19 @@ export function ConfigureWoobDialog({
               className="mt-1.5"
             />
           )}
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("listHint")}</p>
+          {/* Only meaningful for Woob: the hint explains its module catalogue,
+              and "Autre" lets a module name be typed in by hand. Trade Republic
+              is reached directly by pytr, with no module to name. */}
+          {!isTradeRepublic && <p className="text-xs text-[var(--muted)] opacity-70">{t("listHint")}</p>}
         </div>
 
-        <Input
-          id="woob-login"
-          label={t("login")}
-          type="text"
-          value={login}
-          onChange={(e) => setLogin(e.target.value)}
-          placeholder={isConfigured ? t("keepExisting") : ""}
-          autoComplete="username"
-          required={!isConfigured}
-        />
-
-        <Input
-          id="woob-password"
-          label={t("password")}
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder={isConfigured ? t("keepExisting") : ""}
-          autoComplete="current-password"
-          required={!isConfigured}
+        <CredentialFields
+          isTradeRepublic={isTradeRepublic}
+          isConfigured={isConfigured}
+          identifier={identifier}
+          secret={secret}
+          onIdentifier={setIdentifier}
+          onSecret={setSecret}
         />
 
         {error && <p role="alert" className="text-xs text-[var(--negative)]">{error}</p>}
@@ -276,5 +308,78 @@ export function ConfigureWoobDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/**
+ * The two credential inputs, whichever backend they belong to.
+ *
+ * Extracted rather than inlined with a ternary per attribute: eight of them in
+ * a row is exactly the shape that pushed the parent past its complexity
+ * budget, and the pair reads as one decision ("which credentials does this
+ * bank need") rather than eight independent ones.
+ */
+function CredentialFields({
+  isTradeRepublic,
+  isConfigured,
+  identifier,
+  secret,
+  onIdentifier,
+  onSecret,
+}: Readonly<{
+  isTradeRepublic: boolean;
+  isConfigured: boolean;
+  identifier: string;
+  secret: string;
+  onIdentifier: (v: string) => void;
+  onSecret: (v: string) => void;
+}>) {
+  const t = useTranslations("configureWoob");
+  const keepExisting = isConfigured ? t("keepExisting") : "";
+
+  const fields = isTradeRepublic
+    ? {
+        identifierLabel: t("trPhone"),
+        identifierPlaceholder: "+33612345678",
+        secretLabel: t("trPin"),
+        secretPlaceholder: "••••",
+        // A phone number and a PIN are not this browser's saved credentials
+        // for anything, so offering to autofill them only ever gets it wrong.
+        identifierAutoComplete: "off",
+        secretAutoComplete: "off",
+      }
+    : {
+        identifierLabel: t("login"),
+        identifierPlaceholder: keepExisting,
+        secretLabel: t("password"),
+        secretPlaceholder: keepExisting,
+        identifierAutoComplete: "username",
+        secretAutoComplete: "current-password",
+      };
+
+  return (
+    <>
+      <Input
+        id="woob-login"
+        label={fields.identifierLabel}
+        type="text"
+        value={identifier}
+        onChange={(e) => onIdentifier(e.target.value)}
+        placeholder={fields.identifierPlaceholder}
+        autoComplete={fields.identifierAutoComplete}
+        required={!isConfigured}
+      />
+
+      <Input
+        id="woob-password"
+        label={fields.secretLabel}
+        type="password"
+        value={secret}
+        onChange={(e) => onSecret(e.target.value)}
+        placeholder={fields.secretPlaceholder}
+        autoComplete={fields.secretAutoComplete}
+        required={!isConfigured}
+      />
+    </>
   );
 }
