@@ -80,10 +80,52 @@ def get_tr_institutions(cur) -> list[dict]:
     return cur.fetchall()
 
 
-def get_institution_id(cur, name: str) -> str | None:
-    cur.execute('SELECT id FROM "Institution" WHERE name = %s', (name,))
+# The fixed-id user row the v2.0 migration creates and backfills everything to.
+# Mirrors lib/domain/users.ts's OWNER_USER_ID.
+OWNER_USER_ID = "user-owner"
+
+
+def get_institution_id(cur, name: str, user_id: str = OWNER_USER_ID) -> str | None:
+    """An institution by name, scoped to whoever owns it.
+
+    Institution names are unique per USER, not globally (@@unique([userId,
+    name])), so a member creating their own "Trade Republic" is perfectly
+    legal - and an unscoped name lookup would then be a coin flip. This is
+    only ever called by the .env-configured syncs, whose credentials belong to
+    the instance owner, so the owner is the right default and the only value
+    passed today.
+    """
+    cur.execute(
+        'SELECT id FROM "Institution" WHERE name = %s AND "userId" = %s',
+        (name, user_id),
+    )
     row = cur.fetchone()
     return row["id"] if row else None
+
+
+def institution_owner_id(cur, institution_id: str) -> str | None:
+    """Who an institution belongs to. None if it no longer exists."""
+    cur.execute('SELECT "userId" FROM "Institution" WHERE id = %s', (institution_id,))
+    row = cur.fetchone()
+    return row["userId"] if row else None
+
+
+def _sync_log_owner(cur, source: str) -> str | None:
+    """The user a SyncLog row belongs to, derived from its source string.
+
+    Per-institution sources are "woob:<institutionId>" and "tr:<institutionId>";
+    the .env ones are bare words ("lcl", "trade_republic",
+    "trade_republic_realtime") and belong to the owner, which is the column
+    default. Deriving it here rather than adding a parameter to every call site
+    means the ~10 existing callers became correct without being touched, and a
+    future one cannot forget it.
+    """
+    for prefix in ("woob:", "tr:"):
+        if source.startswith(prefix):
+            institution_id = source[len(prefix):]
+            if institution_id and ":" not in institution_id:
+                return institution_owner_id(cur, institution_id)
+    return None
 
 
 # Trade Republic account kinds - mirrors sync_tr.py's ACC_TYPE_MAP suffixes and
@@ -98,6 +140,30 @@ def _is_trade_republic_sync_id(sync_id: str) -> bool:
         return False
     parts = sync_id[len("tr:"):].split(":")
     return len(parts) <= 2 and parts[-1] in _TR_SUFFIXES
+
+
+def _realign_owner(cur, account_id: str, institution_id: str) -> str:
+    """Move an already-synced account back to whoever owns its institution.
+
+    Repairs rows created before this module set "userId" at all, when every
+    synced account silently landed on the instance owner. A member who
+    connected their own Trade Republic ended up with accounts they could see
+    the COUNT of in Settings and nothing else, anywhere - the count is
+    unfiltered, every other read scopes to baseAccountIds(viewer).
+
+    Self-healing on the next sync rather than a one-off script, because the
+    invariant it restores is simply true: nothing in the app ever moves a
+    synced account away from its institution's owner, so a mismatch can only
+    be this bug. Co-ownership is unaffected - that lives in AccountCoOwner,
+    not in this column.
+    """
+    owner_id = institution_owner_id(cur, institution_id)
+    if owner_id:
+        cur.execute(
+            'UPDATE "Account" SET "userId" = %s WHERE id = %s AND "userId" <> %s',
+            (owner_id, account_id, owner_id),
+        )
+    return account_id
 
 
 def upsert_account(cur, *, sync_id: str, name: str, account_type: str, institution_id: str) -> str:
@@ -128,7 +194,7 @@ def upsert_account(cur, *, sync_id: str, name: str, account_type: str, instituti
     cur.execute('SELECT id FROM "Account" WHERE "syncId" = %s', (sync_id,))
     row = cur.fetchone()
     if row:
-        return row["id"]
+        return _realign_owner(cur, row["id"], institution_id)
 
     # The fallback below matches on the trailing colon-delimited segment, which
     # for LCL/Woob is a bank-generated native account id: unique per real
@@ -153,15 +219,25 @@ def upsert_account(cur, *, sync_id: str, name: str, account_type: str, instituti
         )
         row = cur.fetchone()
         if row:
-            return row["id"]
+            return _realign_owner(cur, row["id"], institution_id)
 
+    # A synced account belongs to whoever owns its institution.
+    #
+    # This column used to be left to its DB-level default, which is the
+    # instance owner - correct while only the owner could sync anything, and
+    # wrong the moment v2.1 let anyone connect their own Trade Republic. A
+    # member's sync then created accounts owned by the ADMIN: Settings showed
+    # "4 comptes" against their institution, because that count is unfiltered,
+    # and every other page showed nothing, because they all scope to
+    # baseAccountIds(viewer). Reported from a real instance exactly that way.
+    owner_id = institution_owner_id(cur, institution_id)
     account_id = str(uuid.uuid4())
     cur.execute(
         """
-        INSERT INTO "Account" (id, name, type, "institutionId", "syncId", "createdAt", "updatedAt")
-        VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+        INSERT INTO "Account" (id, name, type, "institutionId", "userId", "syncId", "createdAt", "updatedAt")
+        VALUES (%s, %s, %s, %s, COALESCE(%s, 'user-owner'), %s, NOW(), NOW())
         """,
-        (account_id, name, account_type, institution_id, sync_id),
+        (account_id, name, account_type, institution_id, owner_id, sync_id),
     )
     return account_id
 
@@ -244,10 +320,16 @@ def upsert_transaction(cur, *, account_id: str, sync_id: str, date, label: str, 
 
 
 def write_sync_log(cur, source: str, status: str, message: str | None = None):
+    # Same omission as upsert_account had, with the same consequence:
+    # getSyncStatus() filters by userId, so a member's own sync status was
+    # written against the owner and never appeared on their Settings page -
+    # no status icon, and no way for the Connect prompt to know a session had
+    # expired. NULL falls back to the column default, the owner, which is
+    # correct for every .env-configured source.
     cur.execute(
         """
-        INSERT INTO "SyncLog" (id, source, status, message, "createdAt")
-        VALUES (%s, %s, %s, %s, NOW())
+        INSERT INTO "SyncLog" (id, source, status, message, "userId", "createdAt")
+        VALUES (%s, %s, %s, %s, COALESCE(%s, 'user-owner'), NOW())
         """,
-        (str(uuid.uuid4()), source, status, message),
+        (str(uuid.uuid4()), source, status, message, _sync_log_owner(cur, source)),
     )

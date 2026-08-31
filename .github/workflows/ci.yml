@@ -84,6 +84,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # A real database, because sync/db.py writes with raw SQL and explicit
+    # column lists. The bug this guards against was an ABSENT column silently
+    # taking its DB-level default (the instance owner), which no mock can
+    # show - a member's synced accounts landed on the admin. Without this
+    # service the tests skip, and the guard would exist only on a laptop.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -92,6 +113,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r sync/requirements.txt -r sync/requirements-dev.txt
+      # Prisma owns the schema, so it is what creates it here too - a
+      # hand-written CREATE TABLE would drift from the real one silently.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma migrate deploy
       - run: cd sync && python -m pytest
 
   security:
