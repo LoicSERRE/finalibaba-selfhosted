@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ShieldCheck, ShieldOff, Plus, RefreshCw, Smartphone } from "lucide-react";
 import { formatDateShort, localeToIntl } from "@/lib/utils/format";
 import { markAppLockDevice, forgetAppLockDevice } from "@/lib/domain/app-lock-device";
+import { withTimeout } from "@/lib/utils/with-timeout";
 import { useLocale, useTranslations } from "next-intl";
 import { startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { Button } from "@/components/ui/button";
@@ -49,9 +50,24 @@ export function AppLockSection({
     setRegistering(true);
     setAddError(null);
     try {
-      const optionsJSON = await startAppLockRegistration();
-      const response = await startRegistration({ optionsJSON });
-      await verifyAppLockRegistration(response, deviceLabel);
+      // Each step gets its own deadline so a stall names the step it stalled
+      // on, and the dialog always becomes usable again. Without this a hang
+      // left the button spinning with no way out but reloading the page.
+      const optionsJSON = await withTimeout(
+        startAppLockRegistration(),
+        20_000,
+        t("errorServerTimeout"),
+      );
+      const response = await withTimeout(
+        startRegistration({ optionsJSON }),
+        120_000,
+        t("errorBrowserTimeout"),
+      );
+      await withTimeout(
+        verifyAppLockRegistration(response, deviceLabel),
+        20_000,
+        t("errorServerTimeout"),
+      );
       // Marks THIS browser as one the lock screen applies to. Without it the
       // account flag would lock every device the user owns, including ones
       // with no credential to unlock with - see lib/domain/app-lock-device.ts.

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, TrendingUp } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, TrendingUp } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
@@ -78,45 +78,65 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
 
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="username" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                {t("usernameOptional")}
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                autoCapitalize="none"
-                className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm text-[var(--foreground)] placeholder-[var(--muted)]/40 focus:outline-none focus:border-[var(--accent)] transition-colors"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                {t("password")}
-              </label>
-              <div className="relative">
+            {/* The credential step is replaced by the code step, not stacked
+                above it. A code is only worth typing once the password is
+                behind you, and leaving both on screen reads as "fill all of
+                this in now" - which is not how any app people already use
+                asks for a second factor. */}
+            {!askingCode && (
+              <>
+              <div className="space-y-1.5">
+                <label htmlFor="username" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                  {t("usernameOptional")}
+                </label>
                 <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  autoComplete="current-password"
-                  className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl px-4 py-3 pr-12 text-sm text-[var(--foreground)] placeholder-[var(--muted)]/40 focus:outline-none focus:border-[var(--accent)] transition-colors"
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm text-[var(--foreground)] placeholder-[var(--muted)]/40 focus:outline-none focus:border-[var(--accent)] transition-colors"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? t("hidePassword") : t("showPassword")}
-                  className="absolute right-0 top-0 h-full w-12 flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset rounded-r-xl"
-                >
-                  {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-                </button>
               </div>
-            </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+                  {t("password")}
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    autoComplete="current-password"
+                    className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl px-4 py-3 pr-12 text-sm text-[var(--foreground)] placeholder-[var(--muted)]/40 focus:outline-none focus:border-[var(--accent)] transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? t("hidePassword") : t("showPassword")}
+                    className="absolute right-0 top-0 h-full w-12 flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset rounded-r-xl"
+                  >
+                    {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                  </button>
+                </div>
+              </div>
+              </>
+            )}
+
+            {askingCode && (
+              <button
+                type="button"
+                onClick={() => { setAskingCode(false); setTotpCode(""); setError(""); }}
+                className="flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+              >
+                <ArrowLeft size={12} aria-hidden="true" />
+                {username ? t("signingInAs", { name: username }) : t("back")}
+              </button>
+            )}
 
             {totpEnabled && askingCode && (
               <div className="space-y-1.5">
@@ -147,7 +167,7 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
 
             <button
               type="submit"
-              disabled={loading || !password || (askingCode && !totpCode)}
+              disabled={loading || (askingCode ? !totpCode : !password)}
               className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
               style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-strong))" }}
             >

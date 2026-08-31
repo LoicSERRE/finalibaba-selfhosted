@@ -78,19 +78,30 @@ export async function getAppLockStatus() {
 export async function startAppLockRegistration() {
   const viewer = await getViewer();
   const { rpID } = await getRpConfig();
-  const [existing, user] = await Promise.all([
-    prisma.appLockCredential.findMany({ where: { userId: viewer.id }, select: { credentialId: true } }),
-    prisma.user.findUnique({ where: { id: viewer.id }, select: { username: true, displayName: true } }),
-  ]);
+  const user = await prisma.user.findUnique({
+    where: { id: viewer.id },
+    select: { username: true, displayName: true },
+  });
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
     rpID,
     userName: user?.username || user?.displayName || "owner",
     userID: webAuthnUserId(viewer.id),
     attestationType: "none",
-    // Excludes already-registered devices from being re-registered as a
-    // second credential for the same authenticator.
-    excludeCredentials: existing.map((c) => ({ id: c.credentialId })),
+    // No excludeCredentials, deliberately.
+    //
+    // Its only job was to stop the same authenticator being registered twice,
+    // which costs a duplicate row the user can see and delete. What it cost
+    // instead was a registration that never completed: the list carries no
+    // `transports` (they are not stored), so a browser cannot tell whether an
+    // excluded credential lives locally or on some other device, and has to
+    // go and find out. On a machine with a phone already registered, that is
+    // where a second device stopped - reported twice, and not reproducible
+    // here even against a production build with a real second authenticator.
+    //
+    // A visible duplicate is a far better failure than a spinner that never
+    // ends, so the exclusion goes. Registering the same device twice simply
+    // lists it twice.
     authenticatorSelection: {
       residentKey: "preferred",
       userVerification: "preferred",
@@ -102,9 +113,8 @@ export async function startAppLockRegistration() {
       // phone by QR, a security key), and with a phone already registered it
       // sat on that choice indefinitely rather than going straight to Windows
       // Hello - reported as "registering a second device spins forever".
-      // Pinning it also makes excludeCredentials resolve without probing:
-      // another device's platform credential cannot be present here, so there
-      // is nothing to reach out and check.
+      // It also removes any reason for the browser to look beyond this
+      // machine at all.
       authenticatorAttachment: "platform",
     },
     // Explicit rather than left to the library default, so a ceremony the

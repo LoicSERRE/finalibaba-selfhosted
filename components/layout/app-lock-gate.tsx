@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Lock, RefreshCw, AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
@@ -48,6 +48,43 @@ export function AppLockGate({
   const [error, setError] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState(false);
   const [canRegister, setCanRegister] = useState(false);
+  // One automatic attempt per mount. Retrying on every render would prompt in
+  // a loop, and React runs effects twice in development.
+  const autoTried = useRef(false);
+
+  const attemptUnlock = useCallback(
+    async ({ silent }: { silent: boolean }) => {
+      setChecking(true);
+      setError(null);
+      try {
+        const optionsJSON = await startAppLockAuthentication();
+        const response = await startAuthentication({ optionsJSON });
+        await verifyAppLockAuthentication(response);
+        sessionStorage.setItem(sessionKey, "1");
+        setUnlocked(true);
+      } catch (e) {
+        // The automatic attempt is allowed to fail quietly: a browser that
+        // refuses a ceremony without a user gesture, or a prompt the user
+        // dismissed, should leave the button waiting rather than an alarming
+        // red message they did not ask for.
+        if (!silent) {
+          setError(e instanceof Error ? e.message : t("unknownError"));
+          // The credential this browser registered may have been revoked from
+          // another device, or its authenticator reset. Without a way back it
+          // would be locked out for good, so offer to register it again -
+          // which is no weaker than the lock itself, since reaching this
+          // screen already required whatever authentication the instance is
+          // configured with.
+          setCanRegister(true);
+        }
+      } finally {
+        setChecking(false);
+      }
+    },
+    [sessionKey, t],
+  );
+
+  const handleUnlock = () => attemptUnlock({ silent: false });
 
   useEffect(() => {
     if (!enabled) return;
@@ -64,34 +101,22 @@ export function AppLockGate({
       setUnlocked(true);
       return;
     }
-    if (!browserSupportsWebAuthn()) setUnsupported(true);
-    // Deliberately no auto-triggered ceremony on mount - forcing a native
-    // biometric prompt the instant the page loads (before the user has
-    // even seen why) is jarring; a visible "Unlock" button makes the
-    // prompt an expected response to a real tap, not a surprise.
-  }, [enabled, sessionKey, userId]);
-
-  async function handleUnlock() {
-    setChecking(true);
-    setError(null);
-    try {
-      const optionsJSON = await startAppLockAuthentication();
-      const response = await startAuthentication({ optionsJSON });
-      await verifyAppLockAuthentication(response);
-      sessionStorage.setItem(sessionKey, "1");
-      setUnlocked(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("unknownError"));
-      // The credential this browser registered may have been revoked from
-      // another device, or its authenticator reset. Without a way back it
-      // would be locked out for good, so offer to register it again - which
-      // is no weaker than the lock itself, since reaching this screen already
-      // required whatever authentication the instance is configured with.
-      setCanRegister(true);
-    } finally {
-      setChecking(false);
+    if (!browserSupportsWebAuthn()) {
+      setUnsupported(true);
+      return;
     }
-  }
+    // Ask for the biometric straight away, which is what a native app-lock
+    // does - Trade Republic's own opens Face ID on launch rather than making
+    // you tap "unlock" first. An earlier version deliberately waited for a
+    // tap, on the theory that an unprompted native dialog is jarring; in
+    // practice the extra tap is the jarring part, since the lock screen has
+    // no other purpose. The button stays as the retry, and as the way in on
+    // any browser that refuses a ceremony without a user gesture.
+    if (autoTried.current) return;
+    autoTried.current = true;
+    void attemptUnlock({ silent: true });
+  }, [enabled, sessionKey, userId, attemptUnlock]);
+
 
   async function handleRegisterThisDevice() {
     setChecking(true);

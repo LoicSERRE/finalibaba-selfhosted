@@ -73,7 +73,9 @@
     "sessionEndedTitle": "Session ended",
     "sessionEndedBody": "This account no longer exists. You are being redirected to the login page.",
     "sessionEndedLink": "Go to login",
-    "continue": "Continue"
+    "continue": "Continue",
+    "signingInAs": "Signing in as {name} · Change",
+    "back": "Back to password"
   },
   "accountTypes": {
     "CHECKING": "Checking",
@@ -689,7 +691,9 @@
       "neverUsed": "Never used",
       "remove": "Remove",
       "removeDescription": "This device will no longer be able to unlock the app. If it was the last registered device, app lock will be disabled.",
-      "unknownError": "An unexpected error occurred."
+      "unknownError": "An unexpected error occurred.",
+      "errorServerTimeout": "The server did not respond. Try again; if it keeps happening, check the app container's logs.",
+      "errorBrowserTimeout": "Your browser did not finish the request. Check that Windows Hello, Touch ID or your fingerprint is set up on this device, then try again."
     },
     "shareLinks": {
       "title": "Read-only share links",
