@@ -351,6 +351,7 @@ export async function adoptDedicatedTrAccounts(
   });
 
   let adopted = 0;
+  let skipped = 0;
   for (const account of legacy) {
     const suffix = parseTrSuffix(account.syncId);
     if (!suffix) continue;
@@ -364,10 +365,24 @@ export async function adoptDedicatedTrAccounts(
       where: { syncId: target },
       select: { id: true },
     });
-    if (clash) continue;
+    if (clash) {
+      skipped++;
+      continue;
+    }
 
     await prisma.account.update({ where: { id: account.id }, data: { syncId: target } });
     adopted++;
+  }
+
+  // Every account already had a per-user copy, so this did nothing and would
+  // otherwise report a cheerful "0 adopted". That is the state of anyone who
+  // synced before removing TR_PHONE: two full sets side by side, and no way
+  // to tell from here which copy holds the real history. Say so, and point at
+  // the tool that measures both and lets them choose.
+  if (adopted === 0 && skipped > 0) {
+    throw new Error(
+      `Ces ${skipped} compte(s) existent déjà en double : une synchronisation a déjà créé sa propre copie. Lance ./scripts/fix-duplicate-tr-accounts.sh sur le serveur - il compare l'historique des deux copies et supprime la plus pauvre.`,
+    );
   }
 
   revalidatePath("/settings");

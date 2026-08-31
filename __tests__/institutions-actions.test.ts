@@ -503,11 +503,33 @@ describe("adoptDedicatedTrAccounts", () => {
   it("skips an account whose per-user id already exists rather than colliding", async () => {
     // syncId is globally unique, so renaming onto a taken id would throw. A
     // per-user sync has already made its own copy; merging two accounts on a
-    // guess is not this action's call.
-    accountFindManyMock.mockResolvedValueOnce([{ id: "a1", syncId: "tr:cash" }]);
-    accountFindUniqueMock.mockResolvedValueOnce({ id: "already-there" });
+    // guess is not this action's call. The rest still gets taken over.
+    accountFindManyMock.mockResolvedValueOnce([
+      { id: "a1", syncId: "tr:cash" },
+      { id: "a2", syncId: "tr:cto" },
+    ]);
+    accountFindUniqueMock
+      .mockResolvedValueOnce({ id: "already-there" })
+      .mockResolvedValueOnce(null);
 
-    await expect(adoptDedicatedTrAccounts("inst-1")).resolves.toEqual({ adopted: 0 });
+    await expect(adoptDedicatedTrAccounts("inst-1")).resolves.toEqual({ adopted: 1 });
+    expect(accountUpdateMock).toHaveBeenCalledTimes(1);
+    expect(accountUpdateMock).toHaveBeenCalledWith({
+      where: { id: "a2" },
+      data: { syncId: "tr:inst-1:cto" },
+    });
+  });
+
+  it("says so instead of reporting a cheerful zero when every account is already duplicated", async () => {
+    // The state of anyone who synced before removing TR_PHONE: two full sets
+    // side by side. "0 adopted" reads as success and leaves them stuck.
+    accountFindManyMock.mockResolvedValueOnce([
+      { id: "a1", syncId: "tr:cash" },
+      { id: "a2", syncId: "tr:cto" },
+    ]);
+    accountFindUniqueMock.mockResolvedValue({ id: "already-there" });
+
+    await expect(adoptDedicatedTrAccounts("inst-1")).rejects.toThrow("fix-duplicate-tr-accounts.sh");
     expect(accountUpdateMock).not.toHaveBeenCalled();
   });
 });
