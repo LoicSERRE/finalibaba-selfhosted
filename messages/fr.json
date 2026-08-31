@@ -1247,7 +1247,10 @@
     "unknownError": "Erreur inconnue",
     "trHint": "Finalibaba se connecte directement à Trade Republic (via pytr) et récupère tes positions, ton solde espèces et l'historique de tes opérations. Après l'enregistrement, un code te sera envoyé dans l'application Trade Republic pour établir la session.",
     "trPhone": "Numéro de téléphone Trade Republic",
-    "trPin": "Code PIN Trade Republic"
+    "trPin": "Code PIN Trade Republic",
+    "adoptDescription": "{count} compte(s) sont encore rattachés à la synchronisation .env. Reprends-les avec les identifiants de cette institution : les comptes et tout leur historique sont conservés, rien n'est supprimé.",
+    "adoptButton": "Reprendre les comptes existants",
+    "adoptSuccess": "{count} compte(s) repris, avec leur historique. Connecte-toi puis lance une synchronisation."
   },
   "exportButton": {
     "export": "Exporter",

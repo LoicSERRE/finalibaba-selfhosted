@@ -80,6 +80,11 @@ interface Props {
   // woobAccountCount is 0, as a second, server-side guard against deleting
   // the only copy of an account's history.
   onMigrate?: () => Promise<{ deleted: number }>;
+  /** Bound adoptDedicatedTrAccounts. Renames the .env sync's account ids to
+   *  this institution's own, keeping every account and its whole history -
+   *  the lossless counterpart to onMigrate, and the only one offered for
+   *  Trade Republic. */
+  onAdopt?: () => Promise<{ adopted: number }>;
 }
 
 export function ConfigureWoobDialog({
@@ -93,6 +98,7 @@ export function ConfigureWoobDialog({
   legacyOldestDate = null,
   woobOldestDate = null,
   onMigrate,
+  onAdopt,
   isTradeRepublicConfigured = false,
 }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
@@ -107,6 +113,9 @@ export function ConfigureWoobDialog({
   const [migratePending, startMigrateTransition] = useTransition();
   const [migrateError, setMigrateError] = useState<string | null>(null);
   const [migratedCount, setMigratedCount] = useState(0);
+  const [adoptedCount, setAdoptedCount] = useState<number | null>(null);
+  const [adoptError, setAdoptError] = useState<string | null>(null);
+  const [adoptPending, startAdoptTransition] = useTransition();
   const t = useTranslations("configureWoob");
   const tc = useTranslations("common");
 
@@ -127,6 +136,23 @@ export function ConfigureWoobDialog({
   // run until "woob:"-prefixed accounts exist - which they never will here, so
   // the block would sit there permanently saying it has nothing to work with.
   const canMigrate = legacyAccountCount > 0 && !isTradeRepublic;
+  // Trade Republic gets the lossless path instead. Its four legacy ids map
+  // one-to-one onto the per-user shape, so the accounts can simply be renamed
+  // rather than deleted and re-synced from scratch.
+  const canAdopt = legacyAccountCount > 0 && isTradeRepublic && !!onAdopt;
+
+  const handleAdopt = () => {
+    if (!onAdopt) return;
+    setAdoptError(null);
+    startAdoptTransition(async () => {
+      try {
+        const { adopted } = await onAdopt();
+        setAdoptedCount(adopted);
+      } catch (e) {
+        setAdoptError(e instanceof Error ? e.message : t("unknownError"));
+      }
+    });
+  };
   const historyLossDays = historyDepthLossDays(legacyOldestDate, woobOldestDate);
 
   const handleMigrate = () => {
@@ -191,6 +217,29 @@ export function ConfigureWoobDialog({
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {canAdopt && adoptedCount === null && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/40">
+            <ArrowRightLeft size={14} className="text-[var(--accent-text)] shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="space-y-2 flex-1">
+              <p className="text-xs text-[var(--foreground)]">
+                {t("adoptDescription", { count: legacyAccountCount })}
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={handleAdopt} disabled={adoptPending}>
+                {adoptPending && <RefreshCw size={12} className="animate-spin" aria-hidden="true" />}
+                {t("adoptButton")}
+              </Button>
+              {adoptError && <p className="text-xs text-[var(--negative)]">{adoptError}</p>}
+            </div>
+          </div>
+        )}
+
+        {adoptedCount !== null && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--positive)]/10 border border-[var(--positive)]/40">
+            <CheckCircle size={14} className="text-[var(--positive)] shrink-0 mt-0.5" aria-hidden="true" />
+            <p className="text-xs text-[var(--positive)]">{t("adoptSuccess", { count: adoptedCount })}</p>
+          </div>
+        )}
+
         {(hasDedicatedEnvSync || canMigrate) && migrateStep !== "done" && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/40">
             <AlertTriangle size={14} className="text-[var(--warning)] shrink-0 mt-0.5" aria-hidden="true" />

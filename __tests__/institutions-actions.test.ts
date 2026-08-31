@@ -16,6 +16,8 @@ const {
   institutionFindFirstMock,
   accountCountMock,
   accountFindManyMock,
+  accountFindUniqueMock,
+  accountUpdateMock,
   accountDeleteManyMock,
   transactionFindFirstMock,
   historicalBalanceFindFirstMock,
@@ -27,6 +29,8 @@ const {
   institutionFindFirstMock: vi.fn(),
   accountCountMock: vi.fn(),
   accountFindManyMock: vi.fn(),
+  accountFindUniqueMock: vi.fn(),
+  accountUpdateMock: vi.fn(),
   accountDeleteManyMock: vi.fn(),
   transactionFindFirstMock: vi.fn(),
   historicalBalanceFindFirstMock: vi.fn(),
@@ -44,6 +48,8 @@ vi.mock("@/lib/db/prisma", () => ({
     account: {
       count: accountCountMock,
       findMany: accountFindManyMock,
+      findUnique: accountFindUniqueMock,
+      update: accountUpdateMock,
       deleteMany: accountDeleteManyMock,
     },
     transaction: { findFirst: transactionFindFirstMock },
@@ -69,6 +75,7 @@ import {
   clearGocardlessConnection,
   getMigrationHistoryDepth,
   migrateDedicatedSyncToWoob,
+  adoptDedicatedTrAccounts,
   setWoobConfig,
   setTradeRepublicConfig,
   clearTradeRepublicConfig,
@@ -83,6 +90,7 @@ beforeEach(() => {
   institutionFindFirstMock.mockReset().mockResolvedValue(null);
   accountCountMock.mockReset();
   accountFindManyMock.mockReset().mockResolvedValue([]);
+  accountFindUniqueMock.mockReset().mockResolvedValue(null);
   accountDeleteManyMock.mockReset().mockResolvedValue({ count: 0 });
   transactionFindFirstMock.mockReset().mockResolvedValue(null);
   historicalBalanceFindFirstMock.mockReset().mockResolvedValue(null);
@@ -423,5 +431,83 @@ describe("createInstitution provider selection", () => {
     expect(institutionCreateMock).toHaveBeenCalledWith({
       data: { userId: "user-owner", name: "Half" },
     });
+  });
+});
+
+// Moving off TR_PHONE onto per-user credentials must not cost anyone their
+// history. migrateDedicatedSyncToWoob DELETES the legacy accounts, which for
+// Trade Republic would throw away years of transactions to restart from
+// whatever the API still serves - the shape that already cost a real user
+// their LCL history in v1.11. Nothing needs deleting: only the string saying
+// which sync owns the row is wrong.
+describe("adoptDedicatedTrAccounts", () => {
+  const INSTITUTION = { trPhone: "+33612345678" };
+
+  beforeEach(() => {
+    delete process.env.TR_PHONE;
+    institutionFindUniqueMock.mockResolvedValue(INSTITUTION);
+    accountUpdateMock.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete process.env.TR_PHONE;
+  });
+
+  it("refuses while TR_PHONE is still set", async () => {
+    // Not caution: the env sync resolves its accounts by those same legacy
+    // ids, so running between the rename and the .env edit would recreate
+    // them - the duplicate set this operation exists to avoid.
+    process.env.TR_PHONE = "+33612345678";
+
+    await expect(adoptDedicatedTrAccounts("inst-1")).rejects.toThrow("TR_PHONE");
+    expect(accountUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the institution has no Trade Republic credentials yet", async () => {
+    institutionFindUniqueMock.mockResolvedValue({ trPhone: null });
+
+    await expect(adoptDedicatedTrAccounts("inst-1")).rejects.toThrow("Configure d'abord");
+    expect(accountUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("renames each legacy account in place, never deleting one", async () => {
+    accountFindManyMock.mockResolvedValueOnce([
+      { id: "a1", syncId: "tr:cash" },
+      { id: "a2", syncId: "tr:cto" },
+    ]);
+
+    await expect(adoptDedicatedTrAccounts("inst-1")).resolves.toEqual({ adopted: 2 });
+
+    expect(accountUpdateMock).toHaveBeenCalledWith({
+      where: { id: "a1" },
+      data: { syncId: "tr:inst-1:cash" },
+    });
+    expect(accountUpdateMock).toHaveBeenCalledWith({
+      where: { id: "a2" },
+      data: { syncId: "tr:inst-1:cto" },
+    });
+    // The whole point: the rows survive, so their transactions, balances and
+    // holdings do too.
+    expect(accountDeleteManyMock).not.toHaveBeenCalled();
+  });
+
+  it("only ever reads the four exact legacy ids, never a tr: prefix", async () => {
+    await adoptDedicatedTrAccounts("inst-1");
+
+    expect(accountFindManyMock).toHaveBeenCalledWith({
+      where: { institutionId: "inst-1", syncId: { in: ["tr:cash", "tr:cto", "tr:pea", "tr:crypto"] } },
+      select: { id: true, syncId: true },
+    });
+  });
+
+  it("skips an account whose per-user id already exists rather than colliding", async () => {
+    // syncId is globally unique, so renaming onto a taken id would throw. A
+    // per-user sync has already made its own copy; merging two accounts on a
+    // guess is not this action's call.
+    accountFindManyMock.mockResolvedValueOnce([{ id: "a1", syncId: "tr:cash" }]);
+    accountFindUniqueMock.mockResolvedValueOnce({ id: "already-there" });
+
+    await expect(adoptDedicatedTrAccounts("inst-1")).resolves.toEqual({ adopted: 0 });
+    expect(accountUpdateMock).not.toHaveBeenCalled();
   });
 });

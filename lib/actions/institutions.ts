@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned } from "@/lib/auth-context";
-import { legacyTrSyncIds } from "@/lib/domain/sync-ids";
+import { legacyTrSyncIds, parseTrSuffix, buildTrSyncId } from "@/lib/domain/sync-ids";
 
 export async function createInstitution(formData: FormData) {
   const name = (formData.get("name") as string).trim();
@@ -299,6 +299,81 @@ export async function getMigrationHistoryDepth(
     oldestHistoryDate(woobAccounts.map((a) => a.id)),
   ]);
   return { legacyOldest, woobOldest };
+}
+
+/**
+ * Hand the .env Trade Republic sync's existing accounts over to this
+ * institution's own credentials, keeping every one of them and their history.
+ *
+ * The alternative already here, migrateDedicatedSyncToWoob, DELETES the legacy
+ * accounts once replacements exist - which for a move off TR_PHONE means
+ * throwing away years of transactions and balances and starting the new
+ * connection from whatever Trade Republic still serves. That is the shape that
+ * cost a real user their LCL history in v1.11, and the history-depth warning
+ * only tells you it is about to happen.
+ *
+ * Nothing has to be deleted. The rows are already correct; only the string
+ * that says which sync owns them is wrong. `tr:cash` becomes
+ * `tr:<institutionId>:cash`, the Account row is untouched otherwise, and every
+ * Transaction, HistoricalBalance and Holding hanging off it stays exactly
+ * where it is. The per-user sync then recognises them as its own and keeps
+ * appending.
+ *
+ * Refuses while TR_PHONE is still set, and that guard is the point rather than
+ * caution: the env sync resolves its accounts by those same legacy ids, so if
+ * it ran between the rename and the .env edit it would simply create `tr:cash`
+ * again - the duplicate set this whole operation exists to avoid. Removing the
+ * credentials first makes the race impossible instead of unlikely.
+ */
+export async function adoptDedicatedTrAccounts(
+  institutionId: string,
+): Promise<{ adopted: number }> {
+  const viewer = await getViewer();
+  await assertOwned("institution", institutionId, viewer.id);
+
+  if (process.env.TR_PHONE) {
+    throw new Error(
+      "Retire d'abord TR_PHONE et TR_PIN du .env puis redémarre les conteneurs - sinon la synchronisation .env recréerait les comptes juste après.",
+    );
+  }
+
+  const institution = await prisma.institution.findUnique({
+    where: { id: institutionId },
+    select: { trPhone: true },
+  });
+  if (!institution?.trPhone) {
+    throw new Error("Configure d'abord Trade Republic sur cette institution.");
+  }
+
+  const legacy = await prisma.account.findMany({
+    where: { institutionId, syncId: { in: legacyTrSyncIds() } },
+    select: { id: true, syncId: true },
+  });
+
+  let adopted = 0;
+  for (const account of legacy) {
+    const suffix = parseTrSuffix(account.syncId);
+    if (!suffix) continue;
+    const target = buildTrSyncId(suffix, institutionId);
+
+    // syncId is globally unique. A row already holding the target id means a
+    // per-user sync has already run and made its own copy, so renaming would
+    // fail the constraint - leave both alone and let the user decide, rather
+    // than merging two accounts on a guess.
+    const clash = await prisma.account.findUnique({
+      where: { syncId: target },
+      select: { id: true },
+    });
+    if (clash) continue;
+
+    await prisma.account.update({ where: { id: account.id }, data: { syncId: target } });
+    adopted++;
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/accounts");
+  revalidatePath("/");
+  return { adopted };
 }
 
 export async function migrateDedicatedSyncToWoob(institutionId: string): Promise<{ deleted: number }> {

@@ -1247,7 +1247,10 @@
     "unknownError": "Unknown error",
     "trHint": "Finalibaba connects to Trade Republic directly (through pytr) and fetches your positions, cash balance and transaction history. After saving, Trade Republic sends a code to its app to establish the session.",
     "trPhone": "Trade Republic phone number",
-    "trPin": "Trade Republic PIN"
+    "trPin": "Trade Republic PIN",
+    "adoptDescription": "{count} account(s) still belong to the .env sync. Take them over with this institution's credentials: the accounts and all their history are kept, nothing is deleted.",
+    "adoptButton": "Take over existing accounts",
+    "adoptSuccess": "{count} account(s) taken over, history included. Connect, then run a sync."
   },
   "exportButton": {
     "export": "Export",

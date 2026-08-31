@@ -8,7 +8,7 @@ import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { deleteInstitution, migrateDedicatedSyncToWoob, getMigrationHistoryDepth } from "@/lib/actions/institutions";
+import { deleteInstitution, migrateDedicatedSyncToWoob, getMigrationHistoryDepth, adoptDedicatedTrAccounts } from "@/lib/actions/institutions";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import { isLegacyEnvSyncId, isPerUserSyncId } from "@/lib/domain/sync-ids";
@@ -344,6 +344,7 @@ export default async function SettingsPage({
                           legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
                           woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}
                           onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
+                          onAdopt={adoptDedicatedTrAccounts.bind(null, inst.id)}
                         />
                       </>
                     );

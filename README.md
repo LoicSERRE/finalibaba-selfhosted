@@ -104,6 +104,20 @@ docker compose exec -it sync python setup_tr.py
 
 Either way the session persists in a Docker volume. Renew it when it expires (every few weeks) - from Settings for a UI-configured account, or by re-running the command above for the `.env` one.
 
+> [!IMPORTANT]
+> **One Trade Republic account can only be connected once per instance.** Trade Republic allows a single active web session per account, so putting the same phone number in `.env` *and* on an institution makes the two log each other out on every sync. Pick one path.
+
+#### Moving an existing `.env` connection into the interface
+
+Your accounts and their whole history are kept - nothing is deleted, the accounts are simply handed over to the new credentials.
+
+1. **Settings → Institutions → Configure sync** on your Trade Republic institution, and enter your phone number and PIN.
+2. **Remove `TR_PHONE` and `TR_PIN` from `.env`** and restart (`docker compose up -d`). Do this before the next step: while they are set, the `.env` sync would recreate the old accounts right after you moved them.
+3. Reopen the same dialog and click **Take over existing accounts**.
+4. Click **Connect** on that institution and enter the code from the Trade Republic app, then sync.
+
+The button refuses to run while `TR_PHONE` is still set, so the order is enforced rather than left to you to remember.
+
 Syncs positions, cash balance, **and** the cash account's full transaction history (card payments, transfers, trades, dividends, interest - real merchant/description labels, not just amounts) - so budget categorization and recurring-transaction detection work for Trade Republic the same way they do for a Woob-synced bank. The first sync after connecting pulls your full available history; every sync after that only fetches what's new.
 
 ### French banks via Woob
