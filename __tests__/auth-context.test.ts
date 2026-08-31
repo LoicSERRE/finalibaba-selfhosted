@@ -66,6 +66,8 @@ import {
   assertOwned,
   assertTransactionsWritable,
   getViewContext,
+  isDeletedSessionUser,
+  DeletedSessionUserError,
   OWNER_USER_ID,
 } from "@/lib/auth-context";
 
@@ -353,5 +355,63 @@ describe("getViewContext (the portfolio switcher's read path)", () => {
 
     expect(ctx.readOnly).toBe(false);
     expect(grantFindUniqueMock).not.toHaveBeenCalled();
+  });
+});
+
+// Reported from a real instance, and the worst bug this codebase has had: an
+// admin deleted a member's account while that member had a tab open, and the
+// member's next refresh logged them in AS THE ADMIN. The session cookie stays
+// cryptographically valid for its full 30 days, so the browser kept sending
+// it; the lookup for the deleted id returned null, and getViewer fell through
+// to the owner block - which returns role "ADMIN" and the owner's id. Full
+// read/write over the entire instance, from an account that no longer existed.
+//
+// The owner fallback must be unreachable whenever a session names a user.
+describe("getViewer with a session for a user that no longer exists", () => {
+  beforeEach(() => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue({ user: { id: "user-deleted" } });
+  });
+
+  it("refuses rather than falling back to the owner", async () => {
+    userFindUniqueMock.mockResolvedValue(null);
+
+    await expect(getViewer()).rejects.toBeInstanceOf(DeletedSessionUserError);
+  });
+
+  it("never looks the owner up at all, so it cannot return that identity", async () => {
+    // The precise regression: the second findUnique, for OWNER_USER_ID, was
+    // what handed over the admin identity. It must not happen.
+    userFindUniqueMock.mockResolvedValue(null);
+
+    await expect(getViewer()).rejects.toThrow();
+    expect(userFindUniqueMock).toHaveBeenCalledTimes(1);
+    expect(userFindUniqueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "user-deleted" } }),
+    );
+  });
+
+  it("throws even when the owner row is perfectly fine", async () => {
+    // Guards against a fix that only works because the owner lookup fails too.
+    userFindUniqueMock.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === OWNER_USER_ID ? OWNER : null,
+    );
+
+    await expect(getViewer()).rejects.toBeInstanceOf(DeletedSessionUserError);
+  });
+
+  it("is recognisable to the layout, which is the only caller allowed to swallow it", async () => {
+    userFindUniqueMock.mockResolvedValue(null);
+
+    const caught = await getViewer().catch((e) => e);
+    expect(isDeletedSessionUser(caught)).toBe(true);
+    // A genuinely broken install must stay distinguishable from this.
+    expect(isDeletedSessionUser(new Error("No owner user found"))).toBe(false);
+  });
+
+  it("blocks requireAdmin too, rather than granting it", async () => {
+    userFindUniqueMock.mockResolvedValue(null);
+
+    await expect(requireAdmin()).rejects.toBeInstanceOf(DeletedSessionUserError);
   });
 });

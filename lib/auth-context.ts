@@ -44,20 +44,68 @@ export interface Viewer {
 }
 
 /**
- * The current user. Throws only if the DB has no owner row at all, which
- * would mean the v2 migration never ran - a broken install, not a state the
- * app should try to paper over.
+ * Thrown when a request carries a validly-signed session for a user who no
+ * longer exists - the account was deleted while its owner still had a tab
+ * open. The token stays cryptographically valid for its full 30 days, so this
+ * is an everyday state, not an attack.
+ *
+ * It has its own type because the *only* correct response is to stop, and the
+ * previous code did the opposite. See getViewer.
+ */
+export class DeletedSessionUserError extends Error {
+  constructor(userId: string) {
+    super(`Session references a user that no longer exists: ${userId}`);
+    this.name = "DeletedSessionUserError";
+  }
+}
+
+export function isDeletedSessionUser(e: unknown): boolean {
+  return e instanceof DeletedSessionUserError;
+}
+
+/**
+ * The current user.
+ *
+ * **The owner fallback below is only ever reachable with no live session.**
+ * That distinction is the whole security property of this function, and it was
+ * missing: a session naming a user who had been deleted failed the lookup,
+ * fell through, and came back as the owner - with `role: "ADMIN"`. A member
+ * whose account an admin had just removed became that admin on their next
+ * refresh, with full read/write over the entire instance. Reported from a real
+ * instance, and reproduced here before fixing (see
+ * __tests__/auth-context.test.ts).
+ *
+ * A deleted user now raises DeletedSessionUserError instead. Deliberately not
+ * a redirect: this is called from app/layout.tsx, which renders on /login too,
+ * so redirecting there would loop forever. The layout catches it and signs the
+ * browser out, which is the one action that actually resolves the state.
+ *
+ * Throws for a different reason if the DB has no owner row at all - that means
+ * the v2 migration never ran, a broken install rather than a state to paper
+ * over.
  */
 export async function getViewer(): Promise<Viewer> {
   if (isAuthEnabled()) {
     const session = await getServerSession(authOptions);
-    // A session without a userId is a pre-v2 JWT still in a browser from
-    // before the upgrade (the old token only carried `sub: "owner"`).
-    // Mapping it to the owner keeps those sessions working through the
-    // upgrade instead of logging everyone out mid-flight.
-    const userId = (session?.user as { id?: string } | undefined)?.id ?? OWNER_USER_ID;
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
-    if (user) return { id: user.id, role: user.role, isMonoMode: false };
+    const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
+
+    if (sessionUserId) {
+      const user = await prisma.user.findUnique({
+        where: { id: sessionUserId },
+        select: { id: true, role: true },
+      });
+      // No fallback here, ever. Anything other than the real row for the id
+      // this session names is somebody else's identity.
+      if (!user) throw new DeletedSessionUserError(sessionUserId);
+      return { id: user.id, role: user.role, isMonoMode: false };
+    }
+
+    // No session id at all. Two cases, both benign: a pre-v2 JWT still live in
+    // a browser from before the upgrade (the old token only carried
+    // `sub: "owner"`, and mapping it to the owner is what keeps the upgrade
+    // from logging everyone out mid-flight), or no session cookie - which
+    // reaches here only on the routes the middleware exempts, /login and
+    // /invite among them, where the layout still has to render something.
   }
 
   const owner = await prisma.user.findUnique({

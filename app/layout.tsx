@@ -6,11 +6,12 @@ import { getLocale, getMessages } from "next-intl/server";
 import { SidebarWrapper } from "@/components/layout/sidebar-wrapper";
 import { AutoSync } from "@/components/layout/auto-sync";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
-import { OfflineBanner } from "@/components/layout/offline-banner";
+import { MainContent } from "@/components/layout/main-content";
+import { SessionEnded } from "@/components/auth/session-ended";
 import { AppLockGate } from "@/components/layout/app-lock-gate";
 import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer } from "@/lib/auth-context";
+import { getViewer, isDeletedSessionUser } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import "./globals.css";
 
@@ -80,9 +81,20 @@ export default async function RootLayout({
   // and the app-lock's own sessionStorage key - both are per-browser stores
   // that would otherwise be shared between two accounts using the same
   // browser. See ServiceWorkerRegistration and AppLockGate.
-  const viewer = await getViewer();
+  //
+  // A deleted account is the one thing this cannot resolve: the session cookie
+  // stays valid for its full 30 days, so the browser keeps sending it. The
+  // page is replaced by SessionEnded, which signs the browser out - rendering
+  // children here would run a page for an account that no longer exists.
+  let viewer: Awaited<ReturnType<typeof getViewer>> | null = null;
+  try {
+    viewer = await getViewer();
+  } catch (e) {
+    if (!isDeletedSessionUser(e)) throw e;
+  }
+
   const appLockEnabled =
-    process.env.DEMO_MODE === "true"
+    process.env.DEMO_MODE === "true" || !viewer
       ? false
       : await prisma.user
           .findUnique({ where: { id: viewer.id }, select: { appLockEnabled: true } })
@@ -110,18 +122,19 @@ export default async function RootLayout({
           >
             Skip to content
           </a>
-          <AppLockGate enabled={appLockEnabled} userId={viewer.id}>
-            <SidebarWrapper />
-            <main id="main-content" className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8">
-              <div className="sticky top-0 z-10">
-                <OfflineBanner />
-              </div>
-              <div className="p-4 md:p-8">{children}</div>
-            </main>
-          </AppLockGate>
-          {process.env.DEMO_MODE !== "true" && <AutoSync />}
-          <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} userId={viewer.id} />
-          <RealtimeRefresh />
+          {viewer ? (
+            <>
+              <AppLockGate enabled={appLockEnabled} userId={viewer.id}>
+                <SidebarWrapper />
+                <MainContent>{children}</MainContent>
+              </AppLockGate>
+              {process.env.DEMO_MODE !== "true" && <AutoSync />}
+              <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} userId={viewer.id} />
+              <RealtimeRefresh />
+            </>
+          ) : (
+            <SessionEnded />
+          )}
         </NextIntlClientProvider>
       </body>
     </html>
