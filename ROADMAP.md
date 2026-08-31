@@ -326,4 +326,4 @@ Two things were deliberately *not* built, and are scoped out rather than forgott
 - [X] CSV and PDF export
 - [X] Demo mode - pre-seeded fictional data, read-only (`DEMO_MODE=true`), cron reset
 - [X] WCAG 2.1 accessibility (keyboard navigation, screen reader, focus management)
-- [X] AGPL-3.0 open-source release *(that licence governed every release through v2.0.1; see LICENSE for what applies after)*
+- [X] AGPL-3.0 open-source release *(that licence governed every release through v2.0.1; see LICENSE.md for what applies after)*

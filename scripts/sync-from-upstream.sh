@@ -43,7 +43,11 @@ rsync -av --delete \
   --exclude='README.md' \
   --exclude='AGENTS.md' \
   --exclude='ROADMAP.md' \
-  --exclude='LICENSE' \
+  # Glob, not the exact name: LICENSE-AGPL-3.0 was NOT covered by a bare
+  # 'LICENSE', and since the upstream has no licence files at all, --delete
+  # would have removed it - taking with it the text that governs every
+  # release through v2.0.1 and that README.md links to.
+  --exclude='LICENSE*' \
   --exclude='CONTRIBUTING.md' \
   --exclude='scripts/' \
   --exclude='.claude/' \
