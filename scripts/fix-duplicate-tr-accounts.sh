@@ -13,8 +13,24 @@
 # What it does, per account kind:
 #   - compares the two copies on real history (oldest transaction, oldest
 #     balance, and the row counts of each)
-#   - deletes the copy with LESS history
+#   - MOVES everything the doomed copy holds and the survivor does not onto
+#     the survivor, so nothing is thrown away
+#   - deletes the now-redundant copy
 #   - renames the survivor to the per-user id, so the per-user sync adopts it
+#
+# The move matters more than it looks. Transaction.syncId is GLOBALLY unique
+# and Trade Republic ids are not namespaced per institution, so a transaction
+# present on the second copy is one the first never had - the second sync
+# could not have inserted it otherwise. Deleting that copy would destroy
+# those rows outright, and only a later sync re-fetching them from Trade
+# Republic would bring them back, which is a bet on how far its timeline
+# still reaches. Re-pointing them cannot collide, precisely because that
+# uniqueness means the survivor does not hold them.
+#
+# HistoricalBalance rows are worse: they are point-in-time records that
+# nothing recomputes, so a deleted one is gone for good. Only those newer
+# than the survivor's own newest are moved, which is the gap between the two
+# copies and cannot double up a day.
 #
 # Deleting an Account cascades to its Transaction/HistoricalBalance/Holding
 # rows, which is exactly why the choice is made on measured history and shown
@@ -129,9 +145,11 @@ if [ "$APPLY" != true ]; then
 fi
 
 echo ""
-echo "This DELETES the shallower copy of each kind above, and every"
-echo "transaction, balance and holding attached to it. Take a backup first"
-echo "(./scripts/backup.sh) if you have not."
+echo "This moves every transaction, and every balance snapshot newer than the"
+echo "survivor already has, onto the copy being kept - then deletes the other."
+echo "Holdings on the deleted copy are NOT moved: they are a current position,"
+echo "which the next sync rewrites anyway."
+echo "Take a backup first (./scripts/backup.sh) if you have not."
 read -r -p "Type 'oui' to continue: " CONFIRM
 if [ "$CONFIRM" != "oui" ]; then
   echo "Aborted - nothing changed."
@@ -165,25 +183,41 @@ FROM measured l
 JOIN measured p ON p."institutionId" = l."institutionId" AND p.kind = l.kind AND NOT p.is_legacy
 WHERE l.is_legacy;
 
--- The legacy copy goes deeper: drop the per-user copy, then rename the legacy
--- one into the id it just freed. Order matters, syncId is globally unique.
-DELETE FROM "Account" WHERE id IN (
-  SELECT peruser_id FROM tr_pairs WHERE legacy_oldest < peruser_oldest
-);
+-- Which copy survives, and which is about to go. Resolved once so the moves
+-- below and the deletes cannot disagree.
+CREATE TEMP TABLE tr_moves AS
+SELECT CASE WHEN legacy_oldest < peruser_oldest THEN legacy_id ELSE peruser_id END AS keep_id,
+       CASE WHEN legacy_oldest < peruser_oldest THEN peruser_id ELSE legacy_id END AS drop_id
+FROM tr_pairs
+WHERE legacy_oldest < peruser_oldest
+   OR peruser_oldest < legacy_oldest
+   OR (legacy_oldest = 'infinity' AND peruser_oldest = 'infinity');
 
+-- Rescue the transactions first. syncId is globally unique, so anything on
+-- the doomed copy is by definition absent from the survivor and this cannot
+-- collide.
+UPDATE "Transaction" t SET "accountId" = m.keep_id
+FROM tr_moves m WHERE t."accountId" = m.drop_id;
+
+-- Then the balance snapshots newer than anything the survivor already has.
+-- Older ones would interleave with a series it recorded itself; the gap
+-- between the two copies is what is actually missing.
+UPDATE "HistoricalBalance" h SET "accountId" = m.keep_id
+FROM tr_moves m
+WHERE h."accountId" = m.drop_id
+  AND h."recordedAt" > COALESCE(
+        (SELECT max(k."recordedAt") FROM "HistoricalBalance" k WHERE k."accountId" = m.keep_id),
+        '-infinity');
+
+DELETE FROM "Account" WHERE id IN (SELECT drop_id FROM tr_moves);
+
+-- Rename whichever survivor still carries a legacy id. The delete above
+-- already freed the target, and syncId is globally unique so order matters.
 UPDATE "Account" a
 SET "syncId" = 'tr:' || p."institutionId" || ':' || p.kind
 FROM tr_pairs p
-WHERE a.id = p.legacy_id AND p.legacy_oldest < p.peruser_oldest;
-
--- The per-user copy goes deeper: it already carries the right id, so the
--- legacy one is simply redundant. Same when BOTH are empty - there is no
--- history to weigh, and the per-user id is the one the sync will use.
-DELETE FROM "Account" WHERE id IN (
-  SELECT legacy_id FROM tr_pairs
-  WHERE peruser_oldest < legacy_oldest
-     OR (legacy_oldest = 'infinity' AND peruser_oldest = 'infinity')
-);
+JOIN tr_moves m ON m.keep_id = p.legacy_id
+WHERE a.id = p.legacy_id;
 
 COMMIT;
 SQL

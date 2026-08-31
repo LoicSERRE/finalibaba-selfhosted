@@ -118,7 +118,7 @@ Your accounts and their whole history are kept - nothing is deleted, the account
 
 The button refuses to run while `TR_PHONE` is still set, so the order is enforced rather than left to you to remember.
 
-**If you already ended up with two of every account** (8 instead of 4, because a sync ran before step 2), run `./scripts/fix-duplicate-tr-accounts.sh` on the server. It shows both copies of each account side by side with how far their history actually reaches, then `--apply` deletes the shallower one and hands the survivor to the new credentials. Dry-run by default.
+**If you already ended up with two of every account** (8 instead of 4, because a sync ran before step 2), run `./scripts/fix-duplicate-tr-accounts.sh` on the server. It shows both copies of each account side by side with how far their history actually reaches, then `--apply` merges everything the second copy holds and the first does not onto the one being kept, deletes the redundant copy, and hands the survivor to the new credentials. Nothing is thrown away. Dry-run by default.
 
 Syncs positions, cash balance, **and** the cash account's full transaction history (card payments, transfers, trades, dividends, interest - real merchant/description labels, not just amounts) - so budget categorization and recurring-transaction detection work for Trade Republic the same way they do for a Woob-synced bank. The first sync after connecting pulls your full available history; every sync after that only fetches what's new.
 
