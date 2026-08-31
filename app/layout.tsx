@@ -18,20 +18,29 @@ import "./globals.css";
 const ibmPlexSans = IBM_Plex_Sans({
   variable: "--font-ibm-plex-sans",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  // 300 was loaded and preloaded but never used - grep finds no font-light
+  // anywhere - so every page paid for a font file it would never draw with,
+  // and the browser warned about it ("preloaded but not used within a few
+  // seconds from the window's load event").
+  weight: ["400", "500", "600", "700"],
 });
 
 const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-ibm-plex-mono",
   subsets: ["latin"],
   weight: ["400", "500"],
+  // Used by a handful of components (a code input, a couple of tabular
+  // figures), so most pages never draw with it. Preloading it there is the
+  // same wasted request, and the same warning. It still loads normally on the
+  // pages that do use it.
+  preload: false,
 });
 
 export const metadata: Metadata = {
   title: "Finalibaba",
   description: "Your wealth, at a glance",
-  // No explicit `manifest:` entry - app/manifest.ts is auto-detected and
-  // linked by Next, same convention as app/icon.tsx/apple-icon.tsx below.
+  // No `manifest:` entry: the tag is rendered by hand in <head> below so it
+  // can carry crossOrigin. See app/site.webmanifest/route.ts.
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -114,6 +123,23 @@ export default async function RootLayout({
       {...(theme === "auto" ? {} : { "data-theme": theme })}
       className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased h-full`}
     >
+      <head>
+        {/* crossOrigin is the whole point of hand-rolling this tag: a manifest
+            is fetched WITHOUT credentials by default, so behind an
+            authenticating reverse proxy (Cloudflare Access, Authelia,
+            oauth2-proxy - all of which this project's README recommends) the
+            request arrives with no session cookie and gets redirected to the
+            proxy's own login host. The browser then refuses that cross-origin
+            manifest under `default-src 'self'`, which is what a user saw:
+            "Loading a manifest from ... violates the following Content
+            Security Policy directive". "use-credentials" sends the cookie, the
+            proxy lets it through, and it stays same-origin.
+
+            Next's metadata.manifest only takes a URL and its file convention
+            auto-links a tag we cannot influence, which is why the manifest is
+            a plain Route Handler now - see that file. */}
+        <link rel="manifest" href="/site.webmanifest" crossOrigin="use-credentials" />
+      </head>
       <body className="flex min-h-full bg-[var(--background)]">
         <NextIntlClientProvider messages={messages}>
           <a

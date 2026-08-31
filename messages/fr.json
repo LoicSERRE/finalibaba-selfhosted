@@ -49,7 +49,7 @@
     "subtitle": "Votre patrimoine, en un coup d'œil",
     "password": "Mot de passe",
     "username": "Identifiant",
-    "usernameOptional": "Identifiant (laisser vide si non défini)",
+    "usernameOptional": "Identifiant",
     "confirmPassword": "Confirmer le mot de passe",
     "passwordHint": "{min} caractères minimum",
     "passwordMismatch": "Les deux mots de passe ne correspondent pas",

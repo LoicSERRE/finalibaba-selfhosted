@@ -1016,6 +1016,13 @@ def run_institution(institution_id: str, interactive: bool = False) -> dict:
             _mark_auth_required_for(source, "Session expirée - reconnecte depuis Paramètres")
             _drop_session_file(institution_id)
             raise AuthRequiredError(f"Trade Republic ({inst['name']}): session expired")
+        # Any other failure leaked the connection: this branch re-raised without
+        # closing it, so a repeatedly-failing institution exhausted the pool one
+        # sync at a time. Rolled back rather than committed - a partial write
+        # from an interrupted sync is not a state worth keeping.
+        conn.rollback()
+        cur.close()
+        conn.close()
         raise
 
     conn.commit()

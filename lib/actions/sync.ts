@@ -21,14 +21,37 @@ const SYNC_URL = process.env.SYNC_SERVICE_URL ?? "http://sync:8000";
 // without manually wiring an AbortController per call.
 const SYNC_TIMEOUT_MS = 2 * 60 * 1000;
 
+/**
+ * A failure worth showing the user, as opposed to a bug.
+ *
+ * Next redacts a thrown Server Action error in production and replaces it with
+ * an opaque digest, so every carefully-worded message in this file reached the
+ * user in dev and NOTHING in production - a real report was "POST /settings
+ * 500" plus React error #441, which is exactly that redaction. Next's own
+ * guidance is to model expected errors as return values, which is what the
+ * three exported actions below do; this type is the internal carrier they
+ * convert into one.
+ */
+class SyncServiceError extends Error {}
+
+function asFailure(e: unknown): { ok: false; error: string } {
+  if (e instanceof SyncServiceError) return { ok: false, error: e.message };
+  throw e; // a real bug, or an authorization failure - let it be a 500
+}
+
 async function fetchSync(path: string, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(`${SYNC_URL}${path}`, { ...init, signal: AbortSignal.timeout(SYNC_TIMEOUT_MS) });
   } catch (e) {
     if (e instanceof Error && e.name === "TimeoutError") {
-      throw new Error("La synchronisation a pris trop de temps et a été interrompue - réessaie plus tard.");
+      throw new SyncServiceError(
+        "La synchronisation a pris trop de temps et a été interrompue - réessaie plus tard.",
+      );
     }
-    throw e;
+    // The sync service being unreachable is an everyday state (it is optional,
+    // and not started at all in local dev), so it is a message rather than a
+    // stack trace - but never the raw one, which can carry a hostname.
+    throw new SyncServiceError("Service de synchronisation injoignable - vérifie qu'il tourne.");
   }
 }
 
@@ -131,14 +154,23 @@ export async function getSyncStatus() {
   return Object.fromEntries(logs.map((l) => [l.source, l]));
 }
 
-export async function triggerInstitutionSync(institutionId: string) {
+export type SyncOutcome = { ok: true } | { ok: false; error: string };
+
+export async function triggerInstitutionSync(institutionId: string): Promise<SyncOutcome> {
+  // Authorization still throws: someone driving another user's institution is
+  // not an expected error, and must not get a readable explanation.
   await assertOwnsInstitution(institutionId);
-  const res = await fetchSync(`/sync/institution/${institutionId}`, { method: "POST" });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error((data as { error?: string }).error ?? `Sync service error: ${res.status}`);
+  try {
+    const res = await fetchSync(`/sync/institution/${institutionId}`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new SyncServiceError((data as { error?: string }).error ?? `Erreur ${res.status}`);
+    }
+    await res.json().catch(() => ({}));
+    return { ok: true };
+  } catch (e) {
+    return asFailure(e);
   }
-  return res.json();
 }
 
 export type WoobBankModule = { module: string; label: string };
@@ -201,37 +233,50 @@ export type InstitutionSetupResult =
       /** Trade Republic only: seconds its pushed code stays valid. */
       countdown?: number;
     }
-  | { status: "unsupported"; message: string };
+  | { status: "unsupported"; message: string }
+  /** The sync service refused or could not be reached. Carried as a value so
+   *  the reason survives production's redaction of thrown errors. */
+  | { status: "failed"; ok: false; error: string };
 
 export async function startInstitutionSetup(institutionId: string): Promise<InstitutionSetupResult> {
   await assertOwnsInstitution(institutionId);
-  const res = await fetchSync(`/sync/institution/${institutionId}/setup/start`, { method: "POST" });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error((data as { error?: string }).error ?? `Erreur ${res.status}`);
+  try {
+    const res = await fetchSync(`/sync/institution/${institutionId}/setup/start`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new SyncServiceError((data as { error?: string }).error ?? `Erreur ${res.status}`);
+    }
+    return res.json();
+  } catch (e) {
+    return { status: "failed", ...asFailure(e) };
   }
-  return res.json();
 }
 
 /** Woob reports how many accounts it found; Trade Republic just reports that
  *  the session is now established, so both fields are optional. */
-export type InstitutionSetupCompletion = { accounts?: number; status?: "connected" };
+export type InstitutionSetupCompletion =
+  | { ok: true; accounts?: number; status?: "connected" }
+  | { ok: false; error: string };
 
 export async function completeInstitutionSetup(
   institutionId: string,
   code?: string,
 ): Promise<InstitutionSetupCompletion> {
   await assertOwnsInstitution(institutionId);
-  const res = await fetchSync(`/sync/institution/${institutionId}/setup/complete`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code: code ?? null }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error((data as { error?: string }).error ?? `Erreur ${res.status}`);
+  try {
+    const res = await fetchSync(`/sync/institution/${institutionId}/setup/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code ?? null }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new SyncServiceError((data as { error?: string }).error ?? `Erreur ${res.status}`);
+    }
+    return { ok: true, ...(await res.json().catch(() => ({}))) };
+  } catch (e) {
+    return asFailure(e);
   }
-  return res.json();
 }
 
 // Fired by <AutoSync /> on page load. Scoped to the viewer's own sources

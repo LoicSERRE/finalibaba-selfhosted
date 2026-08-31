@@ -88,8 +88,8 @@ export const config = {
     // AUTH_ENABLED=true instance every one of them would have been silently
     // redirected to /login instead of serving the actual image, breaking
     // browser tab favicons, iOS home-screen install, and PWA install
-    // prompts alike. manifest.webmanifest (app/manifest.ts, replacing the
-    // old static manifest.json this matcher used to name) and sw.js
+    // prompts alike. site.webmanifest (app/site.webmanifest/route.ts - named
+    // that way so Next does not auto-link it, see that file) and sw.js
     // (public/sw.js) need the same treatment for the same reason - a
     // service worker or manifest fetch has no business going through a
     // login redirect either.
@@ -116,6 +116,6 @@ export const config = {
     // `/api/v1/net-worth` alike, but not a bare-prefix collision like
     // `/api/v1999` - verified with the same live-server method as above,
     // not just reasoned through.
-    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api/realtime/notify|api\\/v1(?:\\/.*)?$|invite(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|manifest\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api/realtime/notify|api\\/v1(?:\\/.*)?$|invite(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|site\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
   ],
 };

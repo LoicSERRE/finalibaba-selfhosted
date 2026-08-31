@@ -83,7 +83,8 @@ export function TradeRepublicSetupPrompt({
 
   const triggerSync = () => {
     startTransition(async () => {
-      await triggerInstitutionSync(institutionId);
+      const result = await triggerInstitutionSync(institutionId);
+      if (!result.ok) setError(result.error);
       router.refresh();
     });
   };
@@ -93,6 +94,13 @@ export function TradeRepublicSetupPrompt({
     setError(null);
     try {
       const result = await startInstitutionSetup(institutionId);
+      // The sync service refused or was unreachable. A value rather than a
+      // thrown error, because production redacts the latter - which is why a
+      // real report was a bare 500 with no explanation anywhere.
+      if (result.status === "failed") {
+        setError(result.error);
+        return;
+      }
       // A session that still resumes needs no code at all: the sync service
       // reports that instead of pushing a pointless notification.
       if (result.status === "already_connected") {
@@ -113,7 +121,12 @@ export function TradeRepublicSetupPrompt({
     setBusy(true);
     setError(null);
     try {
-      await completeInstitutionSetup(institutionId, code);
+      const result = await completeInstitutionSetup(institutionId, code);
+      if (!result.ok) {
+        setError(result.error);
+        setBusy(false);
+        return;
+      }
       reset();
       triggerSync();
     } catch (e) {

@@ -49,7 +49,7 @@
     "subtitle": "Your wealth, at a glance",
     "password": "Password",
     "username": "Username",
-    "usernameOptional": "Username (leave blank if not set)",
+    "usernameOptional": "Username",
     "confirmPassword": "Confirm password",
     "passwordHint": "{min} characters minimum",
     "passwordMismatch": "The two passwords don't match",

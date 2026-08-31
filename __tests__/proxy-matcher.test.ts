@@ -34,7 +34,7 @@ describe("proxy matcher - paths that must stay public", () => {
     ["/api/investments/snapshot-balances", "same"],
     ["/api/realtime/notify", "same"],
     ["/sw.js", "a service worker fetch must not be redirected to /login"],
-    ["/manifest.webmanifest", "nor a manifest fetch"],
+    ["/site.webmanifest", "nor a manifest fetch"],
     ["/icon-512", "nor a generated icon"],
     ["/_next/static/chunk.js", "build assets"],
   ])("%s is exempt (%s)", (path) => {

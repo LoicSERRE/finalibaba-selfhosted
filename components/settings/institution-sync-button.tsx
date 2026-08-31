@@ -25,7 +25,11 @@ export function InstitutionSyncButton({ institutionId }: Readonly<{ institutionI
     setError(null);
     startTransition(async () => {
       try {
-        await triggerInstitutionSync(institutionId);
+        // A returned failure, not a thrown one: Next replaces a thrown Server
+        // Action error with an opaque digest in production, so the reason the
+        // sync failed only ever reached the user in development.
+        const result = await triggerInstitutionSync(institutionId);
+        if (!result.ok) setError(result.error);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : t("unknownError"));

@@ -61,12 +61,21 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
 
   const triggerSync = () => {
     startTransition(async () => {
-      await triggerInstitutionSync(institutionId);
+      const result = await triggerInstitutionSync(institutionId);
+      if (!result.ok) setError(result.error);
       router.refresh();
     });
   };
 
   const applyResult = (result: InstitutionSetupResult) => {
+    // The sync service refused or was unreachable. Carried as a value rather
+    // than thrown because Next redacts a thrown Server Action error in
+    // production - the reason would reach the user in dev and nowhere else.
+    if (result.status === "failed") {
+      setWaitKind(null);
+      setError(result.error);
+      return;
+    }
     if (result.status === "already_connected") {
       reset();
       triggerSync();
@@ -99,7 +108,15 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
     setBusy(true);
     setError(null);
     try {
-      await completeInstitutionSetup(institutionId, waitKind === "code" ? code : undefined);
+      const result = await completeInstitutionSetup(
+        institutionId,
+        waitKind === "code" ? code : undefined,
+      );
+      if (!result.ok) {
+        setError(result.error);
+        setBusy(false);
+        return;
+      }
       reset();
       triggerSync();
     } catch (e) {
