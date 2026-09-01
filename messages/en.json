@@ -695,7 +695,12 @@
       "removeDescription": "This device will no longer be able to unlock the app. If it was the last registered device, app lock will be disabled.",
       "unknownError": "An unexpected error occurred.",
       "errorServerTimeout": "The server did not respond. Try again; if it keeps happening, check the app container's logs.",
-      "errorBrowserTimeout": "Your browser did not finish the request. Check that Windows Hello, Touch ID or your fingerprint is set up on this device, then try again."
+      "errorBrowserTimeout": "Your browser did not finish the request. Check that Windows Hello, Touch ID or your fingerprint is set up on this device, then try again.",
+      "errorNoPendingRegistration": "No registration in progress. Start again.",
+      "errorRegistrationUnverified": "Your browser could not prove the registration. Try again.",
+      "errorNoPendingAuth": "No unlock request in progress. Try again.",
+      "errorUnknownDevice": "This device is not registered on this account.",
+      "errorUnlockFailed": "Unlock refused. Try again."
     },
     "shareLinks": {
       "title": "Read-only share links",
@@ -1339,7 +1344,12 @@
     "unknownError": "Unlock failed.",
     "thisDevice": "This device",
     "registerAgainHint": "This device is no longer recognised. Register it again to unlock.",
-    "registerAgain": "Register this device"
+    "registerAgain": "Register this device",
+    "errorNoPendingRegistration": "No registration in progress. Start again.",
+    "errorRegistrationUnverified": "Your browser could not prove the registration. Try again.",
+    "errorNoPendingAuth": "No unlock request in progress. Try again.",
+    "errorUnknownDevice": "This device is not registered on this account.",
+    "errorUnlockFailed": "Unlock refused. Try again."
   },
   "exportAnalytics": {
     "button": "Export",

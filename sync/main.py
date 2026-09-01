@@ -87,11 +87,51 @@ def _keepalive_tr():
         log.warning("TR keepalive failed", exc_info=True)
 
 
+def _notify_owner(institution_id: str) -> None:
+    """Tell the app to refresh the open tabs of whoever owns this institution.
+
+    Live refresh used to reach the instance owner only, because the sole
+    caller of /api/realtime/notify was sync_tr_realtime.py, which follows the
+    .env connection. A member's own sync finished with their dashboard still
+    showing the previous figures until they reloaded by hand - not a coupling,
+    the bus has always been keyed by user, but the feature stopped at the
+    owner.
+
+    Best-effort throughout: a refresh that does not arrive costs a manual
+    reload, and must never turn a successful sync into a failed one.
+    """
+    app_url = os.environ.get("APP_SERVICE_URL")
+    secret = os.environ.get("NEXTAUTH_SECRET")
+    if not app_url or not secret:
+        return
+    try:
+        import psycopg2.extras
+        import requests
+
+        from db import get_conn, institution_owner_id
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        owner_id = institution_owner_id(cur, institution_id)
+        cur.close()
+        conn.close()
+        if not owner_id:
+            return
+        requests.post(
+            f"{app_url}/api/realtime/notify",
+            headers={"Authorization": f"Bearer {secret}"},
+            json={"userId": owner_id},
+            timeout=5,
+        )
+    except Exception as e:
+        log.warning("realtime notify failed for institution %s: %s", institution_id, e)
+
+
 def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str, password: str):
     try:
         import sync_woob
         result = sync_woob.run(inst_id, inst_name, module, login, password)
         log.info("Woob sync done for %s: %s", inst_name, result)
+        _notify_owner(inst_id)
     except sync_woob.AuthRequiredError:
         pass  # already written to SyncLog inside sync_woob.run()
     except Exception as e:
@@ -504,6 +544,7 @@ def _run_tr_institution(inst_id: str):
         import sync_tr
         result = sync_tr.run_institution(inst_id)
         log.info("TR sync done for institution %s: %s", inst_id, result)
+        _notify_owner(inst_id)
     except Exception as e:
         import sync_tr
         if isinstance(e, sync_tr.AuthRequiredError):

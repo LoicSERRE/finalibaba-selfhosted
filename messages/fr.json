@@ -695,7 +695,12 @@
       "removeDescription": "Cet appareil ne pourra plus déverrouiller l'appli. Si c'était le dernier appareil enregistré, le verrouillage sera désactivé.",
       "unknownError": "Une erreur inattendue s'est produite.",
       "errorServerTimeout": "Le serveur n'a pas répondu. Réessaie ; si ça se reproduit, regarde les logs du conteneur app.",
-      "errorBrowserTimeout": "Ton navigateur n'a pas terminé la demande. Vérifie que Windows Hello, Touch ID ou l'empreinte est bien configuré sur cet appareil, puis réessaie."
+      "errorBrowserTimeout": "Ton navigateur n'a pas terminé la demande. Vérifie que Windows Hello, Touch ID ou l'empreinte est bien configuré sur cet appareil, puis réessaie.",
+      "errorNoPendingRegistration": "Aucun enregistrement en cours. Relance depuis le début.",
+      "errorRegistrationUnverified": "Ton navigateur n'a pas pu prouver l'enregistrement. Réessaie.",
+      "errorNoPendingAuth": "Aucune demande de déverrouillage en cours. Réessaie.",
+      "errorUnknownDevice": "Cet appareil n'est pas enregistré sur ce compte.",
+      "errorUnlockFailed": "Déverrouillage refusé. Réessaie."
     },
     "shareLinks": {
       "title": "Liens de partage en lecture seule",
@@ -1339,7 +1344,12 @@
     "unknownError": "Échec du déverrouillage.",
     "thisDevice": "Cet appareil",
     "registerAgainHint": "Cet appareil n'est plus reconnu. Enregistre-le à nouveau pour le déverrouiller.",
-    "registerAgain": "Enregistrer cet appareil"
+    "registerAgain": "Enregistrer cet appareil",
+    "errorNoPendingRegistration": "Aucun enregistrement en cours. Relance depuis le début.",
+    "errorRegistrationUnverified": "Ton navigateur n'a pas pu prouver l'enregistrement. Réessaie.",
+    "errorNoPendingAuth": "Aucune demande de déverrouillage en cours. Réessaie.",
+    "errorUnknownDevice": "Cet appareil n'est pas enregistré sur ce compte.",
+    "errorUnlockFailed": "Déverrouillage refusé. Réessaie."
   },
   "exportAnalytics": {
     "button": "Exporter",

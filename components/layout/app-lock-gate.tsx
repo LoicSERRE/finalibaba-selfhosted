@@ -36,6 +36,14 @@ const sessionKeyFor = (userId: string) => `finalibaba-applock-unlocked:${userId}
 // Unlock state lives in sessionStorage, not a cookie: it should re-lock
 // when the browser/PWA is fully closed and reopened, not persist like a
 // login session - the point is a per-open unlock, not a second sign-in.
+const APP_LOCK_ERRORS = {
+  no_pending_registration: "errorNoPendingRegistration",
+  registration_unverified: "errorRegistrationUnverified",
+  no_pending_auth: "errorNoPendingAuth",
+  unknown_device: "errorUnknownDevice",
+  unlock_failed: "errorUnlockFailed",
+} as const;
+
 export function AppLockGate({
   enabled,
   userId,
@@ -59,7 +67,17 @@ export function AppLockGate({
       try {
         const optionsJSON = await startAppLockAuthentication();
         const response = await startAuthentication({ optionsJSON });
-        await verifyAppLockAuthentication(response);
+        // Returned, not thrown: production hides a thrown Server Action error
+        // behind a digest, and this screen's whole job is explaining why it
+        // will not let you in.
+        const result = await verifyAppLockAuthentication(response);
+        if (!result.ok) {
+          if (!silent) {
+            setError(t(APP_LOCK_ERRORS[result.error]));
+            setCanRegister(true);
+          }
+          return;
+        }
         sessionStorage.setItem(sessionKey, "1");
         setUnlocked(true);
       } catch (e) {
@@ -157,7 +175,11 @@ export function AppLockGate({
     try {
       const optionsJSON = await startAppLockRegistration();
       const response = await startRegistration({ optionsJSON });
-      await verifyAppLockRegistration(response, t("thisDevice"));
+      const result = await verifyAppLockRegistration(response, t("thisDevice"));
+      if (!result.ok) {
+        setError(t(APP_LOCK_ERRORS[result.error]));
+        return;
+      }
       markAppLockDevice(userId);
       sessionStorage.setItem(sessionKey, "1");
       setUnlocked(true);

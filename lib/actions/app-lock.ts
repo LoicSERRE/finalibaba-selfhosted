@@ -128,10 +128,25 @@ export async function startAppLockRegistration() {
   return options;
 }
 
-export async function verifyAppLockRegistration(response: RegistrationResponseJSON, deviceLabel: string) {
+/**
+ * Expected failures are returned with a stable key, not thrown. Production
+ * replaces a thrown Server Action error with an opaque digest, so every
+ * message below reached the developer console and never the lock screen -
+ * which is the one surface in this app whose whole job is to explain why it
+ * will not let you in. Same treatment as sync.ts, totp.ts and sharing.ts.
+ */
+export type AppLockFailure = {
+  ok: false;
+  error: "no_pending_registration" | "registration_unverified" | "no_pending_auth" | "unknown_device" | "unlock_failed";
+};
+
+export async function verifyAppLockRegistration(
+  response: RegistrationResponseJSON,
+  deviceLabel: string,
+): Promise<{ ok: true } | AppLockFailure> {
   const viewer = await getViewer();
   const settings = await prisma.user.findUnique({ where: { id: viewer.id }, select: { appLockChallenge: true } });
-  if (!settings?.appLockChallenge) throw new Error("No pending app-lock registration");
+  if (!settings?.appLockChallenge) return { ok: false, error: "no_pending_registration" };
 
   const { rpID, origin } = await getRpConfig();
   const verification = await verifyRegistrationResponse({
@@ -140,7 +155,9 @@ export async function verifyAppLockRegistration(response: RegistrationResponseJS
     expectedOrigin: origin,
     expectedRPID: rpID,
   });
-  if (!verification.verified || !verification.registrationInfo) throw new Error("Registration could not be verified");
+  if (!verification.verified || !verification.registrationInfo) {
+    return { ok: false, error: "registration_unverified" };
+  }
 
   const { credential } = verification.registrationInfo;
   await prisma.$transaction([
@@ -159,6 +176,7 @@ export async function verifyAppLockRegistration(response: RegistrationResponseJS
     }),
   ]);
   revalidatePath("/settings");
+  return { ok: true as const };
 }
 
 // ── Authentication (unlocking) ──────────────────────────────────────────────
@@ -178,7 +196,9 @@ export async function startAppLockAuthentication() {
   return options;
 }
 
-export async function verifyAppLockAuthentication(response: AuthenticationResponseJSON) {
+export async function verifyAppLockAuthentication(
+  response: AuthenticationResponseJSON,
+): Promise<{ ok: true } | AppLockFailure> {
   const viewer = await getViewer();
   const [settings, row] = await Promise.all([
     prisma.user.findUnique({ where: { id: viewer.id }, select: { appLockChallenge: true } }),
@@ -186,8 +206,8 @@ export async function verifyAppLockAuthentication(response: AuthenticationRespon
     // user's registered authenticator on a shared device.
     prisma.appLockCredential.findFirst({ where: { credentialId: response.id, userId: viewer.id } }),
   ]);
-  if (!settings?.appLockChallenge) throw new Error("No pending app-lock authentication");
-  if (!row) throw new Error("Unknown app-lock device");
+  if (!settings?.appLockChallenge) return { ok: false, error: "no_pending_auth" };
+  if (!row) return { ok: false, error: "unknown_device" };
 
   const { rpID, origin } = await getRpConfig();
   const verification = await verifyAuthenticationResponse({
@@ -198,13 +218,13 @@ export async function verifyAppLockAuthentication(response: AuthenticationRespon
     credential: toStoredCredential(row),
   });
   await prisma.user.update({ where: { id: viewer.id }, data: { appLockChallenge: null } });
-  if (!verification.verified) throw new Error("Unlock failed");
+  if (!verification.verified) return { ok: false, error: "unlock_failed" };
 
   await prisma.appLockCredential.update({
     where: { id: row.id },
     data: { counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() },
   });
-  return { verified: true };
+  return { ok: true as const };
 }
 
 // ── Management ───────────────────────────────────────────────────────────

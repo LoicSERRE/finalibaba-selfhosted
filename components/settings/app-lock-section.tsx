@@ -26,6 +26,14 @@ type Credential = {
   lastUsedAt: Date | null;
 };
 
+const APP_LOCK_ERRORS = {
+  no_pending_registration: "errorNoPendingRegistration",
+  registration_unverified: "errorRegistrationUnverified",
+  no_pending_auth: "errorNoPendingAuth",
+  unknown_device: "errorUnknownDevice",
+  unlock_failed: "errorUnlockFailed",
+} as const;
+
 export function AppLockSection({
   enabled,
   credentials,
@@ -63,11 +71,15 @@ export function AppLockSection({
         120_000,
         t("errorBrowserTimeout"),
       );
-      await withTimeout(
+      const result = await withTimeout(
         verifyAppLockRegistration(response, deviceLabel),
         20_000,
         t("errorServerTimeout"),
       );
+      if (!result.ok) {
+        setAddError(t(APP_LOCK_ERRORS[result.error]));
+        return;
+      }
       // Marks THIS browser as one the lock screen applies to. Without it the
       // account flag would lock every device the user owns, including ones
       // with no credential to unlock with - see lib/domain/app-lock-device.ts.
