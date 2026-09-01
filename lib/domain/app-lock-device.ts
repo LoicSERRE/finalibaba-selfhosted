@@ -57,3 +57,21 @@ export function forgetAppLockDevice(userId: string): void {
     // Nothing to do: the marker is a convenience, not a record of truth.
   }
 }
+
+/**
+ * How long the app may sit in the background before it locks again.
+ *
+ * Without this the unlock lasted for the whole browser session, so an
+ * installed PWA that is resumed far more often than it is cold-started
+ * practically never asked again - which makes the lock decorative. Two
+ * minutes is the same order as a phone's own screen lock, and short enough
+ * that "I put it down and walked away" is covered while "I switched apps to
+ * copy an IBAN" is not.
+ */
+export const RELOCK_AFTER_MS = 2 * 60 * 1000;
+
+/** True when a stretch spent hidden is long enough to lock again. */
+export function shouldRelock(hiddenSinceMs: number | null, nowMs: number): boolean {
+  if (hiddenSinceMs === null) return false;
+  return nowMs - hiddenSinceMs >= RELOCK_AFTER_MS;
+}

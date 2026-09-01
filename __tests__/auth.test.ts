@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import bcrypt from "bcryptjs";
 import { generate as generateTotpToken } from "otplib";
 import type { CredentialsConfig } from "next-auth/providers/credentials";
+import { TOTP_REQUIRED } from "@/lib/domain/auth-constants";
 import { generateTotpSecret, generateBackupCodes, hashBackupCodes } from "@/lib/domain/totp";
 
 // Hoisted so the vi.mock factory below can reference them (vi.mock calls are
@@ -255,12 +256,38 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null when the password is correct but no TOTP code is provided", async () => {
+  // Signals "the password was right, now the code" so the login form can move
+  // to its second step, instead of guessing from a flag fetched for the
+  // instance owner before anyone had typed a username.
+  it("asks for a code when the password is correct and none was provided", async () => {
     vi.stubEnv("AUTH_PASSWORD", "correct-horse");
     const secret = generateTotpSecret();
     findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
-    const result = await provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp()));
+
+    await expect(
+      provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp())),
+    ).rejects.toThrow(TOTP_REQUIRED);
+  });
+
+  it("does NOT ask for a code when the password is wrong - that would be an oracle", async () => {
+    // The whole safety of the signal above: it must be unreachable without
+    // valid credentials, or it would tell an attacker which accounts exist
+    // and which have 2FA on.
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: generateTotpSecret(), totpBackupCodes: [] });
+
+    const result = await provider.authorize({ password: "wrong" }, reqWithIp(nextIp()));
+
     expect(result).toBeNull();
+  });
+
+  it("does not ask for a code on an account without 2FA, whatever the owner has", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: false, totpSecret: null, totpBackupCodes: [] });
+
+    await expect(
+      provider.authorize({ password: "correct-horse" }, reqWithIp(nextIp())),
+    ).resolves.not.toBeNull();
   });
 
   it("accepts a valid unused backup code and consumes it (removed from the stored array)", async () => {

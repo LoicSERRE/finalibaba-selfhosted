@@ -1,7 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { LoginForm } from "@/components/auth/login-form";
 import { CredentialsSetupForm } from "@/components/auth/credentials-setup-form";
-import { getTotpEnabled } from "@/lib/actions/user-settings";
 import { needsBootstrap, bootstrapOwner } from "@/lib/actions/users";
 
 // Must reflect the current DB state on every request, not a build-time
@@ -32,6 +31,8 @@ export default async function LoginPage() {
     );
   }
 
-  const totpEnabled = await getTotpEnabled();
-  return <LoginForm totpEnabled={totpEnabled} />;
+  // No totpEnabled fetch: it answered for the instance OWNER, before anyone
+  // had typed a username, so on a multi-user instance every account got the
+  // owner's answer. The server decides now, after checking the password.
+  return <LoginForm />;
 }

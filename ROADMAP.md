@@ -303,6 +303,15 @@ Two things were deliberately *not* built, and are scoped out rather than forgott
 
 ---
 
+## UI/UX polish - noted from real usage
+
+*Small, real annoyances found while using the app on a live instance. Not urgent, not forgotten. Grouped here rather than scattered so a future pass can take them together.*
+
+- [ ] **Sharing a portfolio with an unknown username shows a raw error.** `lib/actions/sharing.ts` surfaces whatever it throws; it should say "this user does not exist" plainly. Worth doing *with* the existing note that this path is already a username oracle (see `CLAUDE.md`'s post-v2.0 security audit, item 4) - a clearer message does not make it more of one, but the two decisions belong together.
+- [ ] **A co-owned account does not say whose it is.** In the co-owner's own portfolio the account simply appears, with nothing naming the person who owns it - so on an instance shared with family it is not obvious which of you a given account belongs to. `Account.userId` already answers it; it is a display gap, not a data one.
+
+---
+
 ## Backlog - demand-driven
 
 *Not scheduled into a version. Each of these was scoped out of the version it originally belonged to (see that version's own retrospective note) because it needs either confirmed community demand or a materially bigger integration effort than the rest of that version - not because it was forgotten. Move an item here into a real version once that condition is met.*

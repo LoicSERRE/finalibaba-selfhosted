@@ -11,7 +11,7 @@ import {
   startAppLockRegistration,
   verifyAppLockRegistration,
 } from "@/lib/actions/app-lock";
-import { isAppLockDevice, markAppLockDevice } from "@/lib/domain/app-lock-device";
+import { isAppLockDevice, markAppLockDevice, shouldRelock } from "@/lib/domain/app-lock-device";
 
 // Namespaced per user (v2.0) - a shared browser where two accounts both use
 // app-lock must not let one user's unlock satisfy the other's lock screen.
@@ -85,6 +85,39 @@ export function AppLockGate({
   );
 
   const handleUnlock = () => attemptUnlock({ silent: false });
+
+  // Lock again after a spell in the background. An installed PWA is resumed
+  // far more often than it is cold-started, and the unlock used to last the
+  // whole browser session - so in practice it almost never asked again, which
+  // makes the lock decorative. Measured on visibility rather than a timer, so
+  // a backgrounded tab that the browser throttles still locks correctly.
+  useEffect(() => {
+    if (!enabled) return;
+    let hiddenSince: number | null = null;
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenSince = Date.now();
+        return;
+      }
+      if (!shouldRelock(hiddenSince, Date.now())) {
+        hiddenSince = null;
+        return;
+      }
+      hiddenSince = null;
+      try {
+        sessionStorage.removeItem(sessionKey);
+      } catch {
+        // Storage can throw in a private window; the state below is what the
+        // gate actually reads, so the lock still applies.
+      }
+      autoTried.current = false;
+      setUnlocked(false);
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [enabled, sessionKey]);
 
   useEffect(() => {
     if (!enabled) return;

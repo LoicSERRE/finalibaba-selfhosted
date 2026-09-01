@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { verifyTotpCode, matchBackupCode } from "@/lib/domain/totp";
 import { OWNER_USER_ID } from "@/lib/domain/users";
+import { TOTP_REQUIRED } from "@/lib/domain/auth-constants";
 
 // Simple in-memory rate limiter - max 5 attempts per 15 min per IP.
 // Wrapped in a factory (rather than one module-level Map) so tests can each
@@ -161,7 +162,12 @@ export const authOptions: NextAuthOptions = {
         const user = await resolveUser(username, password);
         if (!user) return null;
 
-        if (!(await verifySecondFactor(user, (credentials?.totpCode as string) || ""))) return null;
+        const code = (credentials?.totpCode as string) || "";
+        // Password accepted, code needed and not supplied: say so, so the form
+        // can move to its second step. See TOTP_REQUIRED.
+        if (user.totpEnabled && user.totpSecret && !code) throw new Error(TOTP_REQUIRED);
+
+        if (!(await verifySecondFactor(user, code))) return null;
 
         return { id: user.id, name: process.env.AUTH_USER_NAME ?? "owner", role: user.role };
       },

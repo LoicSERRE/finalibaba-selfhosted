@@ -4,31 +4,28 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff, TrendingUp } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { TOTP_REQUIRED } from "@/lib/domain/auth-constants";
 
-export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
+// No `totpEnabled` prop any more. It was fetched for the INSTANCE OWNER before
+// anyone had typed a username, so on a multi-user instance every account got
+// the owner's answer: a member without 2FA was asked for a code that does not
+// exist, and one with 2FA would not have been asked at all. The server now
+// says when a code is needed, after checking the password. See TOTP_REQUIRED.
+export function LoginForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  // Two visual steps rather than three fields at once. The code field used to
-  // sit under the password from the first paint, which reads as "type all of
-  // this now" when the code is only obtainable after you have decided to sign
-  // in - and a code typed early can expire before the form is submitted.
-  // No extra round trip and nothing new is revealed: the field's presence
-  // already told anyone looking that this account uses 2FA.
+  // Set only once the server has confirmed the password and asked for a code.
+  // An account without 2FA therefore never sees this step at all.
   const [askingCode, setAskingCode] = useState(false);
   const router = useRouter();
   const t = useTranslations("auth");
 
   async function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault();
-    if (totpEnabled && !askingCode) {
-      setAskingCode(true);
-      setError("");
-      return;
-    }
     setError("");
     setLoading(true);
 
@@ -48,13 +45,23 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
     if (result?.ok) {
       router.push("/");
       router.refresh();
-    } else {
-      setError(totpEnabled ? t("errorInvalidWithCode") : t("errorInvalid"));
-      setPassword("");
+      return;
+    }
+
+    // The password was right; this account just needs its code as well.
+    if (result?.error === TOTP_REQUIRED) {
+      setAskingCode(true);
+      return;
+    }
+
+    setError(askingCode ? t("errorInvalidWithCode") : t("errorInvalid"));
+    if (askingCode) {
+      // Only the code can be wrong at this point, and it has to be read again
+      // from the app anyway - so clear it and stay put rather than sending
+      // them back to retype a password that was accepted.
       setTotpCode("");
-      // Back to the password, since that is the field most likely wrong and
-      // the code has to be read again from the app anyway.
-      setAskingCode(false);
+    } else {
+      setPassword("");
     }
   }
 
@@ -138,7 +145,7 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
               </button>
             )}
 
-            {totpEnabled && askingCode && (
+            {askingCode && (
               <div className="space-y-1.5">
                 <label htmlFor="totpCode" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
                   {t("totpLabel")}
@@ -179,7 +186,7 @@ export function LoginForm({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
                   </svg>
                   {t("loading")}
                 </span>
-              ) : (totpEnabled && !askingCode ? t("continue") : t("submit"))}
+              ) : t("submit")}
             </button>
           </form>
         </div>

@@ -4,6 +4,8 @@ import {
   isAppLockDevice,
   markAppLockDevice,
   forgetAppLockDevice,
+  shouldRelock,
+  RELOCK_AFTER_MS,
 } from "@/lib/domain/app-lock-device";
 
 // The dead end this fixes, reported from a real instance: app-lock enabled on
@@ -91,5 +93,39 @@ describe("appLockDeviceKey", () => {
     // Both are per-user browser state for the same feature; distinct prefixes
     // keep "this device is locked at all" separate from "it is unlocked now".
     expect(appLockDeviceKey("user-a")).not.toBe(`finalibaba-applock-unlocked:user-a`);
+  });
+});
+
+// The unlock used to last the whole browser session. An installed PWA is
+// resumed far more often than it is cold-started, so in practice it almost
+// never asked again - which makes the lock decorative.
+describe("shouldRelock", () => {
+  const NOW = 1_000_000;
+
+  it("does not lock a session that was never backgrounded", () => {
+    expect(shouldRelock(null, NOW)).toBe(false);
+  });
+
+  it("does not lock after a glance away", () => {
+    // Switching apps to copy an IBAN and coming straight back must not
+    // demand the biometric again.
+    expect(shouldRelock(NOW - 30_000, NOW)).toBe(false);
+  });
+
+  it("locks once the threshold is reached", () => {
+    expect(shouldRelock(NOW - RELOCK_AFTER_MS, NOW)).toBe(true);
+  });
+
+  it("locks well past it", () => {
+    expect(shouldRelock(NOW - 60 * 60 * 1000, NOW)).toBe(true);
+  });
+
+  it("stays just under at one millisecond short", () => {
+    expect(shouldRelock(NOW - RELOCK_AFTER_MS + 1, NOW)).toBe(false);
+  });
+
+  it("does not lock on a clock that jumped backwards", () => {
+    // A negative elapsed time is not two minutes of absence.
+    expect(shouldRelock(NOW + 60_000, NOW)).toBe(false);
   });
 });
