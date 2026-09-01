@@ -25,6 +25,12 @@ type CoOwnerRow = {
  * co-owners, so the permission graph stays one level deep - see
  * assertAccountOwner in lib/actions/sharing.ts.
  */
+const SHARE_ERRORS = {
+  username_required: "errorUsernameRequired",
+  no_such_user: "errorNoSuchUser",
+  that_is_you: "errorThatIsYou",
+} as const;
+
 export function CoOwnersSection({
   accountId,
   coOwners,
@@ -39,7 +45,14 @@ export function CoOwnersSection({
     setSaving(true);
     setError(null);
     try {
-      await addAccountCoOwner(accountId, formData);
+      // A returned failure, not a thrown one: production replaces a thrown
+      // Server Action error with an opaque digest, so "no such user" reached
+      // the screen as an unreadable internal error.
+      const result = await addAccountCoOwner(accountId, formData);
+      if (!result.ok) {
+        setError(t(SHARE_ERRORS[result.error]));
+        return;
+      }
       setUsername("");
       router.refresh();
     } catch (e) {

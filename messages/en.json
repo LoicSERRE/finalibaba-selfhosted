@@ -258,7 +258,9 @@
       "adding": "Adding…",
       "remove": "Remove",
       "removeConfirm": "Remove {name} from this account? Their alert rules and goals tied to it will be deleted."
-    }
+    },
+    "ownedBy": "{name}'s account",
+    "ownedByHint": "This account belongs to {name}; you co-own it."
   },
   "budgets": {
     "title": "Budgets",
@@ -928,7 +930,10 @@
       "revokeConfirm": "Revoke {name}'s access? The change is immediate.",
       "sharedWithYou": "Portfolios shared with you",
       "switcherHint": "Use the switcher at the top of the sidebar to move between portfolios.",
-      "empty": "Nothing shared yet."
+      "empty": "Nothing shared yet.",
+      "errorUsernameRequired": "Enter a username.",
+      "errorNoSuchUser": "No user with that name on this instance.",
+      "errorThatIsYou": "That is your own account."
     },
     "account": {
       "title": "My account",
@@ -1418,5 +1423,10 @@
     "mdTotalLiabilities": "Total liabilities",
     "mdDebtRatio": "Debt / gross ratio",
     "mdEquity": "Equity"
+  },
+  "coOwners": {
+    "errorUsernameRequired": "Enter a username.",
+    "errorNoSuchUser": "No user with that name on this instance.",
+    "errorThatIsYou": "That is your own account."
   }
 }

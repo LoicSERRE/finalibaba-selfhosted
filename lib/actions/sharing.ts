@@ -33,14 +33,26 @@ import { normalizeUsername } from "@/lib/domain/users";
  * (the admin hands out a link, see lib/actions/users.ts), so anyone
  * legitimately sharing already knows the username they invited.
  */
-async function resolveUsername(raw: string, selfId: string): Promise<string> {
+export type ShareFailure = { ok: false; error: "username_required" | "no_such_user" | "that_is_you" };
+export type ShareResult = { ok: true } | ShareFailure;
+
+/**
+ * Returned rather than thrown, like every other expected failure in this
+ * codebase: Next replaces a thrown Server Action error with an opaque digest
+ * in production, so "no such user" showed up as an unreadable internal error -
+ * reported as exactly that. Stable keys, translated by the caller.
+ */
+async function resolveUsername(
+  raw: string,
+  selfId: string,
+): Promise<{ ok: true; userId: string } | ShareFailure> {
   const username = normalizeUsername(raw ?? "");
-  if (!username) throw new Error("Nom d'utilisateur requis.");
+  if (!username) return { ok: false, error: "username_required" };
 
   const user = await prisma.user.findUnique({ where: { username }, select: { id: true } });
-  if (!user) throw new Error("Aucun utilisateur avec ce nom.");
-  if (user.id === selfId) throw new Error("Tu as déjà accès à tes propres données.");
-  return user.id;
+  if (!user) return { ok: false, error: "no_such_user" };
+  if (user.id === selfId) return { ok: false, error: "that_is_you" };
+  return { ok: true, userId: user.id };
 }
 
 // ── Co-ownership ───────────────────────────────────────────────────────────
@@ -74,10 +86,15 @@ export async function listAccountCoOwners(accountId: string) {
   }));
 }
 
-export async function addAccountCoOwner(accountId: string, formData: FormData): Promise<void> {
+export async function addAccountCoOwner(
+  accountId: string,
+  formData: FormData,
+): Promise<ShareResult> {
   const viewer = await getViewer();
   await assertAccountOwner(accountId, viewer.id);
-  const userId = await resolveUsername(formData.get("username") as string, viewer.id);
+  const resolved = await resolveUsername(formData.get("username") as string, viewer.id);
+  if (!resolved.ok) return resolved;
+  const userId = resolved.userId;
 
   // Idempotent: re-adding someone already on the account is a no-op rather
   // than a unique-constraint crash the UI would have to translate.
@@ -87,6 +104,7 @@ export async function addAccountCoOwner(accountId: string, formData: FormData): 
     update: {},
   });
   revalidatePath(`/accounts/${accountId}`);
+  return { ok: true };
 }
 
 /**
@@ -146,9 +164,11 @@ export async function listPortfolioGrants() {
   };
 }
 
-export async function grantPortfolioAccess(formData: FormData): Promise<void> {
+export async function grantPortfolioAccess(formData: FormData): Promise<ShareResult> {
   const viewer = await getViewer();
-  const granteeUserId = await resolveUsername(formData.get("username") as string, viewer.id);
+  const resolved = await resolveUsername(formData.get("username") as string, viewer.id);
+  if (!resolved.ok) return resolved;
+  const granteeUserId = resolved.userId;
 
   await prisma.portfolioGrant.upsert({
     where: { grantorUserId_granteeUserId: { grantorUserId: viewer.id, granteeUserId } },
@@ -156,6 +176,7 @@ export async function grantPortfolioAccess(formData: FormData): Promise<void> {
     update: {},
   });
   revalidatePath("/settings");
+  return { ok: true };
 }
 
 /**

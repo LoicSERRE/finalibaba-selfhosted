@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { parseCents } from "@/lib/utils/format";
-import { getViewer, OWNER_USER_ID } from "@/lib/auth-context";
-import { normalizeUsername } from "@/lib/domain/users";
+import { getViewer } from "@/lib/auth-context";
 
 export async function getUserSettings() {
   const viewer = await getViewer();
@@ -28,21 +27,6 @@ async function getUserSettingsFor(userId: string) {
     create: { userId },
     update: {},
   });
-}
-
-// Deliberately a read-only findUnique, not an upsert - this is called from
-// the anonymous, unauthenticated /login page on every page view, and that
-// must never write to the DB. Takes the submitted username because the login
-// form has to know whether to render the 2FA field *before* anyone is
-// authenticated; falls back to the owner when no username was typed (the
-// legacy password-only form). Returns false for an unknown username rather
-// than erroring, which also avoids leaking whether an account exists.
-export async function getTotpEnabled(username?: string): Promise<boolean> {
-  const normalized = username ? normalizeUsername(username) : null;
-  const row = normalized
-    ? await prisma.user.findUnique({ where: { username: normalized }, select: { totpEnabled: true } })
-    : await prisma.user.findUnique({ where: { id: OWNER_USER_ID }, select: { totpEnabled: true } });
-  return row?.totpEnabled ?? false;
 }
 
 export async function updateUserSettings(formData: FormData) {

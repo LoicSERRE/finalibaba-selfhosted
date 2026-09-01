@@ -151,7 +151,13 @@ describe("addAccountCoOwner", () => {
     accountCountMock.mockResolvedValue(1);
     userFindUniqueMock.mockResolvedValue(null);
 
-    await expect(addAccountCoOwner("acc-1", formWith("ghost"))).rejects.toThrow(/Aucun utilisateur/);
+    // Returned, not thrown: production replaces a thrown Server Action error
+    // with an opaque digest, so "no such user" reached the screen as an
+    // unreadable internal error. The key is what the UI translates.
+    await expect(addAccountCoOwner("acc-1", formWith("ghost"))).resolves.toEqual({
+      ok: false,
+      error: "no_such_user",
+    });
     expect(coOwnerUpsertMock).not.toHaveBeenCalled();
   });
 
@@ -159,7 +165,10 @@ describe("addAccountCoOwner", () => {
     accountCountMock.mockResolvedValue(1);
     userFindUniqueMock.mockResolvedValue({ id: "user-a" });
 
-    await expect(addAccountCoOwner("acc-1", formWith("me"))).rejects.toThrow(/tes propres données/);
+    await expect(addAccountCoOwner("acc-1", formWith("me"))).resolves.toEqual({
+      ok: false,
+      error: "that_is_you",
+    });
     expect(coOwnerUpsertMock).not.toHaveBeenCalled();
   });
 
@@ -287,5 +296,43 @@ describe("setViewingPortfolio (H6)", () => {
 
     expect(cookieDeleteMock).toHaveBeenCalledWith("viewing_portfolio");
     expect(grantFindUniqueMock).not.toHaveBeenCalled();
+  });
+});
+
+// The one thing the returned key must not become: a way to enumerate accounts.
+// The message is now readable, which is the point - but readable to whom is
+// the question, and this path is already noted as a username oracle in
+// CLAUDE.md's post-v2.0 audit. Pinning the shape here so a future change has
+// to face that decision deliberately rather than drift into it.
+describe("share failures carry a key, never a name", () => {
+  it("never echoes the username that was looked up", async () => {
+    userFindUniqueMock.mockResolvedValue(null);
+    accountCountMock.mockResolvedValue(1);
+
+    const result = await addAccountCoOwner("acc-1", formWith("someone-elses-login"));
+
+    expect(JSON.stringify(result)).not.toContain("someone-elses-login");
+  });
+
+  it("uses the same key whatever the unknown name was", async () => {
+    userFindUniqueMock.mockResolvedValue(null);
+    accountCountMock.mockResolvedValue(1);
+
+    const a = await addAccountCoOwner("acc-1", formWith("ghost-one"));
+    const b = await addAccountCoOwner("acc-1", formWith("ghost-two"));
+
+    expect(a).toEqual(b);
+  });
+
+  it("distinguishes an empty input from an unknown user", async () => {
+    // Different mistakes deserve different guidance, and neither reveals
+    // anything: one is about the form, the other about this instance.
+    accountCountMock.mockResolvedValue(1);
+    userFindUniqueMock.mockResolvedValue(null);
+
+    await expect(addAccountCoOwner("acc-1", formWith("  "))).resolves.toEqual({
+      ok: false,
+      error: "username_required",
+    });
   });
 });

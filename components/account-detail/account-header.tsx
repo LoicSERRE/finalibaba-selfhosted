@@ -1,3 +1,4 @@
+import { Users } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
@@ -14,6 +15,7 @@ export function AccountHeader({
   ta,
   account,
   subtypeLabel,
+  ownerLabel,
   isFiat,
   isInvestment,
   isRealEstate,
@@ -39,6 +41,11 @@ export function AccountHeader({
     insuranceMonthlyCents: bigint | null;
   };
   subtypeLabel: string;
+  /** Whose account this is, when that is NOT the person looking at it - a
+   *  co-owned account otherwise appears in their portfolio with nothing
+   *  saying who it belongs to, which on a family instance leaves you
+   *  guessing. Null for your own accounts, where it would be noise. */
+  ownerLabel?: string | null;
   isFiat: boolean;
   isInvestment: boolean;
   isRealEstate: boolean;
@@ -72,6 +79,15 @@ export function AccountHeader({
             <p className="text-xs text-[var(--muted)]">
               {account.institution?.name && `${account.institution.name} · `}{ta(account.type as Parameters<typeof ta>[0])}{subtypeLabel}
             </p>
+            {ownerLabel && (
+              <span
+                className="inline-flex items-center gap-1 text-xs text-[var(--muted)] bg-[var(--surface-elevated)] border border-[var(--border)] rounded-full px-2 py-0.5"
+                title={td("ownedByHint", { name: ownerLabel })}
+              >
+                <Users size={11} aria-hidden="true" />
+                {td("ownedBy", { name: ownerLabel })}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <h1 className="text-2xl font-semibold text-[var(--foreground)]">{account.name}</h1>

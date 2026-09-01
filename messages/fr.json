@@ -258,7 +258,9 @@
       "adding": "Ajout…",
       "remove": "Retirer",
       "removeConfirm": "Retirer {name} de ce compte ? Ses alertes et objectifs liés à ce compte seront supprimés."
-    }
+    },
+    "ownedBy": "Compte de {name}",
+    "ownedByHint": "Ce compte appartient à {name} ; tu en es copropriétaire."
   },
   "budgets": {
     "title": "Budgets",
@@ -928,7 +930,10 @@
       "revokeConfirm": "Révoquer l'accès de {name} ? Le changement est immédiat.",
       "sharedWithYou": "Portefeuilles partagés avec toi",
       "switcherHint": "Utilise le sélecteur en haut de la barre latérale pour basculer entre les portefeuilles.",
-      "empty": "Aucun partage pour l'instant."
+      "empty": "Aucun partage pour l'instant.",
+      "errorUsernameRequired": "Saisis un nom d'utilisateur.",
+      "errorNoSuchUser": "Aucun utilisateur avec ce nom sur cette instance.",
+      "errorThatIsYou": "C'est ton propre compte."
     },
     "account": {
       "title": "Mon compte",
@@ -1418,5 +1423,10 @@
     "mdTotalLiabilities": "Passif total",
     "mdDebtRatio": "Ratio dette / brut",
     "mdEquity": "Fonds propres"
+  },
+  "coOwners": {
+    "errorUsernameRequired": "Saisis un nom d'utilisateur.",
+    "errorNoSuchUser": "Aucun utilisateur avec ce nom sur cette instance.",
+    "errorThatIsYou": "C'est ton propre compte."
   }
 }

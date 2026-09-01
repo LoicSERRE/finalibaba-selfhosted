@@ -307,8 +307,10 @@ Two things were deliberately *not* built, and are scoped out rather than forgott
 
 *Small, real annoyances found while using the app on a live instance. Not urgent, not forgotten. Grouped here rather than scattered so a future pass can take them together.*
 
-- [ ] **Sharing a portfolio with an unknown username shows a raw error.** `lib/actions/sharing.ts` surfaces whatever it throws; it should say "this user does not exist" plainly. Worth doing *with* the existing note that this path is already a username oracle (see `CLAUDE.md`'s post-v2.0 security audit, item 4) - a clearer message does not make it more of one, but the two decisions belong together.
-- [ ] **A co-owned account does not say whose it is.** In the co-owner's own portfolio the account simply appears, with nothing naming the person who owns it - so on an instance shared with family it is not obvious which of you a given account belongs to. `Account.userId` already answers it; it is a display gap, not a data one.
+- [X] **Sharing a portfolio with an unknown username showed a raw error.** The messages existed and were in French; they were *thrown*, and production replaces a thrown Server Action error with an opaque digest, so what reached the screen was an unreadable internal error. Returned as keys now, translated by the caller, with an empty input distinguished from an unknown user. This path remains the username oracle noted in `CLAUDE.md`'s post-v2.0 audit (item 4) - a readable message does not make it more of one, and tests pin that the failure never echoes the name that was looked up.
+- [X] **A co-owned account did not say whose it is.** The account detail header now carries a "Compte de {name}" chip when the account belongs to someone else, shown only with auth on and only when the owner differs from the viewer, where it would otherwise be noise.
+
+- [ ] **A per-user sync does not refresh that user's open tabs.** `/api/realtime/notify` is only ever called by `sync_tr_realtime.py`, which listens for the `.env` connection alone, so the owner's tabs live-update and nobody else's do. Not a coupling bug - the bus is keyed by user and the default is correct for its one caller - but the feature stops at the owner, which is the asymmetry to close.
 
 ---
 

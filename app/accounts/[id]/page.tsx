@@ -78,6 +78,18 @@ export default async function AccountDetailPage({
   // on, since mono mode has nobody to share with. Fetched here rather than in
   // the Promise.all above because it depends on knowing the account exists.
   const isDirectOwner = isAuthEnabled() && !readOnly && account.userId === viewer.id;
+  // Whose account this is, when that is not the person looking. A co-owned
+  // account appears in the co-owner's portfolio with nothing naming its owner,
+  // so on a family instance you cannot tell whose it is - reported exactly
+  // that way. Only fetched when it differs, and only with auth on, where the
+  // question can arise at all.
+  const ownerLabel =
+    isAuthEnabled() && account.userId !== viewer.id
+      ? await prisma.user
+          .findUnique({ where: { id: account.userId }, select: { displayName: true, username: true } })
+          .then((u) => u?.displayName ?? u?.username ?? null)
+      : null;
+
   const coOwners = isDirectOwner
     ? await prisma.accountCoOwner.findMany({
         where: { accountId: account.id },
@@ -103,6 +115,7 @@ export default async function AccountDetailPage({
         ta={ta}
         account={account}
         subtypeLabel={result.subtypeLabel}
+        ownerLabel={ownerLabel}
         isFiat={result.isFiat}
         isInvestment={result.isInvestment}
         isRealEstate={result.isRealEstate}
