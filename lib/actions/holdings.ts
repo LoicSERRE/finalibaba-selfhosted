@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateHolding } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
@@ -107,10 +107,7 @@ export async function upsertHolding(formData: FormData) {
 
   await refreshAccountBalance(accountId);
 
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/accounts");
-  revalidatePath("/analytics");
-  revalidatePath("/");
+  revalidateHolding(accountId);
 }
 
 export async function deleteHolding(id: string, accountId: string) {
@@ -121,10 +118,7 @@ export async function deleteHolding(id: string, accountId: string) {
   const { count } = await prisma.holding.deleteMany({ where: { id, accountId } });
   if (count === 0) throw new Error("Position introuvable.");
   await refreshAccountBalance(accountId);
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/accounts");
-  revalidatePath("/analytics");
-  revalidatePath("/");
+  revalidateHolding(accountId);
 }
 
 // On-demand multi-currency revaluation - re-fetches the FX rate and
@@ -161,10 +155,7 @@ export async function refreshHoldingExchangeRate(holdingId: string) {
 
   await refreshAccountBalance(holding.accountId);
 
-  revalidatePath(`/accounts/${holding.accountId}`);
-  revalidatePath("/accounts");
-  revalidatePath("/analytics");
-  revalidatePath("/");
+  revalidateHolding(holding.accountId);
 }
 
 // Internal helper, deliberately NOT ownership-guarded: it's also called

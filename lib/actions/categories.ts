@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateCategory } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
@@ -28,10 +28,8 @@ function parseRolloverEnabled(formData: FormData, kind: CategoryKind): boolean {
   return kind === "EXPENSE" && formData.get("rolloverEnabled") === "on";
 }
 
-function revalidateAll() {
-  revalidatePath("/budgets");
-  revalidatePath("/accounts");
-  revalidatePath("/income");
+function revalidateAll(categoryId?: string | null) {
+  revalidateCategory(categoryId);
 }
 
 export async function createCategory(formData: FormData) {

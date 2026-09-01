@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateIncome } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { IncomeType } from "@/app/generated/prisma/enums";
@@ -40,11 +40,6 @@ async function assertIncomeEventEligible(accountId: string, type: IncomeType): P
         : "Interest can only be recorded on checking/savings accounts."
     );
   }
-}
-
-function revalidateAll() {
-  revalidatePath("/income");
-  revalidatePath("/analytics");
 }
 
 function parseIncomeType(formData: FormData): IncomeType {
@@ -90,7 +85,7 @@ export async function createIncomeEvent(formData: FormData) {
   await prisma.incomeEvent.create({
     data: { accountId, type, amountCents, taxWithheldCents, date, ticker },
   });
-  revalidateAll();
+  revalidateIncome(accountId);
 }
 
 export async function updateIncomeEvent(id: string, formData: FormData) {
@@ -108,7 +103,7 @@ export async function updateIncomeEvent(id: string, formData: FormData) {
     where: { id },
     data: { accountId, type, amountCents, taxWithheldCents: taxWithheldCents ?? null, date, ticker },
   });
-  revalidateAll();
+  revalidateIncome(accountId);
 }
 
 export async function deleteIncomeEvent(id: string) {
@@ -121,7 +116,7 @@ export async function deleteIncomeEvent(id: string) {
   await assertAccountWritable(viewer.id, event.accountId);
 
   await prisma.incomeEvent.delete({ where: { id } });
-  revalidateAll();
+  revalidateIncome(event.accountId);
 }
 
 // "Mark as income" - creates an IncomeEvent directly from an existing
@@ -162,8 +157,7 @@ export async function createIncomeEventFromTransaction(
     },
   });
 
-  revalidateAll();
-  revalidatePath(`/accounts/${transaction.accountId}`);
+  revalidateIncome(transaction.accountId);
 
   // Same reasoning as setTransactionCategory's siblingCount in
   // lib/actions/transactions.ts: how many other not-yet-linked, credit
@@ -234,8 +228,7 @@ export async function markSimilarTransactionsAsIncome(
     })),
   });
 
-  revalidateAll();
-  revalidatePath(`/accounts/${source.accountId}`);
+  revalidateIncome(source.accountId);
 
   return { created: matches.length };
 }

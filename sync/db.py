@@ -113,14 +113,21 @@ def institution_owner_id(cur, institution_id: str) -> str | None:
 def _sync_log_owner(cur, source: str) -> str | None:
     """The user a SyncLog row belongs to, derived from its source string.
 
-    Per-institution sources are "woob:<institutionId>" and "tr:<institutionId>";
-    the .env ones are bare words ("lcl", "trade_republic",
-    "trade_republic_realtime") and belong to the owner, which is the column
-    default. Deriving it here rather than adding a parameter to every call site
-    means the ~10 existing callers became correct without being touched, and a
-    future one cannot forget it.
+    Per-institution sources are "woob:<institutionId>", "tr:<institutionId>"
+    and "tr-realtime:<institutionId>"; the .env ones are bare words ("lcl",
+    "trade_republic", "trade_republic_realtime") and belong to the owner, which
+    is the column default. Deriving it here rather than adding a parameter to
+    every call site means the ~10 existing callers became correct without being
+    touched, and a future one cannot forget it.
+
+    Mirrors lib/domain/sync-sources.ts's sourceInstitutionId - the two must
+    agree on which prefixes carry an institution id, since that is what decides
+    whose SyncLog row a sync writes. "tr-realtime:" is a sibling prefix rather
+    than a "tr:<id>:realtime" segment precisely because of the colon check
+    below: a third segment reads as "not an institution id" here, so the nested
+    shape would have silently filed every listener row under the owner.
     """
-    for prefix in ("woob:", "tr:"):
+    for prefix in ("tr-realtime:", "woob:", "tr:"):
         if source.startswith(prefix):
             institution_id = source[len(prefix):]
             if institution_id and ":" not in institution_id:

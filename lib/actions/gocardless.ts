@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateAccount, revalidateTransactions } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getAccountBalances, getTransactions, pickBalance, type GCTransaction } from "@/lib/services/gocardless";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
@@ -26,9 +26,7 @@ export async function syncGocardlessBalances(institutionId: string) {
     })
   );
 
-  revalidatePath("/accounts");
-  revalidatePath("/settings");
-  revalidatePath("/");
+  revalidateAccount();
 }
 
 // Only `booked` transactions - `pending` ones routinely lack a stable
@@ -91,10 +89,7 @@ export async function syncGocardlessTransactions(institutionId: string) {
 
   await autoCategorizeTransactions();
 
-  revalidatePath("/accounts");
-  revalidatePath("/budgets");
-  revalidatePath("/");
-  revalidatePath("/income");
+  revalidateTransactions();
 
   return { imported };
 }

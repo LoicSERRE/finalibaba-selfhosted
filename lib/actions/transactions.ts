@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateTransactions } from "@/lib/actions/revalidate";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertTransactionsWritable, assertOwned } from "@/lib/auth-context";
@@ -36,11 +36,7 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
   // doesn't show already-familiar merchants sitting in "uncategorized".
   await autoCategorizeTransactions(accountId);
 
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/accounts");
-  revalidatePath("/");
-  revalidatePath("/budgets");
-  revalidatePath("/income");
+  revalidateTransactions(accountId);
 
   return { imported: result.count };
 }
@@ -77,16 +73,9 @@ export async function setTransactionCategory(
     prisma.transactionSplit.deleteMany({ where: { transactionId } }),
   ]);
 
-  revalidatePath(`/accounts/${tx.accountId}`);
-  revalidatePath("/budgets");
-  revalidatePath("/income");
-  // TransactionCategorySelect is also used on the /budgets/[categoryId]
-  // drill-down page (recategorizing a transaction away from there should
-  // make it disappear from that list without a manual refresh) - revalidate
-  // both the category it's leaving and the one it's joining, since either
-  // could be the page currently being viewed.
-  if (before?.categoryId) revalidatePath(`/budgets/${before.categoryId}`);
-  if (categoryId) revalidatePath(`/budgets/${categoryId}`);
+  // Both the category it's leaving and the one it's joining, so the
+  // /budgets/[categoryId] drill-down reflects the move in either direction.
+  revalidateTransactions(tx.accountId, [before?.categoryId, categoryId]);
 
   // How many other transactions in this account share the same normalized
   // label but currently sit in a different category (including
@@ -167,10 +156,7 @@ export async function applyCategoryToSimilarTransactions(
     prisma.transactionSplit.deleteMany({ where: { transactionId: { in: ids } } }),
   ]);
 
-  revalidatePath(`/accounts/${source.accountId}`);
-  revalidatePath("/budgets");
-  revalidatePath("/income");
-  if (categoryId) revalidatePath(`/budgets/${categoryId}`);
+  revalidateTransactions(source.accountId, [categoryId]);
 
   return { updated: result.count };
 }
@@ -206,8 +192,7 @@ export async function bulkAssignCategory(transactionIds: string[], categoryId: s
     prisma.transactionSplit.deleteMany({ where: { transactionId: { in: transactionIds } } }),
   ]);
 
-  for (const { accountId } of accountIds) revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/budgets");
+  for (const { accountId } of accountIds) revalidateTransactions(accountId, [categoryId]);
 
   return { updated: result.count };
 }

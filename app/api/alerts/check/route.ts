@@ -21,6 +21,13 @@ import { dispatchAlert } from "@/lib/services/notifications";
 import { probeYahooSectorHealth } from "@/lib/services/yahoo-finance";
 import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
 import { amountMagnitudeRanges, type AmountRange } from "@/lib/domain/transactions-ledger";
+import {
+  isPerUserTrSource,
+  isRealtimeSource,
+  sourceInstitutionId,
+  SOURCE_LCL,
+  SOURCE_TRADE_REPUBLIC,
+} from "@/lib/domain/sync-sources";
 
 /**
  * Called by sync/main.py at the end of every automatic 4h sync run (not on
@@ -127,9 +134,16 @@ const FIXED_SOURCE_LABELS: Record<string, string> = {
 
 async function friendlySourceLabel(source: string): Promise<string> {
   if (FIXED_SOURCE_LABELS[source]) return FIXED_SOURCE_LABELS[source];
-  if (source.startsWith("woob:")) {
+  // Every per-institution source resolves the same way, through the shared
+  // parser. It used to be a `woob:`-only branch, so v2.1's per-user Trade
+  // Republic connections fell straight through to the `return source` below
+  // and were announced by their raw cuid - reintroducing, for a second
+  // prefix, exactly the unreadable-notification bug this function was
+  // written to fix for the first one.
+  const institutionId = sourceInstitutionId(source);
+  if (institutionId) {
     const institution = await prisma.institution.findUnique({
-      where: { id: source.slice("woob:".length) },
+      where: { id: institutionId },
       select: { name: true },
     });
     if (institution) return institution.name;
@@ -143,7 +157,7 @@ async function friendlySourceLabel(source: string): Promise<string> {
     // - the fallback below is generic instead of leaking the id, not a fix
     // for the underlying orphaned-row situation (which needs manual
     // cleanup in Settings, not a notification-formatting change).
-    return "une banque configurée via Woob";
+    return isPerUserTrSource(source) ? "Trade Republic" : "une banque configurée via Woob";
   }
   return source;
 }
@@ -163,14 +177,23 @@ async function friendlySourceLabel(source: string): Promise<string> {
 // only at alert-creation time, so a source retired *after* it already had
 // an active SyncFailureState still gets cleaned up and stops reminding.
 async function isSourceRetired(source: string): Promise<boolean> {
-  if (source === "lcl") return !process.env.LCL_LOGIN;
-  if (source === "trade_republic") return !process.env.TR_PHONE;
-  if (source.startsWith("woob:")) {
+  if (source === SOURCE_LCL) return !process.env.LCL_LOGIN;
+  if (source === SOURCE_TRADE_REPUBLIC) return !process.env.TR_PHONE;
+  const institutionId = sourceInstitutionId(source);
+  if (institutionId) {
     const institution = await prisma.institution.findUnique({
-      where: { id: source.slice("woob:".length) },
-      select: { woobModule: true },
+      where: { id: institutionId },
+      select: { woobModule: true, trPhone: true },
     });
-    return !institution?.woobModule;
+    // Retired once the institution is gone, or once the provider this source
+    // belongs to has been cleared from it. Checking the matching provider
+    // rather than Woob's alone matters: a per-user Trade Republic connection
+    // that was removed used to keep reminding "still broken" every 24h with
+    // no way to ever clear itself, the same dead end this function was
+    // written for when LCL_LOGIN was removed from .env.
+    if (!institution) return true;
+    const isTradeRepublic = isPerUserTrSource(source) || isRealtimeSource(source);
+    return isTradeRepublic ? !institution.trPhone : !institution.woobModule;
   }
   return false;
 }
@@ -233,6 +256,23 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
 
   for (const { source, _max } of latestPerSource) {
     if (!_max.createdAt) continue;
+    // A real-time listener reports on the same Trade Republic session its
+    // batch sync uses, so a dead session makes both fail - and only the batch
+    // sync's alert names something the user recognises and can act on. The
+    // listener's own copy arrived titled "trade_republic_realtime", which
+    // names nothing. Its SyncLog rows stay, and stay visible in Settings;
+    // this suppresses the duplicate notification, not the diagnosis.
+    //
+    // Deletes any state row an earlier version already created rather than
+    // only skipping ahead: left behind, it would sit in the table forever
+    // with nothing left to ever clear it.
+    if (isRealtimeSource(source)) {
+      const stale = await prisma.syncFailureState.findUnique({
+        where: { userId_source: { userId: settings.userId, source } },
+      });
+      await clearSyncFailureState(settings.userId, source, !!stale);
+      continue;
+    }
     const latest = await prisma.syncLog.findFirst({
       where: { userId: settings.userId, source, createdAt: _max.createdAt },
       orderBy: { id: "desc" },

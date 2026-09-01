@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateTransactions } from "@/lib/actions/revalidate";
 import { getViewer, baseAccountIds } from "@/lib/auth-context";
 import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
 
@@ -22,9 +22,6 @@ export async function autoCategorizeTransactions(accountId?: string): Promise<{ 
 
 export async function runAutoCategorizeNow() {
   const result = await autoCategorizeTransactions();
-  revalidatePath("/budgets");
-  revalidatePath("/accounts");
-  revalidatePath("/");
-  revalidatePath("/income");
+  revalidateTransactions();
   return result;
 }

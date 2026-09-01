@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateAccount } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { AccountType, TaxTreatment } from "@/app/generated/prisma/enums";
@@ -27,10 +27,8 @@ function isManualType(type: string): type is ManualType {
   return MANUAL_VALUE_TYPES.includes(type as ManualType);
 }
 
-function revalidateAll() {
-  revalidatePath("/");
-  revalidatePath("/accounts");
-  revalidatePath("/analytics");
+function revalidateAll(accountId?: string | null) {
+  revalidateAccount(accountId);
 }
 
 function parseOptionalCents(val: FormDataEntryValue | null): bigint | undefined {
@@ -167,8 +165,7 @@ export async function renameAccount(formData: FormData) {
   const viewer = await getViewer();
   await assertAccountWritable(viewer.id, id);
   await prisma.account.update({ where: { id }, data: { name } });
-  revalidatePath(`/accounts/${id}`);
-  revalidateAll();
+  revalidateAll(id);
 }
 
 export async function updateRealEstateAccount(formData: FormData) {
@@ -187,8 +184,7 @@ export async function updateRealEstateAccount(formData: FormData) {
     data: { accountId: id, balanceCents: valueCents },
   });
 
-  revalidatePath(`/accounts/${id}`);
-  revalidateAll();
+  revalidateAll(id);
 }
 
 export async function updateInvestmentStartDate(formData: FormData) {
@@ -203,8 +199,7 @@ export async function updateInvestmentStartDate(formData: FormData) {
     data: { investmentStartDate },
   });
 
-  revalidatePath(`/accounts/${id}`);
-  revalidatePath("/analytics");
+  revalidateAll(id);
 }
 
 export async function updateAccountTaxTreatment(formData: FormData) {
@@ -222,10 +217,7 @@ export async function updateAccountTaxTreatment(formData: FormData) {
     },
   });
 
-  revalidatePath(`/accounts/${id}`);
-  revalidatePath("/");
-  revalidatePath("/accounts");
-  revalidatePath("/analytics");
+  revalidateAll(id);
 }
 
 export async function updateAutomobileAccount(formData: FormData) {
@@ -249,6 +241,5 @@ export async function updateAutomobileAccount(formData: FormData) {
     data: { accountId: id, balanceCents: valueCents },
   });
 
-  revalidatePath(`/accounts/${id}`);
-  revalidateAll();
+  revalidateAll(id);
 }

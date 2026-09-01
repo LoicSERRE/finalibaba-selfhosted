@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { revalidateAccount } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, VIEWING_PORTFOLIO_COOKIE } from "@/lib/auth-context";
 import { normalizeUsername } from "@/lib/domain/users";
@@ -103,7 +104,7 @@ export async function addAccountCoOwner(
     create: { accountId, userId },
     update: {},
   });
-  revalidatePath(`/accounts/${accountId}`);
+  revalidateAccount(accountId);
   return { ok: true };
 }
 
@@ -128,8 +129,7 @@ export async function removeAccountCoOwner(accountId: string, userId: string): P
     prisma.goal.deleteMany({ where: { userId, accountId } }),
     prisma.accountCoOwner.deleteMany({ where: { accountId, userId } }),
   ]);
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/settings");
+  revalidateAccount(accountId);
 }
 
 // ── Portfolio grants (read-only guests) ────────────────────────────────────

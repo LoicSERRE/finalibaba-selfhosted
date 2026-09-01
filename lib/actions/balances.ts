@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateHolding } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
 
@@ -20,9 +20,7 @@ export async function importBalanceHistory(accountId: string, rows: BalanceRow[]
 
   const result = await prisma.historicalBalance.createMany({ data });
 
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/accounts");
-  revalidatePath("/");
+  revalidateHolding(accountId);
 
   return { imported: result.count };
 }

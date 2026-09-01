@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateSale } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
@@ -8,11 +8,7 @@ import Decimal from "decimal.js";
 import { refreshAccountBalance } from "@/lib/actions/holdings";
 
 function revalidateAll(accountId: string) {
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/accounts");
-  revalidatePath("/analytics");
-  revalidatePath("/");
-  revalidatePath("/tax-report");
+  revalidateSale(accountId);
 }
 
 export async function recordSale(formData: FormData) {

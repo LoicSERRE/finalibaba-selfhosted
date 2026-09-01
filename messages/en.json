@@ -1006,7 +1006,20 @@
     "unknownError": "Unknown error",
     "trCodeCountdown": "Code valid for another {seconds}s.",
     "trCodeExpired": "The code has expired. Request a new one.",
-    "trResend": "New code"
+    "trResend": "New code",
+    "trDialogTitle": "Connect to Trade Republic",
+    "trStartHint": "Trade Republic will send a login request to your phone, with a 4-digit code.",
+    "trStartAction": "Send the request",
+    "trRequesting": "Sending the request to Trade Republic…",
+    "trSyncing": "Fetching your accounts…",
+    "trConnected": "Connected. Your accounts are up to date.",
+    "trStepRequest": "Request",
+    "trStepCode": "Code",
+    "trStepSync": "Sync",
+    "realtimeListening": "Real-time active",
+    "realtimeStopped": "Real-time interrupted - reconnect",
+    "realtimeDisabled": "Real-time disabled (TR_REALTIME_ENABLED)",
+    "realtimeStarting": "Real-time starting…"
   },
   "allocationHistoryChart": {
     "noHistory": "No history yet",

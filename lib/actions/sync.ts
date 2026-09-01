@@ -20,6 +20,8 @@ const SYNC_URL = process.env.SYNC_SERVICE_URL ?? "http://sync:8000";
 // indefinitely. AbortSignal.timeout() is the built-in way to do this
 // without manually wiring an AbortController per call.
 const SYNC_TIMEOUT_MS = 2 * 60 * 1000;
+// An indicator is never worth making the page wait for.
+const REALTIME_STATUS_TIMEOUT_MS = 2000;
 
 /**
  * A failure worth showing the user, as opposed to a bug.
@@ -39,9 +41,13 @@ function asFailure(e: unknown): { ok: false; error: string } {
   throw e; // a real bug, or an authorization failure - let it be a 500
 }
 
-async function fetchSync(path: string, init?: RequestInit): Promise<Response> {
+// Generous by default because these calls drive a real bank scrape or a 2FA
+// round-trip. Overridable because not all of them do: a status read runs on
+// every Settings render, where the default would mean a hung sync service
+// holding the whole page for two minutes.
+async function fetchSync(path: string, init?: RequestInit, timeoutMs = SYNC_TIMEOUT_MS): Promise<Response> {
   try {
-    return await fetch(`${SYNC_URL}${path}`, { ...init, signal: AbortSignal.timeout(SYNC_TIMEOUT_MS) });
+    return await fetch(`${SYNC_URL}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   } catch (e) {
     if (e instanceof Error && e.name === "TimeoutError") {
       throw new SyncServiceError(
@@ -152,6 +158,37 @@ export async function getSyncStatus() {
     orderBy: { createdAt: "desc" },
   });
   return Object.fromEntries(logs.map((l) => [l.source, l]));
+}
+
+/**
+ * Which Trade Republic connections currently hold a live real-time websocket.
+ *
+ * "listening" is the only state where a portfolio updates by itself; every
+ * other one means it moves on the 4h cron instead. That distinction had no way
+ * of reaching the interface, so a portfolio sitting still looked identical
+ * whether real-time was working, switched off, or waiting for a reconnect - and
+ * for anyone who moved off the .env connection it was silently the last two.
+ *
+ * A plain read with no ownership check: it reports process state (which
+ * listeners are running), names no account and no balance, and every id in it
+ * is one the caller already passed in. Failures degrade to null rather than
+ * throwing - the sync service is optional and simply absent in local dev, and
+ * an indicator is never worth breaking Settings over.
+ */
+export type RealtimeStatus = {
+  enabled: boolean;
+  env: string;
+  institutions: Record<string, string>;
+};
+
+export async function getRealtimeStatus(): Promise<RealtimeStatus | null> {
+  try {
+    const res = await fetchSync("/realtime/status", undefined, REALTIME_STATUS_TIMEOUT_MS);
+    if (!res.ok) return null;
+    return (await res.json()) as RealtimeStatus;
+  } catch {
+    return null;
+  }
 }
 
 export type SyncOutcome = { ok: true } | { ok: false; error: string };

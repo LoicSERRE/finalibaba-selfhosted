@@ -10,6 +10,7 @@ Endpoints (internal Docker network only, not exposed externally):
 
 Cron: every 4 hours
 """
+import asyncio
 import logging
 import os
 import threading
@@ -283,6 +284,151 @@ def _snapshot_investment_balances():
         log.exception("Investment balance snapshot failed")
 
 
+# ── Real-time listener supervision ────────────────────────────────────────────
+#
+# One websocket per Trade Republic connection, kept alive for the process's
+# lifetime. Until v2.3 there was exactly one, hardcoded to the .env connection
+# and started once at boot - so a user who moved off .env to the per-user
+# connections v2.1 introduced silently lost real-time updates entirely, with
+# nothing anywhere saying so. Their portfolio value went back to moving once
+# every four hours and they reported it as "ça ne bouge pas".
+#
+# Connections come and go while the process runs (a family member configures
+# theirs, someone reconnects an expired session, an institution is deleted), so
+# this is a reconcile loop rather than a one-shot start: it compares the set of
+# configured connections against the set of live tasks, every REALTIME_RESCAN_S.
+#
+# `None` is the key for the .env connection - it has no Institution row, which
+# is exactly what distinguishes it, so it is the one key that is not an id.
+
+REALTIME_RESCAN_S = 60
+
+_realtime_tasks: dict[str | None, asyncio.Task] = {}
+# Connections whose listener stopped and must not be restarted on a timer.
+# listen_forever() only ever returns after an authentication failure, which no
+# amount of retrying fixes - a human has to reconnect from Settings. Restarting
+# those on the rescan would be an endless reconnect loop against a dead session.
+_realtime_stopped: set[str | None] = set()
+# The connections the last reconcile found configured. Kept so /realtime/status
+# can answer for one that is configured but has no task yet (the supervisor
+# runs on a timer) without going back to the database on every Settings render.
+_realtime_wanted: set[str | None] = set()
+
+
+def realtime_enabled() -> bool:
+    """Opt-in, still. Kept as an explicit switch rather than turned on by
+    default because it is what decides whether this container holds persistent
+    outbound connections at all - now potentially one per user, not one per
+    instance. What changed in v2.3 is only that it no longer implies TR_PHONE:
+    the flag now governs every Trade Republic connection, .env or not."""
+    return os.environ.get("TR_REALTIME_ENABLED") == "true"
+
+
+def _wanted_realtime_connections() -> set[str | None]:
+    """Every Trade Republic connection that should have a live listener.
+
+    Raises rather than returning a partial set on a DB error: an empty result
+    is indistinguishable from "no connections configured", and the caller would
+    tear down every healthy listener over one failed query.
+    """
+    wanted: set[str | None] = set()
+    if os.environ.get("TR_PHONE") and os.environ.get("TR_PIN"):
+        wanted.add(None)
+    from db import get_conn, get_tr_institutions
+    conn = get_conn()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        for inst in get_tr_institutions(cur):
+            wanted.add(inst["id"])
+        cur.close()
+    finally:
+        conn.close()
+    return wanted
+
+
+def _harvest_finished_listeners() -> None:
+    """Move any task that has ended into the stopped set.
+
+    listen_forever() returns only on an authentication failure and raises only
+    on a bug, and neither is worth retrying on a timer - a crash loop reconnects
+    to Trade Republic every minute forever, which is exactly the traffic pattern
+    that gets an account flagged.
+    """
+    # Collected before anything is removed: this loop mutates the dict it
+    # reads from, so the two steps cannot share an iterator.
+    finished = [key for key, task in _realtime_tasks.items() if task.done()]
+    for key in finished:
+        task = _realtime_tasks.pop(key)
+        _realtime_stopped.add(key)
+        if task.cancelled():
+            continue
+        exc = task.exception()
+        if exc:
+            log.warning("TR realtime listener for %s ended unexpectedly: %s", key or ".env", exc)
+        else:
+            log.info("TR realtime listener for %s stopped, waiting for a reconnect", key or ".env")
+
+
+async def _reconcile_realtime_listeners() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        wanted = await loop.run_in_executor(executor, _wanted_realtime_connections)
+    except Exception:
+        log.exception("TR realtime: could not list connections, leaving current listeners alone")
+        return
+
+    _realtime_wanted.clear()
+    _realtime_wanted.update(wanted)
+    _harvest_finished_listeners()
+
+    # Same reason as _harvest_finished_listeners: collect, then remove.
+    gone = [key for key in _realtime_tasks if key not in wanted]
+    for key in gone:
+        log.info("TR realtime: connection %s is gone, stopping its listener", key or ".env")
+        _realtime_tasks.pop(key).cancel()
+    # A connection that disappears also forgets it was stopped, so re-adding it
+    # later starts clean instead of staying silently dead.
+    _realtime_stopped.intersection_update(wanted)
+
+    from sync_tr_realtime import listen_forever
+    for key in wanted:
+        if key in _realtime_tasks or key in _realtime_stopped:
+            continue
+        _realtime_tasks[key] = asyncio.create_task(listen_forever(key))
+        log.info("TR realtime: listener started for %s", key or ".env")
+
+
+def resume_realtime(institution_id: str | None) -> None:
+    """Let a stopped listener start again on the next reconcile.
+
+    Called right after a successful reconnection ceremony: that is the single
+    moment a dead session becomes live again, and the only signal this process
+    gets that retrying is worth anything.
+    """
+    _realtime_stopped.discard(institution_id)
+
+
+async def _realtime_supervisor() -> None:
+    while True:
+        try:
+            await _reconcile_realtime_listeners()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("TR realtime: reconcile failed")
+        await asyncio.sleep(REALTIME_RESCAN_S)
+
+
+async def _shutdown_realtime_listeners() -> None:
+    tasks = list(_realtime_tasks.values())
+    _realtime_tasks.clear()
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        with suppress(asyncio.CancelledError):
+            await task
+
+
 def _run_woob_sources():
     """LCL + every user-configured Woob institution, plus the categorize/
     alert follow-up so a freshly-synced transaction gets processed within
@@ -350,24 +496,32 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _keepalive_tr)
 
-    # Real-time Trade Republic listener - opt-in (TR_REALTIME_ENABLED, on top
-    # of TR_PHONE being set), a genuinely new pattern for this codebase: a
-    # long-lived asyncio.create_task that keeps a websocket open for the
-    # process's whole lifetime, unlike every other sync path here which is a
-    # bounded executor-thread job. See CLAUDE.md's "Trade Republic real-time
-    # tracking" for the full design and why this is off by default.
-    tr_realtime_task = None
-    if os.environ.get("TR_PHONE") and os.environ.get("TR_REALTIME_ENABLED") == "true":
-        from sync_tr_realtime import listen_forever
-        tr_realtime_task = asyncio.create_task(listen_forever())
-        log.info("Trade Republic real-time listener started")
+    # Real-time Trade Republic listeners - opt-in (TR_REALTIME_ENABLED), a
+    # genuinely new pattern for this codebase: long-lived asyncio tasks that
+    # keep a websocket open for the process's whole lifetime, unlike every
+    # other sync path here which is a bounded executor-thread job. See
+    # CLAUDE.md's "Trade Republic real-time tracking" for the full design and
+    # why this is off by default.
+    #
+    # A supervisor rather than a single task since v2.3: there can be one
+    # connection per user now, and they are configured and reconnected while
+    # the process is running. Gated on the flag alone - it used to also require
+    # TR_PHONE, which meant moving off .env (what v2.1 invited users to do)
+    # silently ended real-time for good.
+    supervisor_task = None
+    if realtime_enabled():
+        supervisor_task = asyncio.create_task(_realtime_supervisor())
+        log.info("Trade Republic real-time supervisor started")
+    else:
+        log.info("TR_REALTIME_ENABLED is not 'true' - real-time listeners disabled")
 
     yield
     scheduler.shutdown()
-    if tr_realtime_task:
-        tr_realtime_task.cancel()
+    if supervisor_task:
+        supervisor_task.cancel()
         with suppress(asyncio.CancelledError):
-            await tr_realtime_task
+            await supervisor_task
+    await _shutdown_realtime_listeners()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -414,6 +568,37 @@ async def trigger_all_async():
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _run_all)
     return {"status": "started"}
+
+
+@app.get("/realtime/status")
+async def get_realtime_status():
+    """Which Trade Republic connections currently hold a live websocket.
+
+    Exists because "is real-time actually on?" had no answer short of reading
+    container logs - and the answer was silently "no" for anyone who moved off
+    the .env connection. Settings renders this next to each connection, so a
+    portfolio that is not updating says why instead of just sitting still.
+
+    Deliberately reports process state, not database state: a listener can be
+    configured and still not be running (flag off, session expired, just
+    crashed), and that gap is the entire point of the endpoint.
+    """
+    _harvest_finished_listeners()
+    live = {key for key, task in _realtime_tasks.items() if not task.done()}
+
+    def state(key: str | None) -> str:
+        if not realtime_enabled():
+            return "disabled"
+        if key in live:
+            return "listening"
+        return "stopped" if key in _realtime_stopped else "starting"
+
+    known = live | _realtime_stopped | _realtime_wanted
+    return {
+        "enabled": realtime_enabled(),
+        "env": state(None) if os.environ.get("TR_PHONE") else "unconfigured",
+        "institutions": {key: state(key) for key in known if key is not None},
+    }
 
 
 @app.get("/status")
@@ -498,6 +683,9 @@ async def tr_setup_complete(request: Request):
     loop = asyncio.get_event_loop()
     try:
         await loop.run_in_executor(executor, setup_tr.complete_setup, code)
+        # A live session again, which is the one thing a stopped listener was
+        # waiting for. Without this it stays down until the container restarts.
+        resume_realtime(None)
         return {"status": "ok"}
     except Exception:
         log.exception("TR setup/complete failed")
@@ -627,9 +815,14 @@ async def institution_setup_complete(institution_id: str, request: Request):
         if not code:
             return JSONResponse({"error": "Code manquant"}, status_code=400)
         try:
-            return await loop.run_in_executor(
+            result = await loop.run_in_executor(
                 executor, setup_tr_institution.complete_setup, institution_id, code
             )
+            # See tr_setup_complete above: reconnecting is the only signal this
+            # process gets that a listener stopped on a dead session is worth
+            # starting again.
+            resume_realtime(institution_id)
+            return result
         except setup_tr_institution.SetupError as e:
             log.exception("TR setup/complete failed for institution %s", institution_id)
             return JSONResponse({"error": e.user_message[:300]}, status_code=500)

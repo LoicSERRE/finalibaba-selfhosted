@@ -19,7 +19,8 @@ import { InstitutionSyncButton } from "@/components/settings/institution-sync-bu
 import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
 import { TradeRepublicSetupPrompt } from "@/components/settings/tr-setup-prompt";
 import { SyncStatus } from "@/components/settings/sync-status";
-import { getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
+import { getRealtimeStatus, getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
+import { RealtimeIndicator } from "@/components/settings/realtime-indicator";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { getTranslations } from "next-intl/server";
@@ -112,7 +113,7 @@ export default async function SettingsPage({
       ])
     : [[], [], { given: [], received: [] }, null];
 
-  const [institutions, syncStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
+  const [institutions, syncStatus, realtimeStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
     await Promise.all([
       prisma.institution.findMany({
         where: { userId: viewer.id },
@@ -129,6 +130,10 @@ export default async function SettingsPage({
         orderBy: { name: "asc" },
       }),
       getSyncStatus(),
+      // Which Trade Republic connections hold a live websocket right now.
+      // Process state, not database state - a connection can be configured and
+      // still not be listening, which is exactly the gap this answers.
+      getRealtimeStatus(),
       getWoobBankModules(),
       getUserSettings(),
       getShareLinks(),
@@ -333,6 +338,9 @@ export default async function SettingsPage({
                         )}
                         {configured && !syncLog && (
                           <Clock size={12} className="text-[var(--muted)]" role="status" aria-label={t("syncStatus.neverSynced")} />
+                        )}
+                        {isTr && (
+                          <RealtimeIndicator state={realtimeStatus?.institutions?.[inst.id]} />
                         )}
                         {configured && <InstitutionSyncButton institutionId={inst.id} />}
                         {isWoob && <WoobSetupPrompt institutionId={inst.id} log={syncLog} />}

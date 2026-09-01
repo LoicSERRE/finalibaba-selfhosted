@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateTransactions } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertTransactionsWritable, assertOwned } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
@@ -18,12 +18,7 @@ export interface SplitLineForm {
 }
 
 async function revalidateForTransaction(accountId: string, categoryIdsAffected: (string | null)[]) {
-  revalidatePath(`/accounts/${accountId}`);
-  revalidatePath("/budgets");
-  revalidatePath("/transactions");
-  for (const id of categoryIdsAffected) {
-    if (id) revalidatePath(`/budgets/${id}`);
-  }
+  revalidateTransactions(accountId, categoryIdsAffected);
 }
 
 // Splits one transaction across 2+ categories - each line's amount must sum
