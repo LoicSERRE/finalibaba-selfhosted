@@ -54,6 +54,18 @@ overrides:
   # migrate deploy`), so it's still installed by the `--prod` install and
   # still in scope for CI's `pnpm audit --prod --audit-level=high` gate.
   fast-uri: ">=3.1.5"
+  # GHSA-3f6p-5ww8-9rcr - a malicious/compromised MySQL server can downgrade
+  # the auth plugin to mysql_clear_password and read the connecting client's
+  # plaintext credentials. Pulled in transitively via prisma>mysql2 and
+  # @prisma/client>prisma>mysql2 - Prisma bundles driver support for every
+  # database it supports, but this project only ever connects to PostgreSQL
+  # (prisma/schema.prisma's datasource is `provider = "postgresql"`, and
+  # lib/db/prisma.ts constructs its client via @prisma/adapter-pg, never
+  # mysql2 or any Prisma-internal MySQL driver path). Same "installed as a
+  # non-dev `dependencies` entry, never actually invoked" shape as
+  # find-my-way/valibot/fast-uri above - this project has no MySQL
+  # datasource for the driver to ever connect through.
+  mysql2: ">=3.22.0"
   eslint-plugin-react-hooks: "7.0.1"
   # pnpm's override selector only supports one level of "parent>dep" -
   # 3-segment chains like npm's nested "eslint > minimatch > brace-expansion"
