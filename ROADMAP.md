@@ -318,6 +318,13 @@ The fix turned a single hardcoded task into a small supervisor - connections are
 
 A real user report ("many components do not update when you change them") turned into a genuine finding of a different kind: **not reproduced**, and the reason is worth keeping. `revalidatePath`'s own documentation implies the specific path matters; three measurements against a production build showed it does not, in this app - every page is `force-dynamic`, so any revalidation refreshes whatever route is on screen regardless of which path was named. Nine real edit flows were then exercised end to end and all refreshed correctly. Nothing was "fixed" on a guess; a test now asserts the one mechanism that is known to cause the symptom (a mutation that revalidates nothing at all), and the report stays open pending a screen and an edit that actually reproduces it.
 
+## v2.4.1 - Banks that cannot be synced now say so - Released ✓
+
+- [X] **A captcha-protected bank produced a stack trace** (issue #51, Amundi). `setup_woob.py` already classified captchas, browser redirects and "do this on our site" actions as unsupported; the sync path did not, so they landed in the generic error handler. Now a distinct `unsupported` status with a readable message, deliberately not `auth_required` (which would send the user round a setup loop that cannot succeed), and the alert machinery stops reminding daily about a bank that can never work. Reproduced independently on a second Amundi account.
+- [X] **Four new HIGH `fast-uri` advisories.** The existing override floor (`>=3.1.5`) was satisfied by 4.1.2, which every one of them still hits; raised to `>=4.1.3`. Same never-invoked `prisma dev` chain as before, bumped rather than exempted because it costs nothing.
+
+---
+
 ## v2.4 - Audit fixes, and the app stops assuming France - Released ✓
 
 *A full audit (data security, cross-user isolation, UI/UX, performance, features, monetisation) run against a real two-user instance rather than by reading code. Isolation held on every assertion, including the escalation case - a read-only guest cannot turn a live grant into an API key or a share link that carries the grantor's data. Seven defects came out of it, none blocking, all fixed here.*

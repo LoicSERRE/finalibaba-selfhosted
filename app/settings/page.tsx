@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getViewer, baseAccountIds, isAuthEnabled, OWNER_USER_ID } from "@/lib/auth-context";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { Settings, CheckCircle, AlertTriangle, Clock } from "lucide-react";
+import { Settings, CheckCircle, AlertTriangle, Ban, Clock } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -317,23 +317,37 @@ export default async function SettingsPage({
                     const syncLog = syncStatus[isTr ? `tr:${inst.id}` : `woob:${inst.id}`] ?? null;
                     return (
                       <>
+                        {/* "unsupported" is a fourth state, not a flavour of
+                            error: the bank cannot be driven by this
+                            integration at all (a captcha, a browser redirect,
+                            an action to perform on the bank's own site). Red
+                            would invite retrying something that can never
+                            work, so it is muted, and the message carries the
+                            explanation - reported in #51 as a raw traceback
+                            with no indication of what to do. */}
                         {configured && syncLog && (
                           <output
                             className={`flex items-center gap-1 text-xs ${
                               syncLog.status === "success" ? "text-[var(--positive)]" :
                               syncLog.status === "auth_required" ? "text-[var(--warning)]" :
+                              syncLog.status === "unsupported" ? "text-[var(--muted)]" :
                               "text-[var(--negative)]"
                             }`}
+                            title={syncLog.message ?? undefined}
                             aria-label={
                               syncLog.status === "success"
                                 ? t("syncStatus.success")
                                 : syncLog.status === "auth_required"
                                 ? t("syncStatus.authRequired")
+                                : syncLog.status === "unsupported"
+                                ? t("syncStatus.unsupported")
                                 : t("syncStatus.error")
                             }
                           >
                             {syncLog.status === "success"
                               ? <CheckCircle size={12} aria-hidden="true" />
+                              : syncLog.status === "unsupported"
+                              ? <Ban size={12} aria-hidden="true" />
                               : <AlertTriangle size={12} aria-hidden="true" />}
                           </output>
                         )}

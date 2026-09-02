@@ -135,6 +135,13 @@ def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str,
         _notify_owner(inst_id)
     except sync_woob.AuthRequiredError:
         pass  # already written to SyncLog inside sync_woob.run()
+    except sync_woob.UnsupportedBankError:
+        # The bank cannot be driven at all (captcha, browser redirect, an
+        # action to perform on the bank's own site). Already written to
+        # SyncLog with a message the user can read - re-raising would only
+        # add a traceback to the container logs for something that is not a
+        # crash and will not be different in four hours.
+        pass
     except Exception as e:
         log.exception("Woob sync failed for %s", inst_name)
         # Write to SyncLog so the UI shows the error (sync_woob.run() may not have caught it)

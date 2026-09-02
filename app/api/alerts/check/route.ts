@@ -333,6 +333,23 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
       continue;
     }
 
+    // "unsupported" means the bank cannot be driven by this integration AT
+    // ALL - a captcha, a browser redirect, an action to perform on the bank's
+    // own site (see sync/sync_woob.py). Unlike an error or an expired
+    // session, no amount of waiting or reconnecting changes it, so the 24h
+    // reminder would nag forever about something the user already knows and
+    // cannot fix. Same "nothing will ever clear this" dead end isSourceRetired
+    // was written for, arrived at from the other direction: not a source that
+    // stopped running, but one that was never able to.
+    //
+    // Reported once via the state row created below on the first pass, then
+    // silent. Still fully visible in Settings, which is where an explanation
+    // belongs.
+    if (latest.status === "unsupported") {
+      await clearSyncFailureState(settings.userId, source, !!state);
+      continue;
+    }
+
     if (!state) {
       await prisma.syncFailureState.create({ data: { userId: settings.userId, source } });
       const label = friendlySourceLabel(source, institutionById);

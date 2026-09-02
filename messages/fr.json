@@ -1050,7 +1050,8 @@
     "realtimeListening": "Temps réel actif",
     "realtimeStopped": "Temps réel interrompu - reconnecte-toi",
     "realtimeDisabled": "Temps réel désactivé (TR_REALTIME_ENABLED)",
-    "realtimeStarting": "Temps réel en cours de démarrage…"
+    "realtimeStarting": "Temps réel en cours de démarrage…",
+    "unsupported": "Synchronisation automatique impossible pour cette banque"
   },
   "allocationHistoryChart": {
     "noHistory": "Aucun historique",

@@ -1050,7 +1050,8 @@
     "realtimeListening": "Real-time active",
     "realtimeStopped": "Real-time interrupted - reconnect",
     "realtimeDisabled": "Real-time disabled (TR_REALTIME_ENABLED)",
-    "realtimeStarting": "Real-time starting…"
+    "realtimeStarting": "Real-time starting…",
+    "unsupported": "This bank cannot be synced automatically"
   },
   "allocationHistoryChart": {
     "noHistory": "No history yet",

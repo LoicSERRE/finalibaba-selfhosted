@@ -135,8 +135,11 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
     other exception is an unexpected Woob failure - both write a sync log
     and clean up the connection via _fail before re-raising."""
     from woob.exceptions import (
+        ActionNeeded,
         AppValidation,
         AppValidationExpired,
+        BrowserRedirect,
+        CaptchaQuestion,
         NeedInteractive,
         NeedInteractiveFor2FA,
     )
@@ -146,6 +149,26 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         msg = f"2FA required - run setup manually in the container: docker exec -it finalibaba-sync-1 python sync_woob.py --setup {institution_id}"
         _fail(cur, conn, sync_source, "auth_required", msg)
         raise AuthRequiredError(msg)
+    except (CaptchaQuestion, BrowserRedirect, ActionNeeded) as e:
+        # Banks this integration structurally cannot drive: a captcha (exists
+        # precisely to defeat automation), a full browser redirect, or an
+        # action the bank wants performed on its own site.
+        #
+        # setup_woob.py has classified these as "unsupported" since it was
+        # written; the sync path never learned the same lesson, so they fell
+        # into the generic handler below and reached the user as a raw
+        # traceback with a truncated exception string - reported from a real
+        # instance (issue #51, Amundi, RecaptchaV2Question). Same exception
+        # families, same conclusion, now stated the same way in both places.
+        #
+        # Deliberately NOT "auth_required": that status means "reconnect and
+        # it will work", which is false here and would send the user round a
+        # setup loop that cannot succeed. Logged at warning without a
+        # traceback, because this is an expected outcome, not a crash.
+        msg = f"{_UNSUPPORTED_PREFIX}{str(e)[:200]}" if str(e) else _UNSUPPORTED_PREFIX.rstrip(": ")
+        log.warning("%s: %s", institution_name, msg)
+        _fail(cur, conn, sync_source, "unsupported", msg)
+        raise UnsupportedBankError(msg) from e
     except Exception as e:
         msg = str(e)[:300]
         # log.exception (not log.error(..., e)) so the traceback lands in
@@ -216,6 +239,19 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
     cur.close()
     conn.close()
     return {"synced": synced}
+
+
+# Shown to the user, so it says what to do rather than what went wrong.
+_UNSUPPORTED_PREFIX = (
+    "Cette banque ne peut pas être synchronisée automatiquement "
+    "(captcha ou action à faire sur le site de la banque) : "
+)
+
+
+class UnsupportedBankError(Exception):
+    """The bank cannot be driven by this integration at all - as opposed to
+    AuthRequiredError, which means "reconnect and it will work". Kept separate
+    so main.py can stop treating it as a failure to retry every 4 hours."""
 
 
 class AuthRequiredError(Exception):
