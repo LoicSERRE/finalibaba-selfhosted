@@ -1,3 +1,4 @@
+import { fetchExternal } from "@/lib/services/external-fetch";
 import nodemailer from "nodemailer";
 import * as webPush from "web-push";
 import { renderAlertEmailHtml } from "@/lib/services/email-template";
@@ -69,7 +70,7 @@ export async function sendNtfyMessage(topicUrl: string, title: string, body: str
     }
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (authToken) headers.Authorization = `Bearer ${authToken}`;
-    const res = await fetch(parsed.origin, { method: "POST", body: JSON.stringify(payload), headers });
+    const res = await fetchExternal(parsed.origin, { method: "POST", body: JSON.stringify(payload), headers });
     return res.ok;
   } catch (e) {
     console.error("Failed to send ntfy alert", e);

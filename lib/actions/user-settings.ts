@@ -1,5 +1,6 @@
 "use server";
 
+import { isCountryCode } from "@/lib/domain/tax-locale";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { parseCents } from "@/lib/utils/format";
@@ -37,10 +38,17 @@ export async function updateUserSettings(formData: FormData) {
   const taxRateCto = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRateCto") as string) || "31.4") / 100));
   const taxRateCrypto = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRateCrypto") as string) || "31.4") / 100));
 
+  // Validated against the known set rather than trusted: this drives which
+  // wrappers and rates the UI offers, and an unrecognised value would silently
+  // resolve to the neutral OTHER preset anyway. Empty stays null - "I have not
+  // said" is a real state, distinct from "somewhere with no presets".
+  const rawCountry = ((formData.get("country") as string) || "").trim();
+  const country = isCountryCode(rawCountry) ? rawCountry : null;
+
   // savingsGoalCents is intentionally absent - superseded by the Goal
   // model (v1.14), see that model's own schema comment. The column stays
   // in place, just no longer written here.
-  const data = { salaryNetCents: salary, monthlyExpensesCents: expenses, monthlySavedCents: saved, taxRatePea, taxRateCto, taxRateCrypto };
+  const data = { salaryNetCents: salary, monthlyExpensesCents: expenses, monthlySavedCents: saved, taxRatePea, taxRateCto, taxRateCrypto, country };
 
   const viewer = await getViewer();
   await prisma.userSettings.upsert({

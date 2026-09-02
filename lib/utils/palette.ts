@@ -37,15 +37,28 @@ export const AVATAR_COLORS = [
 // clustered in the same narrow blue-purple band, nearly indistinguishable
 // as small legend dots/pie slices (confirmed visually, not just by hue
 // math, in a real rendered screenshot). `savings` moved to teal (67° from
-// cash) and `realEstate` to a warm neutral gray - a genuinely distinct
-// family from every other saturated hue here, sidestepping any further
-// close-hue risk rather than hunting for one more "far enough" color.
+// cash) and `realEstate` out of the blue band entirely.
+//
+// Second audit finding, on that same `realEstate` entry: the warm neutral
+// gray it moved to (#78716c, 5% saturation) fixed the hue clash but created
+// a semantic one. On a typical French portfolio real estate is the LARGEST
+// holding, so the biggest wedge of the allocation donut rendered in the one
+// color the eye reads as "no data" - and the sector palette below then
+// deliberately matched `unclassified` to it, giving a real category and a
+// missing one the same visual language.
+//
+// Now terracotta: hue 7°, a genuine earth tone for property, 31° clear of
+// crypto's amber and 37° of automobile's pink, at 26% saturation - five
+// times the gray's, enough to read as a deliberate choice rather than an
+// absence, while staying muted enough that it is never confused with those
+// two vivid neighbours. Deliberately not moved back toward blue, which is
+// what the first fix above existed to escape.
 export const ALLOCATION_CATEGORY_COLORS: Record<string, string> = {
   cash: "#6366f1",
   savings: "#14b8a6",
   investments: "#22c55e",
   crypto: "#f59e0b",
-  realEstate: "#78716c",
+  realEstate: "#a1665e",
   auto: "#ec4899",
 };
 
@@ -82,5 +95,5 @@ export const SECTOR_COLORS: Record<string, string> = {
   real_estate: "#ec4899",
   communication_services: "#06b6d4",
   crypto: "#f59e0b",
-  unclassified: "#64748b",
+  unclassified: "#94a3b8",
 };

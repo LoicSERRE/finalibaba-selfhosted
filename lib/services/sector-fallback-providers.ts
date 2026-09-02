@@ -33,6 +33,8 @@ import { normalizeSectorKey } from "@/lib/domain/sector-exposure";
  * response, so they'd need updating if FMP's real API ever disagrees with
  * its own docs.
  */
+import { fetchExternal } from "@/lib/services/external-fetch";
+
 export function parseFmpSectorWeightings(data: unknown): SectorWeights | null {
   if (!Array.isArray(data) || data.length === 0) return null;
 
@@ -54,7 +56,7 @@ async function fetchFmpEtfSectorWeightings(symbol: string): Promise<SectorWeight
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) return null;
   try {
-    const res = await fetch(
+    const res = await fetchExternal(
       `https://financialmodelingprep.com/api/v3/etf-sector-weightings/${encodeURIComponent(symbol)}?apikey=${encodeURIComponent(apiKey)}`,
       { headers: { Accept: "application/json" }, next: { revalidate: 3600 } }
     );
@@ -115,7 +117,7 @@ async function fetchAlphaVantageEtfSectorWeightings(symbol: string): Promise<Sec
   const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
   if (!apiKey) return null;
   try {
-    const res = await fetch(
+    const res = await fetchExternal(
       `https://www.alphavantage.co/query?function=ETF_PROFILE&symbol=${encodeURIComponent(symbol)}&apikey=${encodeURIComponent(apiKey)}`,
       { headers: { Accept: "application/json" }, next: { revalidate: 3600 } }
     );

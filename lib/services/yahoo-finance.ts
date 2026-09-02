@@ -9,9 +9,11 @@ import { fetchFallbackEtfSectorWeights } from "@/lib/services/sector-fallback-pr
 // 20 (see eslint.config.mjs's sonarjs/cognitive-complexity rule and
 // lib/domain/dashboard.ts's identical justification) - SonarQube's stricter
 // default of 15 is not the threshold this codebase has standardized on.
+import { fetchExternal } from "@/lib/services/external-fetch";
+
 export async function fetchYFDividendForSymbol(symbol: string): Promise<YFDividendInfo> { // NOSONAR
   try {
-    const res = await fetch(
+    const res = await fetchExternal(
       `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=3mo&range=2y&events=div`,
       {
         headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
@@ -82,7 +84,7 @@ export async function fetchYFDividends(symbols: string[]): Promise<Record<string
 // is computed for the portfolio itself.
 export async function fetchYFPriceHistory(symbol: string): Promise<PricePoint[]> {
   try {
-    const res = await fetch(
+    const res = await fetchExternal(
       // "max" rather than a fixed window - investCAGRWeightedYears (the
       // lookback this feeds) can exceed 10 years for a long-held PEA, and
       // clipping the fetch would silently understate an index's CAGR (see
@@ -130,7 +132,7 @@ export async function resolveIsinToYahoo(
   isin: string
 ): Promise<{ symbol: string; quoteType: string; sector: string | null } | null> {
   try {
-    const res = await fetch(
+    const res = await fetchExternal(
       `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=1&newsCount=0`,
       {
         headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
@@ -172,12 +174,12 @@ async function getYahooCrumb(): Promise<{ cookie: string; crumb: string } | null
     return { cookie: cachedCrumb.cookie, crumb: cachedCrumb.crumb };
   }
   try {
-    const cookieRes = await fetch("https://fc.yahoo.com", { headers: { "User-Agent": "Mozilla/5.0" } });
+    const cookieRes = await fetchExternal("https://fc.yahoo.com", { headers: { "User-Agent": "Mozilla/5.0" } });
     const setCookie = cookieRes.headers.get("set-cookie");
     if (!setCookie) return null;
     const cookie = setCookie.split(";")[0];
 
-    const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
+    const crumbRes = await fetchExternal("https://query1.finance.yahoo.com/v1/test/getcrumb", {
       headers: { "User-Agent": "Mozilla/5.0", Cookie: cookie },
     });
     if (!crumbRes.ok) return null;
@@ -200,7 +202,7 @@ async function fetchEtfSectorWeightingsFromYahoo(symbol: string): Promise<Sector
   const auth = await getYahooCrumb();
   if (!auth) return null;
   try {
-    const res = await fetch(
+    const res = await fetchExternal(
       `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=topHoldings&crumb=${encodeURIComponent(auth.crumb)}`,
       { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json", Cookie: auth.cookie } }
     );

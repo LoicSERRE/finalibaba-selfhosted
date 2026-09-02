@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
+import { InterestRateForm } from "@/components/account-detail/interest-rate-form";
 import { ImportBalanceHistoryDialog } from "@/components/account-detail/import-balance-history-dialog";
 import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
 import { getTranslations, getLocale } from "next-intl/server";
@@ -23,7 +24,6 @@ import { LoanSection } from "@/components/account-detail/loan-section";
 import { TransactionsTable } from "@/components/account-detail/transactions-table";
 import { BalanceHistoryTable } from "@/components/account-detail/balance-history-table";
 import { hasLoanParams } from "@/lib/domain/loan";
-import { CoOwnersSection } from "@/components/account-detail/co-owners-section";
 
 export default async function AccountDetailPage({
   params,
@@ -65,6 +65,15 @@ export default async function AccountDetailPage({
 
   if (!account) notFound();
 
+  // Only for the interest-rate hint, and only for an interest-bearing account
+  // - the country decides whether a "regulated rates change" warning applies
+  // at all. Scoped to ownerId so a guest viewing a granted portfolio sees the
+  // grantor's context, matching every other read on this page.
+  const isInterestBearing = account.type === "SAVINGS" || account.type === "CHECKING";
+  const userSettings = isInterestBearing
+    ? await prisma.userSettings.findUnique({ where: { userId: ownerId }, select: { country: true } })
+    : null;
+
   const result = computeAccountDetail({ account, intlLocale, now: new Date() });
   // canImportCsv drives every CSV-import affordance on this page (the chart
   // section, the transactions table, the empty state). A granted portfolio is
@@ -90,13 +99,18 @@ export default async function AccountDetailPage({
           .then((u) => u?.displayName ?? u?.username ?? null)
       : null;
 
+  // undefined, not [], when the viewer is not the direct owner: the header
+  // uses that to hide the control entirely rather than render a button whose
+  // only outcome would be an authorization error.
   const coOwners = isDirectOwner
-    ? await prisma.accountCoOwner.findMany({
-        where: { accountId: account.id },
-        select: { userId: true, user: { select: { username: true, displayName: true } } },
-        orderBy: { createdAt: "asc" },
-      })
-    : [];
+    ? (
+        await prisma.accountCoOwner.findMany({
+          where: { accountId: account.id },
+          select: { userId: true, user: { select: { username: true, displayName: true } } },
+          orderBy: { createdAt: "asc" },
+        })
+      ).map((c) => ({ userId: c.userId, username: c.user.username, displayName: c.user.displayName }))
+    : undefined;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -116,6 +130,7 @@ export default async function AccountDetailPage({
         account={account}
         subtypeLabel={result.subtypeLabel}
         ownerLabel={ownerLabel}
+        coOwners={coOwners}
         isFiat={result.isFiat}
         isInvestment={result.isInvestment}
         isRealEstate={result.isRealEstate}
@@ -130,6 +145,19 @@ export default async function AccountDetailPage({
         value={result.value}
         liability={result.liability}
       />
+
+      {/* Only interest-bearing types: a real-estate or loan account has no
+          rate to set, and offering one would invite a meaningless number. */}
+      {result.isFiat && isInterestBearing && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+          <InterestRateForm
+            accountId={account.id}
+            interestRatePct={account.interestRatePct}
+            country={userSettings?.country ?? null}
+            readOnly={readOnly}
+          />
+        </div>
+      )}
 
       {(result.isFiat || result.isInvestment) && (
         <BalanceChartSection
@@ -237,17 +265,6 @@ export default async function AccountDetailPage({
           canImportCsv={canImportCsv}
           existingBalanceDates={result.existingBalanceDates}
           existingFingerprints={result.existingFingerprints}
-        />
-      )}
-
-      {isDirectOwner && (
-        <CoOwnersSection
-          accountId={account.id}
-          coOwners={coOwners.map((c) => ({
-            userId: c.userId,
-            username: c.user.username,
-            displayName: c.user.displayName,
-          }))}
         />
       )}
 

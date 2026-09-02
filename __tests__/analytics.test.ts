@@ -25,6 +25,7 @@ function account(overrides: Partial<AnalyticsAccount>): AnalyticsAccount {
     investmentStartDate: null,
     taxTreatment: "TAXABLE",
     taxRatePct: null,
+    interestRatePct: null,
     manualValueCents: null,
     liabilityCents: null,
     syncId: null,
@@ -124,6 +125,7 @@ describe("computeAnalytics", () => {
             type: "INVESTMENT",
             taxTreatment: "EXEMPT",
             taxRatePct: null,
+            interestRatePct: null,
             holdings: [holding],
           }),
         ],
@@ -139,7 +141,8 @@ describe("computeAnalytics", () => {
             id: "cto",
             type: "INVESTMENT",
             taxTreatment: "TAXABLE",
-            taxRatePct: 0.3, // 30%
+            taxRatePct: 0.3,
+            interestRatePct: null, // 30%
             holdings: [holding],
           }),
         ],
@@ -158,6 +161,7 @@ describe("computeAnalytics", () => {
           type: "INVESTMENT",
           taxTreatment: "TAXABLE",
           taxRatePct: 0,
+          interestRatePct: null,
           investmentStartDate: twoYearsAgo,
           holdings: [
             {
@@ -190,6 +194,7 @@ describe("computeAnalytics", () => {
           type: "INVESTMENT",
           taxTreatment: "TAXABLE",
           taxRatePct: 0,
+          interestRatePct: null,
           investmentStartDate: oneYearAgo,
           holdings: [
             {
@@ -263,6 +268,7 @@ describe("computeAnalytics", () => {
           type: "INVESTMENT",
           taxTreatment: "TAXABLE",
           taxRatePct: 0.3,
+          interestRatePct: null,
           holdings: [
             {
               ticker: "FR0000120073", // Air Liquide - has a DIVIDEND_YIELDS fallback rate

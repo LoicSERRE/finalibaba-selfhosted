@@ -20,6 +20,7 @@ import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
 import { TradeRepublicSetupPrompt } from "@/components/settings/tr-setup-prompt";
 import { SyncStatus } from "@/components/settings/sync-status";
 import { getRealtimeStatus, getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
+import { COUNTRY_CODES } from "@/lib/domain/tax-locale";
 import { RealtimeIndicator } from "@/components/settings/realtime-indicator";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
@@ -379,6 +380,46 @@ export default async function SettingsPage({
         )}
       </section>
 
+      {/* Auto-sync - hidden in demo mode (no real credentials, mutations blocked).
+          Each card is further gated on its own .env credential actually being
+          set (LCL_LOGIN / TR_PHONE) - these are the dedicated, .env-configured
+          LCL/Trade Republic paths (see "Sync service - optional modules" in
+          CLAUDE.md), distinct from an institution named "LCL" or "Trade
+          Republic" added via the generic Woob flow below. Without this gate,
+          both cards rendered unconditionally with "Jamais synchronisé" even
+          on a fresh install with zero bank credentials configured anywhere -
+          confusing on its own, and doubly so once a user adds their own
+          Woob-configured "LCL" institution, which then shows as a second,
+          differently-behaving "LCL" surface on the same page. The whole
+          section disappears when neither is configured, rather than showing
+          an empty header. */}
+      {process.env.DEMO_MODE !== "true" && (!!process.env.LCL_LOGIN || !!process.env.TR_PHONE) && (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.sync.title")}</h2>
+            <p className="text-xs text-[var(--muted)] mt-0.5">
+              {t(process.env.TR_PHONE ? "settings.sync.subtitle" : "settings.sync.subtitleNoTr")}
+            </p>
+          </div>
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-5 divide-y divide-[var(--border)]">
+            {!!process.env.LCL_LOGIN && (
+              <SyncStatus
+                source="lcl"
+                label="LCL"
+                log={syncStatus["lcl"] ?? null}
+              />
+            )}
+            {!!process.env.TR_PHONE && (
+              <SyncStatus
+                source="trade-republic"
+                label="Trade Republic"
+                log={syncStatus["trade_republic"] ?? null}
+              />
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Financial profile */}
       <section className="space-y-4">
         <div>
@@ -471,6 +512,29 @@ export default async function SettingsPage({
           <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.tax.subtitle")}</p>
         </div>
         <form action={updateUserSettings} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+          {/* Governs which wrappers and rates the rest of the app SUGGESTS -
+              never what it computes. See lib/domain/tax-locale.ts: the app
+              does not model anyone's tax law, it just stops proposing French
+              products to someone who does not live in France. */}
+          <div className="space-y-1.5 max-w-xs">
+            <label htmlFor="country" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+              {t("settings.tax.country")}
+            </label>
+            <select
+              id="country"
+              name="country"
+              defaultValue={userSettings.country ?? ""}
+              className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
+            >
+              <option value="">{t("settings.tax.countryUnset")}</option>
+              {COUNTRY_CODES.map((code) => (
+                <option key={code} value={code}>
+                  {t(`settings.tax.countries.${code}`)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.countryHint")}</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <label htmlFor="taxRatePea" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
@@ -551,72 +615,19 @@ export default async function SettingsPage({
         </form>
       </section>
 
-      {/* Language */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.language.title")}</h2>
-        </div>
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
-          <LanguageSwitcher />
-        </div>
-      </section>
-
-      {/* Theme */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.theme.title")}</h2>
-        </div>
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
-          <ThemeSwitcher theme={theme} />
-        </div>
-      </section>
-
-      {/* Auto-sync - hidden in demo mode (no real credentials, mutations blocked).
-          Each card is further gated on its own .env credential actually being
-          set (LCL_LOGIN / TR_PHONE) - these are the dedicated, .env-configured
-          LCL/Trade Republic paths (see "Sync service - optional modules" in
-          CLAUDE.md), distinct from an institution named "LCL" or "Trade
-          Republic" added via the generic Woob flow below. Without this gate,
-          both cards rendered unconditionally with "Jamais synchronisé" even
-          on a fresh install with zero bank credentials configured anywhere -
-          confusing on its own, and doubly so once a user adds their own
-          Woob-configured "LCL" institution, which then shows as a second,
-          differently-behaving "LCL" surface on the same page. The whole
-          section disappears when neither is configured, rather than showing
-          an empty header. */}
-      {process.env.DEMO_MODE !== "true" && (!!process.env.LCL_LOGIN || !!process.env.TR_PHONE) && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.sync.title")}</h2>
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              {t(process.env.TR_PHONE ? "settings.sync.subtitle" : "settings.sync.subtitleNoTr")}
-            </p>
-          </div>
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-5 divide-y divide-[var(--border)]">
-            {!!process.env.LCL_LOGIN && (
-              <SyncStatus
-                source="lcl"
-                label="LCL"
-                log={syncStatus["lcl"] ?? null}
-              />
-            )}
-            {!!process.env.TR_PHONE && (
-              <SyncStatus
-                source="trade-republic"
-                label="Trade Republic"
-                log={syncStatus["trade_republic"] ?? null}
-              />
-            )}
-          </div>
-        </section>
+      {/* Your own identity and password. Grouped with 2FA and app-lock below
+          rather than left among the sharing sections, where it used to sit ~3000px
+          down the page between share links and portfolio grants: a password, a
+          second factor and a device lock are one subject, and a user looking
+          for any of them is looking for all three. */}
+      {isMulti && ownAccount && process.env.DEMO_MODE !== "true" && (
+        <AccountSection
+          username={ownAccount.username}
+          displayName={ownAccount.displayName}
+          role={ownAccount.role}
+          needsSetup={ownAccount.needsSetup}
+        />
       )}
-
-      {/* Backup & restore - hidden in demo mode (restore mutations are blocked anyway) */}
-      {/* Admin-only since v2.0: this wraps pg_dump/psql over the WHOLE
-          database, so a restore replaces every user's data (and the user table
-          itself). app/api/backup/route.ts enforces it - this just doesn't
-          offer a member a section whose every button returns 403. */}
-      {process.env.DEMO_MODE !== "true" && viewer.role === "ADMIN" && <BackupRestoreSection />}
 
       {/* 2FA - meaningless without built-in auth active, and hidden in demo
           mode (setup/disable mutations are blocked anyway) */}
@@ -635,25 +646,19 @@ export default async function SettingsPage({
         <AppLockSection userId={viewer.id} enabled={appLockStatus.enabled} credentials={appLockStatus.credentials} />
       )}
 
+      {/* Backup & restore - hidden in demo mode (restore mutations are blocked anyway) */}
+      {/* Admin-only since v2.0: this wraps pg_dump/psql over the WHOLE
+          database, so a restore replaces every user's data (and the user table
+          itself). app/api/backup/route.ts enforces it - this just doesn't
+          offer a member a section whose every button returns 403. */}
+      {process.env.DEMO_MODE !== "true" && viewer.role === "ADMIN" && <BackupRestoreSection />}
+
       {/* Read-only share links - deliberately NOT gated by AUTH_ENABLED like
           2FA above: this is meant to work independently of it (the primary
           use case is sharing one view externally while AUTH_ENABLED stays
           off for the trusted private network). Hidden in demo mode only
           (create/revoke mutations are blocked anyway). */}
       {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
-
-      {/* Read-only guests (v2.0) - sits next to share links because they answer
-          the same question ("let someone else see this"), with a different
-          trust model: a grant is tied to a real account on this instance and is
-          revocable per person, a share link is an anonymous URL. */}
-      {isMulti && ownAccount && process.env.DEMO_MODE !== "true" && (
-        <AccountSection
-          username={ownAccount.username}
-          displayName={ownAccount.displayName}
-          role={ownAccount.role}
-          needsSetup={ownAccount.needsSetup}
-        />
-      )}
 
       {isMulti && process.env.DEMO_MODE !== "true" && (
         <PortfolioSharingSection given={grants.given} received={grants.received} />
@@ -698,6 +703,26 @@ export default async function SettingsPage({
           categories={budgetCategories}
         />
       )}
+
+      {/* Language */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.language.title")}</h2>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <LanguageSwitcher />
+        </div>
+      </section>
+
+      {/* Theme */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.theme.title")}</h2>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <ThemeSwitcher theme={theme} />
+        </div>
+      </section>
 
     </div>
   );

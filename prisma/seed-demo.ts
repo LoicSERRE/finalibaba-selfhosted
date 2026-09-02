@@ -88,8 +88,13 @@ async function main() {
 
   // Fiat
   const checking = await prisma.account.create({ data: { userId, name: "Compte courant", type: "CHECKING",     institutionId: bank.id } });
-  const ldds     = await prisma.account.create({ data: { userId, name: "LDDS",           type: "SAVINGS",      institutionId: bank.id } });
-  const livretA  = await prisma.account.create({ data: { userId, name: "Livret A",       type: "SAVINGS",      institutionId: bank.id } });
+  // interestRatePct explicitly, because these rows are written straight to
+  // Prisma rather than through createAccount - so the country preset that
+  // would normally suggest it (lib/domain/tax-locale.ts) never runs. Without
+  // it the demo shows zero passive income, which is exactly the silent-null
+  // failure this field was introduced to make visible.
+  const ldds     = await prisma.account.create({ data: { userId, name: "LDDS",           type: "SAVINGS",      institutionId: bank.id, interestRatePct: 0.015 } });
+  const livretA  = await prisma.account.create({ data: { userId, name: "Livret A",       type: "SAVINGS",      institutionId: bank.id, interestRatePct: 0.015 } });
   const tickets  = await prisma.account.create({ data: { userId, name: "Tickets Restaurant", type: "MEAL_VOUCHER", institutionId: bank.id, manualValueCents: EUR(425) } });
 
   // Investments
@@ -441,12 +446,17 @@ async function main() {
       salaryNetCents:       EUR(3_800),
       monthlyExpensesCents: EUR(2_350),
       monthlySavedCents:    EUR(950),
+      // The demo portfolio is explicitly French (PEA, Livret A, LDDS), so it
+      // says so rather than leaving the country unset - which would show a
+      // visitor the neutral preset while the account names say otherwise.
+      country:              "FR",
     },
     create: {
       userId,
       salaryNetCents:       EUR(3_800),
       monthlyExpensesCents: EUR(2_350),
       monthlySavedCents:    EUR(950),
+      country:              "FR",
     },
   });
 

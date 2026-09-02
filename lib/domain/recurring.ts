@@ -164,6 +164,98 @@ export type Candidate = {
   categoryId: string | null;
 };
 
+
+/**
+ * How many days one cycle of a pattern spans. 30.44 rather than 30 so a
+ * monthly gap measured across February is not systematically short.
+ */
+const CYCLE_DAYS: Record<RecurringFrequency, number> = {
+  WEEKLY: 7,
+  MONTHLY: 30.44,
+  YEARLY: 365,
+};
+
+export function intervalDays(frequency: RecurringFrequency, intervalCount: number): number {
+  return CYCLE_DAYS[frequency] * Math.max(1, intervalCount);
+}
+
+/**
+ * A dismissed pattern, and the evidence the user was looking at when they
+ * dismissed it: the most recent occurrence at that moment, and the cadence.
+ */
+export type DismissedPattern = {
+  /** `${accountId}|${normalizeLabel(label)}` */
+  key: string;
+  anchorDate: Date;
+  frequency: RecurringFrequency;
+  intervalCount: number;
+};
+
+/**
+ * A dismissal covers the occurrences the user saw, not the rest of time.
+ *
+ * "Stop suggesting Netflix" is a reasonable thing to say about a subscription
+ * you just cancelled, and an unreasonable thing to be held to when you
+ * resubscribe eight months later - the app would stay silent about a real
+ * recurring charge forever, with no hint that it was ever detected.
+ *
+ * The distinguishing signal is a GAP, not new occurrences on their own: a
+ * subscription that never stopped also keeps producing occurrences after the
+ * dismissal, and re-suggesting those is exactly the nagging the dismissal
+ * exists to end. So a pattern only comes back if it went quiet for
+ * meaningfully longer than its own cycle and then resumed.
+ */
+const REAPPEARANCE_GAP_CYCLES = 3;
+
+export function hasResumedAfterDismissal(dismissal: DismissedPattern, occurrenceDates: Date[]): boolean {
+  const cycle = intervalDays(dismissal.frequency, dismissal.intervalCount);
+  const anchorMs = dismissal.anchorDate.getTime();
+
+  // The first occurrence after the moment of dismissal. Anything at or before
+  // the anchor is evidence the user already weighed.
+  const next = occurrenceDates
+    .filter((d) => d.getTime() > anchorMs)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  if (!next) return false;
+
+  const gapDays = (next.getTime() - anchorMs) / (24 * 60 * 60 * 1000);
+  // 3 cycles, not 2: skipping a single month is a missed payment, which this
+  // app already surfaces separately, and treating it as a cancellation would
+  // resurrect the suggestion for a subscription that plainly never stopped.
+  return gapDays > cycle * REAPPEARANCE_GAP_CYCLES;
+}
+
+/**
+ * Whether a group of same-label transactions looks like a regular series, and
+ * on what cadence. Null when it does not - too few occurrences, amounts too
+ * scattered, or spacing that matches no GAP_BANDS entry.
+ *
+ * Extracted from detectCandidates so that function reads as what it is (group,
+ * filter, emit) rather than carrying every rejection rule inline.
+ */
+function analyseSeries(
+  group: TxLike[],
+): { sorted: TxLike[]; medianAmount: number; band: (typeof GAP_BANDS)[number] } | null {
+  if (group.length < MIN_OCCURRENCES) return null;
+
+  const sorted = [...group].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const amounts = sorted.map((tx) => Number(tx.amountCents));
+  const medianAmount = median(amounts);
+  const tolerance = amountTolerance(Math.abs(medianAmount));
+  const matchCount = amounts.filter((a) => Math.abs(a - medianAmount) <= tolerance).length;
+  if (matchCount / amounts.length < MIN_MATCH_RATIO) return null;
+
+  const gapsDays: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    gapsDays.push((sorted[i].date.getTime() - sorted[i - 1].date.getTime()) / (24 * 60 * 60 * 1000));
+  }
+  const medianGap = median(gapsDays);
+  const band = GAP_BANDS.find((b) => medianGap >= b.min && medianGap <= b.max);
+  if (!band) return null;
+
+  return { sorted, medianAmount, band };
+}
+
 /**
  * Groups transactions by (accountId, normalized label) and flags groups whose
  * amounts and date spacing look regular enough to be a subscription or
@@ -174,10 +266,19 @@ export type Candidate = {
  * gaps is still out of scope; the manual create/edit form covers that case.
  *
  * `existingKeys` (each `${accountId}|${normalizeLabel(label)}`) excludes
- * patterns already represented by a RecurringTransaction row - confirmed,
- * paused, or a previously dismissed suggestion - so they never resurface.
+ * patterns already represented by a live RecurringTransaction row - confirmed
+ * or paused - so they never resurface as suggestions.
+ *
+ * `dismissed` is deliberately separate rather than folded into that set: a
+ * dismissal is suppressed only until the pattern stops and comes back, so it
+ * needs the evidence to compare against. See hasResumedAfterDismissal.
  */
-export function detectCandidates(transactions: TxLike[], existingKeys: Set<string>): Candidate[] {
+export function detectCandidates(
+  transactions: TxLike[],
+  existingKeys: Set<string>,
+  dismissed: DismissedPattern[] = [],
+): Candidate[] {
+  const dismissedByKey = new Map(dismissed.map((d) => [d.key, d]));
   const groups = new Map<string, TxLike[]>();
   for (const tx of transactions) {
     const key = `${tx.accountId}|${normalizeLabel(tx.label)}`;
@@ -188,23 +289,17 @@ export function detectCandidates(transactions: TxLike[], existingKeys: Set<strin
 
   const candidates: Candidate[] = [];
 
-  for (const group of groups.values()) {
-    if (group.length < MIN_OCCURRENCES) continue;
+  for (const [key, group] of groups) {
+    const series = analyseSeries(group);
+    if (!series) continue;
 
-    const sorted = [...group].sort((a, b) => a.date.getTime() - b.date.getTime());
-    const amounts = sorted.map((tx) => Number(tx.amountCents));
-    const medianAmount = median(amounts);
-    const tolerance = amountTolerance(Math.abs(medianAmount));
-    const matchCount = amounts.filter((a) => Math.abs(a - medianAmount) <= tolerance).length;
-    if (matchCount / amounts.length < MIN_MATCH_RATIO) continue;
+    const { sorted, medianAmount, band } = series;
 
-    const gapsDays: number[] = [];
-    for (let i = 1; i < sorted.length; i++) {
-      gapsDays.push((sorted[i].date.getTime() - sorted[i - 1].date.getTime()) / (24 * 60 * 60 * 1000));
-    }
-    const medianGap = median(gapsDays);
-    const band = GAP_BANDS.find((b) => medianGap >= b.min && medianGap <= b.max);
-    if (!band) continue;
+    // A dismissed pattern stays suppressed unless it went quiet for longer
+    // than its own cycle and then resumed - see hasResumedAfterDismissal for
+    // why a gap, and not merely new occurrences, is the signal.
+    const dismissal = dismissedByKey.get(key);
+    if (dismissal && !hasResumedAfterDismissal(dismissal, sorted.map((tx) => tx.date))) continue;
 
     const latest = sorted.at(-1)!;
     candidates.push({

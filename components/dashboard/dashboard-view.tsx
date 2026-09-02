@@ -68,16 +68,24 @@ export function DashboardView({
         </p>
         {delta30 && (
           <div className="mt-3 flex items-center gap-2">
+            {/* Three states, not two. `>= 0` painted an unchanged net worth
+                green with a rising triangle - "▲ 0 € (+0.0%)" - which reads as
+                good news about nothing having happened. Zero is not a gain, so
+                it gets the muted treatment and a flat marker. */}
             <span
               className={`inline-flex items-center gap-1 text-sm font-medium tabular-nums ${
-                delta30.amount >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"
+                delta30.amount === 0
+                  ? "text-[var(--muted)]"
+                  : delta30.amount > 0
+                    ? "text-[var(--positive)]"
+                    : "text-[var(--negative)]"
               }`}
             >
-              {delta30.amount >= 0 ? "▲" : "▼"}
+              {delta30.amount === 0 ? "—" : delta30.amount > 0 ? "▲" : "▼"}
               {formatCurrency(Math.abs(delta30.amount), 0)}
-              {delta30.percent !== null && (
+              {delta30.percent !== null && delta30.amount !== 0 && (
                 <span className="font-normal opacity-80">
-                  ({delta30.percent >= 0 ? "+" : ""}{delta30.percent.toFixed(1)}%)
+                  ({delta30.percent > 0 ? "+" : ""}{delta30.percent.toFixed(1)}%)
                 </span>
               )}
             </span>

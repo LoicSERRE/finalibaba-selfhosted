@@ -1,3 +1,5 @@
+import { fetchExternal } from "@/lib/services/external-fetch";
+
 const BASE = "https://bankaccountdata.gocardless.com/api/v2";
 
 // In-memory token cache - survives between requests in the same process
@@ -8,7 +10,7 @@ async function getAccessToken(): Promise<string> {
     return tokenCache.access;
   }
 
-  const res = await fetch(`${BASE}/token/new/`, {
+  const res = await fetchExternal(`${BASE}/token/new/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -29,7 +31,7 @@ async function getAccessToken(): Promise<string> {
 
 async function gcFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const token = await getAccessToken();
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetchExternal(`${BASE}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,

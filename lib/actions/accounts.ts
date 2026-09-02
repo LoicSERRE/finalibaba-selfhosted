@@ -1,5 +1,6 @@
 "use server";
 
+import { suggestedSavingsRate } from "@/lib/domain/tax-locale";
 import { revalidateAccount } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
@@ -81,6 +82,7 @@ export async function createAccount(formData: FormData) {
 
   const isLoan = type === "LOAN";
   const isInvestment = type === "INVESTMENT" || type === "CRYPTO";
+  const isInterestBearing = type === "SAVINGS" || type === "CHECKING";
 
   let initialLiabilityCents: bigint | undefined;
   if (isManualType(type)) {
@@ -90,6 +92,27 @@ export async function createAccount(formData: FormData) {
   }
 
   const viewer = await getViewer();
+
+  // An explicit rate wins; otherwise the country preset gets one chance to
+  // suggest one from the name, and whatever it returns is STORED rather than
+  // re-derived on every render. That difference is the point: France is the
+  // only country whose savings rates are set nationally and therefore
+  // knowable, and the old code applied its product names everywhere, so a
+  // "Livret A" in Lisbon got 1.5% while a real Portuguese account got nothing.
+  let interestRatePct: number | null = null;
+  if (isInterestBearing) {
+    const explicit = parseTaxRatePct(formData.get("interestRatePct"));
+    if (explicit !== undefined) {
+      interestRatePct = explicit;
+    } else {
+      const settings = await prisma.userSettings.findUnique({
+        where: { userId: viewer.id },
+        select: { country: true },
+      });
+      interestRatePct = suggestedSavingsRate(settings?.country, name);
+    }
+  }
+
   const account = await prisma.account.create({
     data: {
       userId: viewer.id,
@@ -103,6 +126,7 @@ export async function createAccount(formData: FormData) {
       investmentSubtype: type === "INVESTMENT" ? investmentSubtype : undefined,
       taxTreatment: isInvestment ? taxTreatment : undefined,
       taxRatePct: isInvestment && taxTreatment === "TAXABLE" ? (taxRatePct ?? null) : null,
+      interestRatePct,
       loanAmountCents: isLoan ? loanAmountCents : undefined,
       loanTaeg: isLoan ? loanTaeg : undefined,
       loanDurationMonths: isLoan ? loanDurationMonths : undefined,
@@ -242,4 +266,26 @@ export async function updateAutomobileAccount(formData: FormData) {
   });
 
   revalidateAll(id);
+}
+
+/**
+ * The annual interest rate on a savings or current account.
+ *
+ * The only edit surface for a value that used to be inferred from the account
+ * NAME, in code, against a hardcoded list of French products - which meant it
+ * could not be corrected at all, and was simply absent outside France. See
+ * lib/domain/tax-locale.ts for why the inference became a one-shot suggestion.
+ */
+export async function updateAccountInterestRate(formData: FormData) {
+  const id = formData.get("id") as string;
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
+
+  // An empty field means "this account pays nothing", which is a real answer
+  // and distinct from a rate of zero only in intent - both contribute nothing.
+  const raw = ((formData.get("interestRatePct") as string) || "").trim();
+  const interestRatePct = raw === "" ? null : (parseTaxRatePct(raw) ?? null);
+
+  await prisma.account.update({ where: { id }, data: { interestRatePct } });
+  revalidateAccount(id);
 }

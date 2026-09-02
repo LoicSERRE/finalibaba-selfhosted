@@ -23,13 +23,15 @@ const CURRENCY_PAIR_SYMBOLS: Record<"USD" | "GBP" | "CHF", string> = {
  * expectation there, and reusing the cache avoids extra Yahoo requests for
  * that hot path.
  */
+import { fetchExternal } from "@/lib/services/external-fetch";
+
 export async function fetchExchangeRateToEur(
   currency: "USD" | "GBP" | "CHF",
   bypassCache = false
 ): Promise<number | null> {
   try {
     const symbol = CURRENCY_PAIR_SYMBOLS[currency];
-    const res = await fetch(
+    const res = await fetchExternal(
       `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`,
       {
         headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },

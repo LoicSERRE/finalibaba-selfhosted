@@ -132,7 +132,9 @@ const FIXED_SOURCE_LABELS: Record<string, string> = {
   yahoo_sector_data: "Données sectorielles Yahoo Finance",
 };
 
-async function friendlySourceLabel(source: string): Promise<string> {
+type InstitutionLite = { id: string; name: string; woobModule: string | null; trPhone: string | null };
+
+function friendlySourceLabel(source: string, institutions: Map<string, InstitutionLite>): string {
   if (FIXED_SOURCE_LABELS[source]) return FIXED_SOURCE_LABELS[source];
   // Every per-institution source resolves the same way, through the shared
   // parser. It used to be a `woob:`-only branch, so v2.1's per-user Trade
@@ -142,10 +144,7 @@ async function friendlySourceLabel(source: string): Promise<string> {
   // written to fix for the first one.
   const institutionId = sourceInstitutionId(source);
   if (institutionId) {
-    const institution = await prisma.institution.findUnique({
-      where: { id: institutionId },
-      select: { name: true },
-    });
+    const institution = institutions.get(institutionId);
     if (institution) return institution.name;
     // Real production case: the institution this SyncLog/SyncFailureState
     // row was created for has since been deleted (e.g. deleted and
@@ -176,15 +175,12 @@ async function friendlySourceLabel(source: string): Promise<string> {
 // run (env vars and a single Institution lookup are cheap) rather than
 // only at alert-creation time, so a source retired *after* it already had
 // an active SyncFailureState still gets cleaned up and stops reminding.
-async function isSourceRetired(source: string): Promise<boolean> {
+function isSourceRetired(source: string, institutions: Map<string, InstitutionLite>): boolean {
   if (source === SOURCE_LCL) return !process.env.LCL_LOGIN;
   if (source === SOURCE_TRADE_REPUBLIC) return !process.env.TR_PHONE;
   const institutionId = sourceInstitutionId(source);
   if (institutionId) {
-    const institution = await prisma.institution.findUnique({
-      where: { id: institutionId },
-      select: { woobModule: true, trPhone: true },
-    });
+    const institution = institutions.get(institutionId);
     // Retired once the institution is gone, or once the provider this source
     // belongs to has been cleared from it. Checking the matching provider
     // rather than Woob's alone matters: a per-user Trade Republic connection
@@ -237,6 +233,53 @@ async function clearSyncFailureState(userId: string, source: string, hasState: b
   if (hasState) await prisma.syncFailureState.delete({ where: { userId_source: { userId, source } } });
 }
 
+type SourceGroup = { source: string; _max: { createdAt: Date | null } };
+
+/**
+ * Everything checkSyncFailures's loop needs, in three queries instead of three
+ * per source.
+ *
+ * It used to run a findFirst, a findUnique and (inside isSourceRetired) an
+ * institution lookup for every source, sequentially, inside a route that
+ * already loops per user - so the cost grew as users × sources. Extracted
+ * rather than inlined because this file is already the one flagged as the next
+ * to split, and because the loop that consumes this is quite complex enough on
+ * its own.
+ */
+async function loadSyncFailureContext(userId: string, groups: SourceGroup[]) {
+  const pairs = groups
+    .filter((g) => g._max.createdAt)
+    .map((g) => ({ source: g.source, createdAt: g._max.createdAt as Date }));
+
+  const institutionIds = [
+    ...new Set(pairs.map((p) => sourceInstitutionId(p.source)).filter((id): id is string => !!id)),
+  ];
+
+  const [logRows, stateRows, institutions] = await Promise.all([
+    pairs.length
+      ? prisma.syncLog.findMany({ where: { userId, OR: pairs }, orderBy: { id: "desc" } })
+      : Promise.resolve([]),
+    prisma.syncFailureState.findMany({ where: { userId } }),
+    institutionIds.length
+      ? prisma.institution.findMany({
+          where: { id: { in: institutionIds } },
+          select: { id: true, name: true, woobModule: true, trPhone: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  // orderBy id desc above, so the first row seen for a source is the one the
+  // per-source findFirst used to return.
+  const latestBySource = new Map<string, (typeof logRows)[number]>();
+  for (const row of logRows) if (!latestBySource.has(row.source)) latestBySource.set(row.source, row);
+
+  return {
+    latestBySource,
+    stateBySource: new Map(stateRows.map((r) => [r.source, r])),
+    institutionById: new Map(institutions.map((i) => [i.id, i])),
+  };
+}
+
 async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]> {
   if (!settings.syncFailureAlertsEnabled) return [];
 
@@ -251,6 +294,11 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
     where: { userId: settings.userId },
     _max: { createdAt: true },
   });
+
+  const { latestBySource, stateBySource, institutionById } = await loadSyncFailureContext(
+    settings.userId,
+    latestPerSource,
+  );
 
   const fired: string[] = [];
 
@@ -267,23 +315,15 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
     // only skipping ahead: left behind, it would sit in the table forever
     // with nothing left to ever clear it.
     if (isRealtimeSource(source)) {
-      const stale = await prisma.syncFailureState.findUnique({
-        where: { userId_source: { userId: settings.userId, source } },
-      });
-      await clearSyncFailureState(settings.userId, source, !!stale);
+      await clearSyncFailureState(settings.userId, source, stateBySource.has(source));
       continue;
     }
-    const latest = await prisma.syncLog.findFirst({
-      where: { userId: settings.userId, source, createdAt: _max.createdAt },
-      orderBy: { id: "desc" },
-    });
+    const latest = latestBySource.get(source);
     if (!latest) continue;
 
-    const state = await prisma.syncFailureState.findUnique({
-      where: { userId_source: { userId: settings.userId, source } },
-    });
+    const state = stateBySource.get(source) ?? null;
 
-    if (await isSourceRetired(source)) {
+    if (isSourceRetired(source, institutionById)) {
       await clearSyncFailureState(settings.userId, source, !!state);
       continue;
     }
@@ -295,7 +335,7 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
 
     if (!state) {
       await prisma.syncFailureState.create({ data: { userId: settings.userId, source } });
-      const label = await friendlySourceLabel(source);
+      const label = friendlySourceLabel(source, institutionById);
       await dispatchAlert(settings, "Échec de synchronisation", formatSyncFailureBody(label, latest.status));
       fired.push(source);
     } else if (Date.now() - state.lastAlertedAt.getTime() >= REMINDER_INTERVAL_MS) {
@@ -303,7 +343,7 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
         where: { userId_source: { userId: settings.userId, source } },
         data: { lastAlertedAt: new Date() },
       });
-      const label = await friendlySourceLabel(source);
+      const label = friendlySourceLabel(source, institutionById);
       await dispatchAlert(
         settings,
         "Échec de synchronisation (toujours en cours)",
@@ -697,7 +737,19 @@ async function checkNewTransactionRule(
   const where = excludeInternalTransfers({
     // A rule with no accountId watches every account the user has - their
     // own base set, not the instance's.
-    accountId: rule.accountId ? rule.accountId : { in: accountIds },
+    //
+    // A rule that names one is still intersected with that set rather than
+    // trusted: H4's own note claims the guards "treat rules on non-writable
+    // accounts as inactive defensively", and until now they did not. No path
+    // currently produces such a rule - createAlertRule validates the target,
+    // and every way an account can leave the user's reach (deletion,
+    // co-owner removal) either cascades the rule away or deletes it
+    // explicitly - so this closes a documented gap rather than a live leak.
+    // Cheap insurance on the one kind that would otherwise describe another
+    // person's transactions in a notification.
+    accountId: rule.accountId
+      ? { in: accountIds.filter((id) => id === rule.accountId) }
+      : { in: accountIds },
     ...buildNewTransactionAmountFilter(rule.transactionDirection, rule.balanceThresholdCents),
   });
 

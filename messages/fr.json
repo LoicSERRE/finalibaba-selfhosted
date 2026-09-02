@@ -257,7 +257,9 @@
       "add": "Ajouter",
       "adding": "Ajout…",
       "remove": "Retirer",
-      "removeConfirm": "Retirer {name} de ce compte ? Ses alertes et objectifs liés à ce compte seront supprimés."
+      "removeConfirm": "Retirer {name} de ce compte ? Ses alertes et objectifs liés à ce compte seront supprimés.",
+      "trigger": "Gérer les copropriétaires",
+      "triggerShared": "Partagé avec {count} personne(s) - gérer"
     },
     "ownedBy": "Compte de {name}",
     "ownedByHint": "Ce compte appartient à {name} ; tu en es copropriétaire."
@@ -374,7 +376,13 @@
     "every": "Tous les",
     "months": "mois",
     "anchorDate": "Depuis le",
-    "submit": "Enregistrer"
+    "submit": "Enregistrer",
+    "dismissedTitle": "Masquées",
+    "dismissedDescription": "Ces récurrences ne sont plus suivies et ne seront plus suggérées. Tu peux les rétablir.",
+    "restore": "Rétablir",
+    "restoring": "Rétablissement…",
+    "deleteConfirm": "La récurrence est retirée de ta liste et ne sera plus suggérée. Tu pourras la rétablir depuis « Masquées ».",
+    "forgetConfirm": "Supprimer définitivement. Si le motif existe encore dans tes transactions, il pourra être suggéré à nouveau."
   },
   "income": {
     "title": "Revenus",
@@ -613,7 +621,30 @@
       "peaHint": "Défaut FR : 17,2 %",
       "ctoHint": "Défaut FR : 31,4 % (PFU)",
       "cryptoHint": "Défaut FR : 31,4 % (PFU)",
-      "taxReportLink": "Voir le rapport fiscal annuel →"
+      "taxReportLink": "Voir le rapport fiscal annuel →",
+      "country": "Pays de résidence fiscale",
+      "countryUnset": "Non précisé",
+      "countryHint": "Détermine les enveloppes et les taux proposés (PEA, ISA, 401(k)…). L'app ne calcule jamais ton impôt à ta place : ce sont des suggestions que tu peux corriger.",
+      "interestRate": "Taux d'intérêt annuel",
+      "interestRateHint": "Sers-t'en pour estimer tes revenus passifs. Laisse vide si le compte ne rapporte rien : vide et 0 % donnent le même résultat, mais l'export signale les comptes non renseignés.",
+      "countries": {
+        "FR": "France",
+        "BE": "Belgique",
+        "CH": "Suisse",
+        "LU": "Luxembourg",
+        "DE": "Allemagne",
+        "NL": "Pays-Bas",
+        "ES": "Espagne",
+        "IT": "Italie",
+        "PT": "Portugal",
+        "IE": "Irlande",
+        "GB": "Royaume-Uni",
+        "US": "États-Unis",
+        "CA": "Canada",
+        "OTHER": "Autre pays"
+      },
+      "interestRateStale": "Les taux réglementés changent : celui-ci est proposé d'après les barèmes connus au {date}. Vérifie-le auprès de ta banque.",
+      "interestRateUnset": "Aucun taux renseigné : ce compte ne compte pas dans l'estimation des revenus passifs."
     },
     "language": {
       "title": "Langue"
@@ -1445,7 +1476,8 @@
     "mdRisky": "Risqués",
     "mdTotalLiabilities": "Passif total",
     "mdDebtRatio": "Ratio dette / brut",
-    "mdEquity": "Fonds propres"
+    "mdEquity": "Fonds propres",
+    "mdPassiveMissingRates": "Estimation partielle : {count} compte(s) rémunéré(s) n'ont pas de taux d'intérêt renseigné et ne sont pas comptés ici."
   },
   "coOwners": {
     "errorUsernameRequired": "Saisis un nom d'utilisateur.",

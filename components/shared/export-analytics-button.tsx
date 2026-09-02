@@ -103,6 +103,7 @@ export type AnalyticsExportData = {
   annualDividendsCents: number;
   annualDividendsNetCents: number;
   annualInterestCents: number;
+  accountsMissingInterestRate: number;
   annualPassiveCents: number;
   monthlyPassiveCents: number;
   performanceRows: PerfRowExport[];
@@ -220,6 +221,7 @@ interface AnalyticsExportStrings {
     dividends: string;
     interest: string;
   }) => string;
+  passiveMissingRates: (params: { count: number }) => string;
 }
 
 // ── Markdown generation ───────────────────────────────────────────────────────
@@ -337,6 +339,14 @@ function buildMarkdown(
         interest: fmt(data.annualInterestCents),
       })
     );
+    // A document someone plans with must not quietly under-report. The
+    // interest half of this figure only counts accounts whose rate is set,
+    // and an unset rate is invisible everywhere else in the app - so if any
+    // are missing, the export says so rather than presenting a partial total
+    // as a complete one.
+    if (data.accountsMissingInterestRate > 0) {
+      lines.push("", `> ${s.passiveMissingRates({ count: data.accountsMissingInterestRate })}`);
+    }
     lines.push("");
     if (data.dividendRows.length > 0) {
       lines.push(
@@ -553,6 +563,7 @@ export function ExportAnalyticsButton({ data }: Readonly<{ data: AnalyticsExport
       summaryLine: (params) => t("mdSummaryLine", params),
       cagrSuffix: (cagr) => t("mdCagrSuffix", { cagr }),
       passiveLine: (params) => t("mdPassiveLine", params),
+      passiveMissingRates: (params) => t("mdPassiveMissingRates", params),
     };
     const md = buildMarkdown(data, selected, s, intlLocale);
     downloadFile(md, "analytique");

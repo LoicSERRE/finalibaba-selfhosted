@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  normalizeLabel,
-  getOccurrencesInRange,
-  getMostRecentExpectedOccurrence,
-  isMissed,
   detectCandidates,
   formatFrequencyLabel,
+  getMostRecentExpectedOccurrence,
+  getOccurrencesInRange,
+  hasResumedAfterDismissal,
+  intervalDays,
+  isMissed,
+  normalizeLabel,
   projectDailyCumulative,
   type RecurringSeries,
 } from "@/lib/domain/recurring";
@@ -283,5 +285,106 @@ describe("projectDailyCumulative", () => {
     const points = projectDailyCumulative(series, utc(2026, 0, 1), utc(2026, 0, 10));
     const day5 = points.find((p) => p.date.getUTCDate() === 5);
     expect(day5?.cumulativeCents).toBe(2000);
+  });
+});
+
+// ── Dismissals expire when a pattern stops and comes back ────────────────────
+//
+// Raised directly: "si la dépense revient plus tard il faut quand même qu'elle
+// soit prise en compte, non ?" - and the first cut of dismissedAt made a
+// dismissal permanent, so a resubscribed Netflix would never be suggested
+// again. The distinguishing signal is a GAP, not new occurrences: a
+// subscription that never stopped also keeps producing them.
+
+const DAY = 24 * 60 * 60 * 1000;
+const at = (daysAgo: number) => new Date(Date.now() - daysAgo * DAY);
+
+function monthlySeries(daysAgoList: number[], label = "NETFLIX.COM") {
+  return daysAgoList.map((d) => ({
+    accountId: "acc-1",
+    label,
+    amountCents: BigInt(-1600),
+    date: at(d),
+    categoryId: null,
+  }));
+}
+
+const KEY = "acc-1|netflix.com";
+const dismissal = (anchorDaysAgo: number) => ({
+  key: KEY,
+  anchorDate: at(anchorDaysAgo),
+  frequency: "MONTHLY" as const,
+  intervalCount: 1,
+});
+
+describe("a dismissed pattern that never stopped", () => {
+  it("stays dismissed even as new charges keep arriving", () => {
+    // Dismissed 4 months ago; it has billed every month since. Re-suggesting
+    // is precisely the nagging the dismissal existed to end.
+    const txs = monthlySeries([150, 120, 90, 60, 30, 1]);
+    const out = detectCandidates(txs, new Set(), [dismissal(150)]);
+    expect(out).toEqual([]);
+  });
+
+  it("is not resurrected by a single skipped month", () => {
+    // A 2-cycle gap is a missed payment, which this app surfaces separately -
+    // not a cancellation.
+    const txs = monthlySeries([120, 90, 60, 0]); // ~60d gap after the anchor
+    const out = detectCandidates(txs, new Set(), [dismissal(120)]);
+    expect(out).toEqual([]);
+  });
+});
+
+describe("a dismissed pattern that stopped and came back", () => {
+  it("is suggested again", () => {
+    // Cancelled, silent for ~8 months, then resubscribed and billing monthly.
+    const txs = monthlySeries([400, 370, 340, 90, 60, 30]);
+    const out = detectCandidates(txs, new Set(), [dismissal(340)]);
+    expect(out).toHaveLength(1);
+    expect(out[0].label).toBe("NETFLIX.COM");
+  });
+
+  it("stays suppressed while it is still silent", () => {
+    // Same dismissal, but nothing has come back yet.
+    const txs = monthlySeries([400, 370, 340]);
+    const out = detectCandidates(txs, new Set(), [dismissal(340)]);
+    expect(out).toEqual([]);
+  });
+});
+
+describe("a live template always suppresses, dismissal rules do not apply", () => {
+  it("is never suggested, however long the gap", () => {
+    const txs = monthlySeries([400, 370, 340, 90, 60, 30]);
+    const out = detectCandidates(txs, new Set([KEY]), []);
+    expect(out).toEqual([]);
+  });
+});
+
+describe("hasResumedAfterDismissal", () => {
+  it("is false when nothing happened after the dismissal", () => {
+    expect(hasResumedAfterDismissal(dismissal(30), [at(90), at(60), at(30)])).toBe(false);
+  });
+
+  it("scales the threshold with the pattern's own cycle", () => {
+    // 120 days is a return for a monthly pattern...
+    expect(hasResumedAfterDismissal(dismissal(200), [at(80)])).toBe(true);
+    // ...and routine for a yearly one.
+    expect(
+      hasResumedAfterDismissal(
+        { key: KEY, anchorDate: at(200), frequency: "YEARLY", intervalCount: 1 },
+        [at(80)],
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("intervalDays", () => {
+  it("uses an average month so a February gap is not systematically short", () => {
+    expect(intervalDays("MONTHLY", 1)).toBeCloseTo(30.44, 2);
+  });
+
+  it("scales with intervalCount", () => {
+    expect(intervalDays("MONTHLY", 3)).toBeCloseTo(91.32, 2);
+    expect(intervalDays("WEEKLY", 2)).toBe(14);
   });
 });

@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Lock, RefreshCw, AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { isBareRoute } from "@/lib/domain/bare-routes";
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +53,21 @@ export function AppLockGate({
 }: Readonly<{ enabled: boolean; userId: string; children: React.ReactNode }>) {
   const sessionKey = sessionKeyFor(userId);
   const t = useTranslations("appLock");
+  // Never lock a route that is not "the app": /shared/<token> is handed to an
+  // advisor or a family member who has no account and no registered device,
+  // /login and /invite are what you see before having one. The device marker
+  // already meant a stranger was let through after hydration, but the lock
+  // screen still rendered on the way there - so the first thing a share-link
+  // recipient saw was "Appli verrouillée, déverrouille avec ton empreinte".
+  //
+  // Worse on /shared specifically: an anonymous visitor has no session, so
+  // getViewer() falls back to the instance owner and it is the OWNER's
+  // appLockEnabled that decides. The page owner's lock setting has no business
+  // gating a link they deliberately published.
+  //
+  // Same guard the sidebar, MainContent and AutoSync already carry - this
+  // component was simply never given one.
+  const bare = isBareRoute(usePathname());
   const [unlocked, setUnlocked] = useState(!enabled);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +127,7 @@ export function AppLockGate({
   // makes the lock decorative. Measured on visibility rather than a timer, so
   // a backgrounded tab that the browser throttles still locks correctly.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || bare) return;
     let hiddenSince: number | null = null;
 
     const onVisibility = () => {
@@ -135,10 +152,10 @@ export function AppLockGate({
 
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [enabled, sessionKey]);
+  }, [enabled, bare, sessionKey]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || bare) return;
     // The lock is per device. A browser that never registered an
     // authenticator has nothing to unlock with, and Settings - where it would
     // register one - sits behind this very screen. Locking it is a dead end,
@@ -166,7 +183,7 @@ export function AppLockGate({
     if (autoTried.current) return;
     autoTried.current = true;
     void attemptUnlock({ silent: true });
-  }, [enabled, sessionKey, userId, attemptUnlock]);
+  }, [enabled, bare, sessionKey, userId, attemptUnlock]);
 
 
   async function handleRegisterThisDevice() {
@@ -190,7 +207,7 @@ export function AppLockGate({
     }
   }
 
-  if (unlocked) return <>{children}</>;
+  if (unlocked || bare) return <>{children}</>;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[var(--background)] p-6">

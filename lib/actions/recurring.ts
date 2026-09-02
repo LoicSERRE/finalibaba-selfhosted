@@ -96,7 +96,41 @@ export async function updateRecurringTransaction(id: string, formData: FormData)
   revalidateAll();
 }
 
+/**
+ * Deleting leaves a dismissal tombstone instead of removing the row.
+ *
+ * detectCandidates excludes a pattern by looking for a RecurringTransaction
+ * that still exists, so a hard delete handed the pattern straight back as a
+ * fresh suggestion on the next render - reproduced as 7 suggestions, delete
+ * one, 8 suggestions, with no way out of the loop. The template really is gone
+ * (it disappears from the list, projects nothing, triggers no missed-payment
+ * warning); what survives is the single fact that the user does not want to be
+ * asked about it again, which is exactly what dismissSuggestion stores.
+ *
+ * Restorable from the "hidden" section, so this is not a one-way door.
+ */
 export async function deleteRecurringTransaction(id: string) {
+  await assertRecurringWritable(id);
+  await prisma.recurringTransaction.update({
+    where: { id },
+    data: { active: false, dismissedAt: new Date() },
+  });
+  revalidateAll();
+}
+
+/** Bring a dismissed pattern back as a paused template the user can resume. */
+export async function restoreRecurringTransaction(id: string) {
+  await assertRecurringWritable(id);
+  await prisma.recurringTransaction.update({
+    where: { id },
+    data: { dismissedAt: null, active: false },
+  });
+  revalidateAll();
+}
+
+/** Really remove it, tombstone included - it will be suggested again if the
+ *  pattern is still in the transaction history, which is the point. */
+export async function forgetRecurringTransaction(id: string) {
   await assertRecurringWritable(id);
   await prisma.recurringTransaction.delete({ where: { id } });
   revalidateAll();
@@ -121,6 +155,7 @@ export async function dismissSuggestion(candidate: {
       anchorDate: new Date(`${candidate.anchorDate}T12:00:00.000Z`),
       active: false,
       autoDetected: true,
+      dismissedAt: new Date(),
     },
   });
   revalidateAll();

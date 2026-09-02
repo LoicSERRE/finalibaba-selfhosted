@@ -257,7 +257,9 @@
       "add": "Add",
       "adding": "Adding…",
       "remove": "Remove",
-      "removeConfirm": "Remove {name} from this account? Their alert rules and goals tied to it will be deleted."
+      "removeConfirm": "Remove {name} from this account? Their alert rules and goals tied to it will be deleted.",
+      "trigger": "Manage co-owners",
+      "triggerShared": "Shared with {count} person(s) - manage"
     },
     "ownedBy": "{name}'s account",
     "ownedByHint": "This account belongs to {name}; you co-own it."
@@ -374,7 +376,13 @@
     "every": "Every",
     "months": "months",
     "anchorDate": "Since",
-    "submit": "Save"
+    "submit": "Save",
+    "dismissedTitle": "Hidden",
+    "dismissedDescription": "These are no longer tracked and will not be suggested again. You can restore them.",
+    "restore": "Restore",
+    "restoring": "Restoring…",
+    "deleteConfirm": "Removed from your list and no longer suggested. You can restore it from \"Hidden\".",
+    "forgetConfirm": "Delete permanently. If the pattern is still in your transactions it may be suggested again."
   },
   "income": {
     "title": "Income",
@@ -613,7 +621,30 @@
       "peaHint": "FR default: 17.2%",
       "ctoHint": "FR default: 31.4% (flat tax)",
       "cryptoHint": "FR default: 31.4% (flat tax)",
-      "taxReportLink": "View the annual tax report →"
+      "taxReportLink": "View the annual tax report →",
+      "country": "Country of tax residence",
+      "countryUnset": "Not set",
+      "countryHint": "Decides which wrappers and rates are suggested (PEA, ISA, 401(k)…). The app never computes your tax for you: these are suggestions you can correct.",
+      "interestRate": "Annual interest rate",
+      "interestRateHint": "Used to estimate your passive income. Leave empty if the account pays nothing: empty and 0% give the same result, but the export flags accounts left unset.",
+      "countries": {
+        "FR": "France",
+        "BE": "Belgium",
+        "CH": "Switzerland",
+        "LU": "Luxembourg",
+        "DE": "Germany",
+        "NL": "Netherlands",
+        "ES": "Spain",
+        "IT": "Italy",
+        "PT": "Portugal",
+        "IE": "Ireland",
+        "GB": "United Kingdom",
+        "US": "United States",
+        "CA": "Canada",
+        "OTHER": "Other country"
+      },
+      "interestRateStale": "Regulated rates change: this one is suggested from the schedule known on {date}. Check it with your bank.",
+      "interestRateUnset": "No rate set: this account is excluded from the passive-income estimate."
     },
     "language": {
       "title": "Language"
@@ -1445,7 +1476,8 @@
     "mdRisky": "Risky",
     "mdTotalLiabilities": "Total liabilities",
     "mdDebtRatio": "Debt / gross ratio",
-    "mdEquity": "Equity"
+    "mdEquity": "Equity",
+    "mdPassiveMissingRates": "Partial estimate: {count} interest-bearing account(s) have no rate set and are not counted here."
   },
   "coOwners": {
     "errorUsernameRequired": "Enter a username.",

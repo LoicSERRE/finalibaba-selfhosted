@@ -5,11 +5,13 @@ import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { Repeat, AlertTriangle, Bot } from "lucide-react";
 import { AddRecurringDialog } from "@/components/recurring/add-recurring-dialog";
 import { SuggestionCard } from "@/components/recurring/suggestion-card";
+import { CollapsibleSection } from "@/components/recurring/collapsible-section";
+import { RestoreRecurringButton } from "@/components/recurring/restore-recurring-button";
 import { ToggleRecurringButton } from "@/components/recurring/toggle-recurring-button";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CashflowChart } from "@/components/recurring/cashflow-chart";
-import { deleteRecurringTransaction } from "@/lib/actions/recurring";
+import { deleteRecurringTransaction, forgetRecurringTransaction } from "@/lib/actions/recurring";
 import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
 import {
   detectCandidates,
@@ -60,16 +62,35 @@ export default async function RecurringPage() {
     }),
   ]);
 
-  const existingKeys = new Set(recurring.map((r) => `${r.accountId}|${normalizeLabel(r.label)}`));
+  // Live templates suppress a pattern outright. Dismissals are passed
+  // separately with their evidence, because a dismissal expires: it holds
+  // until the pattern stops and comes back, not forever. See
+  // hasResumedAfterDismissal - "I cancelled this" should not silence a real
+  // charge you resubscribe to next year.
+  const key = (r: { accountId: string; label: string }) => `${r.accountId}|${normalizeLabel(r.label)}`;
+  const existingKeys = new Set(recurring.filter((r) => r.dismissedAt === null).map(key));
+  const dismissedPatterns = recurring
+    .filter((r) => r.dismissedAt !== null)
+    .map((r) => ({
+      key: key(r),
+      anchorDate: r.anchorDate,
+      frequency: r.frequency,
+      intervalCount: r.intervalCount,
+    }));
   const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
-  const candidates = detectCandidates(recentTransactions, existingKeys).map((c) => ({
+  const candidates = detectCandidates(recentTransactions, existingKeys, dismissedPatterns).map((c) => ({
     ...c,
     accountName: accountNameById.get(c.accountId) ?? "?",
     anchorDate: c.anchorDate.toISOString().slice(0, 10),
   }));
 
-  const active = recurring.filter((r) => r.active);
-  const inactive = recurring.filter((r) => !r.active);
+  // Three states, not two. A dismissal used to be indistinguishable from a
+  // pause (both were just active:false), so saying "stop suggesting this"
+  // pushed a row into the visible list wearing a "Paused" badge - dismissing
+  // added clutter instead of removing it. dismissedAt separates them.
+  const dismissed = recurring.filter((r) => r.dismissedAt !== null);
+  const active = recurring.filter((r) => r.active && r.dismissedAt === null);
+  const inactive = recurring.filter((r) => !r.active && r.dismissedAt === null);
 
   const missedById = new Map(
     active.map((r) => [
@@ -120,14 +141,18 @@ export default async function RecurringPage() {
         />
       ) : (
         <>
-          {candidates.length > 0 && (
-            <div className="space-y-3">
-              <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("suggestionsTitle")}</h2>
-              {candidates.map((c) => (
-                <SuggestionCard key={`${c.accountId}|${c.label}`} candidate={c} accounts={dialogAccounts} categories={categories} />
-              ))}
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("chartTitle")}</h2>
+              <span className="text-sm font-medium tabular-nums">
+                {t("netTotal")}:{" "}
+                <span className={netTotalCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                  {formatCurrency(netTotalCents)}
+                </span>
+              </span>
             </div>
-          )}
+            <CashflowChart data={chartData} />
+          </div>
 
           {recurring.length > 0 && (
             <div className="space-y-3">
@@ -177,7 +202,7 @@ export default async function RecurringPage() {
                         accounts={dialogAccounts}
                         categories={categories}
                       />
-                      <DeleteButton iconOnly label={tc("delete")} description={tc("irreversible")} onDelete={deleteRecurringTransaction.bind(null, r.id)} />
+                      <DeleteButton iconOnly label={tc("delete")} description={t("deleteConfirm")} onDelete={deleteRecurringTransaction.bind(null, r.id)} />
                     </div>
                   </div>
                   <p className="text-sm tabular-nums font-medium">
@@ -194,18 +219,55 @@ export default async function RecurringPage() {
             </div>
           )}
 
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("chartTitle")}</h2>
-              <span className="text-sm font-medium tabular-nums">
-                {t("netTotal")}:{" "}
-                <span className={netTotalCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
-                  {formatCurrency(netTotalCents)}
-                </span>
-              </span>
-            </div>
-            <CashflowChart data={chartData} />
-          </div>
+          {/* After the templates you manage, not before them. These used to be
+              the first thing on the page, pushing the active list below the
+              fold on any account with a few detected patterns - reported as
+              exactly that. Collapsed by default, EXCEPT when there is nothing
+              else here: on a fresh install they are the whole point of the
+              page rather than a distraction from it. */}
+          {candidates.length > 0 && (
+            <CollapsibleSection
+              title={t("suggestionsTitle")}
+              count={candidates.length}
+              defaultOpen={recurring.length === 0}
+            >
+              {candidates.map((c) => (
+                <SuggestionCard key={`${c.accountId}|${c.label}`} candidate={c} accounts={dialogAccounts} categories={categories} />
+              ))}
+            </CollapsibleSection>
+          )}
+
+          {/* Dismissed patterns, out of the way but not gone: dismissing used
+              to leave a row in the main list wearing a "Paused" badge, and
+              deleting handed the pattern straight back as a suggestion. Both
+              land here now, restorable. */}
+          {dismissed.length > 0 && (
+            <CollapsibleSection title={t("dismissedTitle")} count={dismissed.length}>
+              <p className="text-xs text-[var(--muted)]">{t("dismissedDescription")}</p>
+              {dismissed.map((r) => (
+                <div
+                  key={r.id}
+                  className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-[var(--muted)] break-words">{r.label}</p>
+                    <p className="text-xs text-[var(--muted)] opacity-70 tabular-nums">
+                      {formatCurrency(r.amountCents)} · {r.account.name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <RestoreRecurringButton id={r.id} />
+                    <DeleteButton
+                      iconOnly
+                      label={tc("delete")}
+                      description={t("forgetConfirm")}
+                      onDelete={forgetRecurringTransaction.bind(null, r.id)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </CollapsibleSection>
+          )}
 
           {upcoming.length > 0 && (
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">

@@ -221,6 +221,14 @@ model Account {
   investmentStartDate   DateTime? // Investment start date (manual entry)
   taxTreatment          TaxTreatment           @default(TAXABLE) // INVESTMENT/CRYPTO only - see TaxTreatment
   taxRatePct            Float? // 0-1 ratio, meaningful only when taxTreatment = TAXABLE
+  // Annual interest rate on a SAVINGS/CHECKING account, 0-1 ratio, null =
+  // unknown. Replaces the name-substring matching in lib/domain/analytics.ts
+  // that guessed a French regulated rate from strings like "livret a"/"ldds"
+  // on every render - which produced zero passive income for every account
+  // outside France, silently. The country preset still SUGGESTS a value at
+  // creation (see lib/domain/tax-locale.ts), but the stored number is what is
+  // computed from, so a user anywhere can see it and correct it.
+  interestRatePct       Float?
   loanAmountCents       BigInt? // LOAN: initial borrowed amount
   loanTaeg              Float? // LOAN: annual interest rate in % (e.g. 5.47)
   loanDurationMonths    Int? // LOAN: total duration in months
@@ -626,6 +634,17 @@ model RecurringTransaction {
   anchorDate    DateTime // a real known occurrence - day/weekday/month is derived from this
   active        Boolean            @default(true)
   autoDetected  Boolean            @default(false) // created by confirming a detected suggestion vs manually
+  // When the user said "stop suggesting this". Distinct from `active`, which
+  // means paused-but-still-mine: before this, dismissing a suggestion and
+  // pausing a real template produced identical rows, so a dismissal appeared
+  // in the visible list wearing a "Paused" badge - dismissing ADDED clutter.
+  //
+  // It also fixes a reported dead end: deleting a confirmed recurring
+  // transaction removed its row, and detectCandidates keys off the rows that
+  // exist, so the pattern was re-suggested on the very next render with no way
+  // to ever be rid of it (reproduced: 7 suggestions -> delete -> 8). Delete now
+  // leaves this tombstone instead of vanishing.
+  dismissedAt   DateTime?
   createdAt     DateTime           @default(now())
 
   @@index([accountId])
@@ -688,6 +707,18 @@ model UserSettings {
   // convention; no longer read or written anywhere in app code.
   savingsGoalCents            BigInt   @default(5000000)
   monthlySavedCents           BigInt   @default(0)
+  // Which country's wrappers and default rates the UI suggests - a preset
+  // key, never an input to any computation (see lib/domain/tax-locale.ts).
+  // Nullable and defaulting to NOTHING on purpose: a self-hoster who has not
+  // said where they live must not silently inherit French wrappers, which is
+  // the whole assumption this field exists to remove. The migration that
+  // added it backfills existing rows to "FR", because those instances WERE
+  // French by construction - the app had no other option before v2.4.
+  country                     String?
+  // Superseded by the country preset above as of v2.4, kept per this repo's
+  // non-destructive-migration convention. Still read as the fallback
+  // suggestion for a France-configured instance so existing installs see no
+  // change; new accounts take their suggestion from the preset instead.
   taxRatePea                  Float    @default(0.172)
   taxRateCto                  Float    @default(0.314)
   taxRateCrypto               Float    @default(0.314)

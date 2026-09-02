@@ -128,6 +128,8 @@ export interface AnalyticsAccount {
   investmentStartDate: Date | null;
   taxTreatment: TaxTreatment;
   taxRatePct: number | null;
+  /** Annual savings interest, 0-1 ratio. Null = unknown, contributes nothing. */
+  interestRatePct: number | null;
   manualValueCents: bigint | null;
   liabilityCents: bigint | null;
   syncId: string | null;
@@ -335,6 +337,8 @@ export interface AnalyticsResult {
   annualDividendsCents: bigint;
   annualDividendsNetCents: bigint;
   annualInterestCents: bigint;
+  /** Interest-bearing accounts with no rate set - see the estimate above. */
+  accountsMissingInterestRate: number;
   annualPassiveCents: bigint;
   monthlyPassiveCents: number;
   dividendCalendar: DividendCalendarRow[];
@@ -410,6 +414,13 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   let annualDividendsCents = BigInt(0);    // gross
   let annualDividendsNetCents = BigInt(0); // net after tax
   let annualInterestCents = BigInt(0);     // already net (French regulated savings accounts are income-tax-exempt)
+  // Interest-bearing accounts with no rate set. A null rate contributes
+  // nothing, which is correct - but indistinguishable on screen from an
+  // account that genuinely pays none, and this estimate is consumed by the
+  // markdown export where nobody would ever see the shortfall. Counting it
+  // lets the consumer say "this figure covers 2 of your 4 savings accounts"
+  // instead of quietly under-reporting.
+  let accountsMissingInterestRate = 0;
 
   const dividendRowsData: Omit<DividendCalendarRow, "exDividendDate" | "annualRatePerShare" | "daysLeft" | "isPast" | "isSoon">[] = [];
 
@@ -528,19 +539,38 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
       value = account.history[0]?.balanceCents ?? BigInt(0);
       if (account.type === "SAVINGS") {
         allocation["savings"] += value;
-        // French regulated savings rates as of 2026-06-01 - update when rates change
-        const name = account.name.toLowerCase();
-        let rate = 0;
-        if (name.includes("lep")) rate = 0.025;           // LEP: 2.5%
-        else if (name.includes("livret a")) rate = 0.015; // Livret A: 1.5%
-        else if (name.includes("ldds")) rate = 0.015;     // LDDS = Livret A: 1.5%
-        else if (name.includes("livret jeune") || name.includes("jeune")) rate = 0.025; // Livret Jeune: 2.5%
-        else if (name.includes("livret")) rate = 0.015;   // other regulated savings: 1.5%
-        if (rate > 0) annualInterestCents += BigInt(Math.round(Number(value) * rate));
+        // The account's own stored rate, not a guess from its name. This used
+        // to match French product names ("livret a", "ldds", "lep") against
+        // account.name on every render, which meant a savings account in any
+        // other country contributed exactly zero to passive income - silently,
+        // with nothing on screen to suggest a number was missing rather than
+        // genuinely nil. It also made a rate change a code change.
+        //
+        // lib/domain/tax-locale.ts still SUGGESTS these same French rates when
+        // a France-configured user names an account "Livret A", and the v2.4
+        // migration backfilled every existing account from the old rules - so
+        // an upgrading French instance sees identical figures. The difference
+        // is that the number now lives on the account, where it is visible and
+        // editable by anyone, anywhere.
+        const rate = account.interestRatePct;
+        if (rate === null) accountsMissingInterestRate += 1;
+        else if (rate > 0) annualInterestCents += BigInt(Math.round(Number(value) * rate));
       } else {
         allocation["cash"] += value;
-        // Trade Republic cash account: 2% gross → 1.372% net (flat tax 31.4%: 12.8% income tax withheld at source + 17.2% social levies + 0.2% exceptional contribution)
-        if (isTrCashAccount(account.syncId)) {
+        // A rate the user set wins over any built-in guess - a current account
+        // can pay interest anywhere, and only its holder knows what.
+        //
+        // The Trade Republic fallback below stays for accounts with no stored
+        // rate, so nothing changes for an existing install, but note what it
+        // bakes in: 2% gross becomes 1.372% net only under the FRENCH flat tax
+        // (12.8% income tax + 17.2% social levies + 0.2% exceptional
+        // contribution). A German or Italian Trade Republic user is taxed
+        // differently on the same 2%. Setting the rate on the account is how
+        // they correct it, which was not possible before this field existed.
+        const cashRate = account.interestRatePct;
+        if (cashRate !== null && cashRate > 0) {
+          annualInterestCents += BigInt(Math.round(Number(value) * cashRate));
+        } else if (cashRate === null && isTrCashAccount(account.syncId)) {
           annualInterestCents += BigInt(Math.round(Number(value) * 0.01372));
         }
       }
@@ -840,6 +870,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     annualDividendsCents,
     annualDividendsNetCents,
     annualInterestCents,
+    accountsMissingInterestRate,
     annualPassiveCents,
     monthlyPassiveCents,
     dividendCalendar,
@@ -936,6 +967,7 @@ export function buildAnalyticsExport(
     annualDividendsCents: Number(result.annualDividendsCents),
     annualDividendsNetCents: Number(result.annualDividendsNetCents),
     annualInterestCents: Number(result.annualInterestCents),
+    accountsMissingInterestRate: result.accountsMissingInterestRate,
     annualPassiveCents: Number(result.annualPassiveCents),
     monthlyPassiveCents: result.monthlyPassiveCents,
     performanceRows: result.performanceRows.map((r) => ({

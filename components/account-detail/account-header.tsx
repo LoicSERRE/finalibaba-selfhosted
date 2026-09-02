@@ -5,6 +5,7 @@ import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import { UpdateRealEstateDialog } from "@/components/accounts/update-real-estate-dialog";
 import { UpdateAutomobileDialog } from "@/components/accounts/update-automobile-dialog";
 import { RenameAccountDialog } from "@/components/accounts/rename-account-dialog";
+import { CoOwnersDialog } from "@/components/account-detail/co-owners-dialog";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 import type { getTranslations } from "next-intl/server";
 
@@ -16,6 +17,7 @@ export function AccountHeader({
   account,
   subtypeLabel,
   ownerLabel,
+  coOwners,
   isFiat,
   isInvestment,
   isRealEstate,
@@ -46,6 +48,10 @@ export function AccountHeader({
    *  saying who it belongs to, which on a family instance leaves you
    *  guessing. Null for your own accounts, where it would be noise. */
   ownerLabel?: string | null;
+  /** Present only for the account's DIRECT owner - a co-owner cannot manage
+   *  further co-owners (assertAccountOwner). Undefined hides the control
+   *  entirely rather than rendering a button that would only ever error. */
+  coOwners?: { userId: string; username: string | null; displayName: string | null }[];
   isFiat: boolean;
   isInvestment: boolean;
   isRealEstate: boolean;
@@ -92,6 +98,11 @@ export function AccountHeader({
           <div className="flex items-center gap-1">
             <h1 className="text-2xl font-semibold text-[var(--foreground)]">{account.name}</h1>
             {!readOnly && <RenameAccountDialog id={account.id} name={account.name} />}
+            {/* Account-level actions belong together, at the top. Co-ownership
+                used to live in a card below the transactions table - up to 200
+                rows down the page - where it was both a scroll away and easy
+                to never discover. */}
+            {coOwners && <CoOwnersDialog accountId={account.id} coOwners={coOwners} />}
           </div>
           {isFiat && latestDelta !== null && latestDelta !== BigInt(0) && (
             <p
