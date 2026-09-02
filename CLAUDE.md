@@ -695,6 +695,14 @@ The receive loop ran `api._recv_subscription()` concurrently, one task per subsc
 
 `test_sync_tr_realtime.py` now drives the real loop against a fake api that enforces the same no-concurrent-recv rule the websocket does. Four of those tests fail against the old loop, which is the check that was missing.
 
+**A second, independent way it was dead, found the moment the first was fixed (v2.4.3).** With the receive loop corrected, the listener reached a real Trade Republic answer for the first time, and that answer was `BAD_SUBSCRIPTION_TYPE: Unknown topic type: neonPortfolio.31`. Two of the three topics it subscribed to - `neonPortfolio` and `cryptoPortfolio` - are not topics at all: neither appears anywhere in pytr's own vocabulary, and at the protocol version pytr connects with (`connect_id = 31`) TR rejects them outright. Only `cash` was ever real.
+
+The rejection arrives **asynchronously**, not from `subscribe()`: TR replies on the socket with an error frame that pytr raises as `TradeRepublicError`. That propagated out of the session, so one bad topic killed the whole listener and it reconnected forever. `sync_tr.py` hits the same rejection on its own `neonPortfolio` fetch but wraps it in a try/except and falls back to ticker prices, which is why the 4h sync kept working and hid this.
+
+Three changes, and the middle one is the durable part: the topic list is now `cash` plus `compactPortfolioByType` per securities account, the pair sync_tr.py's own working fetch path proves TR accepts; `_subscribe_surviving` keeps whichever topics TR actually answers and merely logs the rest, so a future vocabulary change costs coverage rather than the feature; and `MIN_FETCH_INTERVAL_S` puts a 30s floor between fetch cycles, since nothing previously stopped a topic that pushes on every price tick from turning this into a fetch storm.
+
+**The reason to write it down**: TR has now demonstrably changed its topic vocabulary underneath this project. A fixed list of topic strings was a latent bug from the day it was written, and the previous comment in this file claimed those topics were "confirmed against pytr's own pinned source" when two of them appear in that source nowhere. Confirm by grepping, not by recalling.
+
 **The generalisable lesson**, and it is the same one this file keeps recording: *a log line that says "connected" is not evidence of working*. The listener's own success signal was emitted before the code that fails. When something long-running claims to be healthy, the assertion worth writing is that it did its job at least once, not that it started.
 
 ### Per-user real-time listeners

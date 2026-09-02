@@ -318,6 +318,12 @@ The fix turned a single hardcoded task into a small supervisor - connections are
 
 A real user report ("many components do not update when you change them") turned into a genuine finding of a different kind: **not reproduced**, and the reason is worth keeping. `revalidatePath`'s own documentation implies the specific path matters; three measurements against a production build showed it does not, in this app - every page is `force-dynamic`, so any revalidation refreshes whatever route is on screen regardless of which path was named. Nine real edit flows were then exercised end to end and all refreshed correctly. Nothing was "fixed" on a guess; a test now asserts the one mechanism that is known to cause the symptom (a mutation that revalidates nothing at all), and the report stays open pending a screen and an edit that actually reproduces it.
 
+## v2.4.3 - Real-time subscribes to topics that exist - Released ✓
+
+- [X] **Two of the three real-time topics were not topics.** With v2.4.2's receive loop fixed, the listener reached a real Trade Republic answer for the first time: `BAD_SUBSCRIPTION_TYPE: Unknown topic type: neonPortfolio.31`. Neither `neonPortfolio` nor `cryptoPortfolio` appears in pytr's vocabulary; only `cash` was ever real. The rejection arrives asynchronously and killed the whole session, so the listener reconnected forever. Now `cash` plus `compactPortfolioByType` per securities account (the pair the working 4h sync proves TR accepts), a subscription step that keeps whatever TR actually answers so a future vocabulary change costs coverage rather than the feature, and a 30s floor between fetch cycles so a chatty topic cannot cause a fetch storm.
+
+---
+
 ## v2.4.2 - Real-time tracking actually works now - Released ✓
 
 - [X] **The real-time listener had never processed a single push.** It ran one receive task per subscribed topic, which is several concurrent reads on one websocket, which the library forbids. It raised on the first iteration every time, so it connected, logged "listening on [...]", died and reconnected in a loop. Shipped in v1.17 and survived four releases because the success log line is emitted before the code that fails, an ordinary reconnect warning looks the same as a blip, and the tests faked the one function containing the bug. One `recv()` per iteration replaces the whole thing, since the client already multiplexes. Tests now drive the real loop and fail against the old one.

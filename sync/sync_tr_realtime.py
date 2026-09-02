@@ -58,7 +58,29 @@ from sync_tr import (
 log = logging.getLogger(__name__)
 
 ENV_SOURCE = "trade_republic_realtime"
-SUBSCRIBE_TOPICS = ("neonPortfolio", "cash")
+# Candidate topics, each kept only if Trade Republic actually answers it.
+#
+# It used to be a fixed ("neonPortfolio", "cash") plus "cryptoPortfolio", and
+# TWO of those three are not topics at all: they appear nowhere in pytr's own
+# vocabulary, and at the protocol version pytr connects with (31) TR answers
+# `BAD_SUBSCRIPTION_TYPE: Unknown topic type: neonPortfolio.31`. That error
+# arrives asynchronously as a TradeRepublicError, which killed the whole
+# session, so the listener reconnected forever - the second way this feature
+# was dead, found immediately after fixing the first.
+#
+# `cash` is the one confirmed-good topic and covers every real money movement:
+# card payments, transfers, dividends and interest landing.
+# `compactPortfolioByType` is what sync_tr.py's own working fetch path uses for
+# positions, so it is known to be accepted at this protocol version.
+#
+# Tried rather than assumed, because TR has now demonstrably changed its topic
+# vocabulary under us once. Whatever survives is what the listener runs on.
+BASE_TOPICS = ({"type": "cash"},)
+
+# A fetch cycle is a handful of API calls, so a topic that pushes on every
+# price tick could turn this into a fetch storm. Nothing bounded that before.
+# 30s is still "within seconds" for a wealth dashboard.
+MIN_FETCH_INTERVAL_S = 30
 
 INITIAL_BACKOFF_S = 5
 MAX_BACKOFF_S = 300
@@ -156,6 +178,43 @@ def _resolve_db_institution(cur, institution_id: str | None) -> str:
     return resolved
 
 
+async def _subscribe_surviving(api, candidates, label):
+    """Subscribe to each candidate topic and keep the ones TR actually answers.
+
+    A rejection arrives asynchronously, not from subscribe() itself: TR replies
+    on the socket with an error frame that pytr turns into a TradeRepublicError
+    carrying the offending subscription id. Draining one answer per candidate
+    therefore both consumes the initial state (connecting is not a change, and
+    treating it as one meant a full fetch per topic on every reconnect) and
+    reveals which topics are real.
+
+    Returns the accepted topic descriptions, for the log line.
+    """
+    from pytr.api import TradeRepublicError
+
+    pending = {}
+    for topic in candidates:
+        pending[await api.subscribe(topic)] = topic
+
+    accepted = []
+    for _ in range(len(pending)):
+        try:
+            sub_id, _sub, _payload = await api.recv()
+        except TradeRepublicError as e:
+            topic = pending.pop(e.subscription_id, None)
+            # Not fatal on its own. Losing one topic costs some coverage;
+            # losing the session costs all of it, which is what used to happen.
+            log.warning(
+                "TR realtime [%s]: topic %s refused by Trade Republic (%s) - continuing without it",
+                label, topic, e.error,
+            )
+            continue
+        if sub_id in pending:
+            accepted.append(pending.pop(sub_id))
+
+    return accepted
+
+
 async def _run_one_session(institution_id: str | None = None) -> None:
     """One connect→subscribe→listen cycle. Raises AuthRequiredError on a
     real session failure (caller stops retrying), any other exception on a
@@ -188,17 +247,16 @@ async def _run_one_session(institution_id: str | None = None) -> None:
         known_tx_ids = {row["syncId"].split(":", 1)[1] for row in cur.fetchall() if row["syncId"]}
         conn.commit()
 
-        topics = list(SUBSCRIBE_TOPICS) + (["cryptoPortfolio"] if has_crypto else [])
-        subs = [await api.subscribe({"type": t}) for t in topics]
+        candidates = [
+            *BASE_TOPICS,
+            *({"type": "compactPortfolioByType", "secAccNo": n} for ns in sec_accounts.values() for n in ns),
+        ]
+        accepted = await _subscribe_surviving(api, candidates, label)
+        if not accepted:
+            raise RuntimeError("Trade Republic accepted none of the subscription topics")
 
-        # Every subscription answers once with its current state. Those are not
-        # changes, so they are drained here rather than triggering a full fetch
-        # each - three redundant round-trips to Trade Republic on every
-        # connect, and this reconnects with backoff.
-        for _ in subs:
-            await api.recv()
-
-        log.info("TR realtime [%s]: listening on %s", label, topics)
+        log.info("TR realtime [%s]: listening on %s", label, accepted)
+        last_fetch = 0.0
 
         while True:
             try:
@@ -221,6 +279,14 @@ async def _run_one_session(institution_id: str | None = None) -> None:
                 # topic moved does not matter here, since any push means "go
                 # re-derive the real delta from the API".
                 await api.recv()
+
+                # A topic that pushes on every price tick would otherwise mean
+                # a full fetch cycle per tick. Bounded here rather than trusted
+                # to be quiet.
+                now = asyncio.get_event_loop().time()
+                if now - last_fetch < MIN_FETCH_INTERVAL_S:
+                    continue
+                last_fetch = now
 
                 summary, known_tx_ids = _fetch_and_write_once(
                     api, cur,

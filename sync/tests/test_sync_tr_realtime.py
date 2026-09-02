@@ -172,27 +172,42 @@ def test_listen_forever_passes_the_institution_through(monkeypatch):
 # lived at.
 
 class FakeApi:
-    """Enforces the one rule the real websocket enforces: no concurrent recv."""
+    """Speaks the shape api.recv() really returns, enforces the one rule the
+    real websocket enforces (no concurrent recv), and can refuse a topic the
+    way Trade Republic refuses an unknown one."""
 
-    def __init__(self, pushes):
+    def __init__(self, pushes, refuse=()):
         self._pushes = list(pushes)
+        self._refuse = set(refuse)
         self.in_recv = False
         self.recv_calls = 0
         self.subscribed = []
+        self._pending_answers = []
 
     async def subscribe(self, payload):
         self.subscribed.append(payload["type"])
-        return f"sub-{len(self.subscribed)}"
+        sub_id = f"sub-{len(self.subscribed)}"
+        # Each subscription answers once; a refused one answers with an error,
+        # asynchronously, exactly as TR does.
+        self._pending_answers.append((sub_id, payload, payload["type"] in self._refuse))
+        return sub_id
 
     async def recv(self):
+        from pytr.api import TradeRepublicError
+
         if self.in_recv:
             raise RuntimeError("cannot call recv while another coroutine is already running recv")
         self.in_recv = True
         try:
             self.recv_calls += 1
+            if self._pending_answers:
+                sub_id, payload, refused = self._pending_answers.pop(0)
+                if refused:
+                    raise TradeRepublicError(sub_id, payload, {"errorCode": "BAD_SUBSCRIPTION_TYPE"})
+                return sub_id, payload, {}
             if not self._pushes:
                 raise _StopLoop
-            return self._pushes.pop(0)
+            return "sub-1", {"type": "cash"}, self._pushes.pop(0)
         finally:
             self.in_recv = False
 
@@ -201,11 +216,15 @@ class _StopLoop(Exception):
     """Ends the otherwise-infinite listen loop deterministically."""
 
 
-def _drive(monkeypatch, pushes, has_crypto=True):
+def _drive(monkeypatch, pushes, has_crypto=True, refuse=(), no_throttle=True):
     """Run _run_one_session's real body against FakeApi, faking only the
     boundaries it cannot own here (credentials, database, the app callback)."""
-    api = FakeApi(pushes)
+    api = FakeApi(pushes, refuse=refuse)
     fetches = []
+    # The 30s floor between fetch cycles is exercised by its own test below;
+    # everywhere else it would just mask what is being asserted.
+    if no_throttle:
+        monkeypatch.setattr(sync_tr_realtime, "MIN_FETCH_INTERVAL_S", 0)
 
     class FakeCur:
         def execute(self, *_a, **_k): pass
@@ -223,7 +242,7 @@ def _drive(monkeypatch, pushes, has_crypto=True):
     monkeypatch.setattr(sync_tr_realtime, "get_conn", lambda: FakeConn())
     monkeypatch.setattr(sync_tr_realtime, "_resolve_db_institution", lambda *_a: "inst-1")
     monkeypatch.setattr(sync_tr_realtime, "institution_owner_id", lambda *_a: "user-owner")
-    monkeypatch.setattr(sync_tr_realtime, "_get_securities_accounts", lambda _a: ({"default": []}, has_crypto))
+    monkeypatch.setattr(sync_tr_realtime, "_get_securities_accounts", lambda _a: ({"default": ["040575"]}, has_crypto))
     monkeypatch.setattr(sync_tr_realtime, "upsert_account", lambda *a, **k: "acc-1")
     monkeypatch.setattr(sync_tr_realtime, "_notify_and_followup", lambda *_a: None)
 
@@ -242,30 +261,49 @@ def _drive(monkeypatch, pushes, has_crypto=True):
 
 
 def test_the_loop_does_not_call_recv_concurrently(monkeypatch):
-    # The actual v1.17 bug. FakeApi raises exactly what websockets raises.
+    # The v1.17 bug: one receive task per topic is several concurrent reads on
+    # one websocket. FakeApi raises exactly what websockets raises.
     api, _ = _drive(monkeypatch, pushes=["push"])
     assert api.recv_calls > 0
 
 
-def test_a_push_triggers_exactly_one_fetch(monkeypatch):
-    # Three subscriptions, so three initial answers to drain, then one real
-    # push. Without draining this would fetch four times per connect.
-    _, fetches = _drive(monkeypatch, pushes=["a1", "a2", "a3", "real-push"])
+def test_a_push_triggers_a_fetch(monkeypatch):
+    _, fetches = _drive(monkeypatch, pushes=["real-push"])
     assert len(fetches) == 1
 
 
-def test_every_push_after_the_initial_answers_triggers_a_fetch(monkeypatch):
-    _, fetches = _drive(monkeypatch, pushes=["a1", "a2", "a3", "p1", "p2", "p3"])
+def test_every_push_triggers_a_fetch(monkeypatch):
+    _, fetches = _drive(monkeypatch, pushes=["p1", "p2", "p3"])
     assert len(fetches) == 3
 
 
-def test_the_initial_answers_alone_trigger_nothing(monkeypatch):
-    # Connecting is not a change; a reconnect loop must not hammer the API.
-    _, fetches = _drive(monkeypatch, pushes=["a1", "a2", "a3"])
+def test_connecting_is_not_a_change(monkeypatch):
+    # Each subscription answers once with its current state. Treating those as
+    # changes meant a full Trade Republic fetch per topic on every reconnect,
+    # and this reconnects with backoff.
+    _, fetches = _drive(monkeypatch, pushes=[])
     assert fetches == []
 
 
-def test_crypto_absent_means_one_fewer_subscription(monkeypatch):
-    api, fetches = _drive(monkeypatch, pushes=["a1", "a2", "push"], has_crypto=False)
-    assert api.subscribed == ["neonPortfolio", "cash"]
-    assert len(fetches) == 1
+def test_a_refused_topic_does_not_kill_the_session(monkeypatch):
+    # The v2.4.2 bug, from production: TR answers an unknown topic with
+    # BAD_SUBSCRIPTION_TYPE, asynchronously. That error used to propagate out
+    # of the session and the listener reconnected forever.
+    _, fetches = _drive(monkeypatch, pushes=["p1"], refuse=("compactPortfolioByType",))
+    assert len(fetches) == 1, "the surviving topic must still drive the loop"
+
+
+def test_every_topic_refused_is_a_real_failure(monkeypatch):
+    # Losing one topic costs coverage; losing all of them means the listener
+    # would sit there having subscribed to nothing, looking healthy.
+    import pytest as _pytest
+
+    with _pytest.raises(RuntimeError, match="accepted none"):
+        _drive(monkeypatch, pushes=["p1"], refuse=("cash", "compactPortfolioByType"))
+
+
+def test_a_chatty_topic_cannot_cause_a_fetch_storm(monkeypatch):
+    # Nothing bounded the fetch rate before. A topic pushing on every price
+    # tick would have meant a full fetch cycle per tick.
+    _, fetches = _drive(monkeypatch, pushes=["p1", "p2", "p3", "p4"], no_throttle=False)
+    assert len(fetches) == 1, "the 30s floor must collapse a burst into one fetch"
