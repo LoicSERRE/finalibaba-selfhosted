@@ -190,16 +190,37 @@ async def _run_one_session(institution_id: str | None = None) -> None:
 
         topics = list(SUBSCRIBE_TOPICS) + (["cryptoPortfolio"] if has_crypto else [])
         subs = [await api.subscribe({"type": t}) for t in topics]
-        log.info("TR realtime [%s]: connected, listening on %s", label, topics)
+
+        # Every subscription answers once with its current state. Those are not
+        # changes, so they are drained here rather than triggering a full fetch
+        # each - three redundant round-trips to Trade Republic on every
+        # connect, and this reconnects with backoff.
+        for _ in subs:
+            await api.recv()
+
+        log.info("TR realtime [%s]: listening on %s", label, topics)
 
         while True:
             try:
-                recv_tasks = [asyncio.create_task(api._recv_subscription(sub)) for sub in subs]
-                done, pending = await asyncio.wait(recv_tasks, return_when=asyncio.FIRST_COMPLETED)
-                for task in pending:
-                    task.cancel()
-                for task in done:
-                    task.result()  # surface any exception from the completed recv
+                # ONE recv, not one per subscription.
+                #
+                # This used to run api._recv_subscription() concurrently for
+                # each topic, which is three concurrent ws.recv() calls on a
+                # single websocket - forbidden, and the connection raised
+                # ConcurrencyError on the first iteration EVERY time. The
+                # listener therefore connected, logged "listening on [...]",
+                # died, backed off and reconnected, in a loop, without ever
+                # processing a push. That shipped in v1.17 and went unnoticed
+                # for four releases because the log line reads like success
+                # and the tests faked _run_one_session wholesale.
+                #
+                # api.recv() is already the multiplexer: it owns the single
+                # socket, dispatches by subscription id, and returns on both
+                # the initial answer ("A") and every subsequent delta ("D") -
+                # deltas being exactly the change pushes this exists for. Which
+                # topic moved does not matter here, since any push means "go
+                # re-derive the real delta from the API".
+                await api.recv()
 
                 summary, known_tx_ids = _fetch_and_write_once(
                     api, cur,

@@ -318,6 +318,12 @@ The fix turned a single hardcoded task into a small supervisor - connections are
 
 A real user report ("many components do not update when you change them") turned into a genuine finding of a different kind: **not reproduced**, and the reason is worth keeping. `revalidatePath`'s own documentation implies the specific path matters; three measurements against a production build showed it does not, in this app - every page is `force-dynamic`, so any revalidation refreshes whatever route is on screen regardless of which path was named. Nine real edit flows were then exercised end to end and all refreshed correctly. Nothing was "fixed" on a guess; a test now asserts the one mechanism that is known to cause the symptom (a mutation that revalidates nothing at all), and the report stays open pending a screen and an edit that actually reproduces it.
 
+## v2.4.2 - Real-time tracking actually works now - Released ✓
+
+- [X] **The real-time listener had never processed a single push.** It ran one receive task per subscribed topic, which is several concurrent reads on one websocket, which the library forbids. It raised on the first iteration every time, so it connected, logged "listening on [...]", died and reconnected in a loop. Shipped in v1.17 and survived four releases because the success log line is emitted before the code that fails, an ordinary reconnect warning looks the same as a blip, and the tests faked the one function containing the bug. One `recv()` per iteration replaces the whole thing, since the client already multiplexes. Tests now drive the real loop and fail against the old one.
+
+---
+
 ## v2.4.1 - Banks that cannot be synced now say so - Released ✓
 
 - [X] **A captcha-protected bank produced a stack trace** (issue #51, Amundi). `setup_woob.py` already classified captchas, browser redirects and "do this on our site" actions as unsupported; the sync path did not, so they landed in the generic error handler. Now a distinct `unsupported` status with a readable message, deliberately not `auth_required` (which would send the user round a setup loop that cannot succeed), and the alert machinery stops reminding daily about a bank that can never work. Reproduced independently on a second Amundi account.
