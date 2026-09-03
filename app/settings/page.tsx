@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { syncStatusTone, syncStatusLabelKey, type SyncStatusTone } from "@/lib/domain/sync-status";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, baseAccountIds, isAuthEnabled, OWNER_USER_ID } from "@/lib/auth-context";
 import { cookies } from "next/headers";
@@ -76,6 +77,24 @@ const GC_STATUS_KEYS = {
   error: { key: "gcError", tone: "negative" },
   "already-connected": { key: "gcAlreadyConnected", tone: "warning" },
 } as const;
+
+// Paired with lib/domain/sync-status.ts's syncStatusTone: one row per tone, so
+// a new status picks up a colour and an icon by classifying itself rather than
+// by being added to three separate ternary chains (which is what this replaced).
+const SYNC_TONE_CLASS: Record<SyncStatusTone, string> = {
+  success: "text-[var(--positive)]",
+  warning: "text-[var(--warning)]",
+  // Muted, not red: red invites retrying something that can never work.
+  muted: "text-[var(--muted)]",
+  negative: "text-[var(--negative)]",
+};
+
+const SYNC_TONE_ICON: Record<SyncStatusTone, React.ReactElement> = {
+  success: <CheckCircle size={12} aria-hidden="true" />,
+  warning: <AlertTriangle size={12} aria-hidden="true" />,
+  muted: <Ban size={12} aria-hidden="true" />,
+  negative: <AlertTriangle size={12} aria-hidden="true" />,
+};
 
 export default async function SettingsPage({
   searchParams,
@@ -327,28 +346,11 @@ export default async function SettingsPage({
                             with no indication of what to do. */}
                         {configured && syncLog && (
                           <output
-                            className={`flex items-center gap-1 text-xs ${
-                              syncLog.status === "success" ? "text-[var(--positive)]" :
-                              syncLog.status === "auth_required" ? "text-[var(--warning)]" :
-                              syncLog.status === "unsupported" ? "text-[var(--muted)]" :
-                              "text-[var(--negative)]"
-                            }`}
+                            className={`flex items-center gap-1 text-xs ${SYNC_TONE_CLASS[syncStatusTone(syncLog.status)]}`}
                             title={syncLog.message ?? undefined}
-                            aria-label={
-                              syncLog.status === "success"
-                                ? t("syncStatus.success")
-                                : syncLog.status === "auth_required"
-                                ? t("syncStatus.authRequired")
-                                : syncLog.status === "unsupported"
-                                ? t("syncStatus.unsupported")
-                                : t("syncStatus.error")
-                            }
+                            aria-label={t(`syncStatus.${syncStatusLabelKey(syncLog.status)}`)}
                           >
-                            {syncLog.status === "success"
-                              ? <CheckCircle size={12} aria-hidden="true" />
-                              : syncLog.status === "unsupported"
-                              ? <Ban size={12} aria-hidden="true" />
-                              : <AlertTriangle size={12} aria-hidden="true" />}
+                            {SYNC_TONE_ICON[syncStatusTone(syncLog.status)]}
                           </output>
                         )}
                         {configured && !syncLog && (

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { triggerSync, startTRSetup, completeTRSetup, startLCLSetup, completeLCLSetup } from "@/lib/actions/sync";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { needsReconnection } from "@/lib/domain/sync-status";
 
 interface SyncLog {
   status: string;
@@ -21,7 +22,7 @@ interface Props {
 
 function StatusIcon({ status }: Readonly<{ status: string }>) {
   if (status === "success") return <CheckCircle size={14} className="text-[var(--positive)]" aria-hidden="true" />;
-  if (status === "auth_required") return <AlertTriangle size={14} className="text-[var(--warning)]" aria-hidden="true" />;
+  if (needsReconnection(status)) return <AlertTriangle size={14} className="text-[var(--warning)]" aria-hidden="true" />;
   return <AlertTriangle size={14} className="text-[var(--negative)]" aria-hidden="true" />;
 }
 
@@ -157,7 +158,7 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
             <div aria-live="polite">
               {log ? (
                 <p className="text-xs text-[var(--muted)]">
-                  {log.status === "auth_required" ? (
+                  {needsReconnection(log.status) ? (
                     <span className="text-[var(--warning)]">{t("reAuthRequired")}</span>
                   ) : log.status === "success" ? (
                     <span>{timeAgo(log.createdAt, locale)}</span>

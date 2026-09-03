@@ -1,3 +1,4 @@
+import { classifySyncSource, SYNC_STATUS_CAPTCHA_REQUIRED } from "@/lib/domain/sync-status";
 import { NextRequest, NextResponse } from "next/server";
 import { isInternalRequest } from "@/lib/services/internal-auth";
 import { prisma } from "@/lib/db/prisma";
@@ -204,6 +205,11 @@ function isSourceRetired(source: string, institutions: Map<string, InstitutionLi
 // technical detail is still in Paramètres → sync status / SyncLog for
 // anyone who wants to dig further.
 function formatSyncFailureBody(label: string, status: string): string {
+  if (status === SYNC_STATUS_CAPTCHA_REQUIRED) {
+    // Says what to do AND why it will not stop happening, because this one
+    // never resolves itself - see lib/domain/sync-status.ts. Sent once only.
+    return `"${label}" demande un captcha : ouvre Paramètres et clique sur « Se connecter » pour le résoudre. La synchronisation automatique ne peut pas le faire à ta place.`;
+  }
   if (status === "auth_required") {
     return `La connexion à "${label}" a expiré. Reconnecte-toi depuis Paramètres.`;
   }
@@ -309,43 +315,27 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
     // sync's alert names something the user recognises and can act on. The
     // listener's own copy arrived titled "trade_republic_realtime", which
     // names nothing. Its SyncLog rows stay, and stay visible in Settings;
-    // this suppresses the duplicate notification, not the diagnosis.
-    //
-    // Deletes any state row an earlier version already created rather than
-    // only skipping ahead: left behind, it would sit in the table forever
-    // with nothing left to ever clear it.
-    if (isRealtimeSource(source)) {
-      await clearSyncFailureState(settings.userId, source, stateBySource.has(source));
-      continue;
-    }
+    // the verdict below suppresses the duplicate notification, not the
+    // diagnosis.
     const latest = latestBySource.get(source);
     if (!latest) continue;
-
     const state = stateBySource.get(source) ?? null;
 
-    if (isSourceRetired(source, institutionById)) {
-      await clearSyncFailureState(settings.userId, source, !!state);
-      continue;
-    }
-
-    if (latest.status === "success") {
-      await clearSyncFailureState(settings.userId, source, !!state);
-      continue;
-    }
-
-    // "unsupported" means the bank cannot be driven by this integration AT
-    // ALL - a captcha, a browser redirect, an action to perform on the bank's
-    // own site (see sync/sync_woob.py). Unlike an error or an expired
-    // session, no amount of waiting or reconnecting changes it, so the 24h
-    // reminder would nag forever about something the user already knows and
-    // cannot fix. Same "nothing will ever clear this" dead end isSourceRetired
-    // was written for, arrived at from the other direction: not a source that
-    // stopped running, but one that was never able to.
-    //
-    // Reported once via the state row created below on the first pass, then
-    // silent. Still fully visible in Settings, which is where an explanation
-    // belongs.
-    if (latest.status === "unsupported") {
+    // Every reason to skip a source, in one decision rather than five guards
+    // stacked in front of the alerting. See lib/domain/sync-status.ts for what
+    // each verdict means and why; the two facts it cannot know for itself are
+    // computed here and handed in.
+    const verdict = classifySyncSource({
+      status: latest.status,
+      isRetired: isSourceRetired(source, institutionById),
+      isRealtime: isRealtimeSource(source),
+      hasState: !!state,
+    });
+    if (verdict === "silent") continue;
+    if (verdict === "clear") {
+      // Deletes a row an earlier version may already have created rather than
+      // only skipping ahead: left behind, it would sit in the table forever
+      // with nothing left to ever clear it.
       await clearSyncFailureState(settings.userId, source, !!state);
       continue;
     }

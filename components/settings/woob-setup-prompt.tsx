@@ -11,6 +11,8 @@ import {
 } from "@/lib/actions/sync";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { needsReconnection } from "@/lib/domain/sync-status";
+import { RecaptchaWidget } from "./recaptcha-widget";
 
 interface SyncLog {
   status: string;
@@ -26,7 +28,7 @@ const MEDIUM_KEY: Record<string, string> = {
   device: "otpMediumDevice",
 };
 
-type WaitKind = "code" | "approval" | null;
+type WaitKind = "code" | "approval" | "captcha" | null;
 
 // Generic counterpart to SyncStatus's LCL/TR setup flows (that component
 // stays hardcoded to those two sources - see its own file) - same shape,
@@ -39,13 +41,19 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
   const [hint, setHint] = useState<string | null>(null);
   const [unsupportedMessage, setUnsupportedMessage] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  // The reCAPTCHA site key the bank's own login page uses, handed over by Woob
+  // in the exception. Non-null is what puts the widget on screen.
+  const [captchaSiteKey, setCaptchaSiteKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
   const t = useTranslations("syncStatus");
   const tc = useTranslations("common");
 
-  const isAuthRequired = log?.status === "auth_required";
+  // Both auth_required and captcha_required mean "a human can fix this
+  // from here" - the difference matters to the alert path, not to this
+  // button. See lib/domain/sync-status.ts.
+  const isAuthRequired = needsReconnection(log?.status);
   const inFlow = waitKind !== null || unsupportedMessage !== null || busy;
 
   if (!isAuthRequired && !inFlow) return null;
@@ -56,6 +64,7 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
     setHint(null);
     setUnsupportedMessage(null);
     setCode("");
+    setCaptchaSiteKey(null);
     setError(null);
   };
 
@@ -79,6 +88,21 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
     if (result.status === "already_connected") {
       reset();
       triggerSync();
+      return;
+    }
+    if (result.status === "captcha_required") {
+      // A captcha with no site key cannot be rendered, so say so plainly
+      // instead of showing an empty box. Only reachable if a future Woob stops
+      // carrying the field.
+      if (!result.website_key) {
+        setWaitKind(null);
+        setUnsupportedMessage(result.message ?? t("woobCaptchaNoKey"));
+        return;
+      }
+      setUnsupportedMessage(null);
+      setCode("");
+      setCaptchaSiteKey(result.website_key);
+      setWaitKind("captcha");
       return;
     }
     if (result.status === "unsupported") {
@@ -110,11 +134,20 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
     try {
       const result = await completeInstitutionSetup(
         institutionId,
-        waitKind === "code" ? code : undefined,
+        waitKind === "approval" ? undefined : code || undefined,
       );
       if (!result.ok) {
         setError(result.error);
         setBusy(false);
+        // A captcha token is single-use, so the widget on screen is spent and
+        // retrying with it can only fail again. Drop back to the Connect
+        // button - the next attempt fetches a fresh challenge - rather than
+        // leaving a button whose only possible outcome is the same error.
+        if (waitKind === "captcha") {
+          setWaitKind(null);
+          setCaptchaSiteKey(null);
+          setCode("");
+        }
         return;
       }
       reset();
@@ -162,6 +195,46 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
               className="w-24 text-center text-lg font-mono tracking-[0.2em] px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
             />
             <Button size="sm" onClick={handleComplete} disabled={!code.trim() || busy}>
+              {busy ? (
+                <>
+                  <RefreshCw size={12} className="animate-spin" aria-hidden="true" /> {t("validating")}
+                </>
+              ) : (
+                t("confirm")
+              )}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={reset}>
+              {tc("cancel")}
+            </Button>
+          </div>
+          {error && (
+            <p role="alert" className="mt-2 text-xs text-[var(--negative)]">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+
+      {waitKind === "captcha" && captchaSiteKey && (
+        <div className="w-full p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
+          <p className="text-xs text-[var(--muted)] mb-1">{t("woobCaptchaHint")}</p>
+          {/* Stated up front, not discovered later: this bank will need the
+              same checkbox on every sync, because the token is single-use. */}
+          <p className="text-xs text-[var(--muted)] mb-3">{t("woobCaptchaManualOnly")}</p>
+          {/* Google refuses the widget outright when the bank restricts its
+              key to its own domain (Amundi does). Nothing here can fix that,
+              so the error is explained rather than left looking like our bug. */}
+          <p className="text-xs text-[var(--muted)] mb-3">{t("woobCaptchaDomainNote")}</p>
+          <RecaptchaWidget
+            siteKey={captchaSiteKey}
+            onToken={setCode}
+            onUnavailable={() => {
+              setWaitKind(null);
+              setUnsupportedMessage(t("woobCaptchaUnavailable"));
+            }}
+          />
+          <div className="flex items-center gap-2 mt-3">
+            <Button size="sm" onClick={handleComplete} disabled={!code || busy}>
               {busy ? (
                 <>
                   <RefreshCw size={12} className="animate-spin" aria-hidden="true" /> {t("validating")}

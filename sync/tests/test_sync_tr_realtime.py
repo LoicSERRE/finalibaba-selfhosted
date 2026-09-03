@@ -12,6 +12,8 @@ lower.
 
 import asyncio
 
+import pytest
+
 import sync_tr_realtime
 from sync_tr import AuthRequiredError
 
@@ -296,9 +298,7 @@ def test_a_refused_topic_does_not_kill_the_session(monkeypatch):
 def test_every_topic_refused_is_a_real_failure(monkeypatch):
     # Losing one topic costs coverage; losing all of them means the listener
     # would sit there having subscribed to nothing, looking healthy.
-    import pytest as _pytest
-
-    with _pytest.raises(RuntimeError, match="accepted none"):
+    with pytest.raises(RuntimeError, match="accepted none"):
         _drive(monkeypatch, pushes=["p1"], refuse=("cash", "compactPortfolioByType"))
 
 

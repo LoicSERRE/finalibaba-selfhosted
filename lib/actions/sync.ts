@@ -270,6 +270,12 @@ export type InstitutionSetupResult =
       /** Trade Republic only: seconds its pushed code stays valid. */
       countdown?: number;
     }
+  /** The bank put a reCAPTCHA in front of its login (Amundi does). Woob raises
+   *  this only because nothing supplied an answer - the widget renders, a human
+   *  solves it, and the token comes back through the SAME `code` parameter an
+   *  SMS code uses. `website_key` is null only if a future Woob version stops
+   *  carrying it, which the UI treats as unsupported rather than guessing. */
+  | { status: "captcha_required"; website_key: string | null; website_url: string | null; message: string | null }
   | { status: "unsupported"; message: string }
   /** The sync service refused or could not be reached. Carried as a value so
    *  the reason survives production's redaction of thrown errors. */

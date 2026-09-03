@@ -149,17 +149,39 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         msg = f"2FA required - run setup manually in the container: docker exec -it finalibaba-sync-1 python sync_woob.py --setup {institution_id}"
         _fail(cur, conn, sync_source, "auth_required", msg)
         raise AuthRequiredError(msg)
-    except (CaptchaQuestion, BrowserRedirect, ActionNeeded) as e:
-        # Banks this integration structurally cannot drive: a captcha (exists
-        # precisely to defeat automation), a full browser redirect, or an
-        # action the bank wants performed on its own site.
+    except CaptchaQuestion as e:
+        # A captcha IS reconnectable, so this is auth_required like any other
+        # 2FA - the setup flow renders the real widget, a human solves it, and
+        # the sync proceeds (see setup_woob.py's CaptchaQuestion branch).
+        #
+        # It was briefly classified "unsupported" alongside the two below, on
+        # the reasoning that a captcha exists precisely to defeat automation.
+        # True, and beside the point: the bank is refusing a ROBOT, and the
+        # answer is to stop being one for one screen rather than to give up.
+        # Reported from a real instance as a raw traceback (issue #51, Amundi,
+        # RecaptchaV2Question) - the traceback is what was actually broken.
+        #
+        # The honest limit, stated in the UI rather than hidden here: a solved
+        # token is single-use and expires in about two minutes, so this makes
+        # ON-DEMAND sync work and can never make the 4h cron work. Every
+        # scheduled run on such a bank lands right back here.
+        msg = f"{_CAPTCHA_PREFIX}{str(e)[:200]}" if str(e) else _CAPTCHA_PREFIX.rstrip(": ")
+        log.warning("%s: %s", institution_name, msg)
+        # Its own status, not auth_required: both mean "reconnect and it
+        # works", but only this one can never be cleared by a scheduled run,
+        # so the failure alert must stop after telling the user once. See
+        # lib/domain/sync-status.ts.
+        _fail(cur, conn, sync_source, "captcha_required", msg)
+        raise AuthRequiredError(msg) from e
+    except (BrowserRedirect, ActionNeeded) as e:
+        # Banks this integration structurally cannot drive: a full browser
+        # redirect, or an action the bank wants performed on its own site.
         #
         # setup_woob.py has classified these as "unsupported" since it was
         # written; the sync path never learned the same lesson, so they fell
         # into the generic handler below and reached the user as a raw
-        # traceback with a truncated exception string - reported from a real
-        # instance (issue #51, Amundi, RecaptchaV2Question). Same exception
-        # families, same conclusion, now stated the same way in both places.
+        # traceback with a truncated exception string. Same exception families,
+        # same conclusion, now stated the same way in both places.
         #
         # Deliberately NOT "auth_required": that status means "reconnect and
         # it will work", which is false here and would send the user round a
@@ -242,6 +264,12 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
 
 
 # Shown to the user, so it says what to do rather than what went wrong.
+_CAPTCHA_PREFIX = (
+    "Cette banque demande un captcha : ouvre les réglages et clique "
+    "sur « Se connecter » pour le résoudre (la synchronisation "
+    "automatique ne peut pas le faire à ta place) : "
+)
+
 _UNSUPPORTED_PREFIX = (
     "Cette banque ne peut pas être synchronisée automatiquement "
     "(captcha ou action à faire sur le site de la banque) : "

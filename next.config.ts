@@ -11,7 +11,17 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 // injected <img>/<iframe>/third-party-script content, just not a strict CSP.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // www.google.com/recaptcha + www.gstatic.com serve the reCAPTCHA widget a
+  // bank like Amundi puts in front of its login (components/settings/
+  // recaptcha-widget.tsx). Worth being explicit about what this does and does
+  // not cost: script-src already carries 'unsafe-inline', so anyone able to
+  // inject markup into this app can already run arbitrary JS - adding two
+  // host allowlist entries alongside it changes nothing about that ceiling.
+  // frame-src below is the one genuinely new capability, and it is the
+  // narrowest form of it (one host, no wildcard, framing outward only -
+  // frame-ancestors 'none' still refuses to let anyone frame US).
+  "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com",
+  "frame-src 'self' https://www.google.com",
   // Falls back to script-src without this, which already covers same-origin
   // /sw.js (components/layout/service-worker-registration.tsx) - explicit
   // anyway rather than relying on every browser's CSP3 fallback behavior

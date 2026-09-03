@@ -17,10 +17,16 @@ its reference CLI implementation - rather than guessed):
     `backend.config[field.id].set(v)` then retries - that's the only
     documented way to feed the code back in, so this does the same.
 
-A handful of Woob exceptions genuinely can't be driven from a web form
-(CaptchaQuestion, BrowserRedirect, ActionNeeded and its subclasses like
-BrowserPasswordExpired) - those surface as {"status": "unsupported"} with
-Woob's own message, no retry loop offered.
+A captcha CAN be driven from a web form, and is: the exception carries the
+reCAPTCHA site key, the browser renders the real widget, the human solves it,
+and the token comes back as `captcha_response` - the same path an SMS code
+takes. That is the mechanism Woob intends; a paid solving service is merely
+the other way to fill the same field, and is deliberately not used here.
+
+What genuinely can't be driven from a web form is narrower than it looks:
+BrowserRedirect and ActionNeeded (including subclasses like
+BrowserPasswordExpired) surface as {"status": "unsupported"} with Woob's own
+message, no retry loop offered.
 
 Flow (mirrors setup_lcl.py's two-endpoint shape):
   1. POST /sync/institution/{id}/setup/start
@@ -149,7 +155,29 @@ def _try_connect(w, backend_name: str) -> dict:
         _safe_deinit(w)
         raise SetupError("Validation expirée avant d'être approuvée - relance la connexion")
 
-    except (ActionNeeded, CaptchaQuestion, BrowserRedirect) as e:
+    # A captcha is NOT in the unsupported family, despite where it started.
+    # The module raises it only because nothing supplied an answer: give
+    # `captcha_response` a value and the login proceeds normally (see the
+    # Amundi module, browser.py around the RecaptchaV2Question raise). The
+    # exception carries website_key and website_url precisely so a caller can
+    # put the challenge in front of a HUMAN - which is what the UI now does.
+    #
+    # This is the one field id Woob does not list in `.fields` the way an OTP
+    # does, so it is named here. Everything downstream is unchanged:
+    # complete_setup sets it exactly like an SMS code, and if the bank then
+    # also wants a phone approval (Amundi does), _try_connect's AppValidation
+    # branch takes over and re-stores the session with no fields left to set.
+    except CaptchaQuestion as e:
+        _pending[backend_name] = {"w": w, "field_ids": ["captcha_response"]}
+        log.info("Woob setup: captcha requested for %s", backend_name)
+        return {
+            "status": "captcha_required",
+            "website_key": getattr(e, "website_key", None),
+            "website_url": getattr(e, "website_url", None),
+            "message": str(e) or None,
+        }
+
+    except (ActionNeeded, BrowserRedirect) as e:
         _safe_deinit(w)
         return {"status": "unsupported", "message": str(e) or "Cette banque nécessite une action non prise en charge automatiquement"}
 
@@ -200,6 +228,17 @@ def complete_setup(institution_id: str, code: str | None = None) -> dict:
     except AppValidationExpired:
         _cleanup(institution_id)
         raise
+
+    if result["status"] == "captcha_required":
+        # The bank asked AGAIN, which means the token was refused - expired
+        # (they last about two minutes) or simply not accepted. Must not fall
+        # through to the success return below: main.py hands that straight
+        # back as a 200 and the UI would report a connection that never
+        # happened. The session is dropped rather than kept, because retrying
+        # needs a freshly solved captcha and the widget on screen is already
+        # spent - the caller starts over.
+        _cleanup(institution_id)
+        raise SetupError("Captcha refusé ou expiré - relance la connexion pour en obtenir un nouveau")
 
     if result["status"] in ("pending_approval", "code_required"):
         # Still not approved / wrong code - keep the session alive so the
