@@ -4,18 +4,18 @@ import { revalidateTransactions } from "@/lib/actions/revalidate";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertTransactionsWritable, assertOwned } from "@/lib/auth-context";
-import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
+import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
 
 type ImportRow = { date: string; label: string; amountCents: number };
 
 export async function importTransactions(accountId: string, rows: ImportRow[]) {
-  // assertCsvImportEligible below now also checks ownership, but the guard
+  // assertManualAccountEligible below now also checks ownership, but the guard
   // is repeated here so this entry point can't be re-wired later to a
   // different eligibility check and silently lose it.
   if (rows.length === 0) return { imported: 0 };
-  await assertCsvImportEligible(accountId);
+  await assertManualAccountEligible(accountId);
 
   const data = rows.map((r) => ({
     accountId,

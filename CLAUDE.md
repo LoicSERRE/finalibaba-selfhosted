@@ -831,6 +831,73 @@ The distinguishing signal is a **gap**, not new occurrences. A subscription that
 
 **A note on auditing order this way.** The section map that produced these findings was read off the *rendered* document (heading text plus its `y` offset, flagged against the viewport height), not off the source. Source order and visual order diverge whenever a section is conditional - `/settings`'s auto-sync cards render nothing without `LCL_LOGIN`/`TR_PHONE`, so reading the JSX would have put a section on the page that most instances never see.
 
+### Manual entries on an unsynced account
+
+`v2.6`. A meal-voucher card, a cash envelope, a bank the sync cannot reach: an
+account with no external source of truth, whose balance only ever moves because
+a person says so. Asked for exactly that way ("si je rajoute un compte pour mes
+tickets restaurant je dois pouvoir dire j'ai eu une depense de x euros ou un
+ajout sur mon solde de x euros"), with the constraint stated in the same
+breath: **never on an account that syncs.**
+
+**The fact the whole design follows from.** For a fiat account the balance on
+screen is `history[0].balanceCents`, the newest `HistoricalBalance` row
+(`lib/domain/account-detail.ts`). It is never re-derived by summing
+transactions. So "I spent 12 EUR" has to write **both** a `Transaction` (or
+budgets, categorisation and recurring detection never see it) **and** a balance
+snapshot (or the figure on screen does not move). Writing one without the other
+produces the two failures worth naming: a balance that changes with nothing to
+explain it, or a ledger that does not add up to the number printed above it.
+Both writes are in one `$transaction`.
+
+**A past date shifts the snapshots after it, and that is correct rather than
+reckless.** A snapshot is what the app believed on that day; learning about a
+movement on the 7th means every belief held from the 7th on was off by that
+amount. So rows at or after the entry move by the delta, rows before it do not,
+and an anchor row is inserted at the entry date built from the balance
+**strictly before** it - never the latest row overall, which is the one genuinely
+error-prone step and why `anchorBalanceFor` is a pure, separately tested
+function. Rewriting recorded history would be indefensible on a synced account
+where the rows came from a bank; here they only ever came from this same person,
+which is precisely what the eligibility guard enforces.
+
+**Three modes, not one signed field.** Spend and top-up are the same write with
+opposite signs, but asking someone to type a minus sign to mean "I spent" is how
+you get a +12 EUR grocery run, and the sign is unrecoverable once stored - the
+mode decides it, and `Math.abs` makes a typed minus harmless. **Correcting the
+balance is genuinely different**: it writes a snapshot and *no* transaction,
+because nothing happened that a budget should count, the figure was simply
+wrong. Its hint says so on screen, since a correction silently absent from
+budgets would otherwise read as a bug. It is fixed to today on purpose:
+correcting a past day leaves every later snapshot contradicting it, and both
+ways out (shift them, or let them disagree) are surprising - a backdated fix is
+what a movement is for, where the arithmetic is unambiguous.
+
+**Deleting reverses only what it caused.** Scoped by the `manual_` `syncId`
+prefix (`isManualEntry`), never any transaction on the account: a CSV-imported
+or synced row never moved a balance, so "reversing" one would invent a movement
+that never happened. The anchor row the entry may have created is deliberately
+left behind - after the reverse shift it holds exactly the balance that preceded
+the entry, so it draws no step on the chart, which is a better outcome than
+deciding whether some later entry has come to depend on it. **Verified against a
+real database**, not just reasoned through: spend, backdated entry, future-date
+refusal, correction, and delete, each checked against the resulting rows; after
+the delete the anchor came back to the preceding balance exactly.
+
+**`assertCsvImportEligible` became `assertManualAccountEligible`**
+(`lib/actions/manual-account-guard.ts`). The rule was already identical -
+`isFiat && !syncId && !gocardlessAccountId` - so it is one name for one
+question ("is this a fiat account nobody but the user writes to?") rather than
+the same predicate under two names drifting apart. Enforced server-side because
+a Server Action is reachable whatever the UI renders, and here the worst case is
+not an annoyance: a manual entry shifting a bank's own recorded balances would
+destroy real history.
+
+Failures come back as **values with stable keys**, translated by the dialog,
+never thrown sentences - Next replaces a thrown Server Action error with an
+opaque digest in production, which this repo has already paid for twice.
+Authorization still throws.
+
 ### Global transaction ledger
 
 `/transactions` - search and filter every transaction across every account by label, account, category, date range, and amount, instead of only per-account or via the `/budgets/[categoryId]` drill-down. No schema change - reads the existing `Transaction` table. `lib/domain/transactions-ledger.ts` holds the pure `searchParams` parsing (`parseTransactionLedgerFilters`) so invalid-input handling is testable without a request; the actual Prisma `where` construction stays in `app/transactions/page.tsx` per this project's lib/domain-has-no-DB-calls convention. Not linked from the sidebar/mobile nav - same "off nav, reached contextually" precedent as `/tax-report` (see "Public REST API" above, and the mobile bottom nav's own "already-7-item" crowding note under "PWA / offline support"); reached instead via a "View all transactions" link on each account's own transactions table (`components/account-detail/transactions-table.tsx`), which deep-links with `?accountId=`.

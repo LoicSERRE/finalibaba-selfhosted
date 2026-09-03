@@ -37,6 +37,10 @@ export interface AccountDetailBalance {
 
 export interface AccountDetailTransaction {
   id: string;
+  // Carries the origin prefix (`manual_`, `csv_`, `woob:`...). Only a manual
+  // entry may be deleted from the table, because only a manual entry ever
+  // moved a HistoricalBalance row - see lib/domain/manual-entries.ts.
+  syncId: string;
   date: Date;
   label: string;
   amountCents: bigint;

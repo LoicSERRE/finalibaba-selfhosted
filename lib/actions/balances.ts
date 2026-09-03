@@ -2,13 +2,13 @@
 
 import { revalidateHolding } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
-import { assertCsvImportEligible } from "@/lib/actions/csv-import-guard";
+import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 
 type BalanceRow = { date: string; balanceCents: number };
 
 export async function importBalanceHistory(accountId: string, rows: BalanceRow[]) {
   if (rows.length === 0) return { imported: 0 };
-  await assertCsvImportEligible(accountId);
+  await assertManualAccountEligible(accountId);
 
   const data = rows.map((r) => ({
     accountId,

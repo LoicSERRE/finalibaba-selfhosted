@@ -110,7 +110,14 @@ def complete_setup(institution_id: str, code: str) -> dict:
     try:
         api.complete_weblogin(code)  # persists cookies to our per-institution file
     except Exception as e:
-        raise SetupError(f"Code refusé par Trade Republic : {str(e)[:200]}") from e
+        # Logged server-side, never forwarded: main.py's own SetupError handler
+        # states the invariant that a user_message is written here at raise
+        # time and never derived from str(exception), and this was the single
+        # place breaking it. Same rule the backup route and the GoCardless
+        # institutions route already follow - an upstream library's exception
+        # text is not something to hand a browser.
+        log.exception("TR setup (%s): weblogin completion refused", institution_id)
+        raise SetupError("Code refusé par Trade Republic - vérifie le code reçu dans l'app et réessaie.") from e
 
     log.info("TR setup (%s): session saved to %s", institution_id, api._cookies_file)
     _cleanup(institution_id)

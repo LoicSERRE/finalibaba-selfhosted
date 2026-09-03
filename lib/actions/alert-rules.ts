@@ -141,7 +141,7 @@ function buildNewTransactionData(formData: FormData, message: string | null) {
 
 // Server Actions are directly invocable regardless of what the UI picker
 // offers (same trust boundary as assertGoalAccountEligible/
-// assertCsvImportEligible elsewhere in this codebase) - a REBALANCING_DRIFT
+// assertManualAccountEligible elsewhere in this codebase) - a REBALANCING_DRIFT
 // rule pointed at a holding with no target set would silently never fire
 // (computeHoldingDriftPts's own malformed-row guard), the same kind of
 // dead-rule-with-no-explanation gap assertGoalAccountEligible was added to

@@ -17,7 +17,7 @@ export async function getGoals() {
 // The Settings picker only ever offers non-LOAN accounts (see
 // app/settings/page.tsx's goalEligibleAccounts query), but a Server
 // Action is directly invocable regardless of what's rendered - same
-// trust boundary as assertCsvImportEligible/assertIncomeEventEligible
+// trust boundary as assertManualAccountEligible/assertIncomeEventEligible
 // elsewhere in this codebase. Without this check, a goal linked to a
 // LOAN account would silently show 0% progress forever with no
 // explanation: lib/domain/analytics.ts's assetRows deliberately excludes

@@ -197,7 +197,8 @@
       "amount": "Montant",
       "balance": "Solde",
       "change": "Variation",
-      "income": "Revenu"
+      "income": "Revenu",
+      "actions": "Actions"
     },
     "fiscalTip": "Renseignez le prix de revient sur chaque position pour voir les plus-values et l'impôt latent.",
     "fiscalSubtype": "Définissez le type de compte (PEA/CTO) pour activer le calcul fiscal.",
@@ -262,7 +263,32 @@
       "triggerShared": "Partagé avec {count} personne(s) - gérer"
     },
     "ownedBy": "Compte de {name}",
-    "ownedByHint": "Ce compte appartient à {name} ; tu en es copropriétaire."
+    "ownedByHint": "Ce compte appartient à {name} ; tu en es copropriétaire.",
+    "manualEntry": {
+      "title": "Saisie manuelle",
+      "trigger": "Saisir",
+      "triggerLong": "Saisir une opération",
+      "modeSpend": "Dépense",
+      "modeTopup": "Ajout",
+      "modeCorrect": "Corriger le solde",
+      "amount": "Montant",
+      "label": "Libellé",
+      "date": "Date",
+      "category": "Catégorie",
+      "noCategory": "Aucune",
+      "newBalance": "Nouveau solde",
+      "movementHint": "Le solde du compte est ajusté d'autant. Une date passée décale aussi les relevés qui la suivent, pour que l'historique reste cohérent.",
+      "correctHint": "Remplace le solde d'aujourd'hui sans créer d'opération : rien n'apparaîtra dans les budgets. À utiliser quand le chiffre était simplement faux.",
+      "deleteEntry": "Supprimer cette saisie",
+      "deleteConfirmTitle": "Supprimer cette saisie ?",
+      "deleteConfirmBody": "L'opération est supprimée et son effet sur le solde est annulé. Les saisies suivantes ne bougent pas.",
+      "errorAmountRequired": "Indique un montant différent de zéro.",
+      "errorLabelRequired": "Indique un libellé.",
+      "errorFutureDate": "La date ne peut pas être dans le futur : ce relevé deviendrait aussitôt le solde affiché.",
+      "errorInvalidDate": "Date invalide.",
+      "errorNotFound": "Cette opération n'existe plus.",
+      "errorNotManual": "Seule une saisie manuelle peut être supprimée ici."
+    }
   },
   "budgets": {
     "title": "Budgets",

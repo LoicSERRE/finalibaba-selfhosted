@@ -1,6 +1,7 @@
 import { formatCurrency } from "@/lib/utils/format";
 import { ImportBalanceHistoryDialog } from "@/components/account-detail/import-balance-history-dialog";
 import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
+import { ManualEntryDialog } from "@/components/account-detail/manual-entry-dialog";
 import type { HistoryRow } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
 
@@ -12,6 +13,7 @@ export function BalanceHistoryTable({
   accountId,
   historyRows,
   canImportCsv,
+  categories,
   existingBalanceDates,
   existingFingerprints,
 }: Readonly<{
@@ -20,6 +22,9 @@ export function BalanceHistoryTable({
   accountId: string;
   historyRows: HistoryRow[];
   canImportCsv: boolean;
+  /** Offered in the manual-entry dialog; empty is fine, the picker just
+   *  shows "none". */
+  categories: { id: string; name: string; color: string }[];
   existingBalanceDates: string[];
   existingFingerprints: string[];
 }>) {
@@ -41,6 +46,7 @@ export function BalanceHistoryTable({
         </h2>
         {canImportCsv && (
           <div className="flex items-center gap-2 flex-wrap">
+            <ManualEntryDialog accountId={accountId} categories={categories} />
             <ImportBalanceHistoryDialog accountId={accountId} existingDates={existingBalanceDates} />
             <ImportTransactionsDialog accountId={accountId} existingFingerprints={existingFingerprints} />
           </div>

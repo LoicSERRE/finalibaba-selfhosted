@@ -244,7 +244,7 @@ export async function getViewContext(): Promise<ViewContext> {
 
 /**
  * Ownership guard for mutations. Mirrors the existing assert*Eligible family
- * (assertCsvImportEligible, assertGoalAccountEligible, assertIncomeEventEligible,
+ * (assertManualAccountEligible, assertGoalAccountEligible, assertIncomeEventEligible,
  * assertHoldingHasTarget) and exists for the same documented reason: a Server
  * Action is directly invocable regardless of what the UI renders, so hiding a
  * button is never an access control.

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { formatCurrency, centsToEuro } from "@/lib/utils/format";
 import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
+import { ManualEntryDialog } from "@/components/account-detail/manual-entry-dialog";
+import { DeleteManualEntryButton } from "@/components/account-detail/delete-manual-entry-button";
+import { isManualEntry } from "@/lib/domain/manual-entries";
 import { TransactionCategoryCell } from "@/components/shared/transaction-category-cell";
 import { MarkAsIncomeButton } from "@/components/account-detail/mark-as-income-button";
 import type { AccountDetailTransaction } from "@/lib/domain/account-detail";
@@ -42,6 +45,12 @@ export function TransactionsTable({
   if (transactions.length === 0) return null;
 
   const showIncomeColumn = !readOnly && INCOME_ELIGIBLE_ACCOUNT_TYPES.has(accountType);
+  // canImportCsv is this page's "nobody but the user writes here" flag, which
+  // is the same condition manual entry needs. The column only appears once
+  // there is actually something deletable, so an account whose rows all came
+  // from a CSV import never grows an empty column.
+  const showManualColumn =
+    canImportCsv && !readOnly && transactions.some((tx) => isManualEntry(tx.syncId));
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
@@ -62,6 +71,7 @@ export function TransactionsTable({
           >
             {td("viewAllTransactions")}
           </Link>
+          {canImportCsv && !readOnly && <ManualEntryDialog accountId={accountId} categories={categories} />}
           {canImportCsv && (
             <ImportTransactionsDialog accountId={accountId} existingFingerprints={existingFingerprints} />
           )}
@@ -77,6 +87,7 @@ export function TransactionsTable({
               td("tableHeaders.category"),
               td("tableHeaders.amount"),
               ...(showIncomeColumn ? [td("tableHeaders.income")] : []),
+              ...(showManualColumn ? [td("tableHeaders.actions")] : []),
             ].map((h) => (
               <th
                 key={h}
@@ -138,6 +149,11 @@ export function TransactionsTable({
                       alreadyMarked={!!tx.incomeEvent}
                     />
                   )}
+                </td>
+              )}
+              {showManualColumn && (
+                <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
+                  {isManualEntry(tx.syncId) && <DeleteManualEntryButton transactionId={tx.id} />}
                 </td>
               )}
             </tr>

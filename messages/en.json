@@ -197,7 +197,8 @@
       "amount": "Amount",
       "balance": "Balance",
       "change": "Change",
-      "income": "Income"
+      "income": "Income",
+      "actions": "Actions"
     },
     "fiscalTip": "Enter the cost basis for each position to see gains and latent tax.",
     "fiscalSubtype": "Set the account type (PEA/CTO) to enable tax computation.",
@@ -262,7 +263,32 @@
       "triggerShared": "Shared with {count} person(s) - manage"
     },
     "ownedBy": "{name}'s account",
-    "ownedByHint": "This account belongs to {name}; you co-own it."
+    "ownedByHint": "This account belongs to {name}; you co-own it.",
+    "manualEntry": {
+      "title": "Manual entry",
+      "trigger": "Record",
+      "triggerLong": "Record an entry",
+      "modeSpend": "Spend",
+      "modeTopup": "Top-up",
+      "modeCorrect": "Correct the balance",
+      "amount": "Amount",
+      "label": "Label",
+      "date": "Date",
+      "category": "Category",
+      "noCategory": "None",
+      "newBalance": "New balance",
+      "movementHint": "The account balance moves by the same amount. A past date also shifts the snapshots after it, so the history stays consistent.",
+      "correctHint": "Replaces today's balance without recording a movement, so nothing shows up in budgets. Use it when the figure was simply wrong.",
+      "deleteEntry": "Delete this entry",
+      "deleteConfirmTitle": "Delete this entry?",
+      "deleteConfirmBody": "The movement is removed and its effect on the balance is undone. Later entries are left alone.",
+      "errorAmountRequired": "Enter an amount other than zero.",
+      "errorLabelRequired": "Enter a label.",
+      "errorFutureDate": "The date cannot be in the future: that snapshot would immediately become the displayed balance.",
+      "errorInvalidDate": "Invalid date.",
+      "errorNotFound": "This entry no longer exists.",
+      "errorNotManual": "Only a manual entry can be deleted here."
+    }
   },
   "budgets": {
     "title": "Budgets",

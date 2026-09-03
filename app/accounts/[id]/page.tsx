@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { InterestRateForm } from "@/components/account-detail/interest-rate-form";
 import { ImportBalanceHistoryDialog } from "@/components/account-detail/import-balance-history-dialog";
 import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
+import { ManualEntryDialog } from "@/components/account-detail/manual-entry-dialog";
 import { getTranslations, getLocale } from "next-intl/server";
 import { computeAccountDetail } from "@/lib/domain/account-detail";
 import { AccountHeader } from "@/components/account-detail/account-header";
@@ -78,7 +79,7 @@ export default async function AccountDetailPage({
   // canImportCsv drives every CSV-import affordance on this page (the chart
   // section, the transactions table, the empty state). A granted portfolio is
   // read-only, so it's forced off here rather than at each of the three call
-  // sites - assertCsvImportEligible would refuse a guest anyway, this just
+  // sites - assertManualAccountEligible would refuse a guest anyway, this just
   // stops the button existing.
   const canImportCsv = result.canImportCsv && !readOnly;
 
@@ -263,6 +264,7 @@ export default async function AccountDetailPage({
           accountId={account.id}
           historyRows={result.historyRows}
           canImportCsv={canImportCsv}
+          categories={categories}
           existingBalanceDates={result.existingBalanceDates}
           existingFingerprints={result.existingFingerprints}
         />
@@ -276,7 +278,8 @@ export default async function AccountDetailPage({
             title={td("importEmptyTitle")}
             description={td("importEmptyDescription")}
             action={
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                <ManualEntryDialog accountId={account.id} categories={categories} />
                 <ImportBalanceHistoryDialog accountId={account.id} existingDates={result.existingBalanceDates} />
                 <ImportTransactionsDialog accountId={account.id} existingFingerprints={result.existingFingerprints} />
               </div>
