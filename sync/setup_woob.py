@@ -241,9 +241,25 @@ def complete_setup(institution_id: str, code: str | None = None) -> dict:
         raise SetupError("Captcha refusé ou expiré - relance la connexion pour en obtenir un nouveau")
 
     if result["status"] in ("pending_approval", "code_required"):
-        # Still not approved / wrong code - keep the session alive so the
-        # user can retry without starting over.
-        raise SetupError(result.get("message") or "Connexion non encore approuvée - réessaie dans quelques secondes")
+        # NOT a failure: the bank answered a completed step with another step
+        # rather than with a session. Amundi does exactly this - a solved
+        # captcha is followed by a phone approval - and _try_connect has
+        # already re-stored the session with whatever fields remain to be
+        # filled (none, for an approval), so this is resumable by design.
+        #
+        # Raising here turned that resumable state into a red error, and the
+        # UI - which correctly drops a spent captcha widget on any failure -
+        # then fell back to the Connect button. So every retry restarted from
+        # a fresh captcha and triggered a fresh phone prompt, and the flow
+        # could never converge. Reported from a real Amundi account, where it
+        # made the bank impossible to connect at all despite the captcha
+        # itself working.
+        #
+        # Returned as a value so the caller can render the right panel: the
+        # same "model expected errors as return values" rule this repo already
+        # applies to Server Actions. The session is deliberately NOT cleaned
+        # up - it is what the next call resumes.
+        return result
 
     _cleanup(institution_id)
     return result

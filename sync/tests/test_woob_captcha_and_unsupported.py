@@ -235,9 +235,22 @@ def test_the_solved_token_reaches_the_bank_through_the_config_field(monkeypatch)
     assert result["accounts"] == 1
 
 
-def test_a_bank_wanting_phone_approval_after_the_captcha_stops_resending_it(monkeypatch):
-    """Amundi can ask for a phone approval once the captcha clears. The retry
-    must not re-send the spent single-use token - Woob would reject it."""
+def test_a_bank_wanting_phone_approval_after_the_captcha_is_resumable_not_fatal(monkeypatch):
+    """Amundi answers a solved captcha with a phone approval, and both halves
+    of that matter.
+
+    The spent single-use token must not be re-sent on the retry (Woob would
+    reject it), AND the approval must come back as a STATE rather than an
+    exception. Raising was the shipped behaviour, and it made the bank
+    impossible to connect at all: the UI correctly drops a spent captcha widget
+    on any failure, so a raised approval sent the user back to the Connect
+    button, and every retry restarted at a fresh captcha and a fresh phone
+    prompt. Reported from a real Amundi account, where the captcha itself
+    worked and the flow still never terminated.
+
+    This test used to assert the raise. That was pinning an incident, not an
+    invariant - the invariant is the empty field_ids on the line below, and it
+    is unchanged."""
     from woob.capabilities.captcha import RecaptchaV2Question
     from woob.exceptions import AppValidation
 
@@ -247,11 +260,47 @@ def test_a_bank_wanting_phone_approval_after_the_captcha_stops_resending_it(monk
     w = FakeWoob()
 
     setup_woob._try_connect(w, name)
-    with pytest.raises(setup_woob.SetupError):
-        setup_woob.complete_setup(inst, code="token")
+    result = setup_woob.complete_setup(inst, code="token")
 
+    assert result["status"] == "pending_approval", "an approval is a state to resume, not a failure"
+    assert result["message"] == "approve", "the bank's own wording must reach the panel"
+    assert not w.deinited, "the session must survive - the approval resumes THIS login"
     assert setup_woob._pending[name]["field_ids"] == [], "the spent token must not be re-sent on retry"
+
     setup_woob._pending.pop(name, None)
+
+
+def test_the_captcha_then_approval_flow_converges(monkeypatch):
+    """The full loop the real bug broke: the captcha is solved, the bank asks
+    for a phone approval, the user approves and confirms, and THAT call
+    connects.
+
+    Asserted end to end rather than one step at a time because the defect was
+    exactly that every individual step worked while the sequence could never
+    terminate."""
+    from woob.capabilities.captcha import RecaptchaV2Question
+    from woob.exceptions import AppValidation
+
+    inst = "ghi"
+    name = setup_woob._backend_name(inst)
+    _drive_setup(
+        monkeypatch,
+        iter([RecaptchaV2Question(website_key="k", website_url="u"), AppValidation("approve"), None]),
+    )
+    w = FakeWoob()
+
+    assert setup_woob._try_connect(w, name)["status"] == "captcha_required"
+    assert setup_woob.complete_setup(inst, code="token")["status"] == "pending_approval"
+
+    # No code on this call: an approval has nothing to fill in, which is why
+    # _try_connect stored an empty field_ids. A retry that still demanded one
+    # would fail with "Code manquant" and strand the user on the approval
+    # panel with a button that cannot work.
+    final = setup_woob.complete_setup(inst)
+
+    assert final["status"] == "already_connected"
+    assert final["accounts"] == 1
+    assert name not in setup_woob._pending, "a finished setup must release its session"
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { withTimeout } from "@/lib/utils/with-timeout";
 
 /**
  * The real Google reCAPTCHA v2 checkbox, rendered so a HUMAN can solve the
@@ -89,16 +90,25 @@ function loadRecaptchaScript(): Promise<void> {
   return scriptPromise;
 }
 
+/** Google's script is fetched from the open internet by the viewer's own
+ *  browser, so it can hang on a captive network or be swallowed by an
+ *  extension. 20s, matching the app-lock Server Action ceiling. */
+const SCRIPT_TIMEOUT_MS = 20_000;
+
 export function RecaptchaWidget({
   siteKey,
+  loadingLabel,
   onToken,
   onUnavailable,
 }: Readonly<{
   siteKey: string;
+  /** Shown while Google's script is still on its way. */
+  loadingLabel: string;
   /** Empty string when the token expired and must be solved again. */
   onToken: (token: string) => void;
   onUnavailable: () => void;
 }>) {
+  const [loading, setLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderedRef = useRef(false);
   const onTokenRef = useRef(onToken);
@@ -111,7 +121,11 @@ export function RecaptchaWidget({
 
   useEffect(() => {
     let cancelled = false;
-    loadRecaptchaScript()
+    // Without a deadline this promise can stay pending forever - a blocked or
+    // stalled script leaves an empty box and NO message, which is exactly what
+    // was reported from a real instance. Same lesson app-lock already learned:
+    // a stall must name itself rather than look like nothing happening.
+    withTimeout(loadRecaptchaScript(), SCRIPT_TIMEOUT_MS, "recaptcha_script_timeout")
       .then(() => {
         // renderedRef guards React's development double-mount: the ref survives
         // it, so grecaptcha.render is never called twice on one container
@@ -122,6 +136,7 @@ export function RecaptchaWidget({
           return;
         }
         renderedRef.current = true;
+        setLoading(false);
         globalThis.grecaptcha.render(containerRef.current, {
           sitekey: siteKey,
           theme: resolveTheme(),
@@ -145,8 +160,15 @@ export function RecaptchaWidget({
     };
   }, [siteKey]);
 
-  // Left-aligned like the panel's own text and its Confirm button - the
-  // surrounding column right-aligns, which left the checkbox marooned
-  // across a gap from everything it belongs to.
-  return <div ref={containerRef} />;
+  return (
+    <>
+      {/* Something to look at while the script is in flight, so an empty gap
+          never reads as a finished, broken panel. */}
+      {loading && <p className="text-xs text-[var(--muted)]">{loadingLabel}</p>}
+      {/* Left-aligned like the panel's own text and its Confirm button - the
+          surrounding column right-aligns, which left the checkbox marooned
+          across a gap from everything it belongs to. */}
+      <div ref={containerRef} />
+    </>
+  );
 }

@@ -261,7 +261,11 @@ export async function getWoobBankModules(): Promise<WoobBankModule[]> {
 // other's.
 export type InstitutionSetupResult =
   | { status: "already_connected"; accounts?: number }
-  | { status: "pending_approval"; medium_type: string | null; medium_label: string | null; message: string | null }
+  /** `medium_type` is optional because the Woob payload simply does not carry
+   *  it for an approval (see setup_woob.py's AppValidation branch, which sends
+   *  only medium_label and message) - it was declared required and was always
+   *  undefined at runtime. */
+  | { status: "pending_approval"; medium_type?: string | null; medium_label?: string | null; message?: string | null }
   | {
       status: "code_required";
       medium_type?: string | null;
@@ -299,6 +303,19 @@ export async function startInstitutionSetup(institutionId: string): Promise<Inst
  *  the session is now established, so both fields are optional. */
 export type InstitutionSetupCompletion =
   | { ok: true; accounts?: number; status?: "connected" }
+  /** The bank answered a completed step with ANOTHER step instead of a
+   *  session: Amundi follows a solved captcha with a phone approval. The Woob
+   *  session stays alive on the sync side, so this is a state to resume and
+   *  never a failure - the caller routes it back through the same panel logic
+   *  the start path uses. Shapes match InstitutionSetupResult's own members so
+   *  it can be handed straight to it. */
+  | {
+      ok: true;
+      status: "pending_approval" | "code_required";
+      medium_type?: string | null;
+      medium_label?: string | null;
+      message?: string | null;
+    }
   | { ok: false; error: string };
 
 export async function completeInstitutionSetup(

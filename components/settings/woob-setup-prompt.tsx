@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { needsReconnection } from "@/lib/domain/sync-status";
 import { RecaptchaWidget } from "./recaptcha-widget";
+import { CaptchaDomainHelp } from "./captcha-domain-help";
 
 interface SyncLog {
   status: string;
@@ -111,6 +112,10 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
       return;
     }
     setUnsupportedMessage(null);
+    // A captcha token is single-use, so once the flow has moved past it the
+    // key on screen is spent - keep it out of state rather than leaving a
+    // stale one a later render could pick up.
+    setCaptchaSiteKey(null);
     setHint(result.medium_type ? t(MEDIUM_KEY[result.medium_type] ?? "otpMediumUnknown") : (result.message ?? null));
     setWaitKind(result.status === "code_required" ? "code" : "approval");
   };
@@ -148,6 +153,33 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
           setCaptchaSiteKey(null);
           setCode("");
         }
+        return;
+      }
+      // The bank can answer a completed step with another step rather than
+      // with a session - Amundi follows a solved captcha with a phone
+      // approval. Route it through the very same applyResult the start path
+      // uses, so the right panel appears and the user can confirm once they
+      // have approved on their phone. Treating it as success here would
+      // report a connection that never happened; treating it as failure (what
+      // it did before) left no way back to the approval panel at all.
+      if (result.status === "pending_approval") {
+        applyResult({
+          status: "pending_approval",
+          medium_type: result.medium_type,
+          medium_label: result.medium_label,
+          message: result.message,
+        });
+        setBusy(false);
+        return;
+      }
+      if (result.status === "code_required") {
+        applyResult({
+          status: "code_required",
+          medium_type: result.medium_type,
+          medium_label: result.medium_label,
+          message: result.message,
+        });
+        setBusy(false);
         return;
       }
       reset();
@@ -225,8 +257,12 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
               key to its own domain (Amundi does). Nothing here can fix that,
               so the error is explained rather than left looking like our bug. */}
           <p className="text-xs text-[var(--muted)] mb-3">{t("woobCaptchaDomainNote")}</p>
+          {/* The way out, for the case that note describes. Renders nothing on
+              localhost, where it is already irrelevant. */}
+          <CaptchaDomainHelp command={t("woobCaptchaDomainHelpCommand")} />
           <RecaptchaWidget
             siteKey={captchaSiteKey}
+            loadingLabel={t("woobCaptchaLoading")}
             onToken={setCode}
             onUnavailable={() => {
               setWaitKind(null);
