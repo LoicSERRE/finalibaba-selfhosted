@@ -673,6 +673,94 @@ raise it, and it means "accept a notice, complete a form" - the user does it onc
 and syncing resumes. It keeps the `unsupported` status (alert once rather than
 nag every 24h) but says what to do.
 
+### Holdings from the bank, not just a balance (v2.7)
+
+72 of the 96 CapBank modules expose `CapBankWealth` and can report the actual
+lines inside an account. This project asked **none** of them: `sync_woob.py`
+called `iter_accounts`, stored a balance, and stopped. So every PEA, PEE,
+assurance-vie and securities account arrived as a bare figure, and a real PEE
+showed up typed as a current account offering an "annual interest rate" - a
+field that means nothing for a fund. Reported exactly that way.
+
+`iter_investment` now feeds `Holding` rows. Three decisions worth keeping:
+
+**A line with no share count is stored as one unit at its valuation.** Funds
+routinely omit `quantity`. Dropping the line would understate the account;
+storing it this way keeps the account **total** exact, and only the per-unit
+price becomes the whole line.
+
+**A line that cannot be valued is dropped, never stored at zero.** That is the
+"an absent value rendered as a legitimate zero" trap this file already names
+under the v2.4 audit - a zero holding would quietly drag the account total down.
+
+**The account retypes itself**, from `CHECKING` only. That is
+`infer_account_type`'s "nothing matched" fallback, so this corrects a guess and
+never overrides `SAVINGS` or a type a person chose. Holdings are a far better
+signal than a label: "PEE SOPRA STERIA GROUP" matches no keyword.
+
+`replace_holdings` builds on the existing `upsert_holding` (Trade Republic
+already wrote positions through it) rather than repeating its SQL, and adds the
+one thing a full sync needs: **deleting lines that disappeared**, so a sold fund
+cannot linger and keep inflating the account.
+
+**The Woob trap that cost the first attempt**: a field the bank did not report
+is not `None`, it is the `NotAvailable` singleton, whose `str()` is literally
+`"Not available"`. So `inv.unitprice is not None` passes and
+`Decimal(str(...))` dies with `ConversionSyntax`. `iter_investment` was working
+perfectly and every position was being dropped by the mapping. Every field now
+goes through `empty()`, and the test fakes default to `NotAvailable` rather than
+`None` so this cannot regress.
+
+### Classifying what a bank login can fail with
+
+`sync/woob_errors.py`. Built after **measuring** the catalogue rather than after
+another bug report, and the measurement is the argument:
+
+    BrowserIncorrectPassword   61 of 95 modules   was unclassified
+    AssertionError             40                 was unclassified
+    BrowserUserBanned          18                 was unclassified
+    BrowserPasswordExpired     17                 was unclassified
+    AuthMethodNotImplemented   16                 was unclassified
+
+The single most likely failure of all - wrong credentials - fell through to the
+generic handler, and `BrowserIncorrectPassword()` carries **no message**, so the
+`SyncLog` row was empty and the UI had nothing to say. That is issue #54 reached
+from its most probable direction, and it is what "just errors, I don't know why"
+looked like from a real Swile attempt.
+
+**Order is meaning, not style.** `BrowserUserBanned` subclasses
+`BrowserIncorrectPassword`; `BrowserPasswordExpired` and
+`AuthMethodNotImplemented` both subclass `ActionNeeded`. An except-chain gets
+this wrong silently - it would tell a locked-out user to check their password,
+and retrying is precisely what prolongs the lockout. A table matched top-down
+makes the ordering explicit and testable, which is half the reason it exists.
+
+`AssertionError`/`NotImplementedError` are classified too: 40 and 25 modules
+raise them for a response they do not recognise, which means *the bank changed
+under Woob*, not that the user did anything wrong. Saying so beats a traceback.
+
+### reCAPTCHA v2 and v3 are different mechanisms
+
+v2 is a checkbox a human ticks; v3 is invisible and scored from behaviour, with
+nothing to click. Woob models them as separate exception classes and collapsing
+them made the UI render a v2 checkbox for a v3 key, which Google answers with
+"Invalid input" - a permanently broken box. Of the catalogue: 7 banks use v2, 2
+use v3 (`swile`, `cmes`), 1 uses Funcaptcha (`roblox`, unsupported).
+
+`components/settings/recaptcha-v3.tsx` loads the right script (Enterprise has
+its own namespace) and calls `execute()`, so the token arrives with no
+interaction. **Honest limit: this path has never run against a real v3 bank.**
+The one account available to test it (Swile) fails earlier, at the login itself,
+so v3 support is written and unit-tested but unproven end to end.
+
+**Swile cannot be connected at all, and it is not this project's bug.** Its
+module only does an OAuth `grant_type=password` round-trip and implements no
+second factor whatsoever (zero occurrences of `TwoFactorBrowser`, OTP or
+`AppValidation` in its source). Measured against the live API: a nonexistent
+e-mail returns `invalid_grant`, a real account returns `server_error` - so the
+account IS recognised and the server still refuses the token, the signature of
+an SSO or 2FA account the module has no way to carry through.
+
 ### Auditing what every supported bank actually needs
 
 `scripts/audit-bank-modules.py` answers, without a bank account, which

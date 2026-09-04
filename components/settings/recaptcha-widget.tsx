@@ -25,7 +25,18 @@ import { withTimeout } from "@/lib/utils/with-timeout";
  * a second checkbox in the DOM.
  */
 
-type Grecaptcha = {
+/** Both reCAPTCHA generations share one global object, so they share one type:
+ *  declaring `grecaptcha` twice is a TS conflict. `render` is the v2 checkbox;
+ *  `ready`/`execute` are the invisible v3 flow, and `enterprise` is the same
+ *  v3 API under its Enterprise namespace (see recaptcha-v3.tsx). All optional -
+ *  only the script that was actually loaded defines its own. */
+export type Grecaptcha = {
+  ready?: (cb: () => void) => void;
+  execute?: (siteKey: string, opts: { action: string }) => Promise<string>;
+  enterprise?: {
+    ready: (cb: () => void) => void;
+    execute: (siteKey: string, opts: { action: string }) => Promise<string>;
+  };
   render: (
     container: HTMLElement,
     params: {

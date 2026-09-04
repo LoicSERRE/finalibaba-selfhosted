@@ -52,6 +52,56 @@ def infer_account_type(label: str) -> str:
     return "CHECKING"
 
 
+def replace_holdings(cur, account_db_id: str, holdings: list[dict]) -> int:
+    """Make an account's holdings match what the bank just reported.
+
+    Builds on upsert_holding rather than repeating its SQL - this module is the
+    shared helper layer, and Trade Republic already writes positions through it.
+    What is added here is the part a full sync needs and a per-position write
+    does not: lines that disappeared are deleted, so a sold fund cannot linger
+    and keep inflating the account.
+
+    Scoped to one account, and only ever called for a synced one, where the UI
+    already hides manual holding edits.
+    """
+    seen = []
+    for h in holdings:
+        upsert_holding(
+            cur,
+            account_id=account_db_id,
+            ticker=h["ticker"],
+            name=h.get("name"),
+            quantity=h["quantity"],
+            last_price_cents=h["last_price_cents"],
+            cost_basis_cents=h.get("cost_basis_cents"),
+        )
+        seen.append(h["ticker"])
+
+    if seen:
+        cur.execute(
+            'DELETE FROM "Holding" WHERE "accountId" = %s AND ticker <> ALL(%s)',
+            (account_db_id, seen),
+        )
+    return len(seen)
+
+
+def promote_account_to_investment(cur, account_db_id: str) -> bool:
+    """Retype an account as INVESTMENT once the bank reported holdings for it.
+
+    Only from CHECKING, which is infer_account_type's "nothing matched"
+    fallback - never from SAVINGS or anything a keyword or a person chose, so
+    this can correct a guess without overriding a decision. Holdings are a far
+    better signal than a label: "PEE SOPRA STERIA GROUP" matches no keyword,
+    but an account reporting fund lines is an investment account whatever it is
+    called.
+    """
+    cur.execute(
+        'UPDATE "Account" SET type = \'INVESTMENT\' WHERE id = %s AND type = \'CHECKING\'',
+        (account_db_id,),
+    )
+    return cur.rowcount > 0
+
+
 def get_woob_institutions(cur) -> list[dict]:
     """Return all institutions with Woob credentials configured."""
     cur.execute(
@@ -267,7 +317,7 @@ def record_balance(cur, account_id: str, balance_cents: int):
     )
 
 
-def upsert_holding(cur, *, account_id: str, ticker: str, name: str, quantity: str, last_price_cents: int):
+def upsert_holding(cur, *, account_id: str, ticker: str, name: str, quantity: str, last_price_cents: int, cost_basis_cents: int | None = None):
     cur.execute(
         'SELECT id FROM "Holding" WHERE "accountId" = %s AND ticker = %s',
         (account_id, ticker),
@@ -276,18 +326,22 @@ def upsert_holding(cur, *, account_id: str, ticker: str, name: str, quantity: st
     if row:
         cur.execute(
             """
-            UPDATE "Holding" SET name=%s, quantity=%s, "lastPriceCents"=%s, "updatedAt"=NOW()
+            UPDATE "Holding" SET name=%s, quantity=%s, "lastPriceCents"=%s,
+                   -- Only ever fills a cost basis, never erases one: the bank
+                   -- does not always report a purchase price, and the user may
+                   -- have typed it in themselves.
+                   "costBasisCents"=COALESCE(%s, "costBasisCents"), "updatedAt"=NOW()
             WHERE id=%s
             """,
-            (name, quantity, last_price_cents, row["id"]),
+            (name, quantity, last_price_cents, cost_basis_cents, row["id"]),
         )
     else:
         cur.execute(
             """
-            INSERT INTO "Holding" (id, "accountId", ticker, name, quantity, "lastPriceCents", "createdAt", "updatedAt")
-            VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+            INSERT INTO "Holding" (id, "accountId", ticker, name, quantity, "lastPriceCents", "costBasisCents", "createdAt", "updatedAt")
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             """,
-            (str(uuid.uuid4()), account_id, ticker, name, quantity, last_price_cents),
+            (str(uuid.uuid4()), account_id, ticker, name, quantity, last_price_cents, cost_basis_cents),
         )
 
 

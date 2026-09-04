@@ -129,6 +129,7 @@ def _mark_interactive(backend) -> None:
 def _try_connect(w, backend_name: str) -> dict:
     """Attempts iter_accounts and buckets whatever 2FA exception comes back
     into the three UI-facing shapes described in this module's docstring."""
+    from woob.capabilities.captcha import RecaptchaV3Question
     from woob.exceptions import (
         ActionNeeded,
         AppValidation,
@@ -191,11 +192,23 @@ def _try_connect(w, backend_name: str) -> dict:
     # branch takes over and re-stores the session with no fields left to set.
     except CaptchaQuestion as e:
         _pending[backend_name] = {"w": w, "field_ids": ["captcha_response"]}
-        log.info("Woob setup: captcha requested for %s", backend_name)
+        # Which captcha, not just "a captcha": reCAPTCHA v2 is a checkbox a
+        # human ticks, v3 is invisible and scored from behaviour with nothing
+        # to click, and they need different scripts and different calls. Woob
+        # models that as separate exception classes; collapsing them made the
+        # UI render a v2 checkbox for a v3 key, which Google answers with
+        # "Invalid input" - a broken box for banks like Swile and CMES.
+        kind = "v3" if isinstance(e, RecaptchaV3Question) else "v2"
+        log.info("Woob setup: captcha (%s) requested for %s", kind, backend_name)
         return {
             "status": "captcha_required",
             "website_key": getattr(e, "website_key", None),
             "website_url": getattr(e, "website_url", None),
+            "captcha_kind": kind,
+            # v3 only, both optional: the action the site declares, and whether
+            # it is the Enterprise build (a different script URL and namespace).
+            "captcha_action": getattr(e, "action", None),
+            "captcha_enterprise": bool(getattr(e, "is_enterprise", False)),
             "message": str(e) or None,
         }
 

@@ -241,6 +241,40 @@ def test_setup_offers_the_captcha_instead_of_declaring_defeat(monkeypatch):
     setup_woob._pending.pop("inst_x", None)
 
 
+def test_a_v3_captcha_is_reported_as_such_not_as_a_checkbox(monkeypatch):
+    """reCAPTCHA v2 and v3 are different mechanisms, not two flavours of one:
+    v2 is a checkbox a human ticks, v3 is invisible and scored from behaviour.
+    Woob models them as separate classes, and collapsing them made the UI render
+    a v2 checkbox for a v3 key - which Google answers with "Invalid input", so
+    Swile and CMES showed a permanently broken box."""
+    from woob.capabilities.captcha import RecaptchaV3Question
+
+    _drive_setup(
+        monkeypatch,
+        iter([RecaptchaV3Question(website_key="k3", website_url="u", action="login", is_enterprise=True)]),
+    )
+    w = FakeWoob()
+    result = setup_woob._try_connect(w, "inst_v3")
+
+    assert result["status"] == "captcha_required"
+    assert result["captcha_kind"] == "v3"
+    assert result["captcha_action"] == "login"
+    assert result["captcha_enterprise"] is True
+    setup_woob._pending.pop("inst_v3", None)
+
+
+def test_a_v2_captcha_still_reports_v2(monkeypatch):
+    from woob.capabilities.captcha import RecaptchaV2Question
+
+    _drive_setup(monkeypatch, iter([RecaptchaV2Question(website_key="k2", website_url="u")]))
+    w = FakeWoob()
+    result = setup_woob._try_connect(w, "inst_v2")
+
+    assert result["captcha_kind"] == "v2"
+    assert result["captcha_enterprise"] is False
+    setup_woob._pending.pop("inst_v2", None)
+
+
 def test_the_solved_token_reaches_the_bank_through_the_config_field(monkeypatch):
     """The whole mechanism in one assertion: complete_setup must put the token
     the human produced into `captcha_response`, which is the only thing that

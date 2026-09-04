@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { needsReconnection } from "@/lib/domain/sync-status";
 import { RecaptchaWidget } from "./recaptcha-widget";
+import { RecaptchaV3 } from "./recaptcha-v3";
 import { CaptchaDomainHelp } from "./captcha-domain-help";
 
 interface SyncLog {
@@ -45,6 +46,9 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
   // The reCAPTCHA site key the bank's own login page uses, handed over by Woob
   // in the exception. Non-null is what puts the widget on screen.
   const [captchaSiteKey, setCaptchaSiteKey] = useState<string | null>(null);
+  // v3 is invisible: nothing is rendered for the user to act on, the token is
+  // fetched on mount. Kept beside the key so the panel knows which to show.
+  const [captchaV3, setCaptchaV3] = useState<{ action: string; enterprise: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -66,6 +70,7 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
     setUnsupportedMessage(null);
     setCode("");
     setCaptchaSiteKey(null);
+    setCaptchaV3(null);
     setError(null);
   };
 
@@ -109,6 +114,11 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
       setUnsupportedMessage(null);
       setCode("");
       setCaptchaSiteKey(result.website_key);
+      setCaptchaV3(
+        result.captcha_kind === "v3"
+          ? { action: result.captcha_action || "login", enterprise: !!result.captcha_enterprise }
+          : null,
+      );
       setWaitKind("captcha");
       return;
     }
@@ -260,26 +270,50 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
 
       {waitKind === "captcha" && captchaSiteKey && (
         <div className="w-full p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
-          <p className="text-xs text-[var(--muted)] mb-1">{t("woobCaptchaHint")}</p>
+          {/* v3 asks the user for nothing, so the checkbox instructions would
+              be a lie there. Both still need a human present, because the token
+              is single-use and short-lived. */}
+          <p className="text-xs text-[var(--muted)] mb-1">
+            {captchaV3 ? t("woobCaptchaV3Hint") : t("woobCaptchaHint")}
+          </p>
           {/* Stated up front, not discovered later: this bank will need the
-              same checkbox on every sync, because the token is single-use. */}
+              same step on every sync, because the token is single-use. */}
           <p className="text-xs text-[var(--muted)] mb-3">{t("woobCaptchaManualOnly")}</p>
           {/* Google refuses the widget outright when the bank restricts its
               key to its own domain (Amundi does). Nothing here can fix that,
-              so the error is explained rather than left looking like our bug. */}
-          <p className="text-xs text-[var(--muted)] mb-3">{t("woobCaptchaDomainNote")}</p>
-          {/* The way out, for the case that note describes. Renders nothing on
-              localhost, where it is already irrelevant. */}
-          <CaptchaDomainHelp command={t("woobCaptchaDomainHelpCommand")} />
-          <RecaptchaWidget
-            siteKey={captchaSiteKey}
-            loadingLabel={t("woobCaptchaLoading")}
-            onToken={setCode}
-            onUnavailable={() => {
-              setWaitKind(null);
-              setUnsupportedMessage(t("woobCaptchaUnavailable"));
-            }}
-          />
+              so the error is explained rather than left looking like our bug.
+              Only the visible checkbox can show that error, so v3 skips it. */}
+          {!captchaV3 && (
+            <>
+              <p className="text-xs text-[var(--muted)] mb-3">{t("woobCaptchaDomainNote")}</p>
+              {/* The way out, for the case that note describes. Renders nothing
+                  on localhost, where it is already irrelevant. */}
+              <CaptchaDomainHelp command={t("woobCaptchaDomainHelpCommand")} />
+            </>
+          )}
+          {captchaV3 ? (
+            <RecaptchaV3
+              siteKey={captchaSiteKey}
+              action={captchaV3.action}
+              enterprise={captchaV3.enterprise}
+              loadingLabel={t("woobCaptchaLoading")}
+              onToken={setCode}
+              onUnavailable={() => {
+                setWaitKind(null);
+                setUnsupportedMessage(t("woobCaptchaUnavailable"));
+              }}
+            />
+          ) : (
+            <RecaptchaWidget
+              siteKey={captchaSiteKey}
+              loadingLabel={t("woobCaptchaLoading")}
+              onToken={setCode}
+              onUnavailable={() => {
+                setWaitKind(null);
+                setUnsupportedMessage(t("woobCaptchaUnavailable"));
+              }}
+            />
+          )}
           <div className="flex items-center gap-2 mt-3">
             <Button size="sm" onClick={handleComplete} disabled={!code || busy}>
               {busy ? (

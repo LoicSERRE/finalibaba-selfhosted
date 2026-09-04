@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v2.6.0**
+Current stable release: **v2.7.0**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -344,6 +344,21 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 - [X] **Manual entries on an account nobody else writes to.** A meal-voucher card, a cash envelope, a bank the sync cannot reach: spend, top-up, correct the balance, delete an entry. The balance shown for a fiat account is the newest snapshot and is never re-derived from transactions, so an entry writes **both** a transaction and a balance movement in one transaction - one without the other gives either a balance that changes with nothing to explain it, or a ledger that does not add up to the figure above it. A backdated entry shifts the snapshots after it and anchors on the balance *strictly before* it, which is the one genuinely error-prone step and is a separately tested pure function. Correcting the balance deliberately writes no transaction, and says so on screen, because nothing happened that a budget should count. Deleting reverses only what a manual entry caused, never a CSV or synced row, which never moved a balance in the first place. **Verified against a real database**, not just reasoned through.
 - [X] **One name for one rule.** `assertCsvImportEligible` is now `assertManualAccountEligible` - the condition was already identical (`isFiat && !syncId && !gocardlessAccountId`), and the worst case it guards is no longer an annoyance: a manual entry shifting a bank's own recorded balances would destroy real history.
 - [X] **A library exception was reaching the browser.** `setup_tr_institution.py` built a `SetupError` from `str(e)` on a refused Trade Republic code - the single place breaking the invariant `main.py`'s own handler states, that these messages are written at raise time and never derived from an upstream exception. Found by the pre-release audit, not by a report. Logged server-side now, with a fixed message that says what to do.
+
+---
+
+## v2.7 - Banks that actually connect, and the positions inside them - Released ✓
+
+*v2.5 rendered a captcha and v2.6 fixed the panel after it, and a real Amundi account still could not be connected. Four defects were stacked, each hidden by the one in front of it. Fixing them turned out to fix a whole family: an audit built during this work showed 24 of 95 banks could not connect at all.*
+
+- [X] **A captcha bank could connect and still import nothing.** Four causes, in order: Woob was created without a storage so nothing survived the call; a decoupled validation was never resumed (Woob continues one only when the `resume` config key is set - its own reference CLI hardcodes exactly that); a competing sync invalidated the pending approval; and the setup counted the accounts it fetched then threw them away. That last one is why every earlier fix looked ineffective - for an MFA bank the follow-up sync cannot re-fetch, since the module refuses a non-interactive login once MFA is on. Accounts are now written while the approved session is alive.
+- [X] **Holdings are read from the bank, not just a balance.** 72 of 96 modules expose `CapBankWealth` and this project asked none of them, so a PEE arrived as a current account offering an "annual interest rate". Positions now feed real `Holding` rows, and an account that reports lines retypes itself as an investment - from `CHECKING` only, so a guess is corrected and a choice never overridden. Verified on a real PEE: correct ISIN, share count and unit price, totalling the balance it previously showed as a lump.
+- [X] **Every login failure is classified once.** Measured rather than guessed: `BrowserIncorrectPassword` is raised by **61 of 95 modules**, carries no message, and was falling through to the generic handler - so the most likely failure of all produced an empty `SyncLog` and a UI with nothing to say. A single ordered table now covers it plus lockouts, expired passwords, unsupported auth methods and modules that give up. Order is meaning: `BrowserUserBanned` subclasses `BrowserIncorrectPassword`, so a naive chain would tell a locked-out user to check their password, and retrying is what prolongs the lockout.
+- [X] **A bank only a human can refresh no longer offers a button that cannot work.** On a captcha bank the Synchronize button is hidden: it could only fail, and its failure overwrote the connection that had just succeeded, showing a warning triangle seconds after it worked. Sync messages are also printed under the row instead of living in a `title` attribute no phone can reach *(issue #54)*.
+- [X] **reCAPTCHA v3 support**, for the 2 banks that use it. v2 is a checkbox, v3 is invisible and scored from behaviour; rendering one for the other gets "Invalid input" from Google. **Written and unit-tested but never exercised end to end** - the only account available to test it fails earlier, at the login.
+- [X] **`scripts/audit-bank-modules.py` and a monthly CI job.** The modules declare their authentication mechanisms, so "what does each supported bank need?" is answerable without a bank account. Scheduled as well as triggered on a Woob bump, because the catalogue lives on `updates.woob.tech` and moves independently of the pinned version.
+
+**Swile cannot be connected, and it is not this project's bug.** Its module implements no second factor at all, and only does an OAuth `grant_type=password` round-trip. Measured against the live API: a nonexistent e-mail returns `invalid_grant`, a real account returns `server_error` - the account is recognised and the token still refused, which is what an SSO or 2FA account looks like to a module that cannot carry either. Fixing it means fixing the Woob module upstream.
 
 ---
 

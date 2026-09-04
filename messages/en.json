@@ -1053,6 +1053,7 @@
     "woobCodeAriaLabel": "Verification code",
     "woobUnsupported": "This bank needs a step the app can't automate:",
     "woobCaptchaHint": "This bank protects its login with a captcha. Tick the box below to prove you are not a robot, then confirm.",
+    "woobCaptchaV3Hint": "This bank uses an invisible automated check: nothing to tick, it runs on its own. Click Confirm once it is ready.",
     "woobCaptchaLoading": "Loading the captcha…",
     "woobCaptchaManualOnly": "Needed on every sync: the captcha is single-use and expires after about two minutes, so the automatic 4-hourly sync cannot work for this bank.",
     "woobCaptchaDomainNote": "If the box shows \"Invalid domain\", this bank restricts its captcha to its own site, so it cannot be solved from Finalibaba. Nothing to fix on your side.",

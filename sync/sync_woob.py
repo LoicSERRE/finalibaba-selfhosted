@@ -15,10 +15,13 @@ from pathlib import Path
 import psycopg2.extras
 
 import setup_locks
+import woob_errors
 from db import (
     get_conn,
     infer_account_type,
+    promote_account_to_investment,
     record_balance,
+    replace_holdings,
     upsert_account,
     upsert_transaction,
     write_sync_log,
@@ -101,6 +104,95 @@ def _fail(cur, conn, sync_source: str, status: str, msg: str):
     conn.close()
 
 
+def _investment_to_holding(inv) -> dict | None:
+    """Map one Woob Investment onto this project's Holding shape.
+
+    **Every field goes through `empty()`, and that is not defensive style.**
+    Woob does not use None for a field a bank did not report: it uses the
+    `NotAvailable` singleton, which is NOT None and whose str() is the literal
+    "Not available". So `inv.unitprice is not None` passes, and
+    `Decimal(str(inv.unitprice))` then dies with ConversionSyntax - which is
+    exactly what happened on a real Amundi PEE: iter_investment returned the
+    positions correctly and every single one was dropped by this mapping.
+
+    `code` is the ISIN when the bank gives one, the stable identity a holding
+    should be keyed by; the label is only a fallback, truncated because it is
+    the unique key together with the account.
+
+    **When quantity is missing**, and funds routinely omit it, the position is
+    stored as a single unit priced at its valuation. The account's total value -
+    the number that actually matters - stays exact; only the per-unit price
+    becomes the whole line. Better than dropping a real position for lack of a
+    share count.
+    """
+    from woob.capabilities.base import empty
+
+    def value(field):
+        return None if empty(field) else field
+
+    valuation = value(inv.valuation)
+    quantity = value(inv.quantity)
+    unitvalue = value(inv.unitvalue)
+    unitprice = value(inv.unitprice)
+    code = value(inv.code)
+    label = value(inv.label)
+
+    if valuation is None and (quantity is None or unitvalue is None):
+        return None  # nothing to value this line with
+
+    ticker = str(code or label or "").strip()[:64]
+    if not ticker:
+        return None
+
+    if quantity is None or not unitvalue:
+        quantity, unitvalue = Decimal(1), valuation
+
+    cost = None
+    if unitprice is not None:
+        cost = int(Decimal(str(unitprice)) * Decimal(str(quantity)) * 100)
+
+    return {
+        "ticker": ticker,
+        "name": str(label) if label else None,
+        "quantity": Decimal(str(quantity)),
+        "last_price_cents": int(Decimal(str(unitvalue)) * 100),
+        "cost_basis_cents": cost,
+    }
+
+
+def _sync_account_investments(w, backend_name, institution_name, account, account_db_id, cur) -> int:
+    """Fetch and store one account's holdings, when the bank reports any.
+
+    Non-fatal like the transaction fetch above: the balance is already
+    recorded, so a module that does not implement iter_investment - or errors
+    on it - just leaves that account without lines rather than failing the sync.
+    """
+    try:
+        from woob.core.bcall import CallErrors
+
+        holdings = []
+        try:
+            for inv in w.do("iter_investment", account, backends=backend_name):
+                mapped = _investment_to_holding(inv)
+                if mapped:
+                    holdings.append(mapped)
+        except CallErrors as e:
+            log.debug("%s iter_investment unsupported/errored: %s", institution_name, str(e)[:120])
+            return 0
+
+        if not holdings:
+            return 0
+
+        count = replace_holdings(cur, account_db_id, holdings)
+        if promote_account_to_investment(cur, account_db_id):
+            log.info("%s - %s: retyped as an investment account", institution_name, account.label)
+        log.info("%s - %s: %d holding(s) imported", institution_name, account.label, count)
+        return count
+    except Exception:
+        log.warning("%s holdings skipped for %s", institution_name, account.label, exc_info=True)
+        return 0
+
+
 def _sync_account_transactions(w, backend_name, institution_id, institution_name, account, account_db_id, cur):
     """Fetch and upsert transaction history for one account. Errors here are
     non-fatal to the overall sync - the account balance above was already
@@ -161,15 +253,11 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
     other exception is an unexpected Woob failure - both write a sync log
     and clean up the connection via _fail before re-raising."""
     from woob.exceptions import (
-        ActionNeeded,
         AppValidation,
         AppValidationExpired,
-        BrowserRedirect,
-        BrowserUnavailable,
         CaptchaQuestion,
         NeedInteractive,
         NeedInteractiveFor2FA,
-        ScrapingBlocked,
     )
     try:
         return _iter_accounts(w, backend_name, institution_name)
@@ -201,71 +289,31 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         # lib/domain/sync-status.ts.
         _fail(cur, conn, sync_source, "captcha_required", msg)
         raise AuthRequiredError(msg) from e
-    except ActionNeeded as e:
-        # 35 of the 95 CapBank modules can raise this, and it does NOT mean the
-        # bank is undriveable: the messages are things like "accept the notice
-        # on your account" or "verify your email", and the exception carries a
-        # structured action_type (ENABLE_MFA, FILL_KYC, CONTACT, PAYMENT). The
-        # user does it once on the bank's site and syncing works again.
-        #
-        # So it keeps the `unsupported` STATUS - which alerts once instead of
-        # nagging every 24h, the right behaviour for something only the user can
-        # clear - but says what to do rather than "this bank cannot be synced
-        # automatically", which was simply false for this whole family.
-        msg = f"{_ACTION_NEEDED_PREFIX}{str(e)[:200]}" if str(e) else _ACTION_NEEDED_PREFIX.rstrip(": ")
-        log.warning("%s: %s", institution_name, msg)
-        _fail(cur, conn, sync_source, "unsupported", msg)
-        raise UnsupportedBankError(msg) from e
-    except BrowserRedirect as e:
-        # Banks this integration structurally cannot drive: a full browser
-        # redirect, or an action the bank wants performed on its own site.
-        #
-        # setup_woob.py has classified these as "unsupported" since it was
-        # written; the sync path never learned the same lesson, so they fell
-        # into the generic handler below and reached the user as a raw
-        # traceback with a truncated exception string. Same exception families,
-        # same conclusion, now stated the same way in both places.
-        #
-        # Deliberately NOT "auth_required": that status means "reconnect and
-        # it will work", which is false here and would send the user round a
-        # setup loop that cannot succeed. Logged at warning without a
-        # traceback, because this is an expected outcome, not a crash.
-        msg = f"{_UNSUPPORTED_PREFIX}{str(e)[:200]}" if str(e) else _UNSUPPORTED_PREFIX.rstrip(": ")
-        log.warning("%s: %s", institution_name, msg)
-        _fail(cur, conn, sync_source, "unsupported", msg)
-        raise UnsupportedBankError(msg) from e
-    except BrowserUnavailable as e:
-        # The bank's site is momentarily down/in maintenance, or (ScrapingBlocked
-        # subclass) it detected and blocked the automated login. Reported as
-        # issue #54: La Banque Postale raised a bare BrowserUnavailable() - no
-        # message - so the generic handler below logged a full traceback and
-        # wrote an EMPTY SyncLog message, which surfaced in the UI as "sync
-        # failed" with nothing to explain it.
-        #
-        # Status "error", deliberately: it is transient and retryable, so the
-        # next scheduled run clears it on success - unlike unsupported/
-        # captcha_required, which are dead ends. Not auth_required either:
-        # there is nothing to reconnect, the site is simply not answering. The
-        # message is fixed here because the exception usually carries none, and
-        # log.warning without a traceback because this is an expected outcome,
-        # not a crash.
-        detail = str(e)[:200]
-        if isinstance(e, ScrapingBlocked):
-            base = _SCRAPING_BLOCKED_MSG
-        else:
-            base = _UNAVAILABLE_MSG
-        msg = f"{base} {detail}" if detail else base
-        log.warning("%s: %s", institution_name, msg)
-        _fail(cur, conn, sync_source, "error", msg)
-        raise RuntimeError(msg) from e
     except Exception as e:
-        msg = str(e)[:300]
-        # log.exception (not log.error(..., e)) so the traceback lands in
-        # docker compose logs - a bare message can't tell "Woob module raised
-        # something new" from "the account this ran against changed shape".
-        log.exception("%s: unexpected error during iter_accounts", institution_name)
-        _fail(cur, conn, sync_source, "error", msg)
-        raise
+        # Everything that is not an interactive flow goes through one ordered
+        # table (woob_errors) rather than a chain of except clauses grown one
+        # bug report at a time. Measured on the catalogue, that chain had left
+        # out the most common failure of all: BrowserIncorrectPassword, raised
+        # by 61 of the 95 modules and carrying no message, so wrong credentials
+        # produced an empty SyncLog and a UI with nothing to say.
+        classified = woob_errors.classify(e)
+        if classified is None:
+            # Genuinely unknown: keep the traceback, it is the only way to tell
+            # "a module raised something new" from "this account changed shape".
+            msg = str(e)[:300] or "Erreur inattendue pendant la synchronisation."
+            log.exception("%s: unexpected error during iter_accounts", institution_name)
+            _fail(cur, conn, sync_source, "error", msg)
+            raise
+
+        status, msg = classified
+        # An expected outcome, so a warning without a traceback.
+        log.warning("%s: %s", institution_name, msg)
+        _fail(cur, conn, sync_source, status, msg)
+        if status == "auth_required":
+            raise AuthRequiredError(msg) from e
+        if status == "unsupported":
+            raise UnsupportedBankError(msg) from e
+        raise RuntimeError(msg) from e
 
 
 def _sync_account(cur, institution_id, institution_name, account) -> dict | None:
@@ -364,6 +412,7 @@ def persist_accounts(
         if summary is None:
             continue
         synced.append({"label": summary["label"], "balance_cents": summary["balance_cents"]})
+        _sync_account_investments(w, backend_name, institution_name, account, summary["account_db_id"], cur)
         _sync_account_transactions(w, backend_name, institution_id, institution_name, account, summary["account_db_id"], cur)
 
     write_sync_log(cur, sync_source, "success", f"{len(synced)} account(s) synced")
@@ -378,28 +427,6 @@ _CAPTCHA_PREFIX = (
     "Cette banque demande un captcha : ouvre les réglages et clique "
     "sur « Se connecter » pour le résoudre (la synchronisation "
     "automatique ne peut pas le faire à ta place) : "
-)
-
-_UNAVAILABLE_MSG = (
-    "La banque est momentanément indisponible ou en maintenance. "
-    "Réessaie plus tard."
-)
-
-_SCRAPING_BLOCKED_MSG = (
-    "La banque a détecté et bloqué la connexion automatique. "
-    "Réessaie plus tard ; si cela persiste, sa synchronisation "
-    "automatique n'est peut-être pas possible pour l'instant."
-)
-
-_ACTION_NEEDED_PREFIX = (
-    "Cette banque demande une action de ta part sur son site "
-    "(valider un message, compléter un dossier, activer une option). "
-    "Fais-la puis relance la synchronisation : "
-)
-
-_UNSUPPORTED_PREFIX = (
-    "Cette banque ne peut pas être synchronisée automatiquement "
-    "(captcha ou action à faire sur le site de la banque) : "
 )
 
 

@@ -292,7 +292,18 @@ export type InstitutionSetupResult =
    *  solves it, and the token comes back through the SAME `code` parameter an
    *  SMS code uses. `website_key` is null only if a future Woob version stops
    *  carrying it, which the UI treats as unsupported rather than guessing. */
-  | { status: "captcha_required"; website_key: string | null; website_url: string | null; message: string | null }
+  | {
+      status: "captcha_required";
+      website_key: string | null;
+      website_url: string | null;
+      /** v2 is a checkbox a human ticks; v3 is invisible and scored from
+       *  behaviour, with nothing to click. Different scripts, different calls -
+       *  rendering one for the other gets "Invalid input" from Google. */
+      captcha_kind?: "v2" | "v3";
+      captcha_action?: string | null;
+      captcha_enterprise?: boolean;
+      message: string | null;
+    }
   | { status: "unsupported"; message: string }
   /** The sync service refused or could not be reached. Carried as a value so
    *  the reason survives production's redaction of thrown errors. */
