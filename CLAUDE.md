@@ -769,7 +769,8 @@ declare it. `sync/bank-capabilities.json` is the committed baseline; `--check`
 fails on drift and runs in CI (`.github/workflows/bank-modules-audit.yml`).
 
 It exists because every gap above was found by a user opening an issue. Its
-first run showed **24 of 95 banks could not connect at all** - not niche ones:
+first run showed **24 of 95 banks whose connection broke as soon as their
+second factor actually fired** - not niche ones:
 `lcl`, `societegenerale`, `creditmutuel`, `caissedepargne`, `banquepopulaire`,
 `boursorama`, `bred`, `bp`, `n26`. The fixes above are therefore not "an Amundi
 fix" but a whole-family one.
@@ -778,10 +779,15 @@ fix" but a whole-family one.
 `updates.woob.tech` and changes independently of the pinned version, so a
 `requirements.txt` trigger alone would miss most drift.
 
-**Its honest limit**: it reports what a module *can* raise, not what it *will*
+**Its honest limit, and it matters for how the numbers above are read**: it
+reports what a module *can* raise, not what it *will*
 for a given account. `lcl` declares a decoupled validation it does not always
 enforce, which is exactly why one working LCL account proves nothing about the
-next one.
+next one - and the converse: this repo's own maintainer has synced LCL since
+the beginning without ever hitting it, because that account does not have
+Certicode Plus switched on. So "24 banks were broken" must always be read as
+"broken for the accounts on which that second factor fires", never as "nobody
+could use them".
 
 ### Captcha banks (Amundi)
 
