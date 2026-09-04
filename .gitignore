@@ -58,8 +58,10 @@ __pycache__/
 .claude/skills/**/__pycache__/
 .claude/skills/**/*.pyc
 
-# Local-only scratch notes (manual QA checklists etc.) - never pushed
+# Local-only scratch notes (manual QA checklists, issue reply drafts etc.) -
+# kept next to the code so a claim can be checked against it, never pushed
 /TEST_PROTOCOL.md
+/docs/
 
 # Python coverage report for the local SonarQube scan (sync/requirements-dev.txt)
 sync/coverage.xml
