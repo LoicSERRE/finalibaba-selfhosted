@@ -29,7 +29,12 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-executor = ThreadPoolExecutor(max_workers=2)
+# 2 was too few once a setup could block a worker for minutes: a bank polled
+# for a phone approval holds one for up to 180s, a scheduled sync takes the
+# other, and the next "Connect" click then waits for a free worker with no
+# feedback - reported as a button that spins forever (issue #51). These threads
+# are I/O-bound (waiting on banks), so a few more cost almost nothing.
+executor = ThreadPoolExecutor(max_workers=6)
 scheduler = AsyncIOScheduler()
 
 _lcl_lock = threading.Lock()

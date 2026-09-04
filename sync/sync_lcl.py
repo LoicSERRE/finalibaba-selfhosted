@@ -148,9 +148,13 @@ def _sync_account(cur, institution_id, account) -> dict | None:
 def run(interactive: bool = False) -> dict:
     _configure_woob()
 
-    from woob.core import Woob
+    # Same persistent storage as the generic path: Woob() with none keeps no
+    # browser state at all, so a bank whose 2FA must survive between runs is
+    # challenged every single time. Invisible on an LCL account that does not
+    # enforce Certicode Plus, and a dead end on one that does.
+    from sync_woob import make_woob
 
-    w = Woob()
+    w = make_woob()
     try:
         w.load_backends(modules=["lcl"])
     except Exception as e:

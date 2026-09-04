@@ -88,7 +88,13 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
     }
     if (result.status === "already_connected") {
       reset();
-      triggerSync();
+      // The setup writes the accounts itself, with the session the user just
+      // authorised. Re-syncing here would re-login, which an MFA bank refuses
+      // outside an interactive session - the failure then overwrote the
+      // success and the row went back to showing "Connect" with a warning
+      // triangle seconds after it had actually worked (issue #51).
+      if (result.synced === undefined) triggerSync();
+      else router.refresh();
       return;
     }
     if (result.status === "captcha_required") {
@@ -183,7 +189,12 @@ export function WoobSetupPrompt({ institutionId, log }: Readonly<{ institutionId
         return;
       }
       reset();
-      triggerSync();
+      // `in` rather than a property read: the two continuation statuses were
+      // returned above, but TypeScript keeps the union because `status` is
+      // itself a union on that variant, so `result.synced` is not narrowed.
+      const alreadyWritten = "synced" in result && result.synced !== undefined;
+      if (alreadyWritten) router.refresh();
+      else triggerSync();
     } catch (e) {
       setError(e instanceof Error ? e.message : t("unknownError"));
       setBusy(false);

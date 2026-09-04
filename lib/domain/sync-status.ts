@@ -52,6 +52,25 @@ export function alertsOnlyOnce(status: string | null | undefined): boolean {
 }
 
 /**
+ * Can an unattended run ever clear this state, or does it always need a person?
+ *
+ * True only for `captcha_required`: a captcha token is single-use and expires in
+ * about two minutes, and a bank that has MFA on refuses to start a login outside
+ * an interactive session at all, so "Synchronize" on such a bank cannot succeed
+ * - now or ever. Offering it next to "Connect" put two buttons side by side of
+ * which one always failed, and its failure overwrote the successful connection
+ * with a warning triangle seconds later. Reported from a real instance right
+ * after a connection that had in fact worked.
+ *
+ * Deliberately NOT true for `auth_required`: an expired session often comes back
+ * on the next scheduled run, so hiding the button there would remove something
+ * that does work.
+ */
+export function reconnectOnlyRefreshes(status: string | null | undefined): boolean {
+  return status === SYNC_STATUS_CAPTCHA_REQUIRED;
+}
+
+/**
  * The four visual states a sync status collapses to, and the i18n key that
  * explains each one.
  *

@@ -20,6 +20,15 @@ const SYNC_URL = process.env.SYNC_SERVICE_URL ?? "http://sync:8000";
 // indefinitely. AbortSignal.timeout() is the built-in way to do this
 // without manually wiring an AbortController per call.
 const SYNC_TIMEOUT_MS = 2 * 60 * 1000;
+
+// Completing a setup can legitimately outlast the default: a bank that ends in
+// a phone approval is polled by its Woob module until the user taps it, and
+// Amundi's handler runs 60 attempts three seconds apart - 180s - before giving
+// up. At the 2min default the browser abandoned first, so a validation that was
+// still perfectly alive surfaced as a spinner that never resolved (issue #51).
+// Sized above the module's own ceiling so the bank's answer, not our clock,
+// decides the outcome.
+const SETUP_COMPLETE_TIMEOUT_MS = 4 * 60 * 1000;
 // An indicator is never worth making the page wait for.
 const REALTIME_STATUS_TIMEOUT_MS = 2000;
 
@@ -260,7 +269,11 @@ export async function getWoobBankModules(): Promise<WoobBankModule[]> {
 // reports how long its pushed code stays valid, and neither knows about the
 // other's.
 export type InstitutionSetupResult =
-  | { status: "already_connected"; accounts?: number }
+  /** `synced` is how many accounts the setup itself WROTE, using the session
+   *  the user just authorised. Present means the data is already in the
+   *  database and no follow-up sync is needed - for an MFA bank a follow-up
+   *  would fail and overwrite this success with a false error. */
+  | { status: "already_connected"; accounts?: number; synced?: number }
   /** `medium_type` is optional because the Woob payload simply does not carry
    *  it for an approval (see setup_woob.py's AppValidation branch, which sends
    *  only medium_label and message) - it was declared required and was always
@@ -302,7 +315,7 @@ export async function startInstitutionSetup(institutionId: string): Promise<Inst
 /** Woob reports how many accounts it found; Trade Republic just reports that
  *  the session is now established, so both fields are optional. */
 export type InstitutionSetupCompletion =
-  | { ok: true; accounts?: number; status?: "connected" }
+  | { ok: true; accounts?: number; status?: "connected"; synced?: number }
   /** The bank answered a completed step with ANOTHER step instead of a
    *  session: Amundi follows a solved captcha with a phone approval. The Woob
    *  session stays alive on the sync side, so this is a state to resume and
@@ -324,11 +337,15 @@ export async function completeInstitutionSetup(
 ): Promise<InstitutionSetupCompletion> {
   await assertOwnsInstitution(institutionId);
   try {
-    const res = await fetchSync(`/sync/institution/${institutionId}/setup/complete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code ?? null }),
-    });
+    const res = await fetchSync(
+      `/sync/institution/${institutionId}/setup/complete`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code ?? null }),
+      },
+      SETUP_COMPLETE_TIMEOUT_MS,
+    );
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new SyncServiceError((data as { error?: string }).error ?? `Erreur ${res.status}`);

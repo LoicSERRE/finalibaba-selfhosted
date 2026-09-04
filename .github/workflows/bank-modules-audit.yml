@@ -1,0 +1,52 @@
+# Does every supported bank still authenticate the way we think it does?
+#
+# Woob modules declare their authentication mechanisms, so this is answerable by
+# reading the catalogue - no bank account needed. Every authentication gap this
+# project has had was instead found by a user opening an issue: #51 alone
+# uncovered three, and the audit behind it showed 24 of 95 banks could not
+# connect at all. This job is that audit, run automatically.
+#
+# Scheduled as well as triggered on a Woob bump on purpose: the module catalogue
+# lives on updates.woob.tech and changes on its own, independently of the pinned
+# woob version, so a requirements.txt trigger alone would miss most drift.
+name: Bank module audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sync/requirements.txt"
+      - "sync/bank-capabilities.json"
+      - "scripts/audit-bank-modules.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - "sync/requirements.txt"
+      - "sync/bank-capabilities.json"
+      - "scripts/audit-bank-modules.py"
+  schedule:
+    # Monthly: the catalogue moves slowly, and a month's delay on a new
+    # mechanism is far better than finding it through a bug report.
+    - cron: "0 4 1 * *"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Bank authentication mechanisms
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      # woob only - the audit reads modules, it never touches a database or a
+      # bank, so the rest of sync/requirements.txt is not needed here.
+      # The pinned line verbatim (it carries extras, e.g. woob[lcl,swile]==3.7.*)
+      # so the audit reads the same catalogue the sync service would.
+      - run: pip install "$(grep -iE '^woob' sync/requirements.txt | head -1)"
+      - name: Compare the catalogue against the committed baseline
+        run: python3 scripts/audit-bank-modules.py --check

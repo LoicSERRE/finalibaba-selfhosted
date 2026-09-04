@@ -594,6 +594,107 @@ Now a distinct `unsupported` status with a readable message, raised as `Unsuppor
   - `captcha_required` - `CaptchaQuestion` (and its `RecaptchaV2Question` subclass): see "Captcha banks" below. Carries `website_key`/`website_url` so the browser can render the real widget.
   - `unsupported` - `ActionNeeded` (+ `BrowserPasswordExpired`/`AuthMethodNotImplemented`), `BrowserRedirect`: genuinely can't be driven from a web form (full OAuth-style browser redirects, an action the bank wants performed on its own site) - surfaces Woob's own message, no retry loop offered.
 
+### Why an interactive setup was never enough (v2.6.1)
+
+v2.5 rendered the captcha and v2.6 fixed the panel that followed it, and a real
+Amundi account still could not be connected. Four defects were stacked, each
+hidden by the one in front of it, and only a live account surfaced them. Worth
+recording in order, because each was invisible until the previous was fixed.
+
+**1. Woob was given no storage, so nothing survived the call.** `Woob()` with no
+`storage` keeps neither cookies, nor a bank's session token, nor the 2FA
+timestamp. That made an interactive setup structurally pointless for any bank
+needing one: the setup authenticated, its session died with the object, and the
+sync firing right after opened a fresh browser that was challenged again.
+`make_woob()` now gives every path the SAME `StandardStorage`, on the
+`woob_session` volume the compose file already mounted. Applied to `sync_lcl.py`
+and `setup_lcl.py` too, where the same gap was invisible only because that
+account did not enforce Certicode Plus.
+
+**2. A decoupled validation was never resumed.** Woob continues an
+`AppValidation` only when the `resume` config key carries a value - its own
+reference CLI hardcodes exactly that. Without it `do_login` falls through to
+`init_login` and restarts everything, so each "I've approved it" click began a
+fresh captcha and a fresh phone prompt. `request_information` was missing for
+the same reason: Woob treats `None` as "batch mode, do not trigger 2FA".
+
+**3. A competing sync invalidated the approval.** A scheduled run firing while
+the user approved opened a second session and invalidated the `mfa_id` the setup
+was polling. Measured from a container log: approval at 08:39, a full sync at
+08:41, and `handle_polling` still ran its whole 180-second course without ever
+seeing the token. `sync/setup_locks.py` now blocks any sync on an institution
+whose setup is in flight - **skipped, not failed**, so no `SyncLog` row and no
+failure alert for a bank in the middle of being connected properly. Entries
+expire so an abandoned setup cannot freeze a bank for good.
+
+**4. The setup counted the accounts and threw them away.** This is the one that
+kept the database empty through every other fix. `_try_connect` did
+`accounts = _iter_accounts(...)` and returned `len(accounts)`, leaving a separate
+sync to re-fetch them. For an MFA bank that re-fetch is impossible by design -
+the Amundi module calls `check_interactive()` from `init_login` as soon as MFA is
+on, *"we will not be able to stop the login before the notification is sent"* -
+so the follow-up sync could only fail. `persist_accounts` (extracted from
+`run()`) now writes them while the approved session is still alive, which is the
+only moment they can be written at all.
+
+**The generalisable lesson**: each fix was correct and none of them was
+sufficient, because the failure was a *chain*. What finally settled it was
+reading what the bank's own module does rather than reasoning about what the
+flow should do - and one methodological trap is worth naming: verifying a mounted
+file with `docker exec python3 -c` proves nothing, because that starts a NEW
+process. `uvicorn` holds its modules in memory, so a volume edit needs a real
+restart. Two "the fix does not work" rounds were actually the old code running.
+
+**Amundi cannot ever sync unattended, and the UI now says so by shape.**
+`STATE_DURATION = 10` plus the refusal to log in non-interactively means neither
+the 4h cron nor a separate "Synchronize" click can refresh it: data arrives when
+the human connects, and refreshing means connecting again.
+`reconnectOnlyRefreshes` therefore hides the Synchronize button on a
+`captcha_required` bank - it could never succeed, and its failure overwrote the
+connection that had just worked, showing a warning triangle seconds after a real
+success. Deliberately not applied to `auth_required`, where a later run often
+does succeed. The setup also returns `synced`, so the UI stops firing the
+redundant sync that caused that overwrite.
+
+**Sync messages are now shown, not hovered.** The status was a bare icon with
+`title={syncLog.message}`, invisible on mobile and unnoticed everywhere else -
+reported as "no error but sync is not ok" (issue #54). The message is printed
+under the row whenever the status is not `success`, which also carries the
+instruction a captcha bank depends on.
+
+**`BrowserUnavailable` was an empty failure.** La Banque Postale raised a bare
+one, so the generic handler wrote a traceback and an EMPTY `SyncLog` message.
+Now a `error` status (transient and retryable, unlike `unsupported`) with a
+readable message even when the exception carries none, and `ScrapingBlocked` gets
+its own wording.
+
+**`ActionNeeded` no longer claims the bank is undriveable.** 35 of 95 modules can
+raise it, and it means "accept a notice, complete a form" - the user does it once
+and syncing resumes. It keeps the `unsupported` status (alert once rather than
+nag every 24h) but says what to do.
+
+### Auditing what every supported bank actually needs
+
+`scripts/audit-bank-modules.py` answers, without a bank account, which
+authentication mechanism each of the 96 CapBank modules requires - the modules
+declare it. `sync/bank-capabilities.json` is the committed baseline; `--check`
+fails on drift and runs in CI (`.github/workflows/bank-modules-audit.yml`).
+
+It exists because every gap above was found by a user opening an issue. Its
+first run showed **24 of 95 banks could not connect at all** - not niche ones:
+`lcl`, `societegenerale`, `creditmutuel`, `caissedepargne`, `banquepopulaire`,
+`boursorama`, `bred`, `bp`, `n26`. The fixes above are therefore not "an Amundi
+fix" but a whole-family one.
+
+**Scheduled monthly, not only on a Woob bump**: the catalogue lives on
+`updates.woob.tech` and changes independently of the pinned version, so a
+`requirements.txt` trigger alone would miss most drift.
+
+**Its honest limit**: it reports what a module *can* raise, not what it *will*
+for a given account. `lcl` declares a decoupled validation it does not always
+enforce, which is exactly why one working LCL account proves nothing about the
+next one.
+
 ### Captcha banks (Amundi)
 
 Reported as issue #51: adding Amundi produced a raw traceback ending in `RecaptchaV2Question`. The traceback was the real defect and was fixed first (v2.4.1), by classifying captchas as `unsupported` alongside `BrowserRedirect`/`ActionNeeded` - reasoning that a captcha exists precisely to defeat automation.

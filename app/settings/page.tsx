@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { syncStatusTone, syncStatusLabelKey, type SyncStatusTone } from "@/lib/domain/sync-status";
+import { syncStatusTone, syncStatusLabelKey, reconnectOnlyRefreshes, SYNC_STATUS_SUCCESS, type SyncStatusTone } from "@/lib/domain/sync-status";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, baseAccountIds, isAuthEnabled, OWNER_USER_ID } from "@/lib/auth-context";
 import { cookies } from "next/headers";
@@ -256,10 +256,14 @@ export default async function SettingsPage({
           />
         ) : (
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
-            {institutions.map((inst) => (
+            {institutions.map((inst) => {
+              // Resolved once for the whole row: the action cluster needs it,
+              // and so does the explanation printed underneath.
+              const rowSyncLog = syncStatus[inst.trPhone ? `tr:${inst.id}` : `woob:${inst.id}`] ?? null;
+              return (
+              <div key={inst.id} className="px-5 py-3.5">
               <div
-                key={inst.id}
-                className="px-5 py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-center gap-3">
                   <InstitutionLogo
@@ -333,7 +337,7 @@ export default async function SettingsPage({
                     const isTr = !!inst.trPhone;
                     const isWoob = !isTr && !!inst.woobModule;
                     const configured = isTr || isWoob;
-                    const syncLog = syncStatus[isTr ? `tr:${inst.id}` : `woob:${inst.id}`] ?? null;
+                    const syncLog = rowSyncLog;
                     return (
                       <>
                         {/* "unsupported" is a fourth state, not a flavour of
@@ -359,7 +363,12 @@ export default async function SettingsPage({
                         {isTr && (
                           <RealtimeIndicator state={realtimeStatus?.institutions?.[inst.id]} />
                         )}
-                        {configured && <InstitutionSyncButton institutionId={inst.id} />}
+                        {/* Hidden on a bank only a person can refresh: the
+                            button could not succeed, and its failure would
+                            overwrite the connection that just worked. */}
+                        {configured && !reconnectOnlyRefreshes(syncLog?.status) && (
+                          <InstitutionSyncButton institutionId={inst.id} />
+                        )}
                         {isWoob && <WoobSetupPrompt institutionId={inst.id} log={syncLog} />}
                         {isTr && <TradeRepublicSetupPrompt institutionId={inst.id} log={syncLog} />}
                         {/* One dialog for every backend. Trade Republic is an
@@ -391,7 +400,26 @@ export default async function SettingsPage({
                   />
                 </div>
               </div>
-            ))}
+              {/* The sync message, in plain sight rather than in a title
+                  attribute nobody hovers and no phone can reach. Reported as
+                  "no error but sync is not ok" (issue #54): the status was a
+                  bare icon, so a bank that had failed said nothing about why.
+                  It also carries the instruction a captcha bank depends on -
+                  that refreshing it means clicking Connect, not Synchronize. */}
+              {rowSyncLog?.message && rowSyncLog.status !== SYNC_STATUS_SUCCESS && (
+                <p
+                  className={`mt-2 text-xs ${
+                    syncStatusTone(rowSyncLog.status) === "negative"
+                      ? "text-[var(--negative)]"
+                      : "text-[var(--muted)]"
+                  }`}
+                >
+                  {rowSyncLog.message}
+                </p>
+              )}
+              </div>
+              );
+            })}
           </div>
         )}
       </section>

@@ -68,7 +68,6 @@ def start_setup() -> dict:
     _cleanup()
     _configure_woob()
 
-    from woob.core import Woob
     from woob.exceptions import (
         AppValidation,
         AppValidationExpired,
@@ -76,7 +75,11 @@ def start_setup() -> dict:
         NeedInteractiveFor2FA,
     )
 
-    w = Woob()
+    # Persistent storage, same file as every other path - what this setup
+    # authenticates is what the next sync has to reuse.
+    from sync_woob import make_woob
+
+    w = make_woob()
     w.load_backends(modules=["lcl"])
 
     try:

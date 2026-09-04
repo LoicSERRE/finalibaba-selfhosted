@@ -14,6 +14,7 @@ from pathlib import Path
 
 import psycopg2.extras
 
+import setup_locks
 from db import (
     get_conn,
     infer_account_type,
@@ -24,6 +25,31 @@ from db import (
 )
 
 log = logging.getLogger(__name__)
+
+
+# Woob keeps browser state - cookies, a bank's own session token, the date 2FA
+# was last cleared - only when it is given a storage. Woob() with none keeps
+# NOTHING, and that made an interactive setup pointless for any bank needing
+# one: the setup authenticated, its session died with the object, and the sync
+# firing right after opened a fresh browser that got challenged again.
+#
+# Observed end to end on Amundi (issue #51): the phone approval succeeded, the
+# sync that followed still logged "captcha required", and not a single account
+# was ever imported. Both the setup and the sync now share THIS file, which is
+# the whole point - the setup's authenticated state is what the sync reuses.
+#
+# It lives on the woob_session volume docker-compose.yml already mounts at
+# /root/.config/woob, so a container restart does not force a fresh setup.
+_STORAGE_PATH = Path.home() / ".config" / "woob" / "storage.json"
+
+
+def make_woob():
+    """A Woob whose browser state survives the call, and the container."""
+    from woob.core import Woob
+    from woob.tools.storage import StandardStorage
+
+    _STORAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return Woob(storage=StandardStorage(str(_STORAGE_PATH)))
 
 
 def _configure_woob(backend_name: str, module: str, login: str, password: str):
@@ -139,9 +165,11 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         AppValidation,
         AppValidationExpired,
         BrowserRedirect,
+        BrowserUnavailable,
         CaptchaQuestion,
         NeedInteractive,
         NeedInteractiveFor2FA,
+        ScrapingBlocked,
     )
     try:
         return _iter_accounts(w, backend_name, institution_name)
@@ -173,7 +201,22 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         # lib/domain/sync-status.ts.
         _fail(cur, conn, sync_source, "captcha_required", msg)
         raise AuthRequiredError(msg) from e
-    except (BrowserRedirect, ActionNeeded) as e:
+    except ActionNeeded as e:
+        # 35 of the 95 CapBank modules can raise this, and it does NOT mean the
+        # bank is undriveable: the messages are things like "accept the notice
+        # on your account" or "verify your email", and the exception carries a
+        # structured action_type (ENABLE_MFA, FILL_KYC, CONTACT, PAYMENT). The
+        # user does it once on the bank's site and syncing works again.
+        #
+        # So it keeps the `unsupported` STATUS - which alerts once instead of
+        # nagging every 24h, the right behaviour for something only the user can
+        # clear - but says what to do rather than "this bank cannot be synced
+        # automatically", which was simply false for this whole family.
+        msg = f"{_ACTION_NEEDED_PREFIX}{str(e)[:200]}" if str(e) else _ACTION_NEEDED_PREFIX.rstrip(": ")
+        log.warning("%s: %s", institution_name, msg)
+        _fail(cur, conn, sync_source, "unsupported", msg)
+        raise UnsupportedBankError(msg) from e
+    except BrowserRedirect as e:
         # Banks this integration structurally cannot drive: a full browser
         # redirect, or an action the bank wants performed on its own site.
         #
@@ -191,6 +234,30 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         log.warning("%s: %s", institution_name, msg)
         _fail(cur, conn, sync_source, "unsupported", msg)
         raise UnsupportedBankError(msg) from e
+    except BrowserUnavailable as e:
+        # The bank's site is momentarily down/in maintenance, or (ScrapingBlocked
+        # subclass) it detected and blocked the automated login. Reported as
+        # issue #54: La Banque Postale raised a bare BrowserUnavailable() - no
+        # message - so the generic handler below logged a full traceback and
+        # wrote an EMPTY SyncLog message, which surfaced in the UI as "sync
+        # failed" with nothing to explain it.
+        #
+        # Status "error", deliberately: it is transient and retryable, so the
+        # next scheduled run clears it on success - unlike unsupported/
+        # captcha_required, which are dead ends. Not auth_required either:
+        # there is nothing to reconnect, the site is simply not answering. The
+        # message is fixed here because the exception usually carries none, and
+        # log.warning without a traceback because this is an expected outcome,
+        # not a crash.
+        detail = str(e)[:200]
+        if isinstance(e, ScrapingBlocked):
+            base = _SCRAPING_BLOCKED_MSG
+        else:
+            base = _UNAVAILABLE_MSG
+        msg = f"{base} {detail}" if detail else base
+        log.warning("%s: %s", institution_name, msg)
+        _fail(cur, conn, sync_source, "error", msg)
+        raise RuntimeError(msg) from e
     except Exception as e:
         msg = str(e)[:300]
         # log.exception (not log.error(..., e)) so the traceback lands in
@@ -224,14 +291,22 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
 
 
 def run(institution_id: str, institution_name: str, module: str, login: str, password: str) -> dict:
+    # A setup is in flight: the user is solving a captcha or approving on their
+    # phone right now. Opening a second session would invalidate the pending
+    # validation and strand them (issue #51). Skipped, NOT failed - there is
+    # nothing wrong here, so no SyncLog row: writing one would raise a failure
+    # alert for a bank that is in the middle of being connected properly.
+    if setup_locks.is_setup_in_progress(institution_id):
+        log.info("%s: interactive setup in progress, skipping this sync", institution_name)
+        return {"skipped": "setup_in_progress", "accounts": 0}
+
     # Use a sanitised version of the institution id as the Woob backend name
     backend_name = f"inst_{institution_id.replace('-', '_')[:20]}"
     sync_source = f"woob:{institution_id}"
 
     _configure_woob(backend_name, module, login, password)
 
-    from woob.core import Woob
-    w = Woob()
+    w = make_woob()
     try:
         w.load_backends(modules=[module], names=[backend_name])
     except Exception as e:
@@ -247,6 +322,41 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
         log.warning("%s: %s", institution_name, msg)
         _fail(cur, conn, sync_source, "auth_required", msg)
         raise AuthRequiredError(msg)
+
+    return persist_accounts(w, backend_name, institution_id, institution_name, accounts, cur, conn)
+
+
+def persist_accounts(
+    w,
+    backend_name: str,
+    institution_id: str,
+    institution_name: str,
+    accounts: list,
+    cur=None,
+    conn=None,
+) -> dict:
+    """Write an already-fetched account list, and its transactions, to the DB.
+
+    Split out of run() so an interactive setup can persist what it fetched with
+    its OWN live session, instead of counting the accounts and throwing them
+    away for a later sync to re-fetch.
+
+    For a bank like Amundi that later sync is not merely wasteful, it is
+    impossible: its module calls check_interactive() from init_login as soon as
+    MFA is on ("we will not be able to stop the login before the notification is
+    sent"), so any non-interactive run raises NeedInteractiveFor2FA, and an
+    interactive one would push a fresh notification to the user's phone. The
+    only moment its accounts can be written is while the setup still holds the
+    session that a human just approved - which is exactly what this enables.
+
+    Issue #51: the setup succeeded, reported "4 accounts", and the database
+    stayed empty through every retry.
+    """
+    sync_source = f"woob:{institution_id}"
+    owns_connection = cur is None
+    if owns_connection:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     synced = []
     for account in accounts:
@@ -268,6 +378,23 @@ _CAPTCHA_PREFIX = (
     "Cette banque demande un captcha : ouvre les réglages et clique "
     "sur « Se connecter » pour le résoudre (la synchronisation "
     "automatique ne peut pas le faire à ta place) : "
+)
+
+_UNAVAILABLE_MSG = (
+    "La banque est momentanément indisponible ou en maintenance. "
+    "Réessaie plus tard."
+)
+
+_SCRAPING_BLOCKED_MSG = (
+    "La banque a détecté et bloqué la connexion automatique. "
+    "Réessaie plus tard ; si cela persiste, sa synchronisation "
+    "automatique n'est peut-être pas possible pour l'instant."
+)
+
+_ACTION_NEEDED_PREFIX = (
+    "Cette banque demande une action de ta part sur son site "
+    "(valider un message, compléter un dossier, activer une option). "
+    "Fais-la puis relance la synchronisation : "
 )
 
 _UNSUPPORTED_PREFIX = (

@@ -21,6 +21,7 @@ import pytest
 
 import setup_woob
 import sync_woob
+from sync_woob import UnsupportedBankError
 
 
 class FakeCursor:
@@ -157,19 +158,31 @@ def test_an_unexpected_error_is_still_an_error():
 
 
 class FakeValue:
-    """woob's Value object: complete_setup only ever calls .set() on it."""
+    """woob's Value object. complete_setup sets it; _mark_interactive and the
+    resume path also read it, so get()/default are needed too."""
 
-    def __init__(self):
-        self.value = None
+    def __init__(self, default=None):
+        self.default = default
+        self.value = default
 
     def set(self, v):
         self.value = v
+
+    def get(self):
+        return self.value
 
 
 class FakeBackend:
     def __init__(self):
         self.name = "amundi"
-        self.config = {"captcha_response": FakeValue()}
+        # Mirrors the real Amundi module's transient config: captcha_response,
+        # request_information (interactive-mode flag, defaults None), and resume
+        # (the decoupled-validation continuation key).
+        self.config = {
+            "captcha_response": FakeValue(),
+            "request_information": FakeValue(default=None),
+            "resume": FakeValue(default=None),
+        }
 
 
 class FakeWoob:
@@ -184,16 +197,28 @@ class FakeWoob:
         self.deinited = True
 
 
-def _drive_setup(monkeypatch, raises):
+def _drive_setup(monkeypatch, raises, persisted=None):
     """Run setup_woob._try_connect with _iter_accounts raising from `raises`,
-    an iterator so a retry can behave differently from the first attempt."""
+    an iterator so a retry can behave differently from the first attempt.
+
+    Also stands in for the database: a successful connection now WRITES the
+    accounts it fetched (see setup_woob._persist_connected), which would
+    otherwise need DATABASE_URL here. Pass `persisted` to capture what was
+    handed to persist_accounts."""
     def fake_iter(*_a, **_kw):
         outcome = next(raises)
         if outcome is not None:
             raise outcome
         return ["one account"]
 
+    def fake_persist(_w, _backend, _iid, _name, accounts, *_a, **_kw):
+        if persisted is not None:
+            persisted.extend(accounts)
+        return {"synced": list(accounts)}
+
     monkeypatch.setattr(setup_woob, "_iter_accounts", fake_iter)
+    monkeypatch.setattr(setup_woob, "_fetch_institution", lambda _i: {"name": "Amundi"})
+    monkeypatch.setattr(setup_woob, "persist_accounts", fake_persist)
 
 
 def test_setup_offers_the_captcha_instead_of_declaring_defeat(monkeypatch):
@@ -301,6 +326,138 @@ def test_the_captcha_then_approval_flow_converges(monkeypatch):
     assert final["status"] == "already_connected"
     assert final["accounts"] == 1
     assert name not in setup_woob._pending, "a finished setup must release its session"
+
+
+def test_a_successful_setup_writes_the_accounts_it_fetched(monkeypatch):
+    """The defect that made every earlier fix invisible: the setup connected,
+    reported its account count, threw the list away, and left the database
+    empty. A later sync could not recover them - Amundi's module refuses to
+    start a login outside interactive mode once MFA is on, so re-fetching means
+    a fresh captcha and a fresh phone notification, forever.
+
+    The accounts must therefore be written while THIS session is alive."""
+    from woob.capabilities.captcha import RecaptchaV2Question
+    from woob.exceptions import AppValidation
+
+    inst = "writes"
+    name = setup_woob._backend_name(inst)
+    written = []
+    _drive_setup(
+        monkeypatch,
+        iter([RecaptchaV2Question(website_key="k", website_url="u"), AppValidation("approve"), None]),
+        persisted=written,
+    )
+    w = FakeWoob()
+
+    setup_woob._try_connect(w, name)
+    setup_woob.complete_setup(inst, code="token")
+    result = setup_woob.complete_setup(inst)
+
+    assert result["status"] == "already_connected"
+    assert written == ["one account"], "the fetched accounts must reach the database"
+    assert result["synced"] == 1
+    assert "_accounts" not in result, "the internal list must not leak into the HTTP response"
+
+
+def test_resuming_an_approval_sets_resume_not_a_fresh_login(monkeypatch):
+    """The bug behind issue #51: a phone approval that never completed.
+
+    Woob only continues a decoupled validation when the `resume` config key
+    carries a value. Without it, do_login falls through to init_login and
+    restarts the whole flow - a fresh captcha and a fresh approval - so the
+    connection sticks in "pending" no matter how many times the user approves.
+
+    complete_setup with no code (the "I've approved it" click) must therefore
+    set resume=True before retrying. This asserts exactly that, and that the
+    retry then reaches the accounts."""
+    from woob.exceptions import AppValidation
+
+    inst = "approve"
+    name = setup_woob._backend_name(inst)
+    # captcha -> approval -> (resume) success
+    _drive_setup(
+        monkeypatch,
+        iter([__import__("woob.capabilities.captcha", fromlist=["RecaptchaV2Question"]).RecaptchaV2Question(website_key="k", website_url="u"),
+              AppValidation("approuve sur ton tel"),
+              None]),
+    )
+    w = FakeWoob()
+    backend = w.backend
+
+    assert setup_woob._try_connect(w, name)["status"] == "captcha_required"
+    assert setup_woob.complete_setup(inst, code="token")["status"] == "pending_approval"
+
+    # Before the approval click, resume is untouched.
+    assert backend.config["resume"].get() is None
+
+    final = setup_woob.complete_setup(inst)  # the "I've approved it" click
+
+    assert backend.config["resume"].get() is True, "resume must be set to continue the validation, not restart it"
+    assert final["status"] == "already_connected"
+    assert name not in setup_woob._pending
+
+
+def test_setup_marks_the_session_interactive(monkeypatch):
+    """request_information must be non-None before the first attempt, or Woob
+    raises NeedInteractiveFor2FA instead of driving the real 2FA - the module's
+    own base browser gates every decoupled validation on it."""
+    from woob.capabilities.captcha import RecaptchaV2Question
+
+    inst = "interactive"
+    name = setup_woob._backend_name(inst)
+    _drive_setup(monkeypatch, iter([RecaptchaV2Question(website_key="k", website_url="u")]))
+    w = FakeWoob()
+
+    # start_setup marks it; here we drive _try_connect after marking, mirroring
+    # start_setup's own order.
+    setup_woob._mark_interactive(w.backend)
+    setup_woob._try_connect(w, name)
+
+    assert w.backend.config["request_information"].get() == {}, "interactive mode must be flagged"
+    setup_woob._pending.pop(name, None)
+
+
+def test_action_needed_says_what_to_do_rather_than_declaring_defeat():
+    """35 of the 95 CapBank modules can raise ActionNeeded, and for that whole
+    family the bank is perfectly driveable - the user just has to accept a
+    notice or complete a form on its site once. Telling them it "cannot be
+    synced automatically" was false. The status stays `unsupported` (alert once,
+    do not nag every 24h), only the wording changes."""
+    from woob.exceptions import ActionNeeded
+
+    _err, cur = _run(ActionNeeded("Veuillez vous connecter et accepter le message"), UnsupportedBankError)
+    _id, _source, status, message, *_rest = cur.logs[0]
+    assert status == "unsupported"
+    assert "action de ta part" in message, "must say what to do"
+    assert "Veuillez vous connecter" in message, "the bank's own wording must survive"
+    assert "ne peut pas être synchronisée" not in message, "that claim was the bug"
+
+
+def test_a_site_down_is_a_retryable_error_with_a_message_not_an_empty_crash():
+    """Issue #54: La Banque Postale raised a bare BrowserUnavailable() with no
+    message, so the generic handler wrote an EMPTY SyncLog and the UI showed a
+    failure it could not explain. It must be status 'error' (retryable) AND
+    carry a readable message even when the exception itself is empty."""
+    from woob.exceptions import BrowserUnavailable
+
+    _err, cur = _run(BrowserUnavailable(), RuntimeError)
+    # params are (id, source, status, message, owner) - assert on content, the
+    # robust way the rest of this file reads the log rather than by index.
+    _id, _source, status, message, *_rest = cur.logs[0]
+    assert status == "error", "site-down is transient and retryable, not unsupported/auth"
+    assert message and message.strip(), "an empty message is exactly the #54 bug"
+    assert "indisponible" in message.lower() or "maintenance" in message.lower()
+
+
+def test_scraping_blocked_gets_its_own_wording():
+    """ScrapingBlocked is a BrowserUnavailable subclass with a different cause,
+    so it earns a different message - but still a retryable 'error'."""
+    from woob.exceptions import ScrapingBlocked
+
+    _err, cur = _run(ScrapingBlocked(), RuntimeError)
+    _id, _source, status, message, *_rest = cur.logs[0]
+    assert status == "error"
+    assert "bloqué" in message.lower() or "détect" in message.lower()
 
 
 @pytest.mark.parametrize(

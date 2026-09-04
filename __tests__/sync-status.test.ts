@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   needsReconnection,
   alertsOnlyOnce,
+  reconnectOnlyRefreshes,
   classifySyncSource,
   syncStatusTone,
   syncStatusLabelKey,
@@ -148,5 +149,28 @@ describe("syncStatusTone / syncStatusLabelKey - one decision, not three ternarie
     // to "everything is fine".
     expect(syncStatusTone("something_new")).toBe("negative");
     expect(syncStatusLabelKey("something_new")).toBe("error");
+  });
+});
+
+describe("reconnectOnlyRefreshes", () => {
+  // A captcha token is single-use and expires in about two minutes, and a bank
+  // with MFA on refuses to start a login outside an interactive session, so
+  // "Synchronize" can never succeed there. It used to sit next to "Connect",
+  // fail, and overwrite the connection that had just worked with a warning
+  // triangle - reported from a real instance seconds after a success.
+  it("is true only for a captcha bank, the one a scheduled run can never clear", () => {
+    expect(reconnectOnlyRefreshes(SYNC_STATUS_CAPTCHA_REQUIRED)).toBe(true);
+  });
+
+  // Deliberately false here: an expired session often comes back on its own, so
+  // hiding the button would remove something that does work.
+  it("is false for auth_required, where a later sync can still succeed", () => {
+    expect(reconnectOnlyRefreshes(SYNC_STATUS_AUTH_REQUIRED)).toBe(false);
+  });
+
+  it("is false for every other status", () => {
+    for (const status of [SYNC_STATUS_SUCCESS, SYNC_STATUS_ERROR, SYNC_STATUS_UNSUPPORTED, null, undefined]) {
+      expect(reconnectOnlyRefreshes(status)).toBe(false);
+    }
   });
 });

@@ -38,8 +38,9 @@ import logging
 
 import psycopg2.extras
 
+import setup_locks
 from db import get_conn
-from sync_woob import _configure_woob
+from sync_woob import _configure_woob, make_woob, persist_accounts
 
 log = logging.getLogger(__name__)
 
@@ -109,6 +110,22 @@ def _iter_accounts(w, backend_name: str) -> list:
     return accounts
 
 
+def _mark_interactive(backend) -> None:
+    """Tell Woob this is an interactive session by giving `request_information`
+    a non-None value.
+
+    Woob's own base browser treats `request_information is None` as "batch mode,
+    do NOT trigger a 2FA challenge" and raises NeedInteractiveFor2FA instead of
+    driving the real one. A dict (it may carry PSD2 headers, empty is fine) is
+    what flips it to "interactive, go ahead". The reference CLI sets exactly
+    this before every attempt (ReplApplication._do_and_retry). No-op for a
+    module without the field.
+    """
+    key = "request_information"
+    if key in backend.config and backend.config[key].get() is None:
+        backend.config[key].set({})
+
+
 def _try_connect(w, backend_name: str) -> dict:
     """Attempts iter_accounts and buckets whatever 2FA exception comes back
     into the three UI-facing shapes described in this module's docstring."""
@@ -126,7 +143,12 @@ def _try_connect(w, backend_name: str) -> dict:
 
     try:
         accounts = _iter_accounts(w, backend_name)
-        return {"status": "already_connected", "accounts": len(accounts)}
+        # The list travels with the result, under a private key the HTTP layer
+        # strips: whoever called us must be able to WRITE these accounts while
+        # this session is still alive. Returning only the count is what left the
+        # database empty after a successful setup (issue #51) - see
+        # sync_woob.persist_accounts for why a later sync cannot re-fetch them.
+        return {"status": "already_connected", "accounts": len(accounts), "_accounts": accounts}
 
     # SentOTPQuestion/OfflineOTPQuestion are both OTPQuestion subclasses -
     # catching the base covers either without needing to distinguish them
@@ -182,6 +204,33 @@ def _try_connect(w, backend_name: str) -> dict:
         return {"status": "unsupported", "message": str(e) or "Cette banque nécessite une action non prise en charge automatiquement"}
 
 
+def _persist_connected(result: dict, w, backend_name: str, institution_id: str) -> dict:
+    """Write the accounts a just-established session fetched, before anything
+    tears that session down.
+
+    Called on the success path of BOTH entry points, because for an MFA bank
+    this is the only moment its data can be written at all - see
+    sync_woob.persist_accounts. `_accounts` is popped either way so it never
+    reaches the HTTP response.
+    """
+    accounts = result.pop("_accounts", None)
+    if result.get("status") != "already_connected" or not accounts:
+        return result
+
+    inst = _fetch_institution(institution_id)
+    name = inst["name"] if inst else institution_id
+    try:
+        written = persist_accounts(w, backend_name, institution_id, name, accounts)
+        result["synced"] = len(written.get("synced", []))
+    except Exception:
+        # The session IS established, so this is not a setup failure - but the
+        # user must not be told everything worked while the database stayed
+        # empty, which is exactly how issue #51 presented.
+        log.exception("Setup connected %s but writing its accounts failed", name)
+        result["persist_failed"] = True
+    return result
+
+
 def start_setup(institution_id: str) -> dict:
     _cleanup(institution_id)
 
@@ -192,10 +241,14 @@ def start_setup(institution_id: str) -> dict:
         raise SetupError("Aucun module Woob configuré pour cette institution")
 
     backend_name = _backend_name(institution_id)
+    # From here until _cleanup, no scheduled sync may open a competing session
+    # on this bank - see setup_locks for the Amundi approval it silently broke.
+    setup_locks.mark_setup_started(institution_id)
     _configure_woob(backend_name, inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
 
-    from woob.core import Woob
-    w = Woob()
+    # Same storage as the sync path, deliberately: what this setup
+    # authenticates is exactly what the next sync must reuse.
+    w = make_woob()
     try:
         w.load_backends(modules=[inst["woobModule"]], names=[backend_name])
     except Exception as e:
@@ -204,7 +257,11 @@ def start_setup(institution_id: str) -> dict:
             f"Échec du chargement du module Woob '{inst['woobModule']}' - vérifie que le nom du module est correct"
         ) from e
 
-    return _try_connect(w, backend_name)
+    _mark_interactive(w.get_backend(backend_name))
+    result = _persist_connected(_try_connect(w, backend_name), w, backend_name, institution_id)
+    if result["status"] == "already_connected":
+        _cleanup(institution_id)
+    return result
 
 
 def complete_setup(institution_id: str, code: str | None = None) -> dict:
@@ -214,12 +271,26 @@ def complete_setup(institution_id: str, code: str | None = None) -> dict:
         raise SetupError("Aucune configuration en cours pour cette institution - relance la connexion")
 
     w = pending["w"]
+    backend = w.get_backend(backend_name)
+    _mark_interactive(backend)
     if pending["field_ids"]:
         if not code:
             raise SetupError("Code manquant")
-        backend = w.get_backend(backend_name)
         for field_id in pending["field_ids"]:
             backend.config[field_id].set(code)
+    else:
+        # An empty field list means a decoupled app validation is pending - the
+        # phone approval Amundi asks for after the captcha. Woob resumes it
+        # ONLY when the `resume` config key carries a value: do_login calls the
+        # polling handler when it does, and otherwise falls straight through to
+        # init_login and restarts the whole flow from scratch - a fresh captcha
+        # and a fresh approval. That is exactly why the approval never
+        # completed and the connection stuck in "pending" (issue #51): every
+        # "I've approved it" click re-ran init_login instead of finishing.
+        # Mirrors the reference CLI's DecoupledValidation branch
+        # (ReplApplication._do_and_retry), which hardcodes this same key.
+        if "resume" in backend.config:
+            backend.config["resume"].set(True)
 
     from woob.exceptions import AppValidationExpired
 
@@ -261,11 +332,13 @@ def complete_setup(institution_id: str, code: str | None = None) -> dict:
         # up - it is what the next call resumes.
         return result
 
+    result = _persist_connected(result, w, backend_name, institution_id)
     _cleanup(institution_id)
     return result
 
 
 def _cleanup(institution_id: str) -> None:
+    setup_locks.clear_setup(institution_id)
     backend_name = _backend_name(institution_id)
     pending = _pending.pop(backend_name, None)
     if pending is not None:
