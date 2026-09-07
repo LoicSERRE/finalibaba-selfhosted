@@ -9,6 +9,7 @@ Interactive setup (if needed) must be done manually in the container for now.
 """
 import logging
 import subprocess
+import time
 from decimal import Decimal
 from pathlib import Path
 
@@ -247,6 +248,42 @@ def _iter_accounts(w, backend_name, institution_name):
     return accounts
 
 
+# A couple of short retries for a bank backend that is blipping rather than
+# genuinely down - LCL in particular has been observed returning a plain 502
+# for a few seconds at a time on an otherwise-working account, on whichever
+# endpoint (accounts/cards/life insurance) it happens to hit that cycle. Left
+# unretried, one such blip fails the whole scheduled sync and fires a
+# sync-failure alert for something a manual retry a minute later fixes every
+# time - real production evidence, not a hypothetical.
+_TRANSIENT_RETRY_DELAYS_S = (5, 15)
+
+
+def _iter_accounts_with_retry(w, backend_name, institution_name):
+    """Retries _iter_accounts on BrowserUnavailable, with short delays.
+
+    ScrapingBlocked is deliberately excluded even though it subclasses
+    BrowserUnavailable too: that one means the bank detected automation and
+    blocked it, and retrying seconds later is exactly the wrong response -
+    it looks more like a bot, not less. Everything else BrowserUnavailable
+    covers (a plain 5xx, a maintenance page) is a real backend hiccup that
+    routinely clears within the delays below.
+    """
+    from woob.exceptions import BrowserUnavailable, ScrapingBlocked
+
+    for delay in (*_TRANSIENT_RETRY_DELAYS_S, None):
+        try:
+            return _iter_accounts(w, backend_name, institution_name)
+        except ScrapingBlocked:
+            raise
+        except BrowserUnavailable:
+            if delay is None:
+                raise
+            log.warning(
+                "%s: bank backend unavailable, retrying in %ds", institution_name, delay
+            )
+            time.sleep(delay)
+
+
 def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn, sync_source) -> list:
     """Wraps _iter_accounts with the auth-vs-generic-error split every sync
     module needs: 2FA/validation errors mean "run interactive setup", any
@@ -260,7 +297,7 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         NeedInteractiveFor2FA,
     )
     try:
-        return _iter_accounts(w, backend_name, institution_name)
+        return _iter_accounts_with_retry(w, backend_name, institution_name)
     except (AppValidation, AppValidationExpired, NeedInteractiveFor2FA, NeedInteractive):
         msg = f"2FA required - run setup manually in the container: docker exec -it finalibaba-sync-1 python sync_woob.py --setup {institution_id}"
         _fail(cur, conn, sync_source, "auth_required", msg)

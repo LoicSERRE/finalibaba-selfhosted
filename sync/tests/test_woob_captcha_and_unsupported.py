@@ -67,17 +67,23 @@ def _run(exc, expected):
     not boilerplate around one."""
     cur, conn = FakeCursor(), FakeConn()
     original = sync_woob._iter_accounts
+    original_sleep = sync_woob.time.sleep
 
     def boom(*_args, **_kwargs):
         raise exc
 
     sync_woob._iter_accounts = boom
+    # A BrowserUnavailable is retried a couple of times before _fetch_accounts
+    # gives up (see test_woob_transient_retry.py) - boom() raises the same
+    # exception every attempt, so this test would otherwise sleep for real.
+    sync_woob.time.sleep = lambda _delay: None
     try:
         with pytest.raises(expected) as caught:
             sync_woob._fetch_accounts(None, "b", "inst-1", "Amundi", cur, conn, "woob:inst-1")
         return caught.value, cur
     finally:
         sync_woob._iter_accounts = original
+        sync_woob.time.sleep = original_sleep
 
 
 def test_a_captcha_gets_its_own_status_neither_auth_required_nor_unsupported():
