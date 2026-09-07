@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v2.7.0**
+Current stable release: **v2.7.1**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -359,6 +359,14 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 - [X] **`scripts/audit-bank-modules.py` and a monthly CI job.** The modules declare their authentication mechanisms, so "what does each supported bank need?" is answerable without a bank account. Scheduled as well as triggered on a Woob bump, because the catalogue lives on `updates.woob.tech` and moves independently of the pinned version.
 
 **Swile cannot be connected, and it is not this project's bug.** Its module implements no second factor at all, and only does an OAuth `grant_type=password` round-trip. Measured against the live API: a nonexistent e-mail returns `invalid_grant`, a real account returns `server_error` - the account is recognised and the token still refused, which is what an SSO or 2FA account looks like to a module that cannot carry either. Fixing it means fixing the Woob module upstream.
+
+---
+
+## v2.7.1 - The settings page was showing yesterday's numbers - Released ✓
+
+- [X] **The financial profile reverted to 0 after every redeploy, and it was a caching bug, not a database one.** Every page here is force-dynamic and reads live per-user data, but Next.js never emitted an explicit `Cache-Control` header for that - leaving the gap open for whatever sits in front of the app (a reverse proxy, a CDN) to apply its own default instead. A redeploy's brief restart window was consistently enough to surface it. Every route now sends `Cache-Control: no-store, must-revalidate`, excluding the same static-asset set `proxy.ts`'s own matcher already excludes for the mirror reason - confirmed `_next/static` and the icon routes keep their real caching, `/settings` and `/` do not.
+- [X] **The French social-levies rate moved from 17.2% to 18.6%, and it was a literal copied by hand into five different files.** `FR_SOCIAL_LEVIES_RATE`/`FR_PFU_TOTAL_RATE` (`lib/domain/tax-locale.ts`) are the one source of truth now - the Settings page, the account-creation suggestion, the dividend/CTO tax estimate (which was actually wrong even under the old rate, at 30%/32.2% instead of the correct 31.4%/33.6%), and the Trade Republic cash fallback all read from it. A migration bumps any `UserSettings.taxRatePea` still sitting on the old default; a rate already typed in by hand is left alone.
+- [X] **LCL's own backend blips with a plain 502 every so often, and one blip used to fail the whole sync.** Confirmed transient - a manual retry a minute later always worked - so `sync_woob.py` now retries twice (5s, then 15s) before giving up and firing a sync-failure alert. `ScrapingBlocked` is deliberately excluded from the retry even though it shares the same exception family: that one means the bank detected automation, and retrying seconds later is the wrong response to that.
 
 ---
 
