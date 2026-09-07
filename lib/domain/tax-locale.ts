@@ -70,6 +70,27 @@ export type SavingsPreset = { key: string; ratePct: number; knownAt: string };
 /** Displayed with every suggested savings rate - see SavingsPreset. */
 export const SAVINGS_RATES_KNOWN_AT = "2026-02-01";
 
+/**
+ * The two components of the French PFU ("flat tax"), kept separate rather
+ * than as one combined rate: several consumers need only the social-levies
+ * half - a PEA (after 5 years) and an assurance-vie (after 8 years) are both
+ * exempt from the income-tax half but still owe social levies alone, unlike
+ * a plain CTO, which owes both.
+ *
+ * Before this existed, the social-levies rate was a scattered literal - 17.2%
+ * (then 18.6%) - copied by hand into tax-locale.ts's own FR preset,
+ * analytics.ts's dividendEffectiveTaxRate and its Trade Republic cash
+ * fallback, add-account-dialog.tsx's suggested PEA rate, and
+ * user-settings.ts's form-fallback default. A real rate change (confirmed
+ * 2026-09: 17.2% -> 18.6%) is exactly the case that scattering makes easy to
+ * half-fix - one source of truth now, so the next change only happens here.
+ */
+export const FR_SOCIAL_LEVIES_RATE = 0.186;
+export const FR_INCOME_TAX_PFU_RATE = 0.128;
+export const FR_PFU_TOTAL_RATE = FR_SOCIAL_LEVIES_RATE + FR_INCOME_TAX_PFU_RATE;
+/** Last confirmed as of - same "a regulated rate is a fact with an expiry" reasoning as SAVINGS_RATES_KNOWN_AT. */
+export const FR_TAX_RATES_KNOWN_AT = "2026-09-07";
+
 export type CountryPreset = {
   wrappers: WrapperPreset[];
   savings: SavingsPreset[];
@@ -94,8 +115,10 @@ const PRESETS: Record<CountryCode, CountryPreset> = {
     wrappers: [
       { key: "PEA", treatment: EXEMPT, ratePct: null },
       { key: "PEA-PME", treatment: EXEMPT, ratePct: null },
-      { key: "CTO", treatment: TAXABLE, ratePct: 0.314 },
-      { key: "Assurance-vie", treatment: TAXABLE, ratePct: 0.172 },
+      { key: "CTO", treatment: TAXABLE, ratePct: FR_PFU_TOTAL_RATE },
+      // Exempt from the income-tax half after 8 years, still owes the
+      // social-levies half regardless - see the constant's own comment.
+      { key: "Assurance-vie", treatment: TAXABLE, ratePct: FR_SOCIAL_LEVIES_RATE },
       { key: "PER", treatment: DEFERRED, ratePct: null },
     ],
     savings: [
@@ -104,7 +127,7 @@ const PRESETS: Record<CountryCode, CountryPreset> = {
       { key: "LEP", ratePct: 0.025, knownAt: SAVINGS_RATES_KNOWN_AT },
       { key: "Livret Jeune", ratePct: 0.025, knownAt: SAVINGS_RATES_KNOWN_AT },
     ],
-    defaultTaxablePct: 0.314,
+    defaultTaxablePct: FR_PFU_TOTAL_RATE,
   },
   BE: {
     wrappers: [

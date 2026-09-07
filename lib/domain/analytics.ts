@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
 import { isTrCashAccount } from "@/lib/domain/sync-ids";
+import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
 import { computeGoalProgress } from "@/lib/domain/goals";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
@@ -61,19 +62,18 @@ export function holdingMarketValue(h: { quantity: Decimal; lastPriceCents: bigin
 
 // Effective dividend tax rate for a French tax resident under the flat tax (PFU) regime.
 // PEA: reinvested within the wrapper - no immediate tax.
-// CTO French equities: flat tax 30% (12.8% income tax + 17.2% social levies).
-// CTO foreign equities (15% treaty): 15% withholding + 17.2% social levies
-//   → tax credit offsets the 12.8% income tax (credit 15% > IR 12.8% → IR = 0) → effective 32.2%.
+// CTO French equities: flat tax, FR_PFU_TOTAL_RATE (income tax + social levies - see tax-locale.ts).
+// CTO foreign equities (15% treaty): 15% withholding + the social-levies half only
+//   → tax credit offsets the income-tax half (15% withholding > 12.8% IR → IR = 0).
 // Note: estimate under flat-tax assumption. Actual net may differ with progressive scale or 40% deduction.
 export function dividendEffectiveTaxRate(isin: string, subtype: string | null): number {
   if (subtype === "PEA") return 0;
   const country = isin.slice(0, 2).toUpperCase();
-  if (country === "FR") return 0.30;
+  if (country === "FR") return FR_PFU_TOTAL_RATE;
   // Countries with a 15% withholding treaty with France (US, NL, IE, DE, GB, LU, BE...)
-  // Effective = 15% withholding + 17.2% social levies − income tax credit (12.8% < 15% → IT = 0) = 32.2%
   const treaty15 = ["US", "NL", "IE", "DE", "GB", "LU", "BE", "CA", "JP", "CH"];
-  if (treaty15.includes(country)) return 0.322;
-  return 0.30; // default: flat tax, no known withholding treaty
+  if (treaty15.includes(country)) return 0.15 + FR_SOCIAL_LEVIES_RATE;
+  return FR_PFU_TOTAL_RATE; // default: flat tax, no known withholding treaty
 }
 
 /** Closest data point to `target`, or null if the series is empty. */
@@ -562,16 +562,19 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
         //
         // The Trade Republic fallback below stays for accounts with no stored
         // rate, so nothing changes for an existing install, but note what it
-        // bakes in: 2% gross becomes 1.372% net only under the FRENCH flat tax
-        // (12.8% income tax + 17.2% social levies + 0.2% exceptional
-        // contribution). A German or Italian Trade Republic user is taxed
-        // differently on the same 2%. Setting the rate on the account is how
-        // they correct it, which was not possible before this field existed.
+        // bakes in: 2% gross nets down only under the FRENCH flat tax
+        // (FR_PFU_TOTAL_RATE - see tax-locale.ts). A German or Italian Trade
+        // Republic user is taxed differently on the same 2%. Setting the
+        // rate on the account is how they correct it, which was not
+        // possible before this field existed.
         const cashRate = account.interestRatePct;
         if (cashRate !== null && cashRate > 0) {
           annualInterestCents += BigInt(Math.round(Number(value) * cashRate));
         } else if (cashRate === null && isTrCashAccount(account.syncId)) {
-          annualInterestCents += BigInt(Math.round(Number(value) * 0.01372));
+          const TR_CASH_FALLBACK_GROSS_RATE = 0.02;
+          annualInterestCents += BigInt(
+            Math.round(Number(value) * TR_CASH_FALLBACK_GROSS_RATE * (1 - FR_PFU_TOTAL_RATE))
+          );
         }
       }
       grossAssets += value;

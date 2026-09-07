@@ -21,7 +21,7 @@ import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
 import { TradeRepublicSetupPrompt } from "@/components/settings/tr-setup-prompt";
 import { SyncStatus } from "@/components/settings/sync-status";
 import { getRealtimeStatus, getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
-import { COUNTRY_CODES } from "@/lib/domain/tax-locale";
+import { COUNTRY_CODES, FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { RealtimeIndicator } from "@/components/settings/realtime-indicator";
 import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
@@ -595,7 +595,7 @@ export default async function SettingsPage({
                   max="100"
                   step="0.1"
                   defaultValue={+(userSettings.taxRatePea * 100).toFixed(1)}
-                  placeholder="17.2"
+                  placeholder={(FR_SOCIAL_LEVIES_RATE * 100).toFixed(1)}
                   className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
@@ -617,7 +617,7 @@ export default async function SettingsPage({
                   max="100"
                   step="0.1"
                   defaultValue={+(userSettings.taxRateCto * 100).toFixed(1)}
-                  placeholder="31.4"
+                  placeholder={(FR_PFU_TOTAL_RATE * 100).toFixed(1)}
                   className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
@@ -639,7 +639,7 @@ export default async function SettingsPage({
                   max="100"
                   step="0.1"
                   defaultValue={+(userSettings.taxRateCrypto * 100).toFixed(1)}
-                  placeholder="31.4"
+                  placeholder={(FR_PFU_TOTAL_RATE * 100).toFixed(1)}
                   className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>

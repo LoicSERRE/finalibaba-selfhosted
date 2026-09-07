@@ -67,6 +67,32 @@ const nextConfig: NextConfig = {
           // is actually true.
         ],
       },
+      {
+        // Every page here is force-dynamic and reads live, per-user
+        // financial data (see CLAUDE.md's route table - almost nothing is
+        // static) - Next.js does not itself emit a Cache-Control header for
+        // that, which leaves the gap open for a browser or an intermediary
+        // (a reverse proxy, a CDN) to apply its OWN default caching
+        // heuristic instead. Real production report: Settings' financial
+        // profile fields showed 0/blank after a redeploy, which turned out
+        // to be exactly this - a stale HTML response served from in front
+        // of the app, not a database issue.
+        //
+        // Excludes the same static-asset set proxy.ts's own matcher already
+        // excludes, for the mirror-image reason: those genuinely are
+        // build-time-fixed or content-hashed and SHOULD be cached. Reusing
+        // that exact list rather than a second, independently-maintained one
+        // that could drift from it.
+        //
+        // This alone does not guarantee a downstream cache is bypassed - a
+        // CDN's own "Browser Cache TTL"-style setting can still override an
+        // origin's Cache-Control regardless of what it says, which is a
+        // dashboard setting on the CDN side, not something this header can
+        // force. It is still the correct, necessary origin-side signal.
+        source:
+          "/((?!_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|site\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
     ];
   },
 };

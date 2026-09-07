@@ -1,0 +1,19 @@
+-- The French social-levies rate (the "PS" half of the PFU flat tax) moved
+-- from 17.2% to 18.6% (confirmed 2026-09). The income-tax half stays 12.8%.
+-- See lib/domain/tax-locale.ts's FR_SOCIAL_LEVIES_RATE/FR_PFU_TOTAL_RATE,
+-- now the single source of truth this value used to be scattered as a
+-- literal across five different files.
+--
+-- UserSettings.taxRatePea/Cto/Crypto are only suggested DEFAULTS for a new
+-- account (see that column's own schema comment) - they never feed any
+-- existing Account's own stored taxRatePct, so this migration cannot change
+-- any already-computed net worth or latent tax figure.
+--
+-- Only rows still sitting on the OLD default are moved - a user who already
+-- typed their own rate into this field (whatever it happens to be) is left
+-- untouched, same "backfill from a known constant, never overwrite a real
+-- customisation" convention as 20260727141819_add_account_tax_treatment.
+--
+-- taxRateCto/taxRateCrypto need no change: 12.8% income tax + 18.6% social
+-- levies is still 31.4%, unchanged from before this rate moved.
+UPDATE "UserSettings" SET "taxRatePea" = 0.186 WHERE "taxRatePea" = 0.172;

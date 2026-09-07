@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
 import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/domain/loan";
+import { FR_PFU_TOTAL_RATE } from "@/lib/domain/tax-locale";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 
 export const TYPE_TO_TAB: Record<string, string> = {
@@ -341,7 +342,7 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
   if (account.type === "INVESTMENT" && account.investmentSubtype) {
     subtypeLabel = ` · ${account.investmentSubtype}`;
   } else if (account.type === "CRYPTO") {
-    subtypeLabel = " · 31.4% flat tax";
+    subtypeLabel = ` · ${+(FR_PFU_TOTAL_RATE * 100).toFixed(1)}% flat tax`;
   }
 
   return {

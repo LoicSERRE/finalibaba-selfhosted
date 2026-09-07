@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { getViewContext } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
+import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
 import {
   ExportAnalyticsButton,
@@ -41,9 +42,9 @@ const UNCONFIGURED_SETTINGS = {
   salaryNetCents: BigInt(0),
   monthlyExpensesCents: BigInt(0),
   monthlySavedCents: BigInt(0),
-  taxRatePea: 0.172,
-  taxRateCto: 0.314,
-  taxRateCrypto: 0.314,
+  taxRatePea: FR_SOCIAL_LEVIES_RATE,
+  taxRateCto: FR_PFU_TOTAL_RATE,
+  taxRateCrypto: FR_PFU_TOTAL_RATE,
 } as const;
 
 export default async function AnalyticsPage() {

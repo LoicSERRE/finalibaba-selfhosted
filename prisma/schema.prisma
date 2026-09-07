@@ -719,7 +719,14 @@ model UserSettings {
   // non-destructive-migration convention. Still read as the fallback
   // suggestion for a France-configured instance so existing installs see no
   // change; new accounts take their suggestion from the preset instead.
-  taxRatePea                  Float    @default(0.172)
+  //
+  // taxRatePea's default was 0.172 (17.2% social levies) until the rate
+  // changed to 18.6% (confirmed 2026-09, see lib/domain/tax-locale.ts's
+  // FR_SOCIAL_LEVIES_RATE) - migration 20260907191649_update_fr_pfu_rates
+  // bumps any existing row still sitting on the old default, without
+  // touching a row the user has deliberately customised. taxRateCto/Crypto
+  // are unaffected: 12.8% income tax + 18.6% social levies is still 31.4%.
+  taxRatePea                  Float    @default(0.186)
   taxRateCto                  Float    @default(0.314)
   taxRateCrypto               Float    @default(0.314)
   // VESTIGIAL as of v2.0 - TOTP moved to User (per-user 2FA). Kept, not

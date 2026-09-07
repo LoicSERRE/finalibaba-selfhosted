@@ -1,6 +1,6 @@
 "use server";
 
-import { isCountryCode } from "@/lib/domain/tax-locale";
+import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE, isCountryCode } from "@/lib/domain/tax-locale";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { parseCents } from "@/lib/utils/format";
@@ -34,9 +34,9 @@ export async function updateUserSettings(formData: FormData) {
   const salary = parseCents((formData.get("salary") as string) || "0");
   const expenses = parseCents((formData.get("expenses") as string) || "0");
   const saved = parseCents((formData.get("saved") as string) || "0");
-  const taxRatePea = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRatePea") as string) || "17.2") / 100));
-  const taxRateCto = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRateCto") as string) || "31.4") / 100));
-  const taxRateCrypto = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRateCrypto") as string) || "31.4") / 100));
+  const taxRatePea = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRatePea") as string) || String(FR_SOCIAL_LEVIES_RATE * 100)) / 100));
+  const taxRateCto = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRateCto") as string) || String(FR_PFU_TOTAL_RATE * 100)) / 100));
+  const taxRateCrypto = Math.min(1, Math.max(0, Number.parseFloat((formData.get("taxRateCrypto") as string) || String(FR_PFU_TOTAL_RATE * 100)) / 100));
 
   // Validated against the known set rather than trusted: this drives which
   // wrappers and rates the UI offers, and an unrecognised value would silently

@@ -6,9 +6,17 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { createAccount } from "@/lib/actions/accounts";
+import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { useTranslations } from "next-intl";
 
 type Institution = { id: string; name: string };
+
+// These suggestions are French-specific (PEA/CTO), independent of the
+// broader country-preset system in tax-locale.ts - see that module's own
+// FR_SOCIAL_LEVIES_RATE/FR_PFU_TOTAL_RATE comment for why the rate needs to
+// stay a single source of truth rather than a copied literal.
+const PEA_SUGGESTED_RATE_PCT = (FR_SOCIAL_LEVIES_RATE * 100).toFixed(1);
+const CTO_CRYPTO_SUGGESTED_RATE_PCT = (FR_PFU_TOTAL_RATE * 100).toFixed(1);
 
 export function AddAccountDialog({
   institutions,
@@ -21,7 +29,7 @@ export function AddAccountDialog({
   const [type, setType] = useState(defaultType ?? "CHECKING");
   const [subtype, setSubtype] = useState("");
   const [taxTreatment, setTaxTreatment] = useState("TAXABLE");
-  const [taxRatePct, setTaxRatePct] = useState("31.4");
+  const [taxRatePct, setTaxRatePct] = useState(CTO_CRYPTO_SUGGESTED_RATE_PCT);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("addAccount");
   const tc = useTranslations("common");
@@ -34,12 +42,12 @@ export function AddAccountDialog({
 
   function handleTypeChange(newType: string) {
     setType(newType);
-    if (newType === "CRYPTO") setTaxRatePct("31.4");
+    if (newType === "CRYPTO") setTaxRatePct(CTO_CRYPTO_SUGGESTED_RATE_PCT);
   }
 
   function handleSubtypeChange(newSubtype: string) {
     setSubtype(newSubtype);
-    setTaxRatePct(newSubtype === "PEA" ? "17.2" : "31.4");
+    setTaxRatePct(newSubtype === "PEA" ? PEA_SUGGESTED_RATE_PCT : CTO_CRYPTO_SUGGESTED_RATE_PCT);
   }
 
   const ACCOUNT_TYPES = [

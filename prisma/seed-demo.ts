@@ -128,9 +128,11 @@ async function main() {
     // account in this demo (CTO + both crypto accounts below) contributed
     // nothing to latent tax anywhere in the app, not just the new
     // projection. 31.4% matches this app's own suggested CTO default
-    // (add-account-dialog.tsx: PEA suggests 17.2%, CTO/Crypto suggest
-    // 31.4% - a second real bug, found during the pre-v2.0 audit, had
-    // this account using the *PEA* rate instead by mistake).
+    // (add-account-dialog.tsx: PEA suggests the social-levies rate alone,
+    // CTO/Crypto suggest the full PFU rate - see FR_PFU_TOTAL_RATE in
+    // lib/domain/tax-locale.ts - a second real bug, found during the
+    // pre-v2.0 audit, had this account using the *PEA* rate instead by
+    // mistake).
     taxRatePct: 0.314,
   }});
 
