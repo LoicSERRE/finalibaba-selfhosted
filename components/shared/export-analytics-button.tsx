@@ -104,6 +104,8 @@ export type AnalyticsExportData = {
   annualDividendsNetCents: number;
   annualInterestCents: number;
   accountsMissingInterestRate: number;
+  weightedSavingsRatePct: number | null;
+  estimatedYearEndSavingsInterestCents: number;
   annualPassiveCents: number;
   monthlyPassiveCents: number;
   performanceRows: PerfRowExport[];
@@ -222,6 +224,8 @@ interface AnalyticsExportStrings {
     interest: string;
   }) => string;
   passiveMissingRates: (params: { count: number }) => string;
+  passiveWeightedRate: (params: { rate: string }) => string;
+  passiveYearEndEstimate: (params: { amount: string }) => string;
 }
 
 // ── Markdown generation ───────────────────────────────────────────────────────
@@ -346,6 +350,12 @@ function buildMarkdown(
     // as a complete one.
     if (data.accountsMissingInterestRate > 0) {
       lines.push("", `> ${s.passiveMissingRates({ count: data.accountsMissingInterestRate })}`);
+    }
+    if (data.weightedSavingsRatePct !== null) {
+      lines.push("", s.passiveWeightedRate({ rate: (data.weightedSavingsRatePct * 100).toFixed(2) }));
+    }
+    if (data.estimatedYearEndSavingsInterestCents > 0) {
+      lines.push("", s.passiveYearEndEstimate({ amount: fmt(data.estimatedYearEndSavingsInterestCents) }));
     }
     lines.push("");
     if (data.dividendRows.length > 0) {
@@ -564,6 +574,8 @@ export function ExportAnalyticsButton({ data }: Readonly<{ data: AnalyticsExport
       cagrSuffix: (cagr) => t("mdCagrSuffix", { cagr }),
       passiveLine: (params) => t("mdPassiveLine", params),
       passiveMissingRates: (params) => t("mdPassiveMissingRates", params),
+      passiveWeightedRate: (params) => t("mdPassiveWeightedRate", params),
+      passiveYearEndEstimate: (params) => t("mdPassiveYearEndEstimate", params),
     };
     const md = buildMarkdown(data, selected, s, intlLocale);
     downloadFile(md, "analytique");

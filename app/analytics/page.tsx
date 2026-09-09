@@ -214,6 +214,8 @@ export default async function AnalyticsPage() {
             realYtdPassiveNetCents={result.realYtdPassiveNetCents}
             realYtdDividendsNetCents={result.realYtdDividendsNetCents}
             realYtdInterestNetCents={result.realYtdInterestNetCents}
+            weightedSavingsRatePct={result.weightedSavingsRatePct}
+            estimatedYearEndSavingsInterestCents={result.estimatedYearEndSavingsInterestCents}
           />
 
           <ProjectionChart

@@ -204,6 +204,7 @@ export default async function AccountDetailPage({
             investmentStartDate={account.investmentStartDate}
             taxTreatment={account.taxTreatment}
             taxRatePct={account.taxRatePct}
+            dividendsAlreadyNet={account.dividendsAlreadyNet}
           />
         </div>
       )}

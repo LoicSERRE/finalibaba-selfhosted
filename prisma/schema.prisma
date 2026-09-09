@@ -221,6 +221,16 @@ model Account {
   investmentStartDate   DateTime? // Investment start date (manual entry)
   taxTreatment          TaxTreatment           @default(TAXABLE) // INVESTMENT/CRYPTO only - see TaxTreatment
   taxRatePct            Float? // 0-1 ratio, meaningful only when taxTreatment = TAXABLE
+  // Some brokers (reported for Trade Republic) withhold BOTH the foreign
+  // treaty rate AND the French social levies before a dividend ever reaches
+  // the account, unlike a plain custodian that only withholds the treaty
+  // rate and leaves French tax for the annual return. dividendEffectiveTaxRate
+  // (lib/domain/analytics.ts) assumes the latter by default - applying it on
+  // top of an already-fully-net broker double-counts the deduction. This
+  // flag skips that deduction for the dividend-calendar estimate on this
+  // account specifically; per-account rather than a global setting, since not
+  // every broker behaves the same way.
+  dividendsAlreadyNet   Boolean                @default(false)
   // Annual interest rate on a SAVINGS/CHECKING account, 0-1 ratio, null =
   // unknown. Replaces the name-substring matching in lib/domain/analytics.ts
   // that guessed a French regulated rate from strings like "livret a"/"ldds"

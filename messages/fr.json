@@ -221,6 +221,7 @@
       "taxTreatmentTaxable": "Imposable",
       "taxTreatmentExempt": "Exonéré (ISA, Roth IRA…)",
       "taxTreatmentDeferred": "Différé (PER, 401k…)",
+      "dividendsAlreadyNet": "Les dividendes de ce compte arrivent déjà nets (retenue à la source + prélèvements sociaux déjà déduits par le courtier)",
       "taxReportLink": "Voir le rapport fiscal annuel →"
     },
     "rebalancing": {
@@ -415,6 +416,7 @@
     "subtitle": "Dividendes et intérêts perçus",
     "emptyTitle": "Aucun revenu enregistré",
     "emptyDescription": "Enregistrez les dividendes et intérêts perçus pour suivre vos revenus passifs réels.",
+    "noEventsThisYear": "Aucun dividende ni intérêt enregistré pour cette année.",
     "create": "Ajouter un revenu",
     "edit": "Modifier le revenu",
     "submit": "Enregistrer",
@@ -514,7 +516,9 @@
       "viewDetail": "Voir le détail →",
       "emptyPrompt": "Aucun revenu enregistré pour l'instant.",
       "emptyAction": "Suivre mes revenus →",
-      "taxReportLink": "Rapport fiscal annuel →"
+      "taxReportLink": "Rapport fiscal annuel →",
+      "weightedSavingsRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate} %",
+      "yearEndEstimate": "Intérêts livrets estimés en fin d'année : ~{amount}"
     },
     "dividends": {
       "title": "Dividendes",
@@ -527,6 +531,7 @@
       "exDivUnknown": "Date inconnue",
       "perShare": "{amount} $/action",
       "withholding": "Retenue à la source 15% + PS 18,6% (crédit IR)",
+      "alreadyNet": "déjà net (retenu par le courtier)",
       "bruteFootnote": "Brut = yield TTM × valeur de position (Yahoo Finance) · Net = estimation sous PFU, résident français : non contractuel"
     },
     "performance": {
@@ -1519,7 +1524,9 @@
     "mdTotalLiabilities": "Passif total",
     "mdDebtRatio": "Ratio dette / brut",
     "mdEquity": "Fonds propres",
-    "mdPassiveMissingRates": "Estimation partielle : {count} compte(s) rémunéré(s) n'ont pas de taux d'intérêt renseigné et ne sont pas comptés ici."
+    "mdPassiveMissingRates": "Estimation partielle : {count} compte(s) rémunéré(s) n'ont pas de taux d'intérêt renseigné et ne sont pas comptés ici.",
+    "mdPassiveWeightedRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate} %.",
+    "mdPassiveYearEndEstimate": "Intérêts estimés en fin d'année (méthode des quinzaines) : {amount}."
   },
   "coOwners": {
     "errorUsernameRequired": "Saisis un nom d'utilisateur.",

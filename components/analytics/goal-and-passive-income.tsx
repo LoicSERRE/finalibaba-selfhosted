@@ -63,6 +63,8 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents,
   realYtdDividendsNetCents,
   realYtdInterestNetCents,
+  weightedSavingsRatePct,
+  estimatedYearEndSavingsInterestCents,
 }: Readonly<{
   t: T;
   tIncome: T;
@@ -70,6 +72,12 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents: bigint;
   realYtdDividendsNetCents: bigint;
   realYtdInterestNetCents: bigint;
+  /** Balance-weighted average rate across SAVINGS accounts with a known
+   *  rate - null when none have one (see computeAnalytics' own comment). */
+  weightedSavingsRatePct: number | null;
+  /** Full-year projection via the "méthode des quinzaines" - see
+   *  lib/domain/savings-projection.ts. */
+  estimatedYearEndSavingsInterestCents: bigint;
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 space-y-5">
@@ -128,6 +136,16 @@ export function GoalAndPassiveIncome({
               {t("passive.emptyAction")}
             </Link>
           </div>
+        )}
+        {weightedSavingsRatePct !== null && (
+          <p className="text-xs text-[var(--muted)] mt-3">
+            {t("passive.weightedSavingsRate", { rate: (weightedSavingsRatePct * 100).toFixed(2) })}
+          </p>
+        )}
+        {estimatedYearEndSavingsInterestCents > BigInt(0) && (
+          <p className="text-xs text-[var(--muted)] mt-1">
+            {t("passive.yearEndEstimate", { amount: formatCurrency(estimatedYearEndSavingsInterestCents, 0) })}
+          </p>
         )}
         <Link
           href="/tax-report"

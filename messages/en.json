@@ -221,6 +221,7 @@
       "taxTreatmentTaxable": "Taxable",
       "taxTreatmentExempt": "Exempt (ISA, Roth IRA…)",
       "taxTreatmentDeferred": "Deferred (401k, PER…)",
+      "dividendsAlreadyNet": "Dividends on this account already arrive net (source withholding + French social levies already deducted by the broker)",
       "taxReportLink": "View the annual tax report →"
     },
     "rebalancing": {
@@ -415,6 +416,7 @@
     "subtitle": "Dividends and interest received",
     "emptyTitle": "No income recorded yet",
     "emptyDescription": "Record dividends and interest received to track your real passive income.",
+    "noEventsThisYear": "No dividends or interest recorded for this year.",
     "create": "Add income",
     "edit": "Edit income",
     "submit": "Save",
@@ -514,7 +516,9 @@
       "viewDetail": "View detail →",
       "emptyPrompt": "No income recorded yet.",
       "emptyAction": "Track my income →",
-      "taxReportLink": "Annual tax report →"
+      "taxReportLink": "Annual tax report →",
+      "weightedSavingsRate": "Balance-weighted average interest rate across all savings accounts: {rate}%",
+      "yearEndEstimate": "Estimated year-end savings interest: ~{amount}"
     },
     "dividends": {
       "title": "Dividends",
@@ -527,6 +531,7 @@
       "exDivUnknown": "Date unknown",
       "perShare": "{amount} $/share",
       "withholding": "15% withholding + 18.6% social charges (tax credit)",
+      "alreadyNet": "already net (withheld by the broker)",
       "bruteFootnote": "Gross = TTM yield × position value (Yahoo Finance) · Net = estimate under flat tax, French resident: not contractual"
     },
     "performance": {
@@ -1519,7 +1524,9 @@
     "mdTotalLiabilities": "Total liabilities",
     "mdDebtRatio": "Debt / gross ratio",
     "mdEquity": "Equity",
-    "mdPassiveMissingRates": "Partial estimate: {count} interest-bearing account(s) have no rate set and are not counted here."
+    "mdPassiveMissingRates": "Partial estimate: {count} interest-bearing account(s) have no rate set and are not counted here.",
+    "mdPassiveWeightedRate": "Balance-weighted average interest rate across all savings accounts: {rate}%.",
+    "mdPassiveYearEndEstimate": "Estimated year-end interest (fortnight method): {amount}."
   },
   "coOwners": {
     "errorUsernameRequired": "Enter a username.",

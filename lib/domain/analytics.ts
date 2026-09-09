@@ -4,6 +4,7 @@ import { isTrCashAccount } from "@/lib/domain/sync-ids";
 import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
 import { computeGoalProgress } from "@/lib/domain/goals";
+import { estimateYearEndInterestCents } from "@/lib/domain/savings-projection";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type { AnalyticsExportData } from "@/components/shared/export-analytics-button";
@@ -128,6 +129,10 @@ export interface AnalyticsAccount {
   investmentStartDate: Date | null;
   taxTreatment: TaxTreatment;
   taxRatePct: number | null;
+  /** See the field's own schema comment - skips dividendEffectiveTaxRate for
+   *  this account's holdings in the dividend-calendar estimate, for a broker
+   *  that already withholds everything before the dividend lands. */
+  dividendsAlreadyNet: boolean;
   /** Annual savings interest, 0-1 ratio. Null = unknown, contributes nothing. */
   interestRatePct: number | null;
   manualValueCents: bigint | null;
@@ -249,6 +254,11 @@ export interface DividendCalendarRow {
   annualEstCents: bigint;
   annualNetCents: bigint;
   taxRate: number;
+  /** True when taxRate is 0 because the account's own broker already
+   *  withholds everything (Account.dividendsAlreadyNet), not because the
+   *  holding is genuinely tax-free (a PEA still reports 0 for that reason
+   *  too - this only disambiguates the two for display). */
+  alreadyNet: boolean;
   divYield: number;
   exDividendDate: Date | null;
   annualRatePerShare: number | null;
@@ -339,6 +349,13 @@ export interface AnalyticsResult {
   annualInterestCents: bigint;
   /** Interest-bearing accounts with no rate set - see the estimate above. */
   accountsMissingInterestRate: number;
+  /** Balance-weighted average rate (0-1) across SAVINGS accounts with a
+   *  known rate. Null when none have one - see the field's own comment. */
+  weightedSavingsRatePct: number | null;
+  /** Full-calendar-year interest projection across every SAVINGS account
+   *  with a known rate, via the "méthode des quinzaines" - see
+   *  lib/domain/savings-projection.ts. */
+  estimatedYearEndSavingsInterestCents: bigint;
   annualPassiveCents: bigint;
   monthlyPassiveCents: number;
   dividendCalendar: DividendCalendarRow[];
@@ -421,6 +438,15 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   // lets the consumer say "this figure covers 2 of your 4 savings accounts"
   // instead of quietly under-reporting.
   let accountsMissingInterestRate = 0;
+  // Balance-weighted average rate across SAVINGS accounts with a known
+  // rate, for the Analytics page - a plain average of the rates themselves
+  // would treat a 50€ Livret Jeune at 2.5% as equally significant as a
+  // 15,000€ Livret A at 1.5%, which answers a different question than "what
+  // is my money as a whole actually earning". Accounts with no rate set are
+  // excluded from both sums rather than assumed to earn 0 - the same
+  // "missing is not zero" reasoning accountsMissingInterestRate exists for.
+  let weightedSavingsRateSum = 0; // Σ(rate * balanceCents)
+  let savingsBalanceWithRateCents = BigInt(0);
 
   const dividendRowsData: Omit<DividendCalendarRow, "exDividendDate" | "annualRatePerShare" | "daysLeft" | "isPast" | "isSoon">[] = [];
 
@@ -466,7 +492,11 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
         if (divYield > 0) {
           const divCents = BigInt(Math.round(Number(mv) * divYield));
           const subtype = account.investmentSubtype ?? null;
-          const divTaxRate = dividendEffectiveTaxRate(h.ticker, subtype);
+          // A broker that already withholds the full French tax before the
+          // dividend lands (see Account.dividendsAlreadyNet's own comment)
+          // must not have dividendEffectiveTaxRate applied on top - that
+          // would double-count a deduction already taken.
+          const divTaxRate = account.dividendsAlreadyNet ? 0 : dividendEffectiveTaxRate(h.ticker, subtype);
           const divNetCents = BigInt(Math.round(Number(divCents) * (1 - divTaxRate)));
           annualDividendsCents += divCents;
           annualDividendsNetCents += divNetCents;
@@ -480,6 +510,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
               valueCents: mv,
               annualEstCents: divCents,
               annualNetCents: divNetCents,
+              alreadyNet: account.dividendsAlreadyNet,
               taxRate: divTaxRate,
               divYield,
             });
@@ -553,8 +584,13 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
         // is that the number now lives on the account, where it is visible and
         // editable by anyone, anywhere.
         const rate = account.interestRatePct;
-        if (rate === null) accountsMissingInterestRate += 1;
-        else if (rate > 0) annualInterestCents += BigInt(Math.round(Number(value) * rate));
+        if (rate === null) {
+          accountsMissingInterestRate += 1;
+        } else {
+          weightedSavingsRateSum += rate * Number(value);
+          savingsBalanceWithRateCents += value;
+          if (rate > 0) annualInterestCents += BigInt(Math.round(Number(value) * rate));
+        }
       } else {
         allocation["cash"] += value;
         // A rate the user set wins over any built-in guess - a current account
@@ -664,6 +700,12 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     : 0;
   const hasTaxData = totalLatentTax > BigInt(0);
   const effectiveTaxRate = totalPositiveGainCents > BigInt(0) ? weightedTaxRateSum / Number(totalPositiveGainCents) : 0;
+  // null (not 0) when no SAVINGS account has a known rate - same "unknown is
+  // not zero" convention as accountsMissingInterestRate itself, so a
+  // display can say "no data" instead of a misleading 0%.
+  const weightedSavingsRatePct = savingsBalanceWithRateCents > BigInt(0)
+    ? weightedSavingsRateSum / Number(savingsBalanceWithRateCents)
+    : null;
 
   // ── Allocation metrics ───────────────────────────────────────────────────
   const garantis = allocation["cash"] + allocation["savings"];
@@ -743,6 +785,26 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   const runwayMonths = hasExpenses
     ? Number(allocation["savings"]) / Number(settings.monthlyExpensesCents)
     : null;
+
+  // ── Year-end savings interest projection (méthode des quinzaines) ───────
+  // See lib/domain/savings-projection.ts's own header for the method and
+  // why it's a deliberate simplification of the real bank rule.
+  const balancesByAccount = new Map<string, { recordedAt: Date; balanceCents: bigint }[]>();
+  for (const b of allBalances) {
+    if (!balancesByAccount.has(b.accountId)) balancesByAccount.set(b.accountId, []);
+    balancesByAccount.get(b.accountId)!.push({ recordedAt: b.recordedAt, balanceCents: b.balanceCents });
+  }
+  let estimatedYearEndSavingsInterestCents = BigInt(0);
+  for (const account of accounts) {
+    if (account.type !== "SAVINGS" || account.interestRatePct === null || account.interestRatePct <= 0) continue;
+    const currentBalanceCents = account.history[0]?.balanceCents ?? BigInt(0);
+    estimatedYearEndSavingsInterestCents += estimateYearEndInterestCents(
+      balancesByAccount.get(account.id) ?? [],
+      currentBalanceCents,
+      account.interestRatePct,
+      now
+    );
+  }
 
   // ── History ─────────────────────────────────────────────────────────────
   const liabMap = new Map<string, bigint>();
@@ -874,6 +936,8 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     annualDividendsNetCents,
     annualInterestCents,
     accountsMissingInterestRate,
+    weightedSavingsRatePct,
+    estimatedYearEndSavingsInterestCents,
     annualPassiveCents,
     monthlyPassiveCents,
     dividendCalendar,
@@ -971,6 +1035,8 @@ export function buildAnalyticsExport(
     annualDividendsNetCents: Number(result.annualDividendsNetCents),
     annualInterestCents: Number(result.annualInterestCents),
     accountsMissingInterestRate: result.accountsMissingInterestRate,
+    weightedSavingsRatePct: result.weightedSavingsRatePct,
+    estimatedYearEndSavingsInterestCents: Number(result.estimatedYearEndSavingsInterestCents),
     annualPassiveCents: Number(result.annualPassiveCents),
     monthlyPassiveCents: result.monthlyPassiveCents,
     performanceRows: result.performanceRows.map((r) => ({

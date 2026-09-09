@@ -230,6 +230,9 @@ export async function updateAccountTaxTreatment(formData: FormData) {
   const id = formData.get("id") as string;
   const taxTreatment = parseTaxTreatment(formData);
   const taxRatePct = parseTaxRatePct(formData.get("taxRatePct"));
+  // Plain checkbox convention (see updateAlertChannels et al.) - present in
+  // FormData iff checked.
+  const dividendsAlreadyNet = formData.get("dividendsAlreadyNet") === "on";
 
   const viewer = await getViewer();
   await assertAccountWritable(viewer.id, id);
@@ -238,6 +241,7 @@ export async function updateAccountTaxTreatment(formData: FormData) {
     data: {
       taxTreatment,
       taxRatePct: taxTreatment === "TAXABLE" ? (taxRatePct ?? null) : null,
+      dividendsAlreadyNet,
     },
   });
 

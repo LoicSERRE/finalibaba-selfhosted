@@ -10,6 +10,7 @@ export function InvestmentFormsSection({
   investmentStartDate,
   taxTreatment,
   taxRatePct,
+  dividendsAlreadyNet,
   readOnly = false,
 }: Readonly<{
   td: T;
@@ -17,6 +18,7 @@ export function InvestmentFormsSection({
   investmentStartDate: Date | null;
   taxTreatment: string;
   taxRatePct: number | null;
+  dividendsAlreadyNet: boolean;
   /** True when a granted (read-only) portfolio is on screen. The Server
    *  Actions behind these controls guard ownership themselves; this only
    *  avoids rendering buttons that could not succeed. */
@@ -92,6 +94,15 @@ export function InvestmentFormsSection({
           >
             {td("fiscalSummary.save")}
           </button>
+          <label className="flex items-center gap-2 text-xs text-[var(--muted)] cursor-pointer w-full">
+            <input
+              type="checkbox"
+              name="dividendsAlreadyNet"
+              defaultChecked={dividendsAlreadyNet}
+              className="rounded border-[var(--border)] cursor-pointer"
+            />
+            {td("fiscalSummary.dividendsAlreadyNet")}
+          </label>
         </form>
         <Link
           href="/tax-report"

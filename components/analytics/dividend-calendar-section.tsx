@@ -56,7 +56,9 @@ export function DividendCalendarSection({
               </p>
               <p className="text-xs text-[var(--muted)]">
                 brut {formatCurrency(row.annualEstCents, 0)}
-                {row.taxRate > 0 && (
+                {row.alreadyNet ? (
+                  <> · {t("dividends.alreadyNet")}</>
+                ) : row.taxRate > 0 && (
                   <> · −{(row.taxRate * 100).toFixed(1)}%
                   {row.country !== "FR" && row.subtype !== "PEA" && (
                     <span title="Retenue à la source 15% + PS 18,6% (crédit IR)"> ({row.country})</span>

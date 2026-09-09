@@ -25,6 +25,7 @@ function account(overrides: Partial<AnalyticsAccount>): AnalyticsAccount {
     investmentStartDate: null,
     taxTreatment: "TAXABLE",
     taxRatePct: null,
+    dividendsAlreadyNet: false,
     interestRatePct: null,
     manualValueCents: null,
     liabilityCents: null,
@@ -292,6 +293,161 @@ describe("computeAnalytics", () => {
     expect(row.isSoon).toBe(true);
     expect(row.isPast).toBe(false);
     expect(row.daysLeft).toBe(10);
+  });
+
+  it("skips the tax deduction entirely for an account whose broker already withholds everything", () => {
+    const input = baseInput({
+      accounts: [
+        account({
+          id: "tr-cto",
+          type: "INVESTMENT",
+          taxTreatment: "TAXABLE",
+          taxRatePct: 0.314,
+          dividendsAlreadyNet: true,
+          interestRatePct: null,
+          holdings: [
+            {
+              ticker: "FR0000120073",
+              name: "Air Liquide",
+              quantity: new Decimal(10),
+              lastPriceCents: BigInt(100_00),
+              costBasisCents: BigInt(80_00),
+            },
+          ],
+        }),
+      ],
+      yfData: {
+        "AI.PA": { exDividendDate: null, annualYield: 0.02, annualRatePerShare: 2.5 },
+      },
+    });
+
+    const result = computeAnalytics(input);
+
+    expect(result.dividendCalendar).toHaveLength(1);
+    const row = result.dividendCalendar[0];
+    expect(row.alreadyNet).toBe(true);
+    expect(row.taxRate).toBe(0);
+    // Net must equal gross - nothing left for this app to deduct.
+    expect(row.annualNetCents).toBe(row.annualEstCents);
+    expect(result.annualDividendsNetCents).toBe(result.annualDividendsCents);
+  });
+
+  it("still applies the normal FR PFU deduction when dividendsAlreadyNet is false (the default)", () => {
+    const input = baseInput({
+      accounts: [
+        account({
+          id: "cto",
+          type: "INVESTMENT",
+          taxTreatment: "TAXABLE",
+          taxRatePct: 0.314,
+          dividendsAlreadyNet: false,
+          interestRatePct: null,
+          holdings: [
+            {
+              ticker: "FR0000120073",
+              name: "Air Liquide",
+              quantity: new Decimal(10),
+              lastPriceCents: BigInt(100_00),
+              costBasisCents: BigInt(80_00),
+            },
+          ],
+        }),
+      ],
+      yfData: {
+        "AI.PA": { exDividendDate: null, annualYield: 0.02, annualRatePerShare: 2.5 },
+      },
+    });
+
+    const result = computeAnalytics(input);
+
+    const row = result.dividendCalendar[0];
+    expect(row.alreadyNet).toBe(false);
+    expect(row.taxRate).toBeCloseTo(0.314, 5); // FR_PFU_TOTAL_RATE
+    expect(row.annualNetCents).toBeLessThan(row.annualEstCents);
+  });
+});
+
+describe("computeAnalytics - weighted average savings rate", () => {
+  it("weights by balance, not a plain average across accounts", () => {
+    // 15,000€ at 1.5% + 5,000€ at 3.0% - a plain average would be 2.25%,
+    // but the bigger balance should dominate: weighted = 1.875%.
+    const input = baseInput({
+      accounts: [
+        account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(15_000_00) }] }),
+        account({ id: "ldds", type: "SAVINGS", interestRatePct: 0.03, history: [{ balanceCents: BigInt(5_000_00) }] }),
+      ],
+    });
+
+    const result = computeAnalytics(input);
+
+    expect(result.weightedSavingsRatePct).toBeCloseTo(0.01875, 6);
+  });
+
+  it("excludes an account with no rate set, rather than treating it as 0%", () => {
+    const input = baseInput({
+      accounts: [
+        account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(10_000_00) }] }),
+        account({ id: "unknown", type: "SAVINGS", interestRatePct: null, history: [{ balanceCents: BigInt(50_000_00) }] }),
+      ],
+    });
+
+    const result = computeAnalytics(input);
+
+    // If the unknown-rate account were wrongly averaged in at 0%, this would
+    // be nowhere near 1.5% - it must equal the one known-rate account alone.
+    expect(result.weightedSavingsRatePct).toBeCloseTo(0.015, 6);
+  });
+
+  it("is null when no SAVINGS account has a known rate", () => {
+    const input = baseInput({
+      accounts: [account({ id: "unknown", type: "SAVINGS", interestRatePct: null, history: [{ balanceCents: BigInt(1_000_00) }] })],
+    });
+
+    const result = computeAnalytics(input);
+
+    expect(result.weightedSavingsRatePct).toBeNull();
+  });
+
+  it("includes a genuine 0% account in the weighting, unlike a null one", () => {
+    const input = baseInput({
+      accounts: [
+        account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(10_000_00) }] }),
+        account({ id: "zero-rate", type: "SAVINGS", interestRatePct: 0, history: [{ balanceCents: BigInt(10_000_00) }] }),
+      ],
+    });
+
+    const result = computeAnalytics(input);
+
+    // Equal balances, one at 1.5% and one at 0% -> average is 0.75%.
+    expect(result.weightedSavingsRatePct).toBeCloseTo(0.0075, 6);
+  });
+});
+
+describe("computeAnalytics - year-end savings interest projection", () => {
+  it("wires estimateYearEndInterestCents through for every SAVINGS account with a known rate", () => {
+    const input = baseInput({
+      accounts: [
+        account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(10_000_00) }] }),
+        account({ id: "cto", type: "INVESTMENT", interestRatePct: null, history: [] }), // must be ignored - not SAVINGS
+      ],
+      allBalances: [
+        { accountId: "livret-a", recordedAt: new Date("2025-01-01T00:00:00.000Z"), balanceCents: BigInt(10_000_00) },
+      ],
+    });
+
+    const result = computeAnalytics(input);
+
+    // Constant 10,000€ all year at 1.5% -> exactly 150€, same closed-form
+    // check as the pure function's own test.
+    expect(result.estimatedYearEndSavingsInterestCents).toBe(BigInt(150_00));
+  });
+
+  it("is 0 when no SAVINGS account has a positive rate", () => {
+    const input = baseInput({
+      accounts: [account({ id: "livret-a", type: "SAVINGS", interestRatePct: null, history: [{ balanceCents: BigInt(10_000_00) }] })],
+    });
+
+    expect(computeAnalytics(input).estimatedYearEndSavingsInterestCents).toBe(BigInt(0));
   });
 });
 
