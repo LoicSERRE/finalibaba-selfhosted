@@ -49,17 +49,30 @@ ENV NODE_ENV=production
 # Next.js encrypts Server Action closure variables with a key generated fresh
 # on every build unless this is set (node_modules/next/dist/docs/01-app/
 # 02-guides/self-hosting.md: "Failed to find Server Action" otherwise). Left
-# unset here (the default, docker-compose.yml passes an empty string when the
-# user hasn't set one), a build behaves exactly as before - Next falls back to
-# its own random per-build key. Set it (via NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
-# in .env, see .env.example) and every rebuild reuses the same key instead of
-# invalidating one, which is what a real self-hosted report traced back to: a
-# browser tab left open across a redeploy got "Failed to find Server Action"
-# on its next Server Action call, since the just-rebuilt server could no
-# longer decrypt a closure encrypted by the previous build.
-ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
-ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
-RUN pnpm run build
+# unset here (the default - docker-compose.yml's build.secrets entry degrades
+# to empty when the user hasn't set one), a build behaves exactly as before -
+# Next falls back to its own random per-build key. Set it (via
+# NEXT_SERVER_ACTIONS_ENCRYPTION_KEY in .env, see .env.example) and every
+# rebuild reuses the same key instead of invalidating one, which is what a
+# real self-hosted report traced back to: a browser tab left open across a
+# redeploy got "Failed to find Server Action" on its next Server Action call,
+# since the just-rebuilt server could no longer decrypt a closure encrypted
+# by the previous build.
+#
+# A `RUN --mount=type=secret` here rather than the simpler ARG+ENV this
+# started as: a real key handed to `docker build` as a plain ARG is baked
+# into the image's own layer history, retrievable via `docker history
+# --no-trunc` from anyone with the built image - confirmed by
+# docker/build-push-action's own SecretsUsedInArgOrEnv linter, then
+# confirmed the *fix* actually works this way (both the "value reaches the
+# build" and the "history shows nothing" half) with a real build, twice -
+# once with the secret unset (env comes through empty, build still
+# succeeds), once with it set (value present in the build, absent from
+# `docker history --no-trunc` either way). `env=` exposes it as a plain
+# environment variable for this RUN only, matching how `pnpm run build`
+# already reads it - no on-disk secret file to also avoid leaking.
+RUN --mount=type=secret,id=next_server_actions_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+    pnpm run build
 
 # ── runner ─────────────────────────────────────────────────────────────────────
 FROM node:26-alpine AS runner

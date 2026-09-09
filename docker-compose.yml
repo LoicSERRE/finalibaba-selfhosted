@@ -18,15 +18,16 @@ services:
     image: ghcr.io/loicserre/finalibaba-selfhosted/app:latest
     build:
       context: .
-      args:
-        # Only takes effect for a local build (this service also still pulls
-        # the ghcr.io image above by default) - see the Dockerfile's own
-        # comment on this ARG and .env.example for why setting it is worth
-        # doing: without it, every rebuild silently invalidates any browser
-        # tab left open from before the rebuild ("Failed to find Server
-        # Action" on its next save). Empty here behaves identically to never
-        # having set this at all.
-        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
+      # A secret, not a build arg - see the Dockerfile's own RUN --mount
+      # comment for why (a plain ARG bakes the value into the image's layer
+      # history, retrievable by anyone with the image; a secret mount never
+      # persists it anywhere). Only takes effect for a local build (this
+      # service also still pulls the ghcr.io image above by default); unset
+      # in .env behaves identically to never having set this at all - the
+      # secrets.next_server_actions_key entry below degrades to empty, same
+      # as the ARG it replaced did.
+      secrets:
+        - next_server_actions_key
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finalibaba}
       NODE_ENV: production
@@ -188,3 +189,11 @@ volumes:
   mail_data:
   mail_config:
   mail_logs:
+
+secrets:
+  # Sourced straight from the host/.env environment variable, not a file -
+  # `app`'s own build.secrets entry above is what actually feeds this into
+  # the Dockerfile's RUN --mount. Unset behaves as an empty secret, not a
+  # missing-file build error - confirmed live.
+  next_server_actions_key:
+    environment: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
