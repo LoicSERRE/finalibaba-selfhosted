@@ -63,8 +63,6 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents,
   realYtdDividendsNetCents,
   realYtdInterestNetCents,
-  weightedSavingsRatePct,
-  estimatedYearEndSavingsInterestCents,
 }: Readonly<{
   t: T;
   tIncome: T;
@@ -72,12 +70,6 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents: bigint;
   realYtdDividendsNetCents: bigint;
   realYtdInterestNetCents: bigint;
-  /** Balance-weighted average rate across SAVINGS accounts with a known
-   *  rate - null when none have one (see computeAnalytics' own comment). */
-  weightedSavingsRatePct: number | null;
-  /** Full-year projection via the "méthode des quinzaines" - see
-   *  lib/domain/savings-projection.ts. */
-  estimatedYearEndSavingsInterestCents: bigint;
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 space-y-5">
@@ -135,30 +127,6 @@ export function GoalAndPassiveIncome({
             <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
               {t("passive.emptyAction")}
             </Link>
-          </div>
-        )}
-        {/* Deliberately separated from the real, IncomeEvent-tracked figures
-            above by both a divider and its own label - these two lines are
-            LIVE ESTIMATES (today's balances/rates, and a historical-balance
-            projection), not a breakdown of the real YTD total above them.
-            Placed together with no distinction read as "more detail on the
-            real number" during review; a real user could reasonably expect
-            them to reconcile with it, and they will not. */}
-        {(weightedSavingsRatePct !== null || estimatedYearEndSavingsInterestCents > BigInt(0)) && (
-          <div className="pt-3 mt-3 border-t border-[var(--border)] space-y-1">
-            <p className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider opacity-70">
-              {t("passive.estimateSectionLabel")}
-            </p>
-            {weightedSavingsRatePct !== null && (
-              <p className="text-xs text-[var(--muted)]">
-                {t("passive.weightedSavingsRate", { rate: (weightedSavingsRatePct * 100).toFixed(2) })}
-              </p>
-            )}
-            {estimatedYearEndSavingsInterestCents > BigInt(0) && (
-              <p className="text-xs text-[var(--muted)]">
-                {t("passive.yearEndEstimate", { amount: formatCurrency(estimatedYearEndSavingsInterestCents, 0) })}
-              </p>
-            )}
           </div>
         )}
         <Link

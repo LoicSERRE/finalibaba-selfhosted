@@ -54,9 +54,21 @@ export function balanceAtOrBefore(
  * "if nothing else changes" assumption - this cannot know about a deposit
  * or withdrawal that hasn't happened yet).
  *
- * A fortnight with no balance snapshot at or before its start (the account
- * did not exist yet, or has no history that far back) contributes nothing -
- * not a guessed 0-balance quinzaine treated as real data, just absent.
+ * A fortnight before the account's EARLIEST known snapshot uses that
+ * earliest balance held flat backward - the same "assume it held" idealism
+ * already applied forward from today, applied symmetrically. A first cut
+ * of this function skipped those fortnights entirely on the reasoning that
+ * the account "likely did not exist yet" - but for the far more common real
+ * case (an account that existed all along, whose balance history in THIS
+ * app only starts from whenever it was first synced), skipping produced the
+ * same number as assuming a 0€ balance for every unsynced month, silently
+ * understating a full year's worth of interest on an account that in fact
+ * held its balance the whole time. Reported from a real instance: a Livret
+ * showing ~250€ of known real interest for the year, and a LEP the user
+ * said had not moved from 10k€ since January, summed with the rest of
+ * their savings to well over the ~377€ this function was returning. Only
+ * genuinely history-less accounts (an empty `balances` array) still
+ * contribute nothing - there is no balance to extrapolate from at all.
  */
 export function estimateYearEndInterestCents(
   balances: readonly { recordedAt: Date; balanceCents: bigint }[],
@@ -66,13 +78,23 @@ export function estimateYearEndInterestCents(
 ): bigint {
   if (ratePct <= 0) return BigInt(0);
   const boundaries = quinzaineBoundaries(now.getUTCFullYear());
+  const earliestBalanceCents = earliestKnownBalance(balances);
   let totalCents = 0;
   for (const boundary of boundaries) {
     const balanceCents = boundary.getTime() <= now.getTime()
-      ? balanceAtOrBefore(balances, boundary)
+      ? balanceAtOrBefore(balances, boundary) ?? earliestBalanceCents
       : currentBalanceCents;
     if (balanceCents === null) continue;
     totalCents += (Number(balanceCents) * ratePct) / boundaries.length;
   }
   return BigInt(Math.round(totalCents));
+}
+
+/** The balance from the oldest snapshot in the array, or null if empty. */
+function earliestKnownBalance(balances: readonly { recordedAt: Date; balanceCents: bigint }[]): bigint | null {
+  let best: { recordedAt: Date; balanceCents: bigint } | null = null;
+  for (const b of balances) {
+    if (best === null || b.recordedAt.getTime() < best.recordedAt.getTime()) best = b;
+  }
+  return best ? best.balanceCents : null;
 }

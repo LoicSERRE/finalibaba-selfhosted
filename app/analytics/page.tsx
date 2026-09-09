@@ -21,6 +21,7 @@ import { aggregateSectorExposure } from "@/lib/domain/sector-exposure";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { CashflowCards } from "@/components/analytics/cashflow-cards";
 import { GoalAndPassiveIncome } from "@/components/analytics/goal-and-passive-income";
+import { SavingsInterestEstimateSection } from "@/components/analytics/savings-interest-estimate-section";
 import { ProjectionChart } from "@/components/analytics/projection-chart";
 import { DividendCalendarSection } from "@/components/analytics/dividend-calendar-section";
 import { InvestmentPerformanceSection } from "@/components/analytics/investment-performance-section";
@@ -214,8 +215,13 @@ export default async function AnalyticsPage() {
             realYtdPassiveNetCents={result.realYtdPassiveNetCents}
             realYtdDividendsNetCents={result.realYtdDividendsNetCents}
             realYtdInterestNetCents={result.realYtdInterestNetCents}
+          />
+
+          <SavingsInterestEstimateSection
+            t={t}
             weightedSavingsRatePct={result.weightedSavingsRatePct}
             estimatedYearEndSavingsInterestCents={result.estimatedYearEndSavingsInterestCents}
+            accountsMissingInterestRate={result.accountsMissingInterestRate}
           />
 
           <ProjectionChart

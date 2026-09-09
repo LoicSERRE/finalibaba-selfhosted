@@ -519,10 +519,14 @@
       "viewDetail": "Voir le détail →",
       "emptyPrompt": "Aucun revenu enregistré pour l'instant.",
       "emptyAction": "Suivre mes revenus →",
-      "taxReportLink": "Rapport fiscal annuel →",
-      "estimateSectionLabel": "Estimations (pas les chiffres réels ci-dessus)",
-      "weightedSavingsRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate} %",
-      "yearEndEstimate": "Intérêts livrets estimés en fin d'année : ~{amount}"
+      "taxReportLink": "Rapport fiscal annuel →"
+    },
+    "savingsEstimate": {
+      "title": "Estimation des intérêts d'épargne",
+      "subtitle": "Estimation - pas un chiffre réel, à distinguer des revenus perçus ci-dessus",
+      "weightedRate": "Taux moyen pondéré, tous livrets confondus",
+      "yearEndAmount": "Estimé en fin d'année",
+      "missingRates": "{count} compte(s) rémunéré(s) sans taux renseigné - estimation partielle"
     },
     "dividends": {
       "title": "Dividendes",

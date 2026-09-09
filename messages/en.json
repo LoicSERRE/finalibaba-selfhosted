@@ -519,10 +519,14 @@
       "viewDetail": "View detail →",
       "emptyPrompt": "No income recorded yet.",
       "emptyAction": "Track my income →",
-      "taxReportLink": "Annual tax report →",
-      "estimateSectionLabel": "Estimates (not the real figures above)",
-      "weightedSavingsRate": "Balance-weighted average interest rate across all savings accounts: {rate}%",
-      "yearEndEstimate": "Estimated year-end savings interest: ~{amount}"
+      "taxReportLink": "Annual tax report →"
+    },
+    "savingsEstimate": {
+      "title": "Savings interest estimate",
+      "subtitle": "Estimate - not a real figure, distinct from the income tracked above",
+      "weightedRate": "Balance-weighted average rate, across all savings accounts",
+      "yearEndAmount": "Estimated by year end",
+      "missingRates": "{count} interest-bearing account(s) with no rate set - partial estimate"
     },
     "dividends": {
       "title": "Dividends",

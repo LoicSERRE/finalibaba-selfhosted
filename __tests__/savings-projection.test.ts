@@ -71,17 +71,25 @@ describe("estimateYearEndInterestCents", () => {
     expect(Number(result)).toBeLessThan(Number(allHighYear));
   });
 
-  it("contributes nothing for a quinzaine before the account had any recorded balance", () => {
-    // Account's first ever snapshot is in June - the 11 quinzaines before that
-    // (Jan 1 through Jun 1) must be skipped, not treated as a 0€ balance.
+  it("extrapolates backward from the earliest known balance for a quinzaine before it, rather than skipping", () => {
+    // Account's first ever snapshot in this app is in June - the sync only
+    // started tracking it then, but the account itself (and its balance)
+    // existed before that too. The 11 quinzaines before June 1 use the same
+    // 5,000€ the earliest snapshot records, same as the whole year would if
+    // the balance never moved - this is the real-world case a stale-balance
+    // Livret hits, and the fix for the bug this test used to pin (silently
+    // treating those 11 quinzaines as a 0€ balance instead).
     const now = new Date("2026-12-31T00:00:00.000Z");
     const balances = [{ recordedAt: new Date("2026-06-01T00:00:00.000Z"), balanceCents: BigInt(5_000_00) }];
     const result = estimateYearEndInterestCents(balances, BigInt(5_000_00), 0.015, now);
 
-    // Only the 13 quinzaines from Jun 1 onward (inclusive) should count.
-    const quinzainesCounted = quinzaineBoundaries(2026).filter((b) => b.getTime() >= new Date("2026-06-01T00:00:00.000Z").getTime()).length;
-    const expected = BigInt(Math.round((5_000_00 * 0.015 * quinzainesCounted) / 24));
-    expect(result).toBe(expected);
+    // All 24 quinzaines count now, each at the same 5,000€ balance.
+    expect(result).toBe(BigInt(Math.round((5_000_00 * 0.015 * 24) / 24)));
+  });
+
+  it("still contributes nothing when the account has no balance history at all", () => {
+    const now = new Date("2026-12-31T00:00:00.000Z");
+    expect(estimateYearEndInterestCents([], BigInt(5_000_00), 0.015, now)).toBe(BigInt(0));
   });
 
   it("projects every not-yet-started quinzaine from the current balance, not the last known one", () => {
