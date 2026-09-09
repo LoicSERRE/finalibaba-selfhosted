@@ -43,7 +43,15 @@ export function CategoryCard({
           <span className="text-sm font-medium text-[var(--foreground)] break-words">{category.name}</span>
         </Link>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Keyed on the fields this dialog seeds into useState (color/kind
+              - see its own file) - this component instance otherwise stays
+              mounted (and its local state stale) for the page's whole
+              lifetime, since it never unmounts just from being closed. A
+              category edited from another device between page load and a
+              later reopen here would silently show - and, if saved from
+              here, silently restore - the pre-edit color/kind. */}
           <AddCategoryDialog
+            key={`${category.id}-${category.color}`}
             category={{
               id: category.id,
               name: category.name,

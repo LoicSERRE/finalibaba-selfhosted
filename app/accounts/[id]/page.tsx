@@ -197,7 +197,18 @@ export default async function AccountDetailPage({
             holdingsCount={account.holdings.length}
           />
 
+          {/* Keyed on the fields its own <input defaultValue.../defaultChecked>
+              elements seed from - uncontrolled inputs only apply that value
+              at DOM-node creation, never on a later reconciliation of the
+              SAME node, which is exactly what a router.refresh() with no key
+              change produces (this page IS subject to that: the SSE
+              real-time mechanism calls it on this exact route whenever
+              another open tab/device changes something). Without this key,
+              editing these fields from elsewhere while this page is open
+              would leave the form showing pre-edit values, and saving from
+              here would silently revert the newer ones. */}
           <InvestmentFormsSection
+            key={`${account.taxTreatment}-${account.taxRatePct}-${account.dividendsAlreadyNet}`}
             readOnly={readOnly}
             td={td}
             accountId={account.id}

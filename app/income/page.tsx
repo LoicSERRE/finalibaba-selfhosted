@@ -215,7 +215,15 @@ export default async function IncomePage({
                     </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {/* Keyed on every field this dialog seeds into its own
+                        form state, not just e.id - this instance stays
+                        mounted for the page's whole lifetime once opened
+                        once (closing a dialog does not unmount it), so an
+                        edit made elsewhere between page load and a later
+                        reopen here would otherwise show stale values and,
+                        if saved from here, silently revert them. */}
                     <AddIncomeDialog
+                      key={`${e.id}-${e.amountCents}-${e.taxWithheldCents}-${e.ticker}-${e.date.getTime()}`}
                       initial={{
                         id: e.id,
                         type: e.type,

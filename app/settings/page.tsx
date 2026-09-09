@@ -728,7 +728,20 @@ export default async function SettingsPage({
           concern gets its own card and Save button, instead of one long
           mixed form. Hidden in demo mode (mutations are blocked anyway, and
           a demo instance shouldn't be sending real notifications). */}
-      {process.env.DEMO_MODE !== "true" && <AlertChannelsSection settings={userSettings} />}
+      {/* Keyed on the exact fields this section seeds into useState (see its
+          own file) - so a save on ANY other settings section, which
+          revalidates this whole page, only remounts (re-syncing) this form
+          when one of THESE specific values genuinely changed underneath it
+          (e.g. edited from another device/tab), not on every refresh. An
+          unkeyed instance would otherwise keep showing whatever it had at
+          first mount and, if saved from here, silently overwrite a newer
+          value with a stale one. */}
+      {process.env.DEMO_MODE !== "true" && (
+        <AlertChannelsSection
+          key={`${userSettings.ntfyTopicUrl}-${userSettings.ntfyEnabled}-${userSettings.emailAlertsEnabled}-${userSettings.smtpHost}-${userSettings.smtpPort}`}
+          settings={userSettings}
+        />
+      )}
       {/* A 3rd channel alongside ntfy/email above, but its own section (not
           folded into AlertChannelsSection's form) since "configuring" it is
           a subscribe action on this browser, not a text field to type into
