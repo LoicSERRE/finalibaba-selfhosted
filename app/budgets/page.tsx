@@ -2,17 +2,35 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, viewAccountIds } from "@/lib/auth-context";
-import { PiggyBank, Tag } from "lucide-react";
+import { PiggyBank, Tag, ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { CategoryCard } from "@/components/budgets/category-card";
 import { AddCategoryDialog } from "@/components/budgets/add-category-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { UncategorizedGroupCard } from "@/components/budgets/uncategorized-group-card";
 import { AutoCategorizeButton } from "@/components/budgets/auto-categorize-button";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { normalizeLabel } from "@/lib/domain/recurring";
 import { monthsBetween, computeRolloverCarryInCents, mergeCentsMaps } from "@/lib/domain/budgets";
 import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
+
+// "YYYY-MM" - same simple, unvalidated-beyond-shape convention as
+// /tax-report's own ?year= param. An invalid or out-of-range value falls
+// back to the current month rather than erroring, same reasoning: a
+// mistyped URL should degrade to "today", not a 500.
+function parseMonthParam(param: string | undefined, now: Date): Date {
+  const match = param?.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  if (month < 1 || month > 12) return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return new Date(Date.UTC(year, month - 1, 1));
+}
+
+function monthParam(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 // How many of the most-frequent uncategorized label groups to surface at
 // once - bounded so the page doesn't turn into a full inbox-zero triage
@@ -33,12 +51,20 @@ const MAX_UNCATEGORIZED_ROWS = 2000;
 // regardless of how many months/categories have accumulated real history.
 const MAX_ROLLOVER_TRANSACTIONS = 5000;
 
-export default async function BudgetsPage() {
-  const [t, tc] = await Promise.all([getTranslations("budgets"), getTranslations("common")]);
+export default async function BudgetsPage({
+  searchParams,
+}: Readonly<{
+  searchParams: Promise<{ month?: string }>;
+}>) {
+  const { month: monthParamValue } = await searchParams;
+  const [t, tc, locale] = await Promise.all([getTranslations("budgets"), getTranslations("common"), getLocale()]);
+  const intlLocale = localeToIntl(locale);
 
   const now = new Date();
-  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const startOfMonth = parseMonthParam(monthParamValue, now);
+  const startOfNextMonth = new Date(Date.UTC(startOfMonth.getUTCFullYear(), startOfMonth.getUTCMonth() + 1, 1));
+  const startOfPrevMonth = new Date(Date.UTC(startOfMonth.getUTCFullYear(), startOfMonth.getUTCMonth() - 1, 1));
+  const isCurrentMonth = startOfMonth.getTime() === new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).getTime();
 
   // Categories belong to the viewer; every transaction aggregate is scoped
   // to the accounts they can see. accountScope goes *inside* the
@@ -214,6 +240,26 @@ export default async function BudgetsPage() {
         {expenseCategories.length > 0 && <AddCategoryDialog />}
       </div>
 
+      <div className="flex items-center justify-center gap-4">
+        <Link
+          href={`/budgets?month=${monthParam(startOfPrevMonth)}`}
+          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+          aria-label={tc("previous")}
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+        </Link>
+        <span className="text-lg font-semibold tabular-nums text-[var(--foreground)] capitalize w-40 text-center">
+          {new Intl.DateTimeFormat(intlLocale, { month: "long", year: "numeric" }).format(startOfMonth)}
+        </span>
+        <Link
+          href={`/budgets?month=${monthParam(startOfNextMonth)}`}
+          className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+          aria-label={tc("next")}
+        >
+          <ChevronRight size={18} aria-hidden="true" />
+        </Link>
+      </div>
+
       {expenseCategories.length === 0 ? (
         <EmptyState
           icon={PiggyBank}
@@ -263,7 +309,11 @@ export default async function BudgetsPage() {
         </p>
       )}
 
-      {uncategorizedGroups.length > 0 && expenseCategories.length > 0 && (
+      {/* All-time, not scoped to the viewed month (uncategorizedTx has no
+          date filter) - showing it while browsing a past month would offer
+          to bulk-fix transactions that have nothing to do with that month's
+          numbers, so it only renders for the current month. */}
+      {isCurrentMonth && uncategorizedGroups.length > 0 && expenseCategories.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("uncategorizedGroupsTitle")}</h2>

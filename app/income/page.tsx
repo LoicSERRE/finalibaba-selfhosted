@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, viewAccountIds } from "@/lib/auth-context";
-import { Coins } from "lucide-react";
+import { Coins, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { AddIncomeDialog } from "@/components/income/add-income-dialog";
 import { DeleteButton } from "@/components/shared/delete-button";
@@ -16,26 +16,46 @@ import { getTranslations, getLocale } from "next-intl/server";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT", "CRYPTO"] as const;
 
-export default async function IncomePage() {
+export default async function IncomePage({
+  searchParams,
+}: Readonly<{
+  searchParams: Promise<{ year?: string }>;
+}>) {
+  const { year: yearParam } = await searchParams;
   const [t, tc, locale] = await Promise.all([getTranslations("income"), getTranslations("common"), getLocale()]);
   const intlLocale = localeToIntl(locale);
 
   const now = new Date();
-  const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-  const startOfNextYear = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
+  // Same bare-parseInt, fall-back-to-current-year convention as
+  // /tax-report's own ?year= - IncomeEvent (dividends/interest) is the exact
+  // same model that page already reports on a calendar-year cadence, so this
+  // page follows suit rather than inventing a month-level view for data that
+  // naturally accumulates once a year.
+  const year = yearParam ? Number.parseInt(yearParam, 10) : now.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const startOfNextYear = new Date(Date.UTC(year + 1, 0, 1));
 
   const viewer = await getViewer();
   const accountIds = await viewAccountIds(viewer.id);
 
-  const [events, accounts, incomeCategories, categoryTotals, splitCategoryTotals] = await Promise.all([
+  const [events, hasAnyIncomeEver, accounts, incomeCategories, categoryTotals, splitCategoryTotals] = await Promise.all([
     // IncomeEvent is account-transitive, so a co-owned account's dividends
     // show up for both co-owners - documented as intended ("per-viewer view,
-    // not a fiscal filing"; one partner declares).
+    // not a fiscal filing"; one partner declares). Scoped to the viewed
+    // year, same as the summary card below it - browsing 2025 shows 2025's
+    // own events, not an unrelated all-time list next to a 2025 total.
     prisma.incomeEvent.findMany({
-      where: { accountId: { in: accountIds } },
+      where: { accountId: { in: accountIds }, date: { gte: startOfYear, lt: startOfNextYear } },
       include: { account: { select: { name: true } } },
       orderBy: { date: "desc" },
     }),
+    // Unscoped by year, unlike the query above - the empty state must ask
+    // "has this person ever tracked income" (a real first-time-user
+    // question), not "does the currently-viewed year happen to have any",
+    // which a mere navigation click could otherwise make true.
+    prisma.incomeEvent
+      .findFirst({ where: { accountId: { in: accountIds } }, select: { id: true } })
+      .then((row) => row !== null),
     prisma.account.findMany({
       where: { id: { in: accountIds }, type: { in: [...INCOME_ACCOUNT_TYPES] } },
       select: { id: true, name: true, type: true },
@@ -80,7 +100,9 @@ export default async function IncomePage() {
     new Map(splitCategoryTotals.filter((row) => row.categoryId !== null).map((row) => [row.categoryId as string, Number(row._sum.amountCents ?? BigInt(0))])),
   );
 
-  const ytdEvents = events.filter((e) => e.date >= startOfYear && e.date < startOfNextYear);
+  // events is already scoped to the viewed year at the query level now -
+  // no second filter needed.
+  const ytdEvents = events;
 
   const netCents = (e: (typeof events)[number]) => e.amountCents - (e.taxWithheldCents ?? BigInt(0));
 
@@ -99,10 +121,34 @@ export default async function IncomePage() {
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
         </div>
-        {(events.length > 0 || incomeCategories.length > 0) && <AddIncomeDialog accounts={accounts} />}
+        {(hasAnyIncomeEver || incomeCategories.length > 0) && <AddIncomeDialog accounts={accounts} />}
       </div>
 
-      {events.length === 0 && incomeCategories.length === 0 ? (
+      {hasAnyIncomeEver && (
+        <div className="flex items-center justify-center gap-4">
+          <Link
+            href={`/income?year=${year - 1}`}
+            className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+            aria-label={tc("previous")}
+          >
+            <ChevronLeft size={18} aria-hidden="true" />
+          </Link>
+          <span className="text-lg font-semibold tabular-nums text-[var(--foreground)] w-16 text-center">{year}</span>
+          <Link
+            href={`/income?year=${year + 1}`}
+            className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+            aria-label={tc("next")}
+          >
+            <ChevronRight size={18} aria-hidden="true" />
+          </Link>
+        </div>
+      )}
+
+      {hasAnyIncomeEver && events.length === 0 && (
+        <p className="text-sm text-[var(--muted)] text-center">{t("noEventsThisYear")}</p>
+      )}
+
+      {!hasAnyIncomeEver && incomeCategories.length === 0 ? (
         <EmptyState
           icon={Coins}
           title={t("emptyTitle")}
