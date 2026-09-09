@@ -46,6 +46,19 @@ COPY . .
 RUN pnpm exec prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+# Next.js encrypts Server Action closure variables with a key generated fresh
+# on every build unless this is set (node_modules/next/dist/docs/01-app/
+# 02-guides/self-hosting.md: "Failed to find Server Action" otherwise). Left
+# unset here (the default, docker-compose.yml passes an empty string when the
+# user hasn't set one), a build behaves exactly as before - Next falls back to
+# its own random per-build key. Set it (via NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+# in .env, see .env.example) and every rebuild reuses the same key instead of
+# invalidating one, which is what a real self-hosted report traced back to: a
+# browser tab left open across a redeploy got "Failed to find Server Action"
+# on its next Server Action call, since the just-rebuilt server could no
+# longer decrypt a closure encrypted by the previous build.
+ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
 RUN pnpm run build
 
 # ── runner ─────────────────────────────────────────────────────────────────────

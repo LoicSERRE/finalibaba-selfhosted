@@ -37,7 +37,12 @@ services:
 
   app-demo:
     image: ghcr.io/loicserre/finalibaba-selfhosted/app:latest
-    build: .
+    build:
+      context: .
+      args:
+        # See docker-compose.yml's own comment on this - only relevant for a
+        # local build, empty behaves identically to unset.
+        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
     environment:
       DATABASE_URL: postgresql://demo:${DEMO_POSTGRES_PASSWORD}@db-demo:5432/finalibaba_demo
       NODE_ENV: production

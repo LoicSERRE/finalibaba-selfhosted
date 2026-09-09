@@ -59,7 +59,7 @@ export function DividendCalendarSection({
                 {row.taxRate > 0 && (
                   <> · −{(row.taxRate * 100).toFixed(1)}%
                   {row.country !== "FR" && row.subtype !== "PEA" && (
-                    <span title="Retenue à la source 15% + PS 17,2% (crédit IR)"> ({row.country})</span>
+                    <span title="Retenue à la source 15% + PS 18,6% (crédit IR)"> ({row.country})</span>
                   )}</>
                 )}
               </p>

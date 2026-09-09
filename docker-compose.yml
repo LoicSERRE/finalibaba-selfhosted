@@ -16,7 +16,17 @@ services:
 
   app:
     image: ghcr.io/loicserre/finalibaba-selfhosted/app:latest
-    build: .
+    build:
+      context: .
+      args:
+        # Only takes effect for a local build (this service also still pulls
+        # the ghcr.io image above by default) - see the Dockerfile's own
+        # comment on this ARG and .env.example for why setting it is worth
+        # doing: without it, every rebuild silently invalidates any browser
+        # tab left open from before the rebuild ("Failed to find Server
+        # Action" on its next save). Empty here behaves identically to never
+        # having set this at all.
+        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finalibaba}
       NODE_ENV: production
