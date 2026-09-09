@@ -137,15 +137,29 @@ export function GoalAndPassiveIncome({
             </Link>
           </div>
         )}
-        {weightedSavingsRatePct !== null && (
-          <p className="text-xs text-[var(--muted)] mt-3">
-            {t("passive.weightedSavingsRate", { rate: (weightedSavingsRatePct * 100).toFixed(2) })}
-          </p>
-        )}
-        {estimatedYearEndSavingsInterestCents > BigInt(0) && (
-          <p className="text-xs text-[var(--muted)] mt-1">
-            {t("passive.yearEndEstimate", { amount: formatCurrency(estimatedYearEndSavingsInterestCents, 0) })}
-          </p>
+        {/* Deliberately separated from the real, IncomeEvent-tracked figures
+            above by both a divider and its own label - these two lines are
+            LIVE ESTIMATES (today's balances/rates, and a historical-balance
+            projection), not a breakdown of the real YTD total above them.
+            Placed together with no distinction read as "more detail on the
+            real number" during review; a real user could reasonably expect
+            them to reconcile with it, and they will not. */}
+        {(weightedSavingsRatePct !== null || estimatedYearEndSavingsInterestCents > BigInt(0)) && (
+          <div className="pt-3 mt-3 border-t border-[var(--border)] space-y-1">
+            <p className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider opacity-70">
+              {t("passive.estimateSectionLabel")}
+            </p>
+            {weightedSavingsRatePct !== null && (
+              <p className="text-xs text-[var(--muted)]">
+                {t("passive.weightedSavingsRate", { rate: (weightedSavingsRatePct * 100).toFixed(2) })}
+              </p>
+            )}
+            {estimatedYearEndSavingsInterestCents > BigInt(0) && (
+              <p className="text-xs text-[var(--muted)]">
+                {t("passive.yearEndEstimate", { amount: formatCurrency(estimatedYearEndSavingsInterestCents, 0) })}
+              </p>
+            )}
+          </div>
         )}
         <Link
           href="/tax-report"

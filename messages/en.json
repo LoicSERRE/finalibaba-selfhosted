@@ -517,6 +517,7 @@
       "emptyPrompt": "No income recorded yet.",
       "emptyAction": "Track my income →",
       "taxReportLink": "Annual tax report →",
+      "estimateSectionLabel": "Estimates (not the real figures above)",
       "weightedSavingsRate": "Balance-weighted average interest rate across all savings accounts: {rate}%",
       "yearEndEstimate": "Estimated year-end savings interest: ~{amount}"
     },
@@ -1526,7 +1527,7 @@
     "mdEquity": "Equity",
     "mdPassiveMissingRates": "Partial estimate: {count} interest-bearing account(s) have no rate set and are not counted here.",
     "mdPassiveWeightedRate": "Balance-weighted average interest rate across all savings accounts: {rate}%.",
-    "mdPassiveYearEndEstimate": "Estimated year-end interest (fortnight method): {amount}."
+    "mdPassiveYearEndEstimate": "Alternative estimate, based on real historical balances rather than only today's (fortnight method) - can differ from the figure above if a balance moved a lot this year: estimated year-end interest: {amount}."
   },
   "coOwners": {
     "errorUsernameRequired": "Enter a username.",

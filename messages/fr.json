@@ -517,6 +517,7 @@
       "emptyPrompt": "Aucun revenu enregistré pour l'instant.",
       "emptyAction": "Suivre mes revenus →",
       "taxReportLink": "Rapport fiscal annuel →",
+      "estimateSectionLabel": "Estimations (pas les chiffres réels ci-dessus)",
       "weightedSavingsRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate} %",
       "yearEndEstimate": "Intérêts livrets estimés en fin d'année : ~{amount}"
     },
@@ -1526,7 +1527,7 @@
     "mdEquity": "Fonds propres",
     "mdPassiveMissingRates": "Estimation partielle : {count} compte(s) rémunéré(s) n'ont pas de taux d'intérêt renseigné et ne sont pas comptés ici.",
     "mdPassiveWeightedRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate} %.",
-    "mdPassiveYearEndEstimate": "Intérêts estimés en fin d'année (méthode des quinzaines) : {amount}."
+    "mdPassiveYearEndEstimate": "Estimation alternative, basée sur l'historique réel des soldes plutôt que sur le solde actuel seul (méthode des quinzaines) - peut différer du chiffre ci-dessus si un solde a beaucoup varié cette année : intérêts estimés en fin d'année : {amount}."
   },
   "coOwners": {
     "errorUsernameRequired": "Saisis un nom d'utilisateur.",
