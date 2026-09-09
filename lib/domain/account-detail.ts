@@ -46,6 +46,13 @@ export interface AccountDetailTransaction {
   label: string;
   amountCents: bigint;
   categoryId: string | null;
+  // Automatic detection (lib/domain/internal-transfers.ts) needs an exact
+  // amount match on both sides within a few days, and a matching row on
+  // BOTH accounts - a fee-adjusted amount, a slower transfer, or a
+  // receiving account whose own sync never records a deposit transaction
+  // all defeat it silently. This is the manual override for exactly that:
+  // see setInternalTransferFlag in lib/actions/transactions.ts.
+  isInternalTransfer: boolean;
   // Whether this transaction already has a linked IncomeEvent - "Mark as
   // income" (mark-as-income-button.tsx) only renders when this is null, so
   // the same real payment can't be recorded twice.

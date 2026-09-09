@@ -1,9 +1,11 @@
 "use client";
 
-import { Split } from "lucide-react";
+import { useTransition } from "react";
+import { ArrowRightLeft, Split } from "lucide-react";
 import { TransactionCategorySelect } from "@/components/shared/transaction-category-select";
 import { SplitTransactionDialog } from "@/components/shared/split-transaction-dialog";
 import { Button } from "@/components/ui/button";
+import { setInternalTransferFlag } from "@/lib/actions/transactions";
 import { useTranslations } from "next-intl";
 
 type Category = { id: string; name: string; color: string };
@@ -24,6 +26,7 @@ export function TransactionCategoryCell({
   amountCents,
   categories,
   splits,
+  isInternalTransfer,
   readOnly = false,
 }: Readonly<{
   transactionId: string;
@@ -31,6 +34,12 @@ export function TransactionCategoryCell({
   amountCents: bigint;
   categories: Category[];
   splits: SplitLine[];
+  /** Manual override for the automatic pairing (lib/domain/
+   *  internal-transfers.ts) - see setInternalTransferFlag's own comment
+   *  for the ways it can miss a real transfer silently (a fee-adjusted
+   *  amount, a slower settlement, a receiving account whose sync never
+   *  records a deposit event at all). */
+  isInternalTransfer: boolean;
   /** True when a granted (read-only) portfolio is on screen - renders the
    *  current category as a static chip instead of an editable control. The
    *  Server Actions behind both branches already refuse a guest; this only
@@ -38,10 +47,25 @@ export function TransactionCategoryCell({
   readOnly?: boolean;
 }>) {
   const t = useTranslations("categories");
+  const [pending, startTransition] = useTransition();
+
+  function toggleInternalTransfer() {
+    startTransition(() => setInternalTransferFlag(transactionId, !isInternalTransfer));
+  }
 
   if (readOnly) {
     // Same static-badge treatment /budgets/[categoryId] already gives split
-    // rows: show what the category IS, offer no way to change it.
+    // rows: show what the category IS, offer no way to change it. A
+    // flagged transfer gets the same non-interactive treatment - a guest
+    // can see why it's excluded from totals, not change the flag.
+    if (isInternalTransfer) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-[var(--muted)]">
+          <ArrowRightLeft size={12} aria-hidden="true" />
+          {t("internalTransferBadge")}
+        </span>
+      );
+    }
     if (splits.length > 0) {
       return (
         <span className="inline-flex items-center gap-1 text-xs text-[var(--muted)]">
@@ -64,23 +88,58 @@ export function TransactionCategoryCell({
     );
   }
 
+  const transferButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      disabled={pending}
+      onClick={toggleInternalTransfer}
+      aria-pressed={isInternalTransfer}
+      aria-label={isInternalTransfer ? t("unmarkInternalTransfer") : t("markInternalTransfer")}
+      title={isInternalTransfer ? t("unmarkInternalTransfer") : t("markInternalTransfer")}
+      className={isInternalTransfer ? "text-[var(--accent-text)]" : undefined}
+    >
+      <ArrowRightLeft size={12} aria-hidden="true" />
+    </Button>
+  );
+
+  // A transaction manually (or automatically) flagged as an internal
+  // transfer is shown with its own badge first, ahead of the split/plain
+  // category UI - the flag already excludes it from every category total,
+  // so editing a category underneath it would be moot until it's unflagged.
+  if (isInternalTransfer) {
+    return (
+      <div className="flex items-center gap-1">
+        <span className="inline-flex items-center gap-1 text-xs text-[var(--muted)] bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-2 py-1">
+          <ArrowRightLeft size={12} aria-hidden="true" />
+          {t("internalTransferBadge")}
+        </span>
+        {transferButton}
+      </div>
+    );
+  }
+
   if (splits.length > 0) {
     return (
-      <SplitTransactionDialog
-        transactionId={transactionId}
-        amountCents={amountCents}
-        categories={categories}
-        initialSplits={splits}
-        trigger={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-xs text-[var(--foreground)] bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-2 py-1 cursor-pointer hover:border-[var(--accent)] transition-colors min-h-[44px] sm:min-h-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          >
-            <Split size={12} aria-hidden="true" />
-            {t("splitBadgeCount", { count: splits.length })}
-          </button>
-        }
-      />
+      <div className="flex items-center gap-1">
+        <SplitTransactionDialog
+          transactionId={transactionId}
+          amountCents={amountCents}
+          categories={categories}
+          initialSplits={splits}
+          trigger={
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs text-[var(--foreground)] bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-2 py-1 cursor-pointer hover:border-[var(--accent)] transition-colors min-h-[44px] sm:min-h-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            >
+              <Split size={12} aria-hidden="true" />
+              {t("splitBadgeCount", { count: splits.length })}
+            </button>
+          }
+        />
+        {transferButton}
+      </div>
     );
   }
 
@@ -98,6 +157,7 @@ export function TransactionCategoryCell({
           </Button>
         }
       />
+      {transferButton}
     </div>
   );
 }

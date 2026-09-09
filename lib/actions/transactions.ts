@@ -41,6 +41,38 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
   return { imported: result.count };
 }
 
+/**
+ * Manual override for Transaction.isInternalTransfer. The automatic
+ * detection (lib/domain/internal-transfers.ts) needs an exact amount match
+ * on both sides within a few days, with a real Transaction row recorded on
+ * BOTH accounts - a transfer fee or currency spread (breaks the exact-
+ * amount match), a slower settlement (breaks the day window), or a
+ * receiving account whose own sync never records a deposit event at all
+ * (nothing to pair with, ever) each defeat it silently, and until now
+ * there was no way to correct any of them: a real report of a recurring
+ * inter-account transfer counting as ordinary income/spend in "Reste à
+ * vivre", the passive-income estimate, and every /budgets total.
+ *
+ * Deliberately does not touch categoryId - a flagged transaction is
+ * already excluded from every category-scoped total regardless of what
+ * category it still carries (same as the automatic path's own retroactive
+ * cleanup, which only ever clears a specific "Revenus" mis-categorization,
+ * not a blanket clear), and a manual correction is by definition already
+ * reviewed by the person making it.
+ */
+export async function setInternalTransferFlag(transactionId: string, flagged: boolean) {
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, [transactionId]);
+
+  const tx = await prisma.transaction.update({
+    where: { id: transactionId },
+    data: { isInternalTransfer: flagged },
+    select: { accountId: true, categoryId: true },
+  });
+
+  revalidateTransactions(tx.accountId, [tx.categoryId]);
+}
+
 export async function setTransactionCategory(
   transactionId: string,
   categoryId: string | null

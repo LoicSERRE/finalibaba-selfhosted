@@ -166,6 +166,7 @@ export default async function TransactionsPage({
                           amountCents={tx.amountCents}
                           categories={categories}
                           splits={tx.splits}
+                          isInternalTransfer={tx.isInternalTransfer}
                           readOnly={readOnly}
                         />
                       </td>
