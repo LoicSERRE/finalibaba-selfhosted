@@ -1,5 +1,7 @@
 import { formatCurrency } from "@/lib/utils/format";
+import { SavingsInterestHistoryChart } from "@/components/analytics/savings-interest-history-chart";
 import type { getTranslations } from "next-intl/server";
+import type { SavingsInterestHistoryPoint } from "@/lib/domain/analytics";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -15,6 +17,7 @@ export function SavingsInterestEstimateSection({
   t,
   weightedSavingsRatePct,
   estimatedYearEndSavingsInterestCents,
+  estimatedYearEndInterestHistory,
   accountsMissingInterestRate,
 }: Readonly<{
   t: T;
@@ -24,6 +27,9 @@ export function SavingsInterestEstimateSection({
   /** Full-year projection via the "méthode des quinzaines" - see
    *  lib/domain/savings-projection.ts. */
   estimatedYearEndSavingsInterestCents: bigint;
+  /** How that same projection has moved through the year - see
+   *  computeAnalytics' own comment on the field. */
+  estimatedYearEndInterestHistory: SavingsInterestHistoryPoint[];
   /** SAVINGS accounts with a positive balance but no interestRatePct set -
    *  excluded from both figures above, so this estimate is a lower bound
    *  whenever it's non-zero. Surfaced here, not just in the markdown
@@ -61,6 +67,7 @@ export function SavingsInterestEstimateSection({
           {t("savingsEstimate.missingRates", { count: accountsMissingInterestRate })}
         </p>
       )}
+      <SavingsInterestHistoryChart data={estimatedYearEndInterestHistory} />
     </div>
   );
 }

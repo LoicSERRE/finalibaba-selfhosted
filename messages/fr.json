@@ -526,7 +526,9 @@
       "subtitle": "Estimation - pas un chiffre réel, à distinguer des revenus perçus ci-dessus",
       "weightedRate": "Taux moyen pondéré, tous livrets confondus",
       "yearEndAmount": "Estimé en fin d'année",
-      "missingRates": "{count} compte(s) rémunéré(s) sans taux renseigné - estimation partielle"
+      "missingRates": "{count} compte(s) rémunéré(s) sans taux renseigné - estimation partielle",
+      "historyNotEnoughData": "Pas encore assez d'historique pour afficher l'évolution de cette estimation.",
+      "historyAriaLabel": "Évolution de l'estimation des intérêts d'épargne en fin d'année"
     },
     "dividends": {
       "title": "Dividendes",

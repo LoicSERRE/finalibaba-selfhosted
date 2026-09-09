@@ -4,7 +4,7 @@ import { isTrCashAccount } from "@/lib/domain/sync-ids";
 import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
 import { computeGoalProgress } from "@/lib/domain/goals";
-import { estimateYearEndInterestCents } from "@/lib/domain/savings-projection";
+import { estimateYearEndInterestCents, estimateYearEndInterestSeries, quinzaineBoundaries } from "@/lib/domain/savings-projection";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type { AnalyticsExportData } from "@/components/shared/export-analytics-button";
@@ -293,6 +293,12 @@ export interface MonthlyHistoryPoint extends HistoryPoint {
   month: string; // "YYYY-MM"
 }
 
+export interface SavingsInterestHistoryPoint {
+  date: string; // pre-formatted per intlLocale, matches HistoryPoint's own convention
+  isoDate: string; // "YYYY-MM-DD", for the chart's XAxis dataKey
+  estimatedCents: number;
+}
+
 export interface PerformanceRow extends MonthlyHistoryPoint {
   delta: number | null;
   deltaPct: number | null;
@@ -356,6 +362,12 @@ export interface AnalyticsResult {
    *  with a known rate, via the "méthode des quinzaines" - see
    *  lib/domain/savings-projection.ts. */
   estimatedYearEndSavingsInterestCents: bigint;
+  /** How that same projection would have read at each past quinzaine
+   *  boundary this year, for a chart of how the estimate has moved over
+   *  time - see lib/domain/savings-projection.ts's estimateYearEndInterestSeries.
+   *  A boundary no SAVINGS account with a rate has any balance history for
+   *  yet is simply absent, not plotted at 0. */
+  estimatedYearEndInterestHistory: SavingsInterestHistoryPoint[];
   annualPassiveCents: bigint;
   monthlyPassiveCents: number;
   dividendCalendar: DividendCalendarRow[];
@@ -806,6 +818,32 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     );
   }
 
+  // Re-runs the same projection as of each past quinzaine boundary this
+  // year, summed across every SAVINGS account with a rate, so a chart can
+  // show how the estimate has moved (a deposit, a withdrawal, a rate
+  // change) rather than only ever showing today's single figure.
+  const interestHistoryBoundaries = quinzaineBoundaries(now.getUTCFullYear()).filter((b) => b.getTime() <= now.getTime());
+  const interestHistoryTotals = new Map<number, bigint>();
+  for (const account of accounts) {
+    if (account.type !== "SAVINGS" || account.interestRatePct === null || account.interestRatePct <= 0) continue;
+    const series = estimateYearEndInterestSeries(
+      balancesByAccount.get(account.id) ?? [],
+      account.interestRatePct,
+      interestHistoryBoundaries
+    );
+    for (const point of series) {
+      const key = point.date.getTime();
+      interestHistoryTotals.set(key, (interestHistoryTotals.get(key) ?? BigInt(0)) + point.estimatedCents);
+    }
+  }
+  const estimatedYearEndInterestHistory: SavingsInterestHistoryPoint[] = interestHistoryBoundaries
+    .filter((b) => interestHistoryTotals.has(b.getTime()))
+    .map((b) => ({
+      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(b),
+      isoDate: b.toISOString().slice(0, 10),
+      estimatedCents: Number(interestHistoryTotals.get(b.getTime())!),
+    }));
+
   // ── History ─────────────────────────────────────────────────────────────
   const liabMap = new Map<string, bigint>();
   for (const a of accounts) liabMap.set(a.id, a.liabilityCents ?? BigInt(0));
@@ -938,6 +976,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     accountsMissingInterestRate,
     weightedSavingsRatePct,
     estimatedYearEndSavingsInterestCents,
+    estimatedYearEndInterestHistory,
     annualPassiveCents,
     monthlyPassiveCents,
     dividendCalendar,

@@ -526,7 +526,9 @@
       "subtitle": "Estimate - not a real figure, distinct from the income tracked above",
       "weightedRate": "Balance-weighted average rate, across all savings accounts",
       "yearEndAmount": "Estimated by year end",
-      "missingRates": "{count} interest-bearing account(s) with no rate set - partial estimate"
+      "missingRates": "{count} interest-bearing account(s) with no rate set - partial estimate",
+      "historyNotEnoughData": "Not enough history yet to show how this estimate has changed.",
+      "historyAriaLabel": "Year-end savings interest estimate over time"
     },
     "dividends": {
       "title": "Dividends",

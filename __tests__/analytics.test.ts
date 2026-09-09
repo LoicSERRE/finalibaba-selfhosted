@@ -449,6 +449,35 @@ describe("computeAnalytics - year-end savings interest projection", () => {
 
     expect(computeAnalytics(input).estimatedYearEndSavingsInterestCents).toBe(BigInt(0));
   });
+
+  it("also returns a history series showing how the estimate has moved through the year", () => {
+    const input = baseInput({
+      accounts: [account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(10_000_00) }] })],
+      allBalances: [
+        { accountId: "livret-a", recordedAt: new Date("2025-01-01T00:00:00.000Z"), balanceCents: BigInt(10_000_00) },
+      ],
+    });
+
+    const result = computeAnalytics(input);
+
+    expect(result.estimatedYearEndInterestHistory.length).toBeGreaterThan(0);
+    // Every point is dated at or before NOW (2026-07-28) and carries a
+    // non-negative estimate - a constant balance all year means every
+    // point should equal the same final 150€ figure.
+    for (const point of result.estimatedYearEndInterestHistory) {
+      expect(new Date(point.isoDate).getTime()).toBeLessThanOrEqual(NOW.getTime());
+      expect(point.estimatedCents).toBe(150_00);
+    }
+  });
+
+  it("history series is empty when no SAVINGS account has any balance history yet", () => {
+    const input = baseInput({
+      accounts: [account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(10_000_00) }] })],
+      allBalances: [],
+    });
+
+    expect(computeAnalytics(input).estimatedYearEndInterestHistory).toEqual([]);
+  });
 });
 
 describe("computeAnalytics - goals (v1.14)", () => {

@@ -160,6 +160,7 @@ describe("analytics export completeness", () => {
       investTotalGainNet: "derivable from investTotalGainCents - investTotalTaxCents, which the export already recomputes inline in its own summary line",
       assetRows: "internal-only per-account lookup used to resolve a Goal's accountId to its current value (v1.14) - topAssets already covers the top 10 for export purposes, exporting every account's raw row too would be redundant",
       effectiveTaxRate: "internal input for the projection chart's tax-aware mode (v1.14) - not a standalone indicator, the export already shows per-account/aggregate latent tax cents directly",
+      estimatedYearEndInterestHistory: "chart-only series feeding the savings-interest-estimate history chart - the export already shows the current estimatedYearEndSavingsInterestCents figure, a full point-by-point series would be noise in a markdown report",
     };
 
     assertAllFieldsReferenced(buildAnalyticsExportSource, Object.keys(result), allowlist);

@@ -98,3 +98,31 @@ function earliestKnownBalance(balances: readonly { recordedAt: Date; balanceCent
   }
   return best ? best.balanceCents : null;
 }
+
+/**
+ * What estimateYearEndInterestCents' own answer would have been on each of
+ * `evaluationDates`, re-running the projection as if evaluated that day
+ * (using only the balance known as of that day as its "current balance") -
+ * lets a chart show how the estimate has actually moved through the year as
+ * a livret's balance changed, rather than only ever showing today's single
+ * number. Requested directly: the estimate can move a lot if money is
+ * added to or taken out of a savings account, and there was no way to see
+ * that it had.
+ *
+ * A date with no balance known yet that early is skipped (same "absent, not
+ * a guessed 0" rule the projection itself follows), not plotted as if the
+ * estimate were 0 on that day.
+ */
+export function estimateYearEndInterestSeries(
+  balances: readonly { recordedAt: Date; balanceCents: bigint }[],
+  ratePct: number,
+  evaluationDates: readonly Date[]
+): { date: Date; estimatedCents: bigint }[] {
+  const points: { date: Date; estimatedCents: bigint }[] = [];
+  for (const date of evaluationDates) {
+    const balanceAsOfDate = balanceAtOrBefore(balances, date);
+    if (balanceAsOfDate === null) continue;
+    points.push({ date, estimatedCents: estimateYearEndInterestCents(balances, balanceAsOfDate, ratePct, date) });
+  }
+  return points;
+}

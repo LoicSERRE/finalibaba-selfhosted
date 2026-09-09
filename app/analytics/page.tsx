@@ -221,6 +221,7 @@ export default async function AnalyticsPage() {
             t={t}
             weightedSavingsRatePct={result.weightedSavingsRatePct}
             estimatedYearEndSavingsInterestCents={result.estimatedYearEndSavingsInterestCents}
+            estimatedYearEndInterestHistory={result.estimatedYearEndInterestHistory}
             accountsMissingInterestRate={result.accountsMissingInterestRate}
           />
 

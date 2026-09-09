@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   balanceAtOrBefore,
   estimateYearEndInterestCents,
+  estimateYearEndInterestSeries,
   quinzaineBoundaries,
 } from "@/lib/domain/savings-projection";
 
@@ -101,5 +102,43 @@ describe("estimateYearEndInterestCents", () => {
     // 1 quinzaine at the old 1,000€ + 23 quinzaines projected at the new 20,000€.
     const expected = BigInt(Math.round((1_000_00 * 0.015) / 24 + (23 * 20_000_00 * 0.015) / 24));
     expect(result).toBe(expected);
+  });
+});
+
+describe("estimateYearEndInterestSeries", () => {
+  it("skips an evaluation date before the account has any recorded balance", () => {
+    const balances = [{ recordedAt: new Date("2026-06-01T00:00:00.000Z"), balanceCents: BigInt(5_000_00) }];
+    const points = estimateYearEndInterestSeries(balances, 0.015, [
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2026-06-01T00:00:00.000Z"),
+    ]);
+
+    expect(points).toHaveLength(1);
+    expect(points[0].date).toEqual(new Date("2026-06-01T00:00:00.000Z"));
+  });
+
+  it("matches estimateYearEndInterestCents evaluated at each point, using the balance known as of that point", () => {
+    const balances = [
+      { recordedAt: new Date("2026-01-01T00:00:00.000Z"), balanceCents: BigInt(5_000_00) },
+      { recordedAt: new Date("2026-07-01T00:00:00.000Z"), balanceCents: BigInt(8_000_00) },
+    ];
+    const evaluationDates = [new Date("2026-03-01T00:00:00.000Z"), new Date("2026-09-01T00:00:00.000Z")];
+    const points = estimateYearEndInterestSeries(balances, 0.015, evaluationDates);
+
+    expect(points).toHaveLength(2);
+    // On March 1st, only the 5,000€ balance was known yet - re-running the
+    // year-end projection AS OF that date must use it as the "current"
+    // balance for every quinzaine still ahead of March 1st, not the 8,000€
+    // that only exists later in real time.
+    expect(points[0].estimatedCents).toBe(estimateYearEndInterestCents(balances, BigInt(5_000_00), 0.015, evaluationDates[0]));
+    // By September 1st the 8,000€ balance was already known.
+    expect(points[1].estimatedCents).toBe(estimateYearEndInterestCents(balances, BigInt(8_000_00), 0.015, evaluationDates[1]));
+    // And the estimate genuinely moved between the two evaluation dates.
+    expect(points[1].estimatedCents).not.toBe(points[0].estimatedCents);
+  });
+
+  it("returns an empty series for an account with no balance history at all", () => {
+    const points = estimateYearEndInterestSeries([], 0.015, [new Date("2026-06-01T00:00:00.000Z")]);
+    expect(points).toEqual([]);
   });
 });
