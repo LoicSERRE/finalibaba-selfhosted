@@ -411,6 +411,17 @@ def upsert_transaction(
     format changed still carry it, so it is looked up as well, or the first
     sync after the change would re-insert an account's entire history.
 
+    That lookup ALSO matches on the label, which is not defensive detail - it
+    is the difference between the fix working and only half working. The
+    legacy id is label-blind by construction, so both halves of a colliding
+    same-day pair resolve to it: matching on the id alone meant the surviving
+    row answered for its lost twin too, and the twin stayed suppressed
+    forever. Verified against production after the first deployment - not one
+    of the ten known-missing movements had come back, because each one kept
+    matching the legacy id of the row that had displaced it. Comparing the
+    label lets the twin through while the row that genuinely IS the stored
+    one still matches.
+
     `dedup_by_label` enables a narrow same-amount/same-label window for those
     id-less sources only. What it protects against is a real mechanism: a
     synthesised id contains the transaction's DATE, and a bank can restate
@@ -438,7 +449,10 @@ def upsert_transaction(
         return
 
     if legacy_sync_id:
-        cur.execute('SELECT id FROM "Transaction" WHERE "syncId" = %s', (legacy_sync_id,))
+        cur.execute(
+            'SELECT id FROM "Transaction" WHERE "syncId" = %s AND lower(btrim(label)) = lower(btrim(%s))',
+            (legacy_sync_id, label),
+        )
         if cur.fetchone():
             return
 
