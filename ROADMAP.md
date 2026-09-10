@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v2.9.2**
+Current stable release: **v2.9.3**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -367,6 +367,14 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 - [X] **The financial profile reverted to 0 after every redeploy, and it was a caching bug, not a database one.** Every page here is force-dynamic and reads live per-user data, but Next.js never emitted an explicit `Cache-Control` header for that - leaving the gap open for whatever sits in front of the app (a reverse proxy, a CDN) to apply its own default instead. A redeploy's brief restart window was consistently enough to surface it. Every route now sends `Cache-Control: no-store, must-revalidate`, excluding the same static-asset set `proxy.ts`'s own matcher already excludes for the mirror reason - confirmed `_next/static` and the icon routes keep their real caching, `/settings` and `/` do not.
 - [X] **The French social-levies rate moved from 17.2% to 18.6%, and it was a literal copied by hand into five different files.** `FR_SOCIAL_LEVIES_RATE`/`FR_PFU_TOTAL_RATE` (`lib/domain/tax-locale.ts`) are the one source of truth now - the Settings page, the account-creation suggestion, the dividend/CTO tax estimate (which was actually wrong even under the old rate, at 30%/32.2% instead of the correct 31.4%/33.6%), and the Trade Republic cash fallback all read from it. A migration bumps any `UserSettings.taxRatePea` still sitting on the old default; a rate already typed in by hand is left alone.
 - [X] **LCL's own backend blips with a plain 502 every so often, and one blip used to fail the whole sync.** Confirmed transient - a manual retry a minute later always worked - so `sync_woob.py` now retries twice (5s, then 15s) before giving up and firing a sync-failure alert. `ScrapingBlocked` is deliberately excluded from the retry even though it shares the same exception family: that one means the bank detected automation, and retrying seconds later is the wrong response to that.
+
+---
+
+## v2.9.3 - The displaced transactions can actually come back - Released ✓
+
+- [X] **v2.9.2 stopped new collisions but could not undo the old ones.** Its lookup for the pre-label id matched on that id alone, and that id is label-blind by construction - so both halves of a same-day/same-amount pair resolve to it, the surviving row answered for its lost twin as well, and the twin stayed suppressed on every subsequent sync. Found by checking a production database after deploying v2.9.2 rather than by assuming the fix had worked: no duplicates and the 84 hand-recovered rows intact, but not one of the ten known-missing movements back. The lookup now compares the label too. Replayed against that same database: all 192 stored rows still recognised (108 by the legacy id, 84 by the same-amount/same-label window, zero duplicates), and every missing leg still inside the bank's own history window would be re-inserted.
+
+**Worth keeping as a pattern**: a fix that provably prevents the *next* occurrence of a bug can leave every past occurrence permanently in place, and the mechanism that does so is usually the compatibility path written to protect existing data. Verify recovery against real data, not just prevention.
 
 ---
 
