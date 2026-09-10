@@ -109,19 +109,29 @@ function earliestKnownBalance(balances: readonly { recordedAt: Date; balanceCent
  * added to or taken out of a savings account, and there was no way to see
  * that it had.
  *
- * A date with no balance known yet that early is skipped (same "absent, not
- * a guessed 0" rule the projection itself follows), not plotted as if the
- * estimate were 0 on that day.
+ * A date earlier than the account's first snapshot uses that earliest known
+ * balance, exactly as estimateYearEndInterestCents does - the two MUST agree
+ * on this or the chart contradicts the headline figure sitting above it.
+ * The first cut of this function kept the older `continue`-on-null rule
+ * after that function had moved on, which is precisely what went wrong:
+ * a Livret A synced since January plus a LEP synced only since June showed
+ * a headline of 400 EUR against a curve reading 150 EUR until June and then
+ * stepping to 400 EUR on 1 July - a +167% jump representing nothing real,
+ * because the LEP's unsynced months were being read as a 0 EUR balance
+ * again. An account with NO history at all still contributes nothing,
+ * since there is no balance to extrapolate from.
  */
 export function estimateYearEndInterestSeries(
   balances: readonly { recordedAt: Date; balanceCents: bigint }[],
   ratePct: number,
   evaluationDates: readonly Date[]
 ): { date: Date; estimatedCents: bigint }[] {
+  const earliestBalanceCents = earliestKnownBalance(balances);
+  if (earliestBalanceCents === null) return [];
+
   const points: { date: Date; estimatedCents: bigint }[] = [];
   for (const date of evaluationDates) {
-    const balanceAsOfDate = balanceAtOrBefore(balances, date);
-    if (balanceAsOfDate === null) continue;
+    const balanceAsOfDate = balanceAtOrBefore(balances, date) ?? earliestBalanceCents;
     points.push({ date, estimatedCents: estimateYearEndInterestCents(balances, balanceAsOfDate, ratePct, date) });
   }
   return points;

@@ -106,15 +106,22 @@ describe("estimateYearEndInterestCents", () => {
 });
 
 describe("estimateYearEndInterestSeries", () => {
-  it("skips an evaluation date before the account has any recorded balance", () => {
+  it("extrapolates backward for a date before the first snapshot, exactly as the single-value function does", () => {
+    // The regression this pins: the series used to skip such a date while
+    // estimateYearEndInterestCents extrapolated backward, so the chart
+    // contradicted the headline it sits under. A flat 5,000€ account
+    // synced only from June must read the same on both, at every point.
     const balances = [{ recordedAt: new Date("2026-06-01T00:00:00.000Z"), balanceCents: BigInt(5_000_00) }];
-    const points = estimateYearEndInterestSeries(balances, 0.015, [
-      new Date("2026-01-01T00:00:00.000Z"),
-      new Date("2026-06-01T00:00:00.000Z"),
-    ]);
+    const dates = [new Date("2026-01-01T00:00:00.000Z"), new Date("2026-06-01T00:00:00.000Z")];
+    const points = estimateYearEndInterestSeries(balances, 0.015, dates);
 
-    expect(points).toHaveLength(1);
-    expect(points[0].date).toEqual(new Date("2026-06-01T00:00:00.000Z"));
+    expect(points).toHaveLength(2);
+    for (const point of points) {
+      expect(point.estimatedCents).toBe(estimateYearEndInterestCents(balances, BigInt(5_000_00), 0.015, point.date));
+    }
+    // A balance that never moved projects the same year-end figure all year -
+    // no step, which is the whole point.
+    expect(points[0].estimatedCents).toBe(points[1].estimatedCents);
   });
 
   it("matches estimateYearEndInterestCents evaluated at each point, using the balance known as of that point", () => {

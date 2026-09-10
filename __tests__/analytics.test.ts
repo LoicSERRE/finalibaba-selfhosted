@@ -470,6 +470,32 @@ describe("computeAnalytics - year-end savings interest projection", () => {
     }
   });
 
+  it("does not step up as a second account's sync history begins", () => {
+    // The reported regression: a Livret A synced since January plus a LEP
+    // synced only from June produced a curve reading 150€ until June, then
+    // jumping to 400€ - the LEP's unsynced months being counted as a 0€
+    // balance, the exact bug the single-value path had already fixed. Both
+    // balances are flat all year, so every point must read the same 400€.
+    const input = baseInput({
+      accounts: [
+        account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(10_000_00) }] }),
+        account({ id: "lep", type: "SAVINGS", interestRatePct: 0.025, history: [{ balanceCents: BigInt(10_000_00) }] }),
+      ],
+      allBalances: [
+        { accountId: "livret-a", recordedAt: new Date("2026-01-02T00:00:00.000Z"), balanceCents: BigInt(10_000_00) },
+        { accountId: "lep", recordedAt: new Date("2026-06-20T00:00:00.000Z"), balanceCents: BigInt(10_000_00) },
+      ],
+    });
+
+    const result = computeAnalytics(input);
+    const values = result.estimatedYearEndInterestHistory.map((p) => p.estimatedCents);
+
+    expect(values.length).toBeGreaterThan(1);
+    // 10 000€ @1.5% + 10 000€ @2.5% = 400€, flat across every point.
+    expect(new Set(values)).toEqual(new Set([400_00]));
+    expect(result.estimatedYearEndSavingsInterestCents).toBe(BigInt(400_00));
+  });
+
   it("history series is empty when no SAVINGS account has any balance history yet", () => {
     const input = baseInput({
       accounts: [account({ id: "livret-a", type: "SAVINGS", interestRatePct: 0.015, history: [{ balanceCents: BigInt(10_000_00) }] })],
