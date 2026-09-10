@@ -15,26 +15,38 @@
  * safe to treat as an internal transfer without further evidence.
  *
  * Pure function, no DB calls - mirrors lib/domain/auto-categorize.ts's
- * shape. Global-priority matching: every (credit, debit) pair within
- * toleranceDays is a candidate, and the closest-dated pair overall is
- * assigned first, then the next-closest among what's left, and so on.
+ * shape. Every (credit, debit) pair within toleranceDays on two different
+ * accounts is a candidate; the assignment between them is an augmenting-path
+ * bipartite matching, which pairs up **as many legs as the candidates allow**
+ * and prefers the closest dates within that.
  *
- * Not the same as "for each credit, grab its own closest available debit" -
- * that earlier approach let a credit processed early (in whatever order the
- * transactions happen to be listed, which has no relationship to date)
- * permanently claim a debit that only looked like its best local match,
- * even when a *different*, later-processed credit was actually the true
- * same-day counterpart for that debit. Found in production: a same-day,
- * same-amount, cross-account pair (an obvious real transfer) went
- * unmatched because an unrelated same-amount credit a few days off had
- * already consumed the one true debit first. Global-priority ordering
- * fixes this specific failure mode - the exact-date pair always outranks
- * a looser one and gets assigned before the looser pair even gets a
- * chance to compete for the same debit. Still not a provably-optimal
- * assignment for every conceivable case, but a personal finance account
- * rarely has more than a couple of same-amount candidates to disambiguate
- * between, so this remains a deliberate simplicity tradeoff over a full
- * min-cost matching algorithm.
+ * Two earlier assignments were each wrong in a way the next one fixed, and
+ * both are worth keeping in view because the third is not obviously
+ * different from the second:
+ *
+ *   1. "For each credit, take its closest free debit." A credit processed
+ *      early - in whatever order the rows happened to be listed, which has
+ *      nothing to do with date - could permanently claim a debit that was
+ *      only its best local match, while the credit that was that debit's
+ *      true same-day counterpart found nothing. Seen in production.
+ *   2. "Assign the closest candidate pair overall first, then the next."
+ *      That fixes case 1 and still loses legs, because a claim is never
+ *      reconsidered. Measured on a real account: a 1200 EUR movement from a
+ *      Livret to a current account and on to a broker the next day gives two
+ *      credits and two debits and four valid candidate pairs. The
+ *      Livret-to-broker pair happens to land on the same day, wins on
+ *      closeness, and blocks BOTH real pairings - one pair assigned where
+ *      two were available, and the two current-account legs left to count as
+ *      ordinary spending and income.
+ *
+ * Maximising the count is what rules that out: a claim can be handed over
+ * whenever the credit holding it has somewhere else to go, so a locally
+ * attractive pair can no longer cost two real ones. Closeness still decides
+ * between equally valid assignments, it just no longer decides how many
+ * there are. Not provably minimum-cost - preferring the nearest option is a
+ * heuristic on top of the cardinality guarantee, which is the part that
+ * matters here - and the buckets are per exact amount, so they hold a
+ * handful of rows at most.
  */
 
 export type TransferCandidate = {
@@ -88,33 +100,72 @@ function buildCandidatePairs(
   return pairs;
 }
 
+// Every credit's candidate debits, closest first, plus the credits
+// themselves ordered by how close their own best option is. Both fall out
+// of one global sort, so a credit with a same-day counterpart is offered its
+// pick before one whose nearest candidate is three days off.
+function buildAdjacency(pairs: CandidatePair[]): { order: string[]; adjacency: Map<string, string[]> } {
+  pairs.sort((a, b) => a.diffMs - b.diffMs);
+  const adjacency = new Map<string, string[]>();
+  const order: string[] = [];
+  for (const pair of pairs) {
+    const existing = adjacency.get(pair.creditId);
+    if (existing) existing.push(pair.debitId);
+    else {
+      adjacency.set(pair.creditId, [pair.debitId]);
+      order.push(pair.creditId);
+    }
+  }
+  return { order, adjacency };
+}
+
+// Standard augmenting-path step: give this credit its closest free debit, or
+// take one already claimed if the credit holding it can be re-housed
+// elsewhere. That "can be re-housed" recursion is the whole difference from
+// simply handing out the closest pairs and moving on - it is what lets a
+// first claim be reconsidered rather than standing for good.
+function augment(
+  creditId: string,
+  adjacency: Map<string, string[]>,
+  creditByDebit: Map<string, string>,
+  visited: Set<string>
+): boolean {
+  for (const debitId of adjacency.get(creditId) ?? []) {
+    if (visited.has(debitId)) continue;
+    visited.add(debitId);
+    const holder = creditByDebit.get(debitId);
+    if (holder === undefined || augment(holder, adjacency, creditByDebit, visited)) {
+      creditByDebit.set(debitId, creditId);
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
- * Returns the set of transaction ids that are one half of a detected
- * internal-transfer pair. Only ever pairs a credit (positive amountCents)
- * with a debit (negative) of the exact opposite amount on a *different*
- * account - two transactions on the same account can never be a transfer
- * into/out of "another" account of the user's, so same-account matches are
- * never considered even if the amounts happen to cancel out.
+ * Returns the assignment itself - which credit was matched with which
+ * debit - not just the ids involved. The caller stores it (Transaction.
+ * internalTransferPairId) so a later pass can tell "this row is flagged and
+ * I can see why" from "this row is flagged and the evidence is somewhere I
+ * cannot look", which is the only safe basis for ever *revoking* a flag.
+ *
+ * Only ever pairs a credit (positive amountCents) with a debit (negative)
+ * of the exact opposite amount on a *different* account - two transactions
+ * on the same account can never be a transfer into/out of "another" account
+ * of the user's, so same-account matches are never considered even if the
+ * amounts happen to cancel out.
  */
-export function detectInternalTransferPairs(
+export function detectInternalTransferPairings(
   transactions: TransferCandidate[],
   toleranceDays: number = DEFAULT_TOLERANCE_DAYS
-): Set<string> {
+): Array<{ creditId: string; debitId: string }> {
   const toleranceMs = toleranceDays * 24 * 60 * 60 * 1000;
   const debitsByAbsAmount = groupDebitsByAbsAmount(transactions);
   const pairs = buildCandidatePairs(transactions, debitsByAbsAmount, toleranceMs);
-  pairs.sort((a, b) => a.diffMs - b.diffMs);
+  const { order, adjacency } = buildAdjacency(pairs);
 
-  const matched = new Set<string>();
-  const usedCreditIds = new Set<string>();
-  const usedDebitIds = new Set<string>();
-  for (const pair of pairs) {
-    if (usedCreditIds.has(pair.creditId) || usedDebitIds.has(pair.debitId)) continue;
-    usedCreditIds.add(pair.creditId);
-    usedDebitIds.add(pair.debitId);
-    matched.add(pair.creditId);
-    matched.add(pair.debitId);
-  }
+  const creditByDebit = new Map<string, string>();
+  for (const creditId of order) augment(creditId, adjacency, creditByDebit, new Set());
 
-  return matched;
+  return [...creditByDebit].map(([debitId, creditId]) => ({ creditId, debitId }));
 }

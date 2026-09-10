@@ -567,6 +567,32 @@ model Transaction {
   // automatically (it isn't real income or spending) - the flag doesn't
   // block a manual categorization, only the automatic sources.
   isInternalTransfer   Boolean            @default(false)
+  // Three states, not two. isInternalTransfer above is the *effective*
+  // answer every read query uses; this column says who decided it.
+  //
+  // null  - nobody has ruled on this row, the detector owns it and may
+  //         flag, re-pair or un-flag it on any later pass.
+  // true  - a person marked it as a transfer.
+  // false - a person marked it as NOT a transfer.
+  //
+  // Without this column the detector's own candidate pool
+  // (isInternalTransfer = false) silently swallowed the second case: a row
+  // un-marked by hand went straight back into the pool and was re-flagged
+  // by the very next sync, so "this is real income, not a transfer" never
+  // survived. A person's decision is now excluded from the pool in both
+  // directions and nothing automatic can overwrite it.
+  internalTransferManual Boolean?
+  // The other leg of the pair, when the detector matched one. A soft
+  // reference (no FK) - it is only ever read as "is this id in the pool I
+  // am re-deriving", so a deleted counterpart simply stops matching and
+  // the row is left alone rather than dangling into an error.
+  //
+  // It exists so a flag can be *revoked*: a pass that re-derives its own
+  // pairings must be able to tell a pairing that no longer holds from one
+  // whose other leg sits on an account it cannot see. Only the first is
+  // safe to undo - undoing the second would have two users' passes flag
+  // and un-flag the same co-owned row forever.
+  internalTransferPairId String?
   // A transaction with splits has categoryId = null at the top level - the
   // category breakdown lives entirely in these rows instead. Enforced by
   // setTransactionSplits (lib/actions/transaction-splits.ts), never a raw

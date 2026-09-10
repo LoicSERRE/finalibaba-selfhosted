@@ -6,6 +6,7 @@ import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { IncomeType } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
+import { excludeInternalTransfers } from "@/lib/domain/transaction-filters";
 
 const INCOME_TYPES = new Set(Object.values(IncomeType));
 
@@ -170,11 +171,24 @@ export async function createIncomeEventFromTransaction(
   // internal transfers and real external payments, so treating every
   // same-labeled transaction as "also income" would be just as wrong here
   // as it was for categorization.
+  //
+  // The label denylist alone was not enough, and internal transfers are why:
+  // it only knows the two boilerplate wordings a French bank reuses, so a
+  // transfer that arrives with a real name attached ("VIREMENT M ...") sailed
+  // through it and got recorded as a dividend or as interest - money the app
+  // has already established is not income at all, landing in the one place
+  // meant to be accurate enough to declare. The pairing detector knows about
+  // exactly those, so the sweep asks it rather than the label.
   let siblingCount = 0;
   if (!isGenericTransferLabel(transaction.label)) {
     const normalized = normalizeLabelForCategorization(transaction.label);
     const candidates = await prisma.transaction.findMany({
-      where: { accountId: transaction.accountId, id: { not: transactionId }, amountCents: { gt: BigInt(0) }, incomeEvent: null },
+      where: excludeInternalTransfers({
+        accountId: transaction.accountId,
+        id: { not: transactionId },
+        amountCents: { gt: BigInt(0) },
+        incomeEvent: null,
+      }),
       select: { label: true },
     });
     siblingCount = candidates.filter((c) => normalizeLabelForCategorization(c.label) === normalized).length;
@@ -210,8 +224,17 @@ export async function markSimilarTransactionsAsIncome(
   const ticker = (formData.get("ticker") as string | null)?.trim().toUpperCase() || null;
 
   const normalized = normalizeLabelForCategorization(source.label);
+  // Same exclusion, and the same reason, as the sibling count that offered
+  // this in the first place - see createIncomeEventFromTransaction. The two
+  // queries have to agree or the confirmation would promise one number and
+  // write another.
   const candidates = await prisma.transaction.findMany({
-    where: { accountId: source.accountId, id: { not: transactionId }, amountCents: { gt: BigInt(0) }, incomeEvent: null },
+    where: excludeInternalTransfers({
+      accountId: source.accountId,
+      id: { not: transactionId },
+      amountCents: { gt: BigInt(0) },
+      incomeEvent: null,
+    }),
     select: { id: true, label: true, date: true, amountCents: true },
   });
   const matches = candidates.filter((c) => normalizeLabelForCategorization(c.label) === normalized);

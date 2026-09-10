@@ -3,7 +3,7 @@
 import { revalidateTransactions } from "@/lib/actions/revalidate";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, assertTransactionsWritable, assertOwned } from "@/lib/auth-context";
+import { getViewer, assertTransactionsWritable, assertOwned, baseAccountIds } from "@/lib/auth-context";
 import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
@@ -59,6 +59,11 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
  * cleanup, which only ever clears a specific "Revenus" mis-categorization,
  * not a blanket clear), and a manual correction is by definition already
  * reviewed by the person making it.
+ *
+ * It writes internalTransferManual as well as the flag, and that is what
+ * makes it stick: the detector's candidate pool is every row with no human
+ * decision, so before this column existed an un-marked transfer went
+ * straight back into the pool and the next sync re-flagged it.
  */
 export async function setInternalTransferFlag(transactionId: string, flagged: boolean) {
   const viewer = await getViewer();
@@ -66,9 +71,33 @@ export async function setInternalTransferFlag(transactionId: string, flagged: bo
 
   const tx = await prisma.transaction.update({
     where: { id: transactionId },
-    data: { isInternalTransfer: flagged },
-    select: { accountId: true, categoryId: true },
+    data: { isInternalTransfer: flagged, internalTransferManual: flagged },
+    select: { accountId: true, categoryId: true, internalTransferPairId: true },
   });
+
+  // Un-marking one leg breaks the pair, so the other leg is no longer half
+  // of anything either and goes back to being ordinary money - leaving it
+  // flagged would keep it out of every budget total on the strength of a
+  // pairing the user has just rejected. Scoped through updateMany rather
+  // than a direct update so the two cases where it must not happen simply
+  // match nothing instead of throwing: the partner sits on an account this
+  // viewer cannot write to, or a person has already ruled on it themselves.
+  //
+  // Marking one leg by hand is not the mirror image of this and deliberately
+  // stops at the row it was asked about: the reason to do it at all is that
+  // the counterpart was never recorded anywhere, so there is nothing to
+  // flag alongside it.
+  if (!flagged && tx.internalTransferPairId) {
+    const writableIds = await baseAccountIds(viewer.id);
+    await prisma.transaction.updateMany({
+      where: {
+        id: tx.internalTransferPairId,
+        accountId: { in: writableIds },
+        internalTransferManual: null,
+      },
+      data: { isInternalTransfer: false, internalTransferPairId: null },
+    });
+  }
 
   revalidateTransactions(tx.accountId, [tx.categoryId]);
 }

@@ -15,26 +15,31 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 const {
   txFindManyMock,
   txUpdateManyMock,
+  txUpdateMock,
+  transactionMock,
   categoryFindManyMock,
   categoryCreateMock,
-  detectPairsMock,
+  detectPairingsMock,
 } = vi.hoisted(() => ({
   txFindManyMock: vi.fn(),
   txUpdateManyMock: vi.fn(),
+  txUpdateMock: vi.fn(),
+  transactionMock: vi.fn(),
   categoryFindManyMock: vi.fn(),
   categoryCreateMock: vi.fn(),
-  detectPairsMock: vi.fn(() => new Set<string>()),
+  detectPairingsMock: vi.fn(() => [] as Array<{ creditId: string; debitId: string }>),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    transaction: { findMany: txFindManyMock, updateMany: txUpdateManyMock },
+    transaction: { findMany: txFindManyMock, updateMany: txUpdateManyMock, update: txUpdateMock },
     category: { findMany: categoryFindManyMock, create: categoryCreateMock },
+    $transaction: transactionMock,
   },
 }));
 
 vi.mock("@/lib/domain/internal-transfers", () => ({
-  detectInternalTransferPairs: detectPairsMock,
+  detectInternalTransferPairings: detectPairingsMock,
 }));
 
 import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
@@ -51,10 +56,17 @@ const ACCOUNTS = ["acc-1", "acc-2"];
 beforeEach(() => {
   txFindManyMock.mockReset().mockResolvedValue([]);
   txUpdateManyMock.mockReset().mockResolvedValue({ count: 0 });
+  txUpdateMock.mockReset().mockImplementation(async (args) => args);
+  transactionMock.mockReset().mockImplementation(async (ops) => ops);
   categoryFindManyMock.mockReset().mockResolvedValue([]);
   categoryCreateMock.mockReset();
-  detectPairsMock.mockReset().mockReturnValue(new Set());
+  detectPairingsMock.mockReset().mockReturnValue([]);
 });
+
+/** The per-row writes the transfer pass batches into one $transaction. */
+function pairWrites() {
+  return txUpdateMock.mock.calls.map(([a]) => a);
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -94,35 +106,109 @@ describe("account scoping", () => {
 });
 
 describe("internal-transfer pass", () => {
+  /** Two unflagged legs of one transfer, nobody has ruled on either. */
+  const FRESH_PAIR = [
+    { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
+    { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
+  ];
+
   it("flags detected pairs and clears only this user's own \"Revenus\"", async () => {
-    queueTransactionQueries([
-      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date() },
-      { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date() },
-    ]);
-    detectPairsMock.mockReturnValue(new Set(["t1", "t2"]));
+    queueTransactionQueries(FRESH_PAIR);
+    detectPairingsMock.mockReturnValue([{ creditId: "t2", debitId: "t1" }]);
 
     await autoCategorizeForUser("user-a", ACCOUNTS);
 
-    const flagged = txUpdateManyMock.mock.calls.find(
-      ([a]) => a.data?.isInternalTransfer === true
-    );
-    expect(flagged?.[0].where.id.in).toEqual(["t1", "t2"]);
+    // Each leg records the other, so a later pass can tell what justified it.
+    expect(pairWrites()).toEqual([
+      { where: { id: "t1" }, data: { isInternalTransfer: true, internalTransferPairId: "t2" } },
+      { where: { id: "t2" }, data: { isInternalTransfer: true, internalTransferPairId: "t1" } },
+    ]);
 
     // The retroactive cleanup must not clear a category belonging to someone
     // else who happens to have named theirs "Revenus" too.
     const cleared = txUpdateManyMock.mock.calls.find(([a]) => a.data?.categoryId === null);
     expect(cleared?.[0].where.category).toEqual({ userId: "user-a", name: "Revenus" });
+    expect(cleared?.[0].where.id.in).toEqual(["t1", "t2"]);
+  });
+
+  it("never considers a row a person has ruled on, in either direction", async () => {
+    // The whole point of the third state: the pool is what nobody decided.
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    const pool = txFindManyMock.mock.calls[0][0];
+    expect(pool.where.internalTransferManual).toBeNull();
   });
 
   it("writes nothing when no pair is detected", async () => {
     queueTransactionQueries([
-      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date() },
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
     ]);
-    detectPairsMock.mockReturnValue(new Set());
 
     await autoCategorizeForUser("user-a", ACCOUNTS);
 
+    expect(transactionMock).not.toHaveBeenCalled();
     expect(txUpdateManyMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves an already-correct pairing completely alone", async () => {
+    queueTransactionQueries([
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t2" },
+      { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t1" },
+    ]);
+    detectPairingsMock.mockReturnValue([{ creditId: "t2", debitId: "t1" }]);
+
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it("re-pairs a leg onto the counterpart that turned up later", async () => {
+    // t1 was matched with the unrelated t3 when it was the only same-amount
+    // credit around; t2 has since arrived on the same day and wins. Nothing
+    // used to revisit this - both wrong halves stayed out of every total.
+    queueTransactionQueries([
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t3" },
+      { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
+      { id: "t3", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t1" },
+    ]);
+    detectPairingsMock.mockReturnValue([{ creditId: "t2", debitId: "t1" }]);
+
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    expect(pairWrites()).toEqual([
+      { where: { id: "t1" }, data: { isInternalTransfer: true, internalTransferPairId: "t2" } },
+      { where: { id: "t2" }, data: { isInternalTransfer: true, internalTransferPairId: "t1" } },
+    ]);
+    // t3 loses its flag: the pairing that justified it is gone and this pass
+    // can see that for itself, because t1 is in the very pool it re-derived.
+    const revoked = txUpdateManyMock.mock.calls.find(([a]) => a.data?.isInternalTransfer === false);
+    expect(revoked?.[0].where.id.in).toEqual(["t3"]);
+  });
+
+  it("never revokes a flag whose other leg it cannot see", async () => {
+    // The co-owned-account case: this user sees one leg of a transfer another
+    // stakeholder's pass matched. Revoking here and re-flagging there would
+    // flip the row between them forever.
+    queueTransactionQueries([
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "elsewhere" },
+    ]);
+
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it("never revokes a flag that predates the recorded pairing", async () => {
+    // Flagged before the column existed and left unpaired by the migration's
+    // backfill: no evidence either way, so it keeps its flag until a person
+    // says otherwise rather than being dropped on nothing.
+    queueTransactionQueries([
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: null },
+    ]);
+
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 });
 

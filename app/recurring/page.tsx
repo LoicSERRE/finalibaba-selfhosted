@@ -21,6 +21,7 @@ import {
   normalizeLabel,
   projectDailyCumulative,
 } from "@/lib/domain/recurring";
+import { excludeInternalTransfers } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
 
 const FIAT_TYPES = ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] as const;
@@ -57,7 +58,22 @@ export default async function RecurringPage() {
       // Detection groups by (accountId, label), so feeding it only the
       // viewer's own accounts also keeps suggestions from being derived
       // across users who happen to share a merchant name.
-      where: { accountId: { in: accountIds }, date: { gte: detectionCutoff } },
+      //
+      // Internal transfers are excluded, and they are the single most
+      // detectable pattern there is: a standing order into a savings
+      // account is the same amount, the same day and the same label every
+      // month, so it cleared every threshold detection has and was offered
+      // as a subscription to confirm - repeatedly, on both legs, which is
+      // also money the projection would then count twice. What this page
+      // looks for is a commitment to somebody else; moving your own money
+      // between your own accounts is not one.
+      //
+      // Securities movements are deliberately NOT excluded, unlike the
+      // budget totals: a monthly savings-plan execution really does leave
+      // the cash account on a schedule, which is exactly what a cash-flow
+      // projection is for. The question here is "is this a regular
+      // outgoing", not "is this household spending".
+      where: excludeInternalTransfers({ accountId: { in: accountIds }, date: { gte: detectionCutoff } }),
       select: { accountId: true, label: true, amountCents: true, date: true, categoryId: true },
     }),
   ]);

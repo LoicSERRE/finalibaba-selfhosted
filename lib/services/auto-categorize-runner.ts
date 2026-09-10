@@ -14,7 +14,7 @@ import { prisma } from "@/lib/db/prisma";
 import { suggestCategoryAssignments } from "@/lib/domain/auto-categorize";
 import { matchMerchantCategory, MERCHANT_CATEGORY_COLORS } from "@/lib/domain/merchant-categories";
 import { matchMccCategory, MCC_CATEGORY_COLORS } from "@/lib/domain/mcc-categories";
-import { detectInternalTransferPairs } from "@/lib/domain/internal-transfers";
+import { detectInternalTransferPairings } from "@/lib/domain/internal-transfers";
 import { excludeFromBudgetTotals } from "@/lib/domain/transaction-filters";
 
 type UncategorizedTx = { id: string; accountId: string; label: string; merchantCategoryCode: string | null };
@@ -115,31 +115,99 @@ async function matchAgainstDefaults(
 // is every account anyway, so behavior there is unchanged.
 //
 // Running it per user means a transfer is flagged if ANY stakeholder can see
-// both sides, which is the intended semantics for a co-owned account. It is
-// safe to run repeatedly from several users' passes: the write only ever
-// sets isInternalTransfer to true (monotonic), so two passes can't thrash a
-// row back and forth.
+// both sides, which is the intended semantics for a co-owned account.
 //
 // Deliberately NOT narrowed further to one accountId the way the rest of the
 // engine can be - transfers are inherently cross-account, so the pool has to
-// span the runner's whole base set. Once a pair is flagged, the
-// isInternalTransfer index keeps each subsequent run bounded to genuinely
-// new transactions rather than rescanning history.
+// span the runner's whole base set.
+//
+// The pool is every row NOBODY HAS RULED ON, flagged or not - not, as it
+// used to be, every row that isn't flagged yet. Two consequences, and both
+// were real defects:
+//
+//   - A person's decision now survives. The old pool contained every
+//     un-flagged row, which is exactly where un-marking a transfer by hand
+//     put it, so the next sync flagged it straight back.
+//   - A pairing is no longer permanent. A debit paired with an unrelated
+//     same-amount credit stayed that way even once its true counterpart
+//     turned up, and both wrong halves stayed out of budgets and income for
+//     good. Re-deriving over the whole pool lets a better pairing win.
+//
+// Re-deriving means the pass can now *revoke* a flag, which the old
+// monotonic write made structurally impossible - and that write was what
+// kept two users' passes over a co-owned account from thrashing one row
+// between them. The replacement guarantee is internalTransferPairId: a flag
+// is only ever revoked when the partner that justified it is in this pass's
+// own pool, so a pairing whose other leg sits on an account this user cannot
+// see is left exactly as it is. A row flagged before that column existed and
+// left unpaired by the migration's backfill likewise keeps its flag until a
+// person says otherwise, rather than being dropped on no evidence.
 async function flagInternalTransfers(accountIds: string[], userId: string): Promise<void> {
   if (accountIds.length === 0) return;
   const candidates = await prisma.transaction.findMany({
-    where: { isInternalTransfer: false, accountId: { in: accountIds } },
-    select: { id: true, accountId: true, amountCents: true, date: true },
+    // Securities movements are not a leg of anything: buying shares moves
+    // money out of the cash account and into a position, and no second bank
+    // account ever records the other side. Leaving them in only ever gave
+    // the matcher fake competition, and on a real account it won - a 10 EUR
+    // "Bitcoin - Sparplan ausgeführt" sat exactly as close to a 10 EUR
+    // credit on a Livret as the genuine transfer out of the current account
+    // did, took the tie, and the real pair went unflagged.
+    where: {
+      internalTransferManual: null,
+      isSecuritiesMovement: false,
+      accountId: { in: accountIds },
+    },
+    select: {
+      id: true,
+      accountId: true,
+      amountCents: true,
+      date: true,
+      isInternalTransfer: true,
+      internalTransferPairId: true,
+    },
   });
   if (candidates.length === 0) return;
 
-  const matchedIds = [...detectInternalTransferPairs(candidates)];
-  if (matchedIds.length === 0) return;
+  const partnerById = new Map<string, string>();
+  for (const { creditId, debitId } of detectInternalTransferPairings(candidates)) {
+    partnerById.set(creditId, debitId);
+    partnerById.set(debitId, creditId);
+  }
+  const poolIds = new Set(candidates.map((c) => c.id));
 
-  await prisma.transaction.updateMany({
-    where: { id: { in: matchedIds } },
-    data: { isInternalTransfer: true },
-  });
+  const newlyPaired: Array<{ id: string; pairId: string }> = [];
+  const unpaired: string[] = [];
+  for (const c of candidates) {
+    const partner = partnerById.get(c.id);
+    if (partner) {
+      // Rewritten when the partner changed too, not only when the flag did -
+      // a re-pairing has to leave the stored evidence pointing at the leg
+      // that actually justifies it.
+      if (!c.isInternalTransfer || c.internalTransferPairId !== partner) {
+        newlyPaired.push({ id: c.id, pairId: partner });
+      }
+    } else if (c.isInternalTransfer && c.internalTransferPairId && poolIds.has(c.internalTransferPairId)) {
+      unpaired.push(c.id);
+    }
+  }
+
+  if (newlyPaired.length === 0 && unpaired.length === 0) return;
+
+  await prisma.$transaction([
+    ...newlyPaired.map(({ id, pairId }) =>
+      prisma.transaction.update({
+        where: { id },
+        data: { isInternalTransfer: true, internalTransferPairId: pairId },
+      })
+    ),
+    prisma.transaction.updateMany({
+      where: { id: { in: unpaired } },
+      data: { isInternalTransfer: false, internalTransferPairId: null },
+    }),
+  ]);
+
+  const matchedIds = newlyPaired.map((p) => p.id);
+  if (matchedIds.length === 0) return;
 
   // Retroactive cleanup for the exact incident this was built to fix: a
   // transaction already (wrongly) sitting in "Revenus" that's now

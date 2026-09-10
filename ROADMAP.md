@@ -370,6 +370,32 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 
 ---
 
+## v2.10 - The audit's own findings, patched
+
+*The end-of-version audit that produced v2.9.2 to v2.9.4 found twenty-four defects; those three releases fixed the ones losing data. This one starts on the rest, in the order they cost the most.*
+
+### Money that was never spent
+
+- [X] **Buying shares was counted as spending.** A broker's cash account is a `CHECKING` account, so every `Kauforder` and `Sparplan` landed in the budget totals as an expense and every sale as income. Measured on a real instance: one month showed 8 EUR of spending on the actual bank account against **-3 233 EUR** on the brokerage account, almost all of it two share purchases, which made "reste à vivre" describe nothing. Across its whole history, 323 of the rows the app was asking the user to categorise were stock orders. `Transaction.isSecuritiesMovement` is set by the sync and backfilled by the migration from Trade Republic's own vocabulary; 438 rows reclassified, September's "reste à vivre" went from **-252,76 EUR to +126,31 EUR** and the categorisation backlog from 687 to 337, with zero rows caught that lacked a securities keyword. Deliberately **not** solved by excluding the account: the same account also carries 293 rows of real card spending, so the distinction has to be per transaction. Equally deliberately, it excludes a row from *totals* and never from a browsing surface - a trade did happen, and hiding it in the ledger would be lying about the account.
+
+### Human decisions about transfers now survive, and pairings can be revisited
+
+- [X] **Un-marking a transfer by hand did not hold.** The detector's candidate pool was every row not yet flagged, which is exactly where un-marking one put it - so the next sync flagged it straight back and "this is real income, not a transfer" never survived the hour. `Transaction.internalTransferManual` is the third state: null means the detector owns the row, true and false are a person's decision, and neither is ever overwritten automatically. Un-marking one leg also releases the other, which is no longer half of anything.
+- [X] **A wrong pairing was permanent.** Once flagged, a row left the pool for good, so a debit matched to an unrelated same-amount credit stayed matched even after its true counterpart turned up - both wrong halves out of budgets and income forever. The pass now re-derives its own pairings over everything nobody has ruled on. Revoking a flag was structurally impossible before (the write only ever set it to true, which is also what kept two users' passes over a co-owned account from thrashing one row between them); `internalTransferPairId` replaces that guarantee, by only ever revoking a flag whose partner is in the same pool.
+- [X] **The matcher itself had to be rewritten in the same pass, and only real data showed why.** Assigning the closest candidate pair first and never reconsidering it loses legs: 1200 EUR moving Livret -> current account -> broker over two days gives two credits, two debits and four valid pairs, and the Livret-to-broker pair wins on closeness and blocks **both** true pairings. So the first re-derivation on a production copy revoked 5 flags, 4 of them unmistakable real transfers a locally-closer pair had displaced. Now an augmenting-path matching, which pairs as many legs as the candidates allow and prefers closeness within that. Securities movements also leave the pool - a 10 EUR `Bitcoin - Sparplan ausgeführt` sat exactly as close to a 10 EUR Livret credit as the genuine transfer did, and took the tie. Re-measured on the same database: **32 legs newly flagged, 35 re-paired onto a better counterpart, 1 revoked**.
+- [X] **Internal transfers were being offered as recurring subscriptions.** A standing order into a savings account is the most detectable pattern there is - same amount, same day, same label, every month - so it cleared every threshold, on both legs, and would then have been projected as a real outgoing. Savings-plan executions are deliberately *kept*: one really does leave the cash account on a schedule, and a cash-flow projection asks "is this regular", not "is this household spending".
+- [X] **"Mark as income" in bulk ignored the flag.** Its only guard was the generic-label denylist, which knows two boilerplate wordings - so a transfer arriving with a real name attached ("VIREMENT M ...") was swept in and recorded as a dividend or as interest, in the one place meant to be accurate enough to declare.
+
+### The same figure, the same meaning, on every screen
+
+- [X] **Three screens disagreed about what net worth is.** The dashboard reported it before latent tax and analytics after it, so the same portfolio had two headline numbers. `netWorth` is after tax everywhere now, with `netWorthBeforeTax` kept alongside it, and the projection draws both curves - some countries tax on withdrawal, so both are worth seeing.
+- [X] **The net-worth history subtracted the original loan capital, for every past day.** A loan repaid over three years showed as a constant liability at its day-one amount, so the entire curve sat below the truth by however much had been repaid. Each day now amortises the loan to that day.
+- [X] **The projection never deducted the latent tax already owed.** It taxed the gain it projected and ignored the unrealised gain sitting there on day one, so the after-tax curve started too high and stayed too high by a constant.
+
+**Known limit, measured rather than assumed**: amount-and-date matching still produces the occasional false pair - a 105 EUR incoming transfer from a third party and an unrelated 105 EUR card payment two days later on another account. Tightening the tolerance would not help: of 63 pairs on a real account, 29 are same-day, 28 one day apart and 6 two days apart, and 5 of those 6 are genuine. The durable fix is Trade Republic's own `eventType`, which distinguishes a card payment from a transfer and which the sync does not yet capture.
+
+---
+
 ## v2.9.4 - One movement, described twice, is not two movements - Released ✓
 
 *v2.9.3 recovered real transactions and introduced two duplication bugs doing it. Both were found by diffing production dumps a day later, and the second only by asking the bank's own balance instead of trusting the reasoning that produced it.*

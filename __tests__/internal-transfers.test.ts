@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { detectInternalTransferPairs } from "@/lib/domain/internal-transfers";
+import { detectInternalTransferPairings } from "@/lib/domain/internal-transfers";
+import type { TransferCandidate } from "@/lib/domain/internal-transfers";
+
+/** The ids on either side of a detected pair - what the caller acts on. */
+function detectInternalTransferPairs(txs: TransferCandidate[], toleranceDays?: number): Set<string> {
+  const ids = new Set<string>();
+  for (const p of detectInternalTransferPairings(txs, toleranceDays)) {
+    ids.add(p.creditId);
+    ids.add(p.debitId);
+  }
+  return ids;
+}
 
 describe("detectInternalTransferPairs", () => {
   it("matches a same-day, same-amount credit/debit pair on different accounts", () => {
@@ -43,7 +54,7 @@ describe("detectInternalTransferPairs", () => {
     expect(result.size).toBe(0);
   });
 
-  it("greedily picks the closest-dated debit when multiple candidates share the same amount", () => {
+  it("picks the closest-dated debit when multiple candidates share the same amount", () => {
     const result = detectInternalTransferPairs([
       { id: "credit1", accountId: "a2", amountCents: BigInt(5000), date: new Date("2026-07-05") },
       { id: "debitFar", accountId: "a1", amountCents: BigInt(-5000), date: new Date("2026-07-01") },
@@ -81,6 +92,24 @@ describe("detectInternalTransferPairs", () => {
     expect(result.has("creditFewDaysOff")).toBe(false);
   });
 
+  it("pairs up as many legs as the candidates allow, not as many as closeness suggests", () => {
+    // Measured on a real account: 1200 EUR left a Livret, landed on the
+    // current account, and went on to a broker the next day. Four legs, four
+    // valid candidate pairs. Assigning the closest pair first hands the
+    // Livret debit to the broker credit - same day, so it wins - and both
+    // current-account legs are then left to count as ordinary spending and
+    // income, one pair where two were available.
+    const result = detectInternalTransferPairings([
+      { id: "currentIn", accountId: "current", amountCents: BigInt(120000), date: new Date("2026-02-13") },
+      { id: "currentOut", accountId: "current", amountCents: BigInt(-120000), date: new Date("2026-02-13") },
+      { id: "livretOut", accountId: "livret", amountCents: BigInt(-120000), date: new Date("2026-02-14") },
+      { id: "brokerIn", accountId: "broker", amountCents: BigInt(120000), date: new Date("2026-02-14") },
+    ]);
+    expect(result).toHaveLength(2);
+    expect(result).toContainEqual({ creditId: "currentIn", debitId: "livretOut" });
+    expect(result).toContainEqual({ creditId: "brokerIn", debitId: "currentOut" });
+  });
+
   it("real-world example: LCL's generic 'VIREMENT SEPA' label reused for both an internal transfer and unrelated payments", () => {
     // Mirrors data seen in production: a 2500€ internal transfer between
     // "Compte perso" and "Livret A", alongside an unrelated salary-like
@@ -93,5 +122,37 @@ describe("detectInternalTransferPairs", () => {
     expect(result.has("internalCredit")).toBe(true);
     expect(result.has("internalDebit")).toBe(true);
     expect(result.has("salary")).toBe(false);
+  });
+});
+
+describe("detectInternalTransferPairings", () => {
+  it("says which credit went with which debit, not just who was involved", () => {
+    // The caller stores this. Without it a later pass can tell that a row is
+    // flagged but not what justified it, which is the only thing that makes
+    // revoking a flag safe rather than a guess.
+    const result = detectInternalTransferPairings([
+      { id: "credit1", accountId: "a2", amountCents: BigInt(250000), date: new Date("2026-07-04") },
+      { id: "debit1", accountId: "a1", amountCents: BigInt(-250000), date: new Date("2026-07-04") },
+    ]);
+    expect(result).toEqual([{ creditId: "credit1", debitId: "debit1" }]);
+  });
+
+  it("keeps the closest-first assignment the flattened form has always had", () => {
+    // debit1 sits between two same-amount credits; the same-day one wins and
+    // the looser one is left unpaired rather than stealing it.
+    const result = detectInternalTransferPairings([
+      { id: "far", accountId: "a2", amountCents: BigInt(10000), date: new Date("2026-07-06") },
+      { id: "debit1", accountId: "a1", amountCents: BigInt(-10000), date: new Date("2026-07-04") },
+      { id: "near", accountId: "a3", amountCents: BigInt(10000), date: new Date("2026-07-04") },
+    ]);
+    expect(result).toEqual([{ creditId: "near", debitId: "debit1" }]);
+  });
+
+  it("returns nothing to store when nothing pairs", () => {
+    expect(
+      detectInternalTransferPairings([
+        { id: "credit1", accountId: "a2", amountCents: BigInt(10000), date: new Date("2026-07-01") },
+      ])
+    ).toEqual([]);
   });
 });
