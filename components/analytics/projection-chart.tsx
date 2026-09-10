@@ -19,12 +19,6 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 const HORIZONS = [10, 20, 30, 40] as const;
 const DEFAULT_HORIZON_YEARS = 30;
-// Same hardcoded assumption lib/domain/analytics.ts's own dividend-calendar
-// estimate already uses for "Livret A"-named accounts (see the
-// name.includes("livret a") branch there) - reused here as the default
-// for the liquid-bucket rate below rather than inventing a second,
-// independent guess.
-const DEFAULT_LIQUID_RETURN_PCT = 1.5;
 
 // Long-term net worth projection (v1.14) - a compound-growth "what-if"
 // chart, deliberately client-side and interactive rather than a persisted
@@ -38,6 +32,7 @@ export function ProjectionChart({
   investedCents,
   annualContributionCents,
   defaultAnnualReturnPct,
+  defaultLiquidReturnPct,
   effectiveTaxRate,
 }: Readonly<{
   currentNetWorthCents: bigint;
@@ -59,6 +54,18 @@ export function ProjectionChart({
   // guessing from a single noisy month-over-month delta.
   annualContributionCents: bigint | null;
   defaultAnnualReturnPct: number;
+  // Pre-filled from the exact same balance-weighted rate across real
+  // SAVINGS accounts that the "Estimation des intérêts d'épargne" card
+  // already computes and shows (lib/domain/analytics.ts's
+  // weightedSavingsRatePct) - this used to be an independent hardcoded
+  // 1.5% ("same as lib/domain/analytics.ts's own Livret-A-named-account
+  // guess"), even after that guess itself was replaced by a real per-
+  // account rate elsewhere on this same page. Reported directly: two
+  // livret-return numbers on the same page that could have been the same
+  // number and weren't. Falls back to 1.5% when no SAVINGS account has a
+  // rate set yet, same reasoning as defaultAnnualReturnPct's own fallback
+  // for a portfolio with no computable CAGR.
+  defaultLiquidReturnPct: number;
   // Blended latent-tax rate (0-1 ratio) from lib/domain/analytics.ts's
   // AnalyticsResult - 0 when hasTaxData is false, in which case the
   // after-tax series is identical to the pre-tax one and stays hidden
@@ -67,7 +74,7 @@ export function ProjectionChart({
 }>) {
   const t = useTranslations("projectionChart");
   const [investedReturnPct, setInvestedReturnPct] = useState(defaultAnnualReturnPct);
-  const [liquidReturnPct, setLiquidReturnPct] = useState(DEFAULT_LIQUID_RETURN_PCT);
+  const [liquidReturnPct, setLiquidReturnPct] = useState(defaultLiquidReturnPct);
   const [horizonYears, setHorizonYears] = useState<number>(DEFAULT_HORIZON_YEARS);
   const currentYear = new Date().getFullYear();
   const showAfterTax = effectiveTaxRate > 0;
