@@ -83,7 +83,7 @@ docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
    AND d.date BETWEEN g.date - INTERVAL '3 days' AND g.date + INTERVAL '3 days'
    AND lower(btrim(d.label)) NOT IN ('virement sepa', 'virement instantane')
   WHERE g.id IN ($CANDIDATES)
-  ORDER BY g.date;"
+  ORDER BY g.date;" < /dev/null
 
 echo ""
 echo "→ Trade Republic rows describing a purchase already stored:"
@@ -105,10 +105,30 @@ docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
     AND k.\"categoryId\" IS NULL
     AND NOT EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = k.id)
     AND NOT EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = k.id)
-  ORDER BY k.date;"
+  ORDER BY k.date;" < /dev/null
 
 echo ""
-echo "→ Skipped because you have categorised, split or marked them as income:"
+echo "→ Merged instead of deleted (the flag is on the placeholder row, the"
+echo "  real name on the other - neither can simply go):"
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+  SELECT a.name AS account, g.date::date AS date, g.\"amountCents\"/100.0 AS amount,
+         g.label AS keeping_this_row, d.label AS taking_this_label
+  FROM \"Transaction\" g
+  JOIN \"Account\" a ON a.id = g.\"accountId\"
+  JOIN \"Transaction\" d
+    ON d.\"accountId\" = g.\"accountId\" AND d.\"amountCents\" = g.\"amountCents\"
+   AND d.id <> g.id AND d.date BETWEEN g.date - INTERVAL '3 days' AND g.date + INTERVAL '3 days'
+   AND lower(btrim(d.label)) NOT IN ('virement sepa', 'virement instantane')
+  WHERE lower(btrim(g.label)) IN ('virement sepa', 'virement instantane')
+    AND (a.\"syncId\" LIKE 'woob:%' OR a.\"syncId\" LIKE 'lcl:%')
+    AND g.\"isInternalTransfer\" AND NOT d.\"isInternalTransfer\"
+    AND d.\"categoryId\" IS NULL
+    AND NOT EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = d.id)
+    AND NOT EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = d.id)
+  ORDER BY g.date;" < /dev/null
+
+echo ""
+echo "→ Left alone - removing or merging either row would lose something:"
 docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
   SELECT a.name AS account, g.date::date AS date, g.\"amountCents\"/100.0 AS amount, g.label
   FROM \"Transaction\" g
@@ -124,7 +144,12 @@ docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
          OR g.\"isInternalTransfer\" <> d.\"isInternalTransfer\"
          OR EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = g.id)
          OR EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = g.id))
-  ORDER BY g.date;"
+    -- minus the ones the merge above handles
+    AND NOT (g.\"isInternalTransfer\" AND NOT d.\"isInternalTransfer\"
+             AND d.\"categoryId\" IS NULL
+             AND NOT EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = d.id)
+             AND NOT EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = d.id))
+  ORDER BY g.date;" < /dev/null
 
 if [ "$APPLY" -ne 1 ]; then
   echo ""
