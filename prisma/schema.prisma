@@ -536,6 +536,21 @@ model Transaction {
   // when present, since it's assigned by the card network at merchant
   // registration time rather than guessed from a label substring.
   merchantCategoryCode String?
+  // A portfolio movement, not household spending: buying or selling a
+  // security, a savings-plan execution, cash moving into a PEA envelope.
+  //
+  // A broker's cash account is typed CHECKING because that is what it is -
+  // money sits there and a card spends it - so every debit on it counted as
+  // spending. Measured on a real instance: in one month the actual bank
+  // account showed 8 EUR of spending while the brokerage account showed
+  // -3 233 EUR, almost all of it two share purchases, making "reste à
+  // vivre" describe nothing. Across its whole history, 323 of the rows the
+  // app asked the user to categorise were stock orders.
+  //
+  // Deliberately NOT solved by excluding the account: the same account also
+  // carries 293 rows of real card spending (supermarkets, restaurants), so
+  // the distinction has to be made per transaction, not per account.
+  isSecuritiesMovement Boolean            @default(false)
   createdAt            DateTime           @default(now())
   // Reverse side of IncomeEvent.transactionId - lets "Mark as income"
   // (see IncomeEvent below) tell whether this transaction already has one,

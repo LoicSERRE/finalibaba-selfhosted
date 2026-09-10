@@ -20,7 +20,7 @@ import {
 } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
 import { probeYahooSectorHealth } from "@/lib/services/yahoo-finance";
-import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
+import { excludeInternalTransfers, excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { amountMagnitudeRanges, type AmountRange } from "@/lib/domain/transactions-ledger";
 import {
   isPerUserTrSource,
@@ -674,7 +674,7 @@ async function checkBudgetOverrunRule(
   // invisible to this alert entirely. See CLAUDE.md's "Split transactions".
   const [spend, splitSpend] = await Promise.all([
     prisma.transaction.aggregate({
-      where: excludeInternalTransfers({
+      where: excludeFromBudgetTotals({
         accountId: { in: accountIds },
         categoryId: rule.category.id,
         amountCents: { lt: BigInt(0) },
@@ -683,7 +683,7 @@ async function checkBudgetOverrunRule(
       _sum: { amountCents: true },
     }),
     prisma.transactionSplit.aggregate({
-      where: excludeInternalTransfersOnSplit(
+      where: excludeFromBudgetTotalsOnSplit(
         { categoryId: rule.category.id, amountCents: { lt: BigInt(0) } },
         { accountId: { in: accountIds }, date: { gte: monthRange.start, lt: monthRange.end } },
       ),

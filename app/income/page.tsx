@@ -11,7 +11,7 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { deleteIncomeEvent } from "@/lib/actions/income";
 import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
 import { mergeCentsMaps } from "@/lib/domain/budgets";
-import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
+import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT", "CRYPTO"] as const;
@@ -72,7 +72,7 @@ export default async function IncomePage({
     prisma.category.findMany({ where: { userId: viewer.id, kind: "INCOME" }, orderBy: { name: "asc" } }),
     prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: excludeInternalTransfers({
+      where: excludeFromBudgetTotals({
         accountId: { in: accountIds },
         amountCents: { gt: BigInt(0) },
         date: { gte: startOfYear, lt: startOfNextYear },
@@ -87,7 +87,7 @@ export default async function IncomePage({
     // INCOME category's year-to-date total comes from here instead.
     prisma.transactionSplit.groupBy({
       by: ["categoryId"],
-      where: excludeInternalTransfersOnSplit(
+      where: excludeFromBudgetTotalsOnSplit(
         { amountCents: { gt: BigInt(0) }, category: { kind: "INCOME" } },
         { accountId: { in: accountIds }, date: { gte: startOfYear, lt: startOfNextYear } },
       ),

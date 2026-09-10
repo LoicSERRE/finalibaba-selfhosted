@@ -15,7 +15,7 @@ import { suggestCategoryAssignments } from "@/lib/domain/auto-categorize";
 import { matchMerchantCategory, MERCHANT_CATEGORY_COLORS } from "@/lib/domain/merchant-categories";
 import { matchMccCategory, MCC_CATEGORY_COLORS } from "@/lib/domain/mcc-categories";
 import { detectInternalTransferPairs } from "@/lib/domain/internal-transfers";
-import { excludeInternalTransfers } from "@/lib/domain/transaction-filters";
+import { excludeFromBudgetTotals } from "@/lib/domain/transaction-filters";
 
 type UncategorizedTx = { id: string; accountId: string; label: string; merchantCategoryCode: string | null };
 
@@ -212,7 +212,7 @@ export async function autoCategorizeForUser(
     // treat it as genuinely uncategorized and silently overwrite the
     // user's manual split the next time this runs.
     prisma.transaction.findMany({
-      where: excludeInternalTransfers({ ...scope, categoryId: null, splits: { none: {} } }),
+      where: excludeFromBudgetTotals({ ...scope, categoryId: null, splits: { none: {} } }),
       select: { id: true, accountId: true, label: true, merchantCategoryCode: true },
     }),
     prisma.transaction.findMany({

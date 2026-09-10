@@ -12,7 +12,7 @@ import { AutoCategorizeButton } from "@/components/budgets/auto-categorize-butto
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { normalizeLabel } from "@/lib/domain/recurring";
 import { monthsBetween, computeRolloverCarryInCents, mergeCentsMaps } from "@/lib/domain/budgets";
-import { excludeInternalTransfers, excludeInternalTransfersOnSplit } from "@/lib/domain/transaction-filters";
+import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
 
 // "YYYY-MM" - same simple, unvalidated-beyond-shape convention as
@@ -68,7 +68,7 @@ export default async function BudgetsPage({
 
   // Categories belong to the viewer; every transaction aggregate is scoped
   // to the accounts they can see. accountScope goes *inside* the
-  // excludeInternalTransfers wrapper so both invariants hold together.
+  // excludeFromBudgetTotals wrapper so both invariants hold together.
   const viewer = await getViewer();
   const accountIds = await viewAccountIds(viewer.id);
 
@@ -84,7 +84,7 @@ export default async function BudgetsPage({
     // below instead, not from this plain groupBy.
     prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: excludeInternalTransfers({
+      where: excludeFromBudgetTotals({
         accountId: { in: accountIds },
         amountCents: { lt: BigInt(0) },
         date: { gte: startOfMonth, lt: startOfNextMonth },
@@ -98,7 +98,7 @@ export default async function BudgetsPage({
     // credit this month regardless of category, categorized or not.
     prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: excludeInternalTransfers({
+      where: excludeFromBudgetTotals({
         accountId: { in: accountIds },
         amountCents: { gt: BigInt(0) },
         date: { gte: startOfMonth, lt: startOfNextMonth },
@@ -112,12 +112,12 @@ export default async function BudgetsPage({
     // of a real transaction that happened on that transaction's date.
     prisma.transactionSplit.groupBy({
       by: ["categoryId"],
-      where: excludeInternalTransfersOnSplit({ amountCents: { lt: BigInt(0) } }, { accountId: { in: accountIds }, date: { gte: startOfMonth, lt: startOfNextMonth } }),
+      where: excludeFromBudgetTotalsOnSplit({ amountCents: { lt: BigInt(0) } }, { accountId: { in: accountIds }, date: { gte: startOfMonth, lt: startOfNextMonth } }),
       _sum: { amountCents: true },
     }),
     prisma.transactionSplit.groupBy({
       by: ["categoryId"],
-      where: excludeInternalTransfersOnSplit({ amountCents: { gt: BigInt(0) } }, { accountId: { in: accountIds }, date: { gte: startOfMonth, lt: startOfNextMonth } }),
+      where: excludeFromBudgetTotalsOnSplit({ amountCents: { gt: BigInt(0) } }, { accountId: { in: accountIds }, date: { gte: startOfMonth, lt: startOfNextMonth } }),
       _sum: { amountCents: true },
     }),
     // Also excludes split transactions - already fully allocated across
@@ -125,7 +125,7 @@ export default async function BudgetsPage({
     // "leave this portion uncategorized" choice, not a "please suggest one"
     // one the bulk picker below can act on for a whole transaction).
     prisma.transaction.findMany({
-      where: excludeInternalTransfers({ accountId: { in: accountIds }, categoryId: null, splits: { none: {} } }),
+      where: excludeFromBudgetTotals({ accountId: { in: accountIds }, categoryId: null, splits: { none: {} } }),
       select: { id: true, label: true, amountCents: true },
       orderBy: { date: "desc" },
       take: MAX_UNCATEGORIZED_ROWS,
@@ -186,7 +186,7 @@ export default async function BudgetsPage({
     const rolloverCategoryIds = rolloverCategories.map((c) => c.id);
     const [rolloverTx, rolloverSplits] = await Promise.all([
       prisma.transaction.findMany({
-        where: excludeInternalTransfers({
+        where: excludeFromBudgetTotals({
           accountId: { in: accountIds },
           categoryId: { in: rolloverCategoryIds },
           amountCents: { lt: BigInt(0) },
@@ -201,7 +201,7 @@ export default async function BudgetsPage({
       // splitSpendByCategory further up, just scoped to the anchor-to-now
       // window instead of the current calendar month.
       prisma.transactionSplit.findMany({
-        where: excludeInternalTransfersOnSplit(
+        where: excludeFromBudgetTotalsOnSplit(
           { categoryId: { in: rolloverCategoryIds }, amountCents: { lt: BigInt(0) } },
           { accountId: { in: accountIds }, date: { gte: earliestAnchor, lt: startOfMonth } },
         ),

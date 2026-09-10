@@ -418,6 +418,7 @@ def upsert_transaction(
     amount_cents: int,
     legacy_sync_id: str | None = None,
     near_duplicate: str = "amount",
+    is_securities_movement: bool = False,
 ):
     """Insert transaction if not already stored.
 
@@ -543,10 +544,10 @@ def upsert_transaction(
 
     cur.execute(
         """
-        INSERT INTO "Transaction" (id, "accountId", "syncId", date, label, "amountCents", "createdAt")
-        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        INSERT INTO "Transaction" (id, "accountId", "syncId", date, label, "amountCents", "isSecuritiesMovement", "createdAt")
+        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
         """,
-        (str(uuid.uuid4()), account_id, sync_id, date, label, amount_cents),
+        (str(uuid.uuid4()), account_id, sync_id, date, label, amount_cents, is_securities_movement),
     )
 
 

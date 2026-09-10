@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, viewAccountIds } from "@/lib/auth-context";
+import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -49,7 +50,11 @@ export default async function CategoryDetailPage({
       where: { id: categoryId, userId: viewer.id },
       include: {
         transactions: {
-          where: { splits: { none: {} }, accountId: { in: accountIds } },
+          // Defect 05: this page summed and listed internal transfers and
+          // securities movements while the /budgets card it is reached from
+          // excluded them, so the drill-down total contradicted the number
+          // just clicked.
+          where: excludeFromBudgetTotals({ splits: { none: {} }, accountId: { in: accountIds } }),
           orderBy: { date: "desc" },
           include: { account: { select: { name: true } } },
         },
@@ -57,7 +62,7 @@ export default async function CategoryDetailPage({
     }),
     prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
     prisma.transactionSplit.findMany({
-      where: { categoryId, transaction: { accountId: { in: accountIds } } },
+      where: excludeFromBudgetTotalsOnSplit({ categoryId }, { accountId: { in: accountIds } }),
       include: { transaction: { include: { account: { select: { name: true } } } } },
     }),
   ]);

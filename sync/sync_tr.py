@@ -526,6 +526,53 @@ async def _fetch_timeline_feed(api, feed_type: str, known_ids: set[str], max_pag
     return items
 
 
+# Trade Republic's own event vocabulary for "this moved securities, not
+# household money". Read from the raw timeline item, which carries an
+# eventType this project never looked at before.
+#
+# The label fallback below exists because that is the ONLY signal rows
+# already in the database carry - eventType was never stored for them, and
+# a re-sync will not revisit them since upsert_transaction skips a syncId it
+# already knows. It is also the safety net if TR renames an event: the
+# German words below come from real captured data on a live account, the
+# eventType strings from pytr's vocabulary, and neither is guaranteed
+# forever.
+_SECURITIES_EVENT_TYPES = frozenset({
+    "TRADE_INVOICE",
+    "ORDER_EXECUTED",
+    "SAVINGS_PLAN_EXECUTED",
+    "SAVINGS_PLAN_INVOICE_CREATED",
+    "BENEFITS_SAVEBACK_EXECUTION",
+    "BENEFITS_SPARE_CHANGE_EXECUTION",
+    "SHAREBOOKING",
+    "SHAREBOOKING_TRANSACTION",
+    "TRADE_CORRECTED",
+})
+
+_SECURITIES_LABEL_MARKERS = ("kauforder", "verkaufsorder", "sparplan", "saveback")
+
+
+def is_securities_movement(item: dict, label: str) -> bool:
+    """Whether this timeline entry is a portfolio movement rather than
+    spending. Pure, so the classification can be tested without a live
+    session - see _timeline_item_to_transaction's own note.
+
+    Dividends and interest are deliberately NOT here: they are real income
+    the user may well want in their budget, and they are separately
+    recordable as an IncomeEvent.
+    """
+    event_type = (item.get("eventType") or "").strip().upper()
+    if event_type in _SECURITIES_EVENT_TYPES:
+        return True
+
+    lowered = label.lower()
+    if any(marker in lowered for marker in _SECURITIES_LABEL_MARKERS):
+        return True
+    # "<instrument> - PEA": cash entering the PEA envelope, which the
+    # account's own balance already reflects.
+    return lowered.endswith("- pea")
+
+
 def _timeline_item_to_transaction(item: dict) -> dict | None:
     """Resolve one raw timeline item into the fields upsert_transaction()
     needs. Returns None for items that don't represent a real money movement
@@ -551,6 +598,7 @@ def _timeline_item_to_transaction(item: dict) -> dict | None:
         "date": _parse_tr_timestamp(item["timestamp"]),
         "label": label,
         "amount_cents": int(Decimal(str(value)) * 100),
+        "is_securities_movement": is_securities_movement(item, label),
     }
 
 
@@ -592,6 +640,7 @@ def _sync_transactions(cur, account_id: str, items: list[dict]) -> int:
                 date=resolved["date"],
                 label=resolved["label"],
                 amount_cents=resolved["amount_cents"],
+                is_securities_movement=resolved["is_securities_movement"],
             )
             count += 1
         log.info("TR transactions - %d nouvelle(s) sur %d élément(s) reçus", count, len(items))
