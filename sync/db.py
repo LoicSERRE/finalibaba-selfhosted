@@ -384,8 +384,28 @@ def composite_sync_id(base: str, date, amount_cents: int, label: str, occurrence
 
 
 def _label_fingerprint(label: str) -> str:
-    normalised = " ".join(label.lower().split())
-    return hashlib.sha1(normalised.encode("utf-8")).hexdigest()[:8]
+    return hashlib.sha1(_normalise_label(label).encode("utf-8")).hexdigest()[:8]
+
+
+def _normalise_label(label: str) -> str:
+    return " ".join(label.lower().split())
+
+
+# The placeholder labels LCL shows before an operation settles, after which
+# the same movement is restated with its real counterparty. Mirrors
+# GENERIC_TRANSFER_LABELS in lib/domain/auto-categorize.ts, which was written
+# from the same observation on the same bank - keep the two lists in step.
+#
+# Measured, not assumed: on a production account, a 161,01 EUR benefit
+# payment arrived as "VIREMENT SEPA" and came back as "VIREMENT CAF DE L
+# HERAULT" on the next sync, and two 600 EUR transfers did the same the day
+# before. Every earlier month held exactly one row per such payment, which is
+# how we know these are restatements and not second movements.
+_GENERIC_TRANSFER_LABELS = frozenset({"virement sepa", "virement instantane"})
+
+
+def is_generic_transfer_label(label: str) -> bool:
+    return _normalise_label(label) in _GENERIC_TRANSFER_LABELS
 
 
 def upsert_transaction(
@@ -439,10 +459,24 @@ def upsert_transaction(
     for CSV import, that two legitimately different transactions can share a
     fingerprint and must not be auto-merged.
 
+    A restatement is absorbed rather than merged away: when that window finds
+    a row still carrying one of LCL's placeholder labels and the incoming row
+    names a real counterparty, the stored row's LABEL is updated in place. It
+    is the same movement, described better.
+
+    Requiring the labels to match without that step was itself a regression,
+    caught one day after deploying it by comparing two production dumps: a
+    161,01 EUR benefit payment and two 600 EUR transfers had each gained a
+    twin, because "VIREMENT SEPA" and its restatement are the same movement
+    under two names. Three duplicates in a single day, accumulating every
+    half hour - which is why the amount-only window, wrong as it was about
+    genuinely distinct movements, was not simply removable.
+
     Accepted, documented residue: two transactions with the SAME amount AND
     the same label within three days, on a source with no bank id, still
-    merge. Distinguishing those needs an identity the bank does not give us,
-    and merging them is the lesser error than duplicating a restated one.
+    merge - as does a genuine second movement arriving while the first is
+    still shown under a placeholder label. Distinguishing those needs an
+    identity the bank does not give us.
     """
     cur.execute('SELECT id FROM "Transaction" WHERE "syncId" = %s', (sync_id,))
     if cur.fetchone():
@@ -459,17 +493,28 @@ def upsert_transaction(
     if dedup_by_label:
         cur.execute(
             """
-            SELECT id FROM "Transaction"
+            SELECT id, label FROM "Transaction"
             WHERE "accountId" = %s
               AND "amountCents" = %s
-              AND lower(btrim(label)) = lower(btrim(%s))
               AND date BETWEEN (%s::timestamptz - INTERVAL '3 days') AND (%s::timestamptz + INTERVAL '3 days')
-            LIMIT 1
+            ORDER BY date
             """,
-            (account_id, amount_cents, label, date, date),
+            (account_id, amount_cents, date, date),
         )
-        if cur.fetchone():
-            return  # same movement restated on an adjacent date
+        nearby = cur.fetchall()
+        for row in nearby:
+            stored_label = row["label"] if isinstance(row, dict) else row[1]
+            if _normalise_label(stored_label) == _normalise_label(label):
+                return  # same movement, restated on an adjacent date
+
+        # Same movement, described better: adopt the real counterparty rather
+        # than storing it a second time.
+        for row in nearby:
+            stored_id = row["id"] if isinstance(row, dict) else row[0]
+            stored_label = row["label"] if isinstance(row, dict) else row[1]
+            if is_generic_transfer_label(stored_label) and not is_generic_transfer_label(label):
+                cur.execute('UPDATE "Transaction" SET label = %s WHERE id = %s', (label, stored_id))
+                return
 
     cur.execute(
         """

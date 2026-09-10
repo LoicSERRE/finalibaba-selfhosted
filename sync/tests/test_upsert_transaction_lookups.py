@@ -23,7 +23,7 @@ ACCOUNT = "acc-db-id"
 
 
 class FakeCursor:
-    """Answers the two SELECT shapes upsert_transaction uses, from `stored`.
+    """Answers the SELECT shapes upsert_transaction uses, from `stored`.
 
     Each stored row is (sync_id, account_id, amount_cents, label, date).
     """
@@ -31,11 +31,17 @@ class FakeCursor:
     def __init__(self, stored):
         self.stored = list(stored)
         self.inserted = []
+        self.relabelled = []
         self._result = None
+        self._rows = []
 
     def execute(self, sql, params):
         if sql.strip().startswith("INSERT"):
             self.inserted.append(params)
+            self._result = None
+        elif sql.strip().startswith("UPDATE"):
+            new_label, row_id = params
+            self.relabelled.append((row_id, new_label))
             self._result = None
         elif "syncId" in sql and "lower(btrim(label))" in sql:
             sync_id, label = params
@@ -44,19 +50,19 @@ class FakeCursor:
             )
         elif "syncId" in sql:
             self._result = next((r for r in self.stored if r[0] == params[0]), None)
-        else:  # the same-amount / same-label window
-            account_id, amount, label, date, _ = params
-            self._result = next(
-                (
-                    r for r in self.stored
-                    if r[1] == account_id and r[2] == amount and _norm(r[3]) == _norm(label)
-                    and abs((r[4] - date).days) <= 3
-                ),
-                None,
-            )
+        else:  # the same-amount window
+            account_id, amount, date, _ = params
+            self._rows = [
+                {"id": r[0], "label": r[3]}
+                for r in self.stored
+                if r[1] == account_id and r[2] == amount and abs((r[4] - date).days) <= 3
+            ]
 
     def fetchone(self):
         return self._result
+
+    def fetchall(self):
+        return self._rows
 
 
 def _norm(s):
@@ -88,14 +94,30 @@ def test_a_row_already_stored_under_its_legacy_id_is_not_re_inserted():
 
 
 def test_the_lost_twin_of_a_legacy_row_is_finally_inserted():
-    """Same day, same amount, different label - a genuinely different
-    movement that the label-blind legacy lookup used to swallow."""
-    stored = [(legacy_composite_sync_id(BASE, DAY, -30000), ACCOUNT, -30000, "VIREMENT INSTANTANE", DAY)]
+    """Same day, same amount, two DIFFERENT named counterparties - a
+    genuinely distinct movement that the label-blind legacy lookup used to
+    swallow. The real recovered case: a 500 EUR transfer to a livret and a
+    500 EUR transfer to a broker on the same day."""
+    stored = [(legacy_composite_sync_id(BASE, DAY, -30000), ACCOUNT, -30000, "VIR SEPA M LOIC SERRE", DAY)]
     cur = FakeCursor(stored)
 
     _upsert(cur, "VIR INST Compte Trade Republic")
 
     assert len(cur.inserted) == 1
+
+
+def test_a_twin_whose_survivor_kept_a_placeholder_label_stays_lost():
+    """The honest limit of doing this by label. When the row that displaced
+    the twin is still shown under a placeholder, "one movement, restated"
+    and "two movements, one unnamed" are the same two strings - and treating
+    them as distinct is what produced duplicates every half hour. Losing the
+    twin is the lesser error; it can still be entered by hand."""
+    stored = [(legacy_composite_sync_id(BASE, DAY, -30000), ACCOUNT, -30000, "VIREMENT INSTANTANE", DAY)]
+    cur = FakeCursor(stored)
+
+    _upsert(cur, "VIR INST Compte Trade Republic")
+
+    assert cur.inserted == []
 
 
 def test_a_hand_recovered_row_is_still_protected():
@@ -148,4 +170,42 @@ def test_a_source_with_real_ids_never_consults_the_window():
         amount_cents=-30000,
     )
 
+    assert len(cur.inserted) == 1
+
+
+def test_a_restated_label_updates_the_row_instead_of_duplicating_it():
+    """LCL shows a movement under a placeholder first, then restates it with
+    the real counterparty. Requiring the labels to match treated the two as
+    separate movements - three duplicates appeared in one production day."""
+    stored = [("recovered_9f2c", ACCOUNT, 16101, "VIREMENT SEPA", DAY)]
+    cur = FakeCursor(stored)
+
+    _upsert(cur, "VIREMENT CAF DE L HERAULT", amount=16101)
+
+    assert cur.inserted == []
+    assert cur.relabelled == [("recovered_9f2c", "VIREMENT CAF DE L HERAULT")]
+
+
+def test_two_real_movements_both_named_are_still_both_kept():
+    """Neither label is a placeholder, so this is not a restatement - it is
+    the transfer-to-a-livret / transfer-to-a-broker pair that the
+    amount-only window used to swallow."""
+    stored = [("recovered_9f2c", ACCOUNT, -50000, "VIR SEPA M LOIC SERRE", DAY)]
+    cur = FakeCursor(stored)
+
+    _upsert(cur, "VIR INST Compte Trade Republic", amount=-50000)
+
+    assert len(cur.inserted) == 1
+    assert cur.relabelled == []
+
+
+def test_a_placeholder_never_overwrites_a_real_label():
+    """The restatement only ever runs one way. A later sync re-reporting the
+    placeholder must not undo the name already learned."""
+    stored = [("recovered_9f2c", ACCOUNT, 16101, "VIREMENT CAF DE L HERAULT", DAY)]
+    cur = FakeCursor(stored)
+
+    _upsert(cur, "VIREMENT SEPA", amount=16101)
+
+    assert cur.relabelled == []
     assert len(cur.inserted) == 1
