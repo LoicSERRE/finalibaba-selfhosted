@@ -18,9 +18,11 @@
 #   - only a row whose label is exactly one of the known placeholders
 #   - only when a same-account, same-amount, non-placeholder row exists
 #     within three days
-#   - never a row carrying a category, a split or a linked income event -
-#     that is a row you have touched, and merging your work into another row
-#     is not this script's call. Those are reported instead.
+#   - never a row whose category, internal-transfer flag, split or linked
+#     income event would be LOST by removing it. Where the surviving row
+#     already carries the same category and flag - which is the usual case,
+#     since both halves get categorised the same way - nothing is lost and
+#     the duplicate goes. Anything else is reported and left alone.
 #
 # Usage:
 #   ./scripts/fix-restated-label-duplicates.sh          # dry run (default)
@@ -59,7 +61,12 @@ read -r -d '' CANDIDATES <<'SQL' || true
    AND lower(btrim(d.label)) NOT IN ('virement sepa', 'virement instantane')
   WHERE lower(btrim(g.label)) IN ('virement sepa', 'virement instantane')
     AND (a."syncId" LIKE 'woob:%' OR a."syncId" LIKE 'lcl:%')
-    AND g."categoryId" IS NULL
+    -- Your work is only at risk if the row being KEPT does not already
+    -- carry it. Both halves of a restatement usually end up categorised
+    -- the same way, and refusing to touch those left a duplicate standing
+    -- for no benefit.
+    AND (g."categoryId" IS NULL OR g."categoryId" = d."categoryId")
+    AND g."isInternalTransfer" = d."isInternalTransfer"
     AND NOT EXISTS (SELECT 1 FROM "TransactionSplit" s WHERE s."transactionId" = g.id)
     AND NOT EXISTS (SELECT 1 FROM "IncomeEvent" i WHERE i."transactionId" = g.id)
 SQL
@@ -113,7 +120,8 @@ docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
    AND lower(btrim(d.label)) NOT IN ('virement sepa', 'virement instantane')
   WHERE lower(btrim(g.label)) IN ('virement sepa', 'virement instantane')
     AND (a.\"syncId\" LIKE 'woob:%' OR a.\"syncId\" LIKE 'lcl:%')
-    AND (g.\"categoryId\" IS NOT NULL
+    AND ((g.\"categoryId\" IS NOT NULL AND g.\"categoryId\" IS DISTINCT FROM d.\"categoryId\")
+         OR g.\"isInternalTransfer\" <> d.\"isInternalTransfer\"
          OR EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = g.id)
          OR EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = g.id))
   ORDER BY g.date;"
@@ -133,6 +141,30 @@ if [ "$CONFIRM" != "yes" ]; then
 fi
 
 docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 --single-transaction -c "
+  -- Merge, for the pair where the state sits on the PLACEHOLDER row: the
+  -- automatic transfer detector may well have flagged that half rather than
+  -- its restatement. Deleting either one loses something, so the row
+  -- carrying the state survives and takes the better label. Runs first,
+  -- while both rows still exist.
+  WITH pairs AS (
+    SELECT g.id AS keeper, d.id AS drop_id, d.label AS good_label
+    FROM \"Transaction\" g
+    JOIN \"Account\" a ON a.id = g.\"accountId\"
+    JOIN \"Transaction\" d
+      ON d.\"accountId\" = g.\"accountId\" AND d.\"amountCents\" = g.\"amountCents\"
+     AND d.id <> g.id AND d.date BETWEEN g.date - INTERVAL '3 days' AND g.date + INTERVAL '3 days'
+     AND lower(btrim(d.label)) NOT IN ('virement sepa', 'virement instantane')
+    WHERE lower(btrim(g.label)) IN ('virement sepa', 'virement instantane')
+      AND (a.\"syncId\" LIKE 'woob:%' OR a.\"syncId\" LIKE 'lcl:%')
+      AND g.\"isInternalTransfer\" AND NOT d.\"isInternalTransfer\"
+      AND d.\"categoryId\" IS NULL
+      AND NOT EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = d.id)
+      AND NOT EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = d.id)
+  ), renamed AS (
+    UPDATE \"Transaction\" t SET label = p.good_label FROM pairs p WHERE t.id = p.keeper RETURNING t.id
+  )
+  DELETE FROM \"Transaction\" WHERE id IN (SELECT drop_id FROM pairs);
+
   DELETE FROM \"Transaction\" WHERE id IN ($CANDIDATES);
   DELETE FROM \"Transaction\" WHERE id IN (
     SELECT k.id FROM \"Transaction\" k
