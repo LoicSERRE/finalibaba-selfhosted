@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v2.9.1**
+Current stable release: **v2.9.2**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -367,6 +367,17 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 - [X] **The financial profile reverted to 0 after every redeploy, and it was a caching bug, not a database one.** Every page here is force-dynamic and reads live per-user data, but Next.js never emitted an explicit `Cache-Control` header for that - leaving the gap open for whatever sits in front of the app (a reverse proxy, a CDN) to apply its own default instead. A redeploy's brief restart window was consistently enough to surface it. Every route now sends `Cache-Control: no-store, must-revalidate`, excluding the same static-asset set `proxy.ts`'s own matcher already excludes for the mirror reason - confirmed `_next/static` and the icon routes keep their real caching, `/settings` and `/` do not.
 - [X] **The French social-levies rate moved from 17.2% to 18.6%, and it was a literal copied by hand into five different files.** `FR_SOCIAL_LEVIES_RATE`/`FR_PFU_TOTAL_RATE` (`lib/domain/tax-locale.ts`) are the one source of truth now - the Settings page, the account-creation suggestion, the dividend/CTO tax estimate (which was actually wrong even under the old rate, at 30%/32.2% instead of the correct 31.4%/33.6%), and the Trade Republic cash fallback all read from it. A migration bumps any `UserSettings.taxRatePea` still sitting on the old default; a rate already typed in by hand is left alone.
 - [X] **LCL's own backend blips with a plain 502 every so often, and one blip used to fail the whole sync.** Confirmed transient - a manual retry a minute later always worked - so `sync_woob.py` now retries twice (5s, then 15s) before giving up and firing a sync-failure alert. `ScrapingBlocked` is deliberately excluded from the retry even though it shares the same exception family: that one means the bank detected automation, and retrying seconds later is the wrong response to that.
+
+---
+
+## v2.9.2 - The sync was throwing real transactions away - Released ✓
+
+*First fixes out of the end-of-version audit (eight deep passes plus a verification against a copy of a real production database). The two critical ones were losing data on every sync.*
+
+- [X] **Two transactions with the same date and amount became one.** LCL through Woob supplies no transaction id, so one was synthesised from date + amount alone - identical for two transfers of the same amount on the same day, and the second was refused as a duplicate it never was. Measured: the account whose bank *does* supply ids held 142 same-day/same-amount pairs; the id-less account held **zero** across its entire history. The id now carries a label fingerprint plus an occurrence number for rows sharing date, amount *and* label; the pre-label id is looked up separately, verified against a real database so that not one existing row would be re-inserted.
+- [X] **The ±3-day near-duplicate window ignored the label.** Same account + same amount within three days meant "skip", on every source: a 300 EUR transfer to a livret suppressed a 300 EUR transfer to a broker three days later. On the reporting instance, ten movements totalling ~3 850 EUR had no sending leg stored - which is exactly what left their counterparts unmatchable and showing up as income, the symptom v2.9.0's manual override could only mask. Now requires the label to match too, and only runs for sources with no bank id (Trade Republic has real ids, so the heuristic was pure downside there). **Kept rather than removed**, on evidence: 84 of that instance's LCL rows carry `recovered_*` ids from a hand-restored backup and match no computable id, so this window is the only thing standing between them and duplication. Removing it - the first instinct, once `iter_coming` turned out never to be called - would have duplicated a hand-recovered history.
+- [X] **Each Settings card silently erased the other one's data.** Both forms posted to one action that wrote all six columns, and a field absent from the submitted form arrives as `null`, not as "unchanged" - so saving the financial profile wiped the country and reset the tax rates, and saving the tax card zeroed salary/expenses/savings. Reported as "I can't pick a country, saving does nothing": it saved, then the next profile save wiped it. Confirmed in production data by a `taxRatePea` sitting at exactly `0.18600000000000003`, the float an absent field produces. Split into two actions, same remedy as `updateAlertChannels`/`updateAlertTriggers`.
+- [X] **The interest-estimate chart contradicted the figure printed above it.** v2.9.0's backward-extrapolation fix had landed only in the single-value path, so the chart still read an account's unsynced months as a 0 EUR balance: a Livret A synced since January plus a LEP synced from June showed 400 EUR as the headline against a curve reading 150 EUR until June, then stepping to 400 EUR on 1 July.
 
 ---
 
