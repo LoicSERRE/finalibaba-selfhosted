@@ -1133,7 +1133,8 @@
     "ariaLabel": "Long-term net worth projection",
     "seriesLabel": "Projected net worth",
     "afterTaxSeriesLabel": "Estimated after-tax",
-    "afterTaxCalloutNote": "≈ {amount} after tax"
+    "afterTaxCalloutNote": "≈ {amount} after tax",
+    "beforeTaxCalloutNote": "≈ {amount} before latent tax"
   },
   "openBanking": {
     "connect": "Connect",

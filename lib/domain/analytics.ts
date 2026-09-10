@@ -314,8 +314,13 @@ export interface AnalyticsResult {
   hasData: boolean;
 
   // KPIs
+  /** After latent tax - the figure every screen shows as "net worth", and
+   *  the same definition lib/domain/dashboard.ts uses. */
   netWorth: bigint;
-  netWorthAfterTax: bigint;
+  /** Before latent tax. Only for surfaces that show the deduction itself
+   *  (the KPI card's sub-line, the export breakdown, the projection's
+   *  second curve) - never as a headline. */
+  netWorthBeforeTax: bigint;
   grossAssets: bigint;
   totalLiabilities: bigint;
   totalLatentTax: bigint;
@@ -700,8 +705,14 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
         }
       : null;
 
-  const netWorth = grossAssets - totalLiabilities;
-  const netWorthAfterTax = netWorth - totalLatentTax;
+  // "Net worth" means AFTER latent tax, here as in lib/domain/dashboard.ts.
+  // These two files used to disagree - this one called the pre-tax figure
+  // `netWorth` - and the disagreement was not academic: the KPI card knew to
+  // display the after-tax one, but the goals on the same page were fed this
+  // variable, so a goal could read 100% complete against a number the card
+  // directly above it said you did not have.
+  const netWorthBeforeTax = grossAssets - totalLiabilities;
+  const netWorth = netWorthBeforeTax - totalLatentTax;
   const debtRatio = grossAssets > BigInt(0)
     ? Math.round((Number(totalLiabilities) / Number(grossAssets)) * 100)
     : 0;
@@ -949,7 +960,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   return {
     hasData,
     netWorth,
-    netWorthAfterTax,
+    netWorthBeforeTax,
     grossAssets,
     totalLiabilities,
     totalLatentTax,
@@ -1018,7 +1029,7 @@ export function buildAnalyticsExport(
 ): AnalyticsExportData {
   return {
     netWorth: Number(result.netWorth),
-    netWorthAfterTax: Number(result.netWorthAfterTax),
+    netWorthBeforeTax: Number(result.netWorthBeforeTax),
     grossAssets: Number(result.grossAssets),
     totalLiabilities: Number(result.totalLiabilities),
     totalLatentTax: Number(result.totalLatentTax),

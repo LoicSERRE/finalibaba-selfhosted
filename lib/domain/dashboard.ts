@@ -238,6 +238,34 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
   // order already equals chronological order by design - localeCompare
   // would add overhead for no behavior change.
   const sortedDays = [...dayMap.keys()].sort(); // NOSONAR
+  // A loan's remaining capital on the day being drawn, not today's.
+  //
+  // liabMap holds Account.liabilityCents, which for a LOAN is the ORIGINAL
+  // capital, written once at creation and never updated - there is no action
+  // that touches it. Subtracting it from every historical point drew the
+  // mortgage as a flat constant for its whole life: on a 200 000 EUR loan at
+  // 3.5% over 25 years taken 12.5 years ago, the headline figure deducts the
+  // real ~121 500 EUR while every point of the chart below it deducted
+  // 200 000 EUR, a gap of ~78 500 EUR widening every month. It also erased
+  // the shape - principal repaid is real wealth accumulating, and the chart
+  // showed none of it.
+  //
+  // Unlike the real-estate case below, this is not a missing-data problem:
+  // calcCurrentCapital is a closed form that already takes the date to
+  // evaluate at, so the correct figure is derivable for every past day.
+  const loanParamsMap = new Map<string, Parameters<typeof calcCurrentCapital>[0]>();
+  for (const account of accounts) {
+    if (account.type === "LOAN" && hasLoanParams(account)) {
+      loanParamsMap.set(account.id, {
+        loanAmountCents: account.loanAmountCents,
+        loanTaeg: account.loanTaeg,
+        loanDurationMonths: account.loanDurationMonths,
+        loanDeferralMonths: account.loanDeferralMonths ?? 0,
+        loanStartDate: account.loanStartDate,
+      });
+    }
+  }
+
   const running = new Map<string, bigint>();
   const historyRaw: { day: string; netWorth: number }[] = [];
   const allocationHistoryRaw: { day: string; buckets: Record<string, bigint> }[] = [];
@@ -268,9 +296,13 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
       else if (type === "REAL_ESTATE") buckets.realEstate += clampedEquity(v, liabMap.get(id) ?? BigInt(0));
       else if (type === "AUTOMOBILE") buckets.auto += clampedEquity(v, liabMap.get(id) ?? BigInt(0));
     }
+    const [dy, dm, dd] = day.split("-");
+    const dayDate = new Date(Date.UTC(+dy, +dm - 1, +dd));
     let liab = BigInt(0);
     for (const [id, v] of liabMap) {
-      if (running.has(id)) liab += v;
+      if (!running.has(id)) continue;
+      const loan = loanParamsMap.get(id);
+      liab += loan ? calcCurrentCapital(loan, dayDate) : v;
     }
     historyRaw.push({ day, netWorth: Number(gross - liab) });
     allocationHistoryRaw.push({ day, buckets });

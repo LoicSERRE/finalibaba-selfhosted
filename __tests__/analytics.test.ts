@@ -423,6 +423,43 @@ describe("computeAnalytics - weighted average savings rate", () => {
   });
 });
 
+describe("computeAnalytics - what net worth means", () => {
+  /** An account holding a real unrealized gain, so latent tax is non-zero. */
+  function taxableGainInput() {
+    return baseInput({
+      accounts: [
+        account({
+          id: "cto",
+          type: "INVESTMENT",
+          taxTreatment: "TAXABLE",
+          taxRatePct: 0.3,
+          holdings: [{ ticker: "US0378331005", name: "Apple", quantity: new Decimal(100), lastPriceCents: BigInt(2_000_00), costBasisCents: BigInt(100_000_00) }],
+        }),
+      ],
+      goals: [{ id: "g1", name: "Patrimoine", targetCents: BigInt(200_000_00), targetDate: null, accountId: null }],
+    });
+  }
+
+  it("nets latent tax out of netWorth, and keeps the pre-tax figure separate", () => {
+    const result = computeAnalytics(taxableGainInput());
+
+    // 100 x 2 000€ = 200 000€ of value, 100 000€ of gain, taxed at 30% = 30 000€.
+    expect(result.totalLatentTax).toBe(BigInt(30_000_00));
+    expect(result.netWorthBeforeTax).toBe(BigInt(200_000_00));
+    expect(result.netWorth).toBe(BigInt(170_000_00));
+  });
+
+  it("measures a net-worth goal against the after-tax figure, like the card above it", () => {
+    // The defect: goals were fed the pre-tax figure while the KPI card on the
+    // same page displayed the after-tax one, so a 200 000€ goal read as
+    // complete against a number the page itself said you did not have.
+    const result = computeAnalytics(taxableGainInput());
+
+    expect(result.goals[0].currentCents).toBe(BigInt(170_000_00));
+    expect(result.goals[0].pct).toBe(85);
+  });
+});
+
 describe("computeAnalytics - year-end savings interest projection", () => {
   it("wires estimateYearEndInterestCents through for every SAVINGS account with a known rate", () => {
     const input = baseInput({

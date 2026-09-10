@@ -229,4 +229,41 @@ describe("projectNetWorthSplit", () => {
     // total (both buckets have positive gain here).
     expect(points[5].netWorthAfterTaxCents).toBeLessThan(points[5].netWorthCents);
   });
+
+  it("deducts tax already owed today from year 0, so the chart opens on the figure every other screen shows", () => {
+    // The defect: only FUTURE gains were taxed, so year 0 came out equal to
+    // the pre-tax total - the chart opened on a number the KPI card above it
+    // had already reduced by exactly this amount.
+    const points = projectNetWorthSplit({
+      liquidCurrentCents: 0,
+      investedCurrentCents: 200_000_00,
+      fixedCurrentCents: 0,
+      annualContributionCents: 0,
+      liquidReturnRate: 0,
+      investedReturnRate: 0.05,
+      horizonYears: 10,
+      effectiveTaxRate: 0.3,
+      currentLatentTaxCents: 30_000_00,
+    });
+
+    expect(points[0].netWorthCents).toBe(200_000_00);
+    expect(points[0].netWorthAfterTaxCents).toBe(170_000_00);
+    // And it stays deducted - holding the position longer does not make an
+    // already-owed liability disappear.
+    expect(points[10].netWorthCents - points[10].netWorthAfterTaxCents).toBeGreaterThanOrEqual(30_000_00);
+  });
+
+  it("leaves both series identical when nothing is owed and nothing is taxable", () => {
+    const points = projectNetWorthSplit({
+      liquidCurrentCents: 10_000_00,
+      investedCurrentCents: 0,
+      fixedCurrentCents: 0,
+      annualContributionCents: 0,
+      liquidReturnRate: 0.02,
+      investedReturnRate: 0.07,
+      horizonYears: 5,
+    });
+
+    for (const p of points) expect(p.netWorthAfterTaxCents).toBe(p.netWorthCents);
+  });
 });

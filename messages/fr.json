@@ -1133,7 +1133,8 @@
     "ariaLabel": "Projection du patrimoine net à long terme",
     "seriesLabel": "Patrimoine projeté",
     "afterTaxSeriesLabel": "Net d'impôt estimé",
-    "afterTaxCalloutNote": "≈ {amount} net d'impôt"
+    "afterTaxCalloutNote": "≈ {amount} net d'impôt",
+    "beforeTaxCalloutNote": "≈ {amount} avant impôt latent"
   },
   "openBanking": {
     "connect": "Connecter",

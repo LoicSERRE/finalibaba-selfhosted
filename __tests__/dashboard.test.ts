@@ -267,3 +267,61 @@ describe("computeDashboard", () => {
     });
   });
 });
+
+describe("computeDashboard - a loan amortizes across the history chart", () => {
+  // The defect: Account.liabilityCents holds the ORIGINAL capital, written
+  // once at creation and never updated, and every historical point deducted
+  // it. The headline figure meanwhile used calcCurrentCapital. So the chart
+  // sat permanently below the KPI above it, by a gap that widens every
+  // month, and rendered the mortgage paydown - real wealth accumulating -
+  // as a flat constant.
+  function loanInput() {
+    return baseInput({
+      accounts: [
+        account({ id: "checking", history: [{ balanceCents: BigInt(300_000_00) }] }),
+        account({
+          id: "loan",
+          type: "LOAN",
+          liabilityCents: BigInt(200_000_00), // the frozen original capital
+          loanAmountCents: BigInt(200_000_00),
+          loanTaeg: 3.5,
+          loanDurationMonths: 300,
+          loanDeferralMonths: 0,
+          loanStartDate: new Date("2014-01-01T00:00:00.000Z"),
+        }),
+      ],
+      allBalances: [
+        { accountId: "checking", recordedAt: new Date("2026-01-15T12:00:00.000Z"), balanceCents: BigInt(300_000_00) },
+        { accountId: "loan", recordedAt: new Date("2026-01-15T12:00:00.000Z"), balanceCents: BigInt(0) },
+        { accountId: "checking", recordedAt: new Date("2026-07-15T12:00:00.000Z"), balanceCents: BigInt(300_000_00) },
+        { accountId: "loan", recordedAt: new Date("2026-07-15T12:00:00.000Z"), balanceCents: BigInt(0) },
+      ],
+    });
+  }
+
+  it("deducts the capital still owed on each day, not the amount borrowed", () => {
+    const result = computeDashboard(loanInput());
+    const [first, last] = [result.history[0], result.history.at(-1)!];
+
+    // Twelve years in, well under half the original 200 000 EUR is still owed.
+    expect(first.netWorth).toBeGreaterThan(300_000_00 - 200_000_00);
+    expect(last.netWorth).toBeGreaterThan(300_000_00 - 200_000_00);
+  });
+
+  it("shows the paydown as real growth, with assets held flat", () => {
+    const result = computeDashboard(loanInput());
+    const [first, last] = [result.history[0], result.history.at(-1)!];
+
+    // Nothing but the loan moved between the two points, so the entire
+    // difference is capital repaid - which the frozen figure rendered as 0.
+    expect(last.netWorth).toBeGreaterThan(first.netWorth);
+  });
+
+  it("agrees with the headline figure the chart sits under", () => {
+    const result = computeDashboard(loanInput());
+
+    // Both now derive the loan from calcCurrentCapital; the last point is a
+    // couple of weeks behind `now`, so allow one month of amortization.
+    expect(Math.abs(result.history.at(-1)!.netWorth - Number(result.netWorth))).toBeLessThan(2_000_00);
+  });
+});

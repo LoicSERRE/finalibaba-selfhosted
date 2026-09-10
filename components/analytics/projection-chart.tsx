@@ -34,6 +34,7 @@ export function ProjectionChart({
   defaultAnnualReturnPct,
   defaultLiquidReturnPct,
   effectiveTaxRate,
+  currentLatentTaxCents,
 }: Readonly<{
   currentNetWorthCents: bigint;
   // Today's real SAVINGS-type balance only ("savingsCents" - Livrets etc,
@@ -71,13 +72,18 @@ export function ProjectionChart({
   // after-tax series is identical to the pre-tax one and stays hidden
   // (no point drawing two overlapping lines).
   effectiveTaxRate: number;
+  // Latent tax already owed today. currentNetWorthCents above is the
+  // BEFORE-tax figure on purpose - it is what the liquid/invested/fixed
+  // split has to add back up to - so this is what pulls the after-tax
+  // series down to the net worth every other screen shows.
+  currentLatentTaxCents: number;
 }>) {
   const t = useTranslations("projectionChart");
   const [investedReturnPct, setInvestedReturnPct] = useState(defaultAnnualReturnPct);
   const [liquidReturnPct, setLiquidReturnPct] = useState(defaultLiquidReturnPct);
   const [horizonYears, setHorizonYears] = useState<number>(DEFAULT_HORIZON_YEARS);
   const currentYear = new Date().getFullYear();
-  const showAfterTax = effectiveTaxRate > 0;
+  const showAfterTax = effectiveTaxRate > 0 || currentLatentTaxCents > 0;
 
   const fixedCents = currentNetWorthCents - liquidCents - investedCents;
   const growingTotalCents = liquidCents + investedCents;
@@ -100,8 +106,9 @@ export function ProjectionChart({
         investedReturnRate: investedReturnPct / 100,
         horizonYears,
         effectiveTaxRate,
+        currentLatentTaxCents,
       }),
-    [liquidCents, investedCents, fixedCents, annualContributionCents, liquidReturnPct, investedReturnPct, horizonYears, effectiveTaxRate],
+    [liquidCents, investedCents, fixedCents, annualContributionCents, liquidReturnPct, investedReturnPct, horizonYears, effectiveTaxRate, currentLatentTaxCents],
   );
 
   const chartData = points.map((p) => ({
@@ -241,13 +248,19 @@ export function ProjectionChart({
         <div className="space-y-4">
           <div>
             <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("heroLabel")}</p>
+            {/* After tax leads, before tax is the sub-line - the same order
+                the KPI card at the top of this page uses, so the two agree
+                on what "net worth" means. */}
             <p className="text-3xl sm:text-4xl font-bold text-[var(--accent-text)] tabular-nums mt-1">
-              {formatCurrency(points[horizonYears].netWorthCents, 0)}
+              {formatCurrency(
+                showAfterTax ? points[horizonYears].netWorthAfterTaxCents : points[horizonYears].netWorthCents,
+                0,
+              )}
             </p>
             <p className="text-sm text-[var(--muted)] mt-1">{t("horizonLabel", { years: horizonYears })}</p>
             {showAfterTax && (
               <p className="text-xs text-[var(--muted)] opacity-70 mt-0.5">
-                {t("afterTaxCalloutNote", { amount: formatCurrency(points[horizonYears].netWorthAfterTaxCents, 0) })}
+                {t("beforeTaxCalloutNote", { amount: formatCurrency(points[horizonYears].netWorthCents, 0) })}
               </p>
             )}
           </div>

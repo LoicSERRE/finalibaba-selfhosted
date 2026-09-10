@@ -77,7 +77,7 @@ export type DebtAccountRowExport = {
 
 export type AnalyticsExportData = {
   netWorth: number;
-  netWorthAfterTax: number;
+  netWorthBeforeTax: number;
   grossAssets: number;
   totalLiabilities: number;
   totalLatentTax: number;
@@ -252,14 +252,15 @@ function buildMarkdown(
     lines.push(`## ${s.summary}`, "");
     lines.push(`| ${s.indicator} | ${s.value} |`);
     lines.push("|---|---|");
+    // data.netWorth is already net of latent tax; the label only says so
+    // explicitly when there is a deduction to speak of.
     const netLabel = data.hasTaxData ? s.netWorthAfterTax : s.netWorth;
-    lines.push(
-      `| ${netLabel} | **${fmt(data.hasTaxData ? data.netWorthAfterTax : data.netWorth)}** |`
-    );
+    lines.push(`| ${netLabel} | **${fmt(data.netWorth)}** |`);
     lines.push(`| ${s.gross} | ${fmt(data.grossAssets)} |`);
     lines.push(`| ${s.debts} | ${fmt(data.totalLiabilities)} |`);
     if (data.hasTaxData) {
       lines.push(`| ${s.taxes} | ${fmt(data.totalLatentTax)} |`);
+      lines.push(`| ${s.netWorth} | ${fmt(data.netWorthBeforeTax)} |`);
     }
     lines.push(`| ${s.investedRate} | ${data.investedPct}% |`);
     if (data.savingsRate !== null) {

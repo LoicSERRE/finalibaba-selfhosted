@@ -7,7 +7,7 @@ export function KpiCards({
   t,
   hasTaxData,
   netWorth,
-  netWorthAfterTax,
+  netWorthBeforeTax,
   grossAssets,
   totalLiabilities,
   totalLatentTax,
@@ -16,8 +16,9 @@ export function KpiCards({
 }: Readonly<{
   t: T;
   hasTaxData: boolean;
+  /** After latent tax - see AnalyticsResult's own field comment. */
   netWorth: bigint;
-  netWorthAfterTax: bigint;
+  netWorthBeforeTax: bigint;
   grossAssets: bigint;
   totalLiabilities: bigint;
   totalLatentTax: bigint;
@@ -29,7 +30,7 @@ export function KpiCards({
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
         <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-2">{t("kpis.netWorth")}</p>
         <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--accent-text)]">
-          {formatCurrency(hasTaxData ? netWorthAfterTax : netWorth, 0)}
+          {formatCurrency(netWorth, 0)}
         </p>
         {momDelta !== null && (
           <p
@@ -43,7 +44,7 @@ export function KpiCards({
         )}
         {hasTaxData && (
           <p className="text-xs text-[var(--muted)] mt-1">
-            ~{formatCurrency(netWorth, 0)} {t("kpis.beforeTax")}
+            ~{formatCurrency(netWorthBeforeTax, 0)} {t("kpis.beforeTax")}
           </p>
         )}
       </div>

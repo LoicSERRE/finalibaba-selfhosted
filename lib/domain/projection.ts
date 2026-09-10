@@ -86,6 +86,15 @@ export function projectNetWorthSplit(params: {
   investedReturnRate: number;
   horizonYears: number;
   effectiveTaxRate?: number;
+  /** Latent tax already owed on today's unrealized gains. Deducted from the
+   *  after-tax series at every point, including year 0.
+   *
+   *  Without it that series only ever taxed FUTURE gains, so year 0 came out
+   *  equal to the pre-tax figure - and the chart opened on a number the KPI
+   *  card directly above it had already reduced by this exact amount. The
+   *  money is owed today and stays owed; nothing about holding the position
+   *  longer makes it go away. */
+  currentLatentTaxCents?: number;
 }): ProjectionPoint[] {
   const {
     liquidCurrentCents,
@@ -96,6 +105,7 @@ export function projectNetWorthSplit(params: {
     investedReturnRate,
     horizonYears,
     effectiveTaxRate = 0,
+    currentLatentTaxCents = 0,
   } = params;
 
   const growingTotal = liquidCurrentCents + investedCurrentCents;
@@ -124,7 +134,10 @@ export function projectNetWorthSplit(params: {
     year: invested.year,
     netWorthCents: Math.round(fixedCurrentCents + invested.netWorthCents + liquidPoints[i].netWorthCents),
     netWorthAfterTaxCents: Math.round(
-      fixedCurrentCents + invested.netWorthAfterTaxCents + liquidPoints[i].netWorthAfterTaxCents,
+      fixedCurrentCents
+        + invested.netWorthAfterTaxCents
+        + liquidPoints[i].netWorthAfterTaxCents
+        - currentLatentTaxCents,
     ),
   }));
 }

@@ -184,7 +184,7 @@ export default async function AnalyticsPage() {
         t={t}
         hasTaxData={result.hasTaxData}
         netWorth={result.netWorth}
-        netWorthAfterTax={result.netWorthAfterTax}
+        netWorthBeforeTax={result.netWorthBeforeTax}
         grossAssets={result.grossAssets}
         totalLiabilities={result.totalLiabilities}
         totalLatentTax={result.totalLatentTax}
@@ -226,7 +226,7 @@ export default async function AnalyticsPage() {
           />
 
           <ProjectionChart
-            currentNetWorthCents={result.netWorth}
+            currentNetWorthCents={result.netWorthBeforeTax}
             liquidCents={result.savingsCents}
             investedCents={result.risques}
             annualContributionCents={result.hasDeclaredSavings ? result.monthlySavedCents * BigInt(12) : null}
@@ -235,6 +235,7 @@ export default async function AnalyticsPage() {
               result.weightedSavingsRatePct !== null ? Math.max(0, Math.round(result.weightedSavingsRatePct * 1000) / 10) : 1.5
             }
             effectiveTaxRate={result.effectiveTaxRate}
+            currentLatentTaxCents={Number(result.totalLatentTax)}
           />
 
           <DividendCalendarSection
