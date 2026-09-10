@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v2.9.3**
+Current stable release: **v2.9.4**
 
 Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
 
@@ -367,6 +367,18 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 - [X] **The financial profile reverted to 0 after every redeploy, and it was a caching bug, not a database one.** Every page here is force-dynamic and reads live per-user data, but Next.js never emitted an explicit `Cache-Control` header for that - leaving the gap open for whatever sits in front of the app (a reverse proxy, a CDN) to apply its own default instead. A redeploy's brief restart window was consistently enough to surface it. Every route now sends `Cache-Control: no-store, must-revalidate`, excluding the same static-asset set `proxy.ts`'s own matcher already excludes for the mirror reason - confirmed `_next/static` and the icon routes keep their real caching, `/settings` and `/` do not.
 - [X] **The French social-levies rate moved from 17.2% to 18.6%, and it was a literal copied by hand into five different files.** `FR_SOCIAL_LEVIES_RATE`/`FR_PFU_TOTAL_RATE` (`lib/domain/tax-locale.ts`) are the one source of truth now - the Settings page, the account-creation suggestion, the dividend/CTO tax estimate (which was actually wrong even under the old rate, at 30%/32.2% instead of the correct 31.4%/33.6%), and the Trade Republic cash fallback all read from it. A migration bumps any `UserSettings.taxRatePea` still sitting on the old default; a rate already typed in by hand is left alone.
 - [X] **LCL's own backend blips with a plain 502 every so often, and one blip used to fail the whole sync.** Confirmed transient - a manual retry a minute later always worked - so `sync_woob.py` now retries twice (5s, then 15s) before giving up and firing a sync-failure alert. `ScrapingBlocked` is deliberately excluded from the retry even though it shares the same exception family: that one means the bank detected automation, and retrying seconds later is the wrong response to that.
+
+---
+
+## v2.9.4 - One movement, described twice, is not two movements - Released ✓
+
+*v2.9.3 recovered real transactions and introduced two duplication bugs doing it. Both were found by diffing production dumps a day later, and the second only by asking the bank's own balance instead of trusting the reasoning that produced it.*
+
+- [X] **A restated label was being stored as a second transaction.** LCL shows a movement under a placeholder ("VIREMENT SEPA", "VIREMENT INSTANTANE") and restates it with the real counterparty on a later sync. v2.9.3's requirement that labels match turned every such restatement into a new row - four in a single production day, accumulating every half hour. A restatement now updates the stored row's label instead of inserting, so the movement keeps one row and gains the real counterparty name. **Honest limit, pinned by its own test**: when the row that displaced a lost twin still carries a placeholder, "one movement restated" and "two movements, one unnamed" are the same two strings, so that twin stays lost - the lesser error.
+- [X] **Trade Republic describes one purchase with two events.** v2.9.2 switched the near-duplicate window off for sources supplying real transaction ids, reasoning it was pure downside there. A purchase inside a PEA emits both a `Kauforder` and a `PEA` event: same amount, same day, different ids. Measured against the bank's own reported balance for one day - the only arbiter that does not depend on the reasoning under test - the account moved **-325,41 EUR**, while the stored transactions summed to **-334,14 EUR** with the window on and **-3 470,52 EUR** with it off. The boolean became a three-way mode: `amount` (the old behaviour, now the default) for sources that describe one movement several times, `label` for id-less sources where that same window was destroying genuinely distinct movements, `off` for nothing but the id.
+- [X] **`scripts/fix-restated-label-duplicates.sh`** cleans up what already landed, both families, dry-run by default - and skips any row the user has categorised, split or marked as income, because merging their work into another row is not a script's call.
+
+**The lesson worth keeping, and it cost three releases**: a real transaction id proves a *row* is unique, never that a *movement* is described once. Dedup correctness cannot be established by reasoning about identifiers; it has to be checked against the balance the bank itself reports, because that is the one figure not derived from the code being tested.
 
 ---
 
