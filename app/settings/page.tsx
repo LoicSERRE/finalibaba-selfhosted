@@ -23,7 +23,7 @@ import { SyncStatus } from "@/components/settings/sync-status";
 import { getRealtimeStatus, getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
 import { COUNTRY_CODES, FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { RealtimeIndicator } from "@/components/settings/realtime-indicator";
-import { getUserSettings, updateUserSettings } from "@/lib/actions/user-settings";
+import { getUserSettings, updateFinancialProfile, updateTaxSettings } from "@/lib/actions/user-settings";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/settings/language-switcher";
@@ -470,7 +470,7 @@ export default async function SettingsPage({
           <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.profile.title")}</h2>
           <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.profile.subtitle")}</p>
         </div>
-        <form action={updateUserSettings} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+        <form action={updateFinancialProfile} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label htmlFor="salary" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
@@ -555,7 +555,7 @@ export default async function SettingsPage({
           <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.tax.title")}</h2>
           <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.tax.subtitle")}</p>
         </div>
-        <form action={updateUserSettings} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+        <form action={updateTaxSettings} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
           {/* Governs which wrappers and rates the rest of the app SUGGESTS -
               never what it computes. See lib/domain/tax-locale.ts: the app
               does not model anyone's tax law, it just stops proposing French
