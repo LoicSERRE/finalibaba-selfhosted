@@ -87,7 +87,7 @@ def _sync_account_transactions(w, account, account_db_id, cur):
                     label=label,
                     amount_cents=amount_cents,
                     legacy_sync_id=legacy_sync_id,
-                    dedup_by_label=not tx.id,
+                    near_duplicate="label" if not tx.id else "amount",
                 )
                 tx_count += 1
         except CallErrors as e:

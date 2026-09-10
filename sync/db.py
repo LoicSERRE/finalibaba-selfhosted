@@ -417,7 +417,7 @@ def upsert_transaction(
     label: str,
     amount_cents: int,
     legacy_sync_id: str | None = None,
-    dedup_by_label: bool = False,
+    near_duplicate: str = "amount",
 ):
     """Insert transaction if not already stored.
 
@@ -442,8 +442,27 @@ def upsert_transaction(
     label lets the twin through while the row that genuinely IS the stored
     one still matches.
 
-    `dedup_by_label` enables a narrow same-amount/same-label window for those
-    id-less sources only. What it protects against is a real mechanism: a
+    `near_duplicate` picks how hard to look for a movement already stored
+    under a different id, and the three modes exist because two sources fail
+    in opposite directions:
+
+      "label"  - id-less sources (LCL through Woob). Same amount AND same
+                 label within three days, plus the restatement rule below.
+      "amount" - sources that DO supply ids but describe one cash movement
+                 with several of them. Same amount within three days, label
+                 ignored. The default, because it is the older, safer
+                 behaviour.
+      "off"    - nothing but the id.
+
+    Trade Republic needs "amount", which cost a release to learn. Reasoning
+    that a real transaction id makes the window pure downside there, it was
+    switched off - and a purchase inside a PEA turned out to emit both a
+    "Kauforder" and a "PEA" event, same amount, same day, different ids.
+    Measured against the bank's own balance for one day: the account moved
+    -325,41 EUR, the transactions summed to -334,14 EUR with the window on
+    and -3 470,52 EUR with it off.
+
+    What the window protects against is a real mechanism: a
     synthesised id contains the transaction's DATE, and a bank can restate
     that date by a day once the operation settles, which yields a different
     id for a transaction already stored. It deliberately no longer fires on
@@ -490,7 +509,7 @@ def upsert_transaction(
         if cur.fetchone():
             return
 
-    if dedup_by_label:
+    if near_duplicate != "off":
         cur.execute(
             """
             SELECT id, label FROM "Transaction"
@@ -502,6 +521,12 @@ def upsert_transaction(
             (account_id, amount_cents, date, date),
         )
         nearby = cur.fetchall()
+
+        if near_duplicate == "amount":
+            if nearby:
+                return  # one movement the source describes more than once
+            nearby = []
+
         for row in nearby:
             stored_label = row["label"] if isinstance(row, dict) else row[1]
             if _normalise_label(stored_label) == _normalise_label(label):

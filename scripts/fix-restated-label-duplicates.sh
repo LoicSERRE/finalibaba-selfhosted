@@ -79,6 +79,28 @@ docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
   ORDER BY g.date;"
 
 echo ""
+echo "→ Trade Republic rows describing a purchase already stored:"
+# The other half of the same release's damage. Switching the near-duplicate
+# window off for sources with real transaction ids assumed one id per cash
+# movement; a purchase inside a PEA emits both a "Kauforder" and a "PEA"
+# event with the same amount on the same day. Scoped to exactly that shape
+# rather than to same-amount pairs in general, because this account
+# legitimately holds many of those.
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+  SELECT a.name AS account, k.date::date AS date, k.\"amountCents\"/100.0 AS amount,
+         k.label AS removing, p.label AS keeping
+  FROM \"Transaction\" k
+  JOIN \"Account\" a ON a.id = k.\"accountId\"
+  JOIN \"Transaction\" p
+    ON p.\"accountId\" = k.\"accountId\" AND p.\"amountCents\" = k.\"amountCents\"
+   AND p.date::date = k.date::date AND p.id <> k.id AND p.label LIKE '%- PEA'
+  WHERE k.label LIKE '%- Kauforder'
+    AND k.\"categoryId\" IS NULL
+    AND NOT EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = k.id)
+    AND NOT EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = k.id)
+  ORDER BY k.date;"
+
+echo ""
 echo "→ Skipped because you have categorised, split or marked them as income:"
 docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
   SELECT a.name AS account, g.date::date AS date, g.\"amountCents\"/100.0 AS amount, g.label
@@ -111,6 +133,15 @@ if [ "$CONFIRM" != "yes" ]; then
 fi
 
 docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 --single-transaction -c "
-  DELETE FROM \"Transaction\" WHERE id IN ($CANDIDATES);"
+  DELETE FROM \"Transaction\" WHERE id IN ($CANDIDATES);
+  DELETE FROM \"Transaction\" WHERE id IN (
+    SELECT k.id FROM \"Transaction\" k
+    JOIN \"Transaction\" p
+      ON p.\"accountId\" = k.\"accountId\" AND p.\"amountCents\" = k.\"amountCents\"
+     AND p.date::date = k.date::date AND p.id <> k.id AND p.label LIKE '%- PEA'
+    WHERE k.label LIKE '%- Kauforder'
+      AND k.\"categoryId\" IS NULL
+      AND NOT EXISTS (SELECT 1 FROM \"TransactionSplit\" s WHERE s.\"transactionId\" = k.id)
+      AND NOT EXISTS (SELECT 1 FROM \"IncomeEvent\" i WHERE i.\"transactionId\" = k.id));"
 
 echo "✓ Done. The next sync will keep restatements in place rather than duplicating them."

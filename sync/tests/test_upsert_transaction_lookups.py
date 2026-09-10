@@ -78,7 +78,7 @@ def _upsert(cur, label, *, amount=-30000, date=DAY, occurrence=1):
         label=label,
         amount_cents=amount,
         legacy_sync_id=legacy_composite_sync_id(BASE, date, amount),
-        dedup_by_label=True,
+        near_duplicate="label",
     )
 
 
@@ -155,10 +155,14 @@ def test_the_window_no_longer_swallows_a_different_movement():
     assert len(cur.inserted) == 1
 
 
-def test_a_source_with_real_ids_never_consults_the_window():
-    """Trade Republic supplies transaction ids, so the heuristic is pure
-    downside there - it held 142 legitimate same-day/same-amount pairs."""
-    stored = [("tr:cash:abc", ACCOUNT, -30000, "M LOIC SERRE - Fertig", DAY)]
+def test_a_source_that_describes_one_movement_twice_keeps_the_amount_window():
+    """Trade Republic supplies real transaction ids, and that is NOT enough:
+    a purchase inside a PEA emits both a "Kauforder" and a "PEA" event, same
+    amount, same day, different ids. Switching the window off for it on the
+    grounds that ids made it redundant put the account 3 000 EUR away from
+    the balance the bank itself reported for that day. "amount" is the
+    default for exactly this reason."""
+    stored = [("tr:cash:abc", ACCOUNT, -175950, "Ferrari - PEA", DAY)]
     cur = FakeCursor(stored)
 
     upsert_transaction(
@@ -166,11 +170,12 @@ def test_a_source_with_real_ids_never_consults_the_window():
         account_id=ACCOUNT,
         sync_id="tr:cash:def",
         date=DAY,
-        label="M LOIC SERRE - Fertig",
-        amount_cents=-30000,
+        label="Ferrari - Kauforder",
+        amount_cents=-175950,
     )
 
-    assert len(cur.inserted) == 1
+    assert cur.inserted == []
+    assert cur.relabelled == []
 
 
 def test_a_restated_label_updates_the_row_instead_of_duplicating_it():
