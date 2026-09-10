@@ -14,9 +14,11 @@ from pathlib import Path
 import psycopg2.extras
 
 from db import (
+    composite_sync_id,
     get_conn,
     get_institution_id,
     infer_account_type,
+    legacy_composite_sync_id,
     record_balance,
     upsert_account,
     upsert_transaction,
@@ -60,18 +62,32 @@ def _sync_account_transactions(w, account, account_db_id, cur):
         from woob.core.bcall import CallErrors
         tx_count = 0
         try:
+            # See sync_woob.py's identical block - LCL is the source that
+            # supplies no transaction id, so this is the path that needs it.
+            seen_composites: dict[tuple, int] = {}
             for tx in w.do("iter_history", account, backends="lcl"):
                 if tx.amount is None or tx.date is None:
                     continue
                 amount_cents = int(Decimal(str(tx.amount)) * 100)
-                sync_id = f"lcl:{account.id}:{tx.id}" if tx.id else f"lcl:{account.id}:{tx.date.isoformat()}:{amount_cents}"
+                label = (tx.label or tx.raw or "").strip() or "-"
+                base = f"lcl:{account.id}"
+                legacy_sync_id = None
+                if tx.id:
+                    sync_id = f"{base}:{tx.id}"
+                else:
+                    key = (tx.date, amount_cents, label)
+                    seen_composites[key] = seen_composites.get(key, 0) + 1
+                    sync_id = composite_sync_id(base, tx.date, amount_cents, label, seen_composites[key])
+                    legacy_sync_id = legacy_composite_sync_id(base, tx.date, amount_cents)
                 upsert_transaction(
                     cur,
                     account_id=account_db_id,
                     sync_id=sync_id,
                     date=tx.date,
-                    label=(tx.label or tx.raw or "").strip() or "-",
+                    label=label,
                     amount_cents=amount_cents,
+                    legacy_sync_id=legacy_sync_id,
+                    dedup_by_label=not tx.id,
                 )
                 tx_count += 1
         except CallErrors as e:

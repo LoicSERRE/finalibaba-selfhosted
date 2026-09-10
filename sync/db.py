@@ -1,4 +1,5 @@
 """PostgreSQL helpers shared across sync scripts."""
+import hashlib
 import os
 import uuid
 
@@ -345,31 +346,116 @@ def upsert_holding(cur, *, account_id: str, ticker: str, name: str, quantity: st
         )
 
 
-def upsert_transaction(cur, *, account_id: str, sync_id: str, date, label: str, amount_cents: int):
-    """Insert transaction if not already stored (idempotent via syncId or near-duplicate check).
+def legacy_composite_sync_id(base: str, date, amount_cents: int) -> str:
+    """The pre-label synthesised id, kept only so already-stored rows are still
+    recognised. Never written for a new row."""
+    return f"{base}:{date.isoformat()}:{amount_cents}"
 
-    Woob returns each LCL transaction twice: once as "pending" (generic label, date J)
-    and once as "cleared" (full label, date J+1). We skip the new entry if an existing
-    transaction on the same account with the same amount exists within a ±3-day window.
-    The first one stored (cleared, with the full label) wins.
+
+def composite_sync_id(base: str, date, amount_cents: int, label: str, occurrence: int) -> str:
+    """A synthesised id for a bank that gives us no transaction id of its own.
+
+    Date and amount alone are NOT unique: two transfers of the same amount on
+    the same day collide, and the second one was being refused as a duplicate
+    it never was. Measured on a real instance - the account whose bank DOES
+    supply ids held 142 same-day/same-amount pairs, while the id-less account
+    held zero across its whole history, which is not luck.
+
+    The label discriminates the common real case (two transfers the same day
+    to different destinations read differently on the statement), and
+    `occurrence` covers the rest by numbering repeats within one sync pass.
+
+    The label fingerprint is appended for EVERY occurrence, including the
+    first, even though that means no new id matches an already-stored one -
+    upsert_transaction() looks the legacy id up separately for exactly that
+    reason. The alternative, leaving the first occurrence bare so it keeps
+    matching, would make the ids order-dependent: whichever of two same-day
+    transactions the bank happened to return first would claim the bare id,
+    and a reordering on the next run would swap both ids and duplicate both
+    rows. Order-independence is worth one extra lookup.
+
+    `occurrence` remains order-dependent, but only ever applies to two rows
+    sharing a date, an amount AND a label, which nothing can tell apart.
+    """
+    suffix = f":{_label_fingerprint(label)}" if label else ""
+    if occurrence > 1:
+        suffix += f":{occurrence}"
+    return f"{base}:{date.isoformat()}:{amount_cents}{suffix}"
+
+
+def _label_fingerprint(label: str) -> str:
+    normalised = " ".join(label.lower().split())
+    return hashlib.sha1(normalised.encode("utf-8")).hexdigest()[:8]
+
+
+def upsert_transaction(
+    cur,
+    *,
+    account_id: str,
+    sync_id: str,
+    date,
+    label: str,
+    amount_cents: int,
+    legacy_sync_id: str | None = None,
+    dedup_by_label: bool = False,
+):
+    """Insert transaction if not already stored.
+
+    Dedup is exact whenever the bank gives us a transaction id: `sync_id`
+    carries it and nothing else is consulted. The rest of this function only
+    exists for sources that give us NO id (LCL through Woob is the one that
+    matters), where the id has to be synthesised from the transaction's own
+    fields - see composite_sync_id().
+
+    `legacy_sync_id` is the pre-label composite id. Rows stored before that
+    format changed still carry it, so it is looked up as well, or the first
+    sync after the change would re-insert an account's entire history.
+
+    `dedup_by_label` enables a narrow same-amount/same-label window for those
+    id-less sources only. What it protects against is a real mechanism: a
+    synthesised id contains the transaction's DATE, and a bank can restate
+    that date by a day once the operation settles, which yields a different
+    id for a transaction already stored. It deliberately no longer fires on
+    amount alone.
+
+    That amount-only version was a silent data-loss bug, measured against a
+    real production database: a 300 EUR transfer to a livret suppressed a
+    300 EUR transfer to a broker made three days later, because it never
+    looked at the label. Ten movements totalling ~3 850 EUR had been dropped
+    that way on one instance, and each one left its counterpart on the other
+    account permanently unmatchable, which is what made internal transfers
+    show up as income. It also contradicted this project's own stated rule
+    for CSV import, that two legitimately different transactions can share a
+    fingerprint and must not be auto-merged.
+
+    Accepted, documented residue: two transactions with the SAME amount AND
+    the same label within three days, on a source with no bank id, still
+    merge. Distinguishing those needs an identity the bank does not give us,
+    and merging them is the lesser error than duplicating a restated one.
     """
     cur.execute('SELECT id FROM "Transaction" WHERE "syncId" = %s', (sync_id,))
     if cur.fetchone():
         return
 
-    # Near-duplicate check: same account + amount within ±3 days
-    cur.execute(
-        """
-        SELECT id FROM "Transaction"
-        WHERE "accountId" = %s
-          AND "amountCents" = %s
-          AND date BETWEEN (%s::timestamptz - INTERVAL '3 days') AND (%s::timestamptz + INTERVAL '3 days')
-        LIMIT 1
-        """,
-        (account_id, amount_cents, date, date),
-    )
-    if cur.fetchone():
-        return  # likely a pending/cleared duplicate - skip
+    if legacy_sync_id:
+        cur.execute('SELECT id FROM "Transaction" WHERE "syncId" = %s', (legacy_sync_id,))
+        if cur.fetchone():
+            return
+
+    if dedup_by_label:
+        cur.execute(
+            """
+            SELECT id FROM "Transaction"
+            WHERE "accountId" = %s
+              AND "amountCents" = %s
+              AND lower(btrim(label)) = lower(btrim(%s))
+              AND date BETWEEN (%s::timestamptz - INTERVAL '3 days') AND (%s::timestamptz + INTERVAL '3 days')
+            LIMIT 1
+            """,
+            (account_id, amount_cents, label, date, date),
+        )
+        if cur.fetchone():
+            return  # same movement restated on an adjacent date
 
     cur.execute(
         """

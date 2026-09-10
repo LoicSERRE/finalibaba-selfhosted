@@ -18,8 +18,10 @@ import psycopg2.extras
 import setup_locks
 import woob_errors
 from db import (
+    composite_sync_id,
     get_conn,
     infer_account_type,
+    legacy_composite_sync_id,
     promote_account_to_investment,
     record_balance,
     replace_holdings,
@@ -203,22 +205,33 @@ def _sync_account_transactions(w, backend_name, institution_id, institution_name
         from woob.core.bcall import CallErrors
         tx_count = 0
         try:
+            # Counts (date, amount, label) repeats within THIS pass so a bank
+            # with no transaction ids can still store two identical-looking
+            # movements - see composite_sync_id().
+            seen_composites: dict[tuple, int] = {}
             for tx in w.do("iter_history", account, backends=backend_name):
                 if tx.amount is None or tx.date is None:
                     continue
                 amount_cents = int(Decimal(str(tx.amount)) * 100)
-                tx_sync_id = (
-                    f"woob:{institution_id}:{account.id}:{tx.id}"
-                    if tx.id
-                    else f"woob:{institution_id}:{account.id}:{tx.date.isoformat()}:{amount_cents}"
-                )
+                label = (tx.label or tx.raw or "").strip() or "-"
+                base = f"woob:{institution_id}:{account.id}"
+                legacy_sync_id = None
+                if tx.id:
+                    tx_sync_id = f"{base}:{tx.id}"
+                else:
+                    key = (tx.date, amount_cents, label)
+                    seen_composites[key] = seen_composites.get(key, 0) + 1
+                    tx_sync_id = composite_sync_id(base, tx.date, amount_cents, label, seen_composites[key])
+                    legacy_sync_id = legacy_composite_sync_id(base, tx.date, amount_cents)
                 upsert_transaction(
                     cur,
                     account_id=account_db_id,
                     sync_id=tx_sync_id,
                     date=tx.date,
-                    label=(tx.label or tx.raw or "").strip() or "-",
+                    label=label,
                     amount_cents=amount_cents,
+                    legacy_sync_id=legacy_sync_id,
+                    dedup_by_label=not tx.id,
                 )
                 tx_count += 1
         except CallErrors as e:
