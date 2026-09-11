@@ -122,6 +122,21 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prisma migrate deploy
+      # Replaying the chain from zero is the only thing that shows a migration
+      # which changed DATA where it should also have changed the SCHEMA, and
+      # this job is the one place with an empty database to replay it into.
+      #
+      # Found exactly that, once: the migration that moved the French
+      # social-levies rate to 18.6% ran an UPDATE and never altered the column
+      # default, so schema.prisma said 0.186 while every fresh database said
+      # 0.172 - and since UserSettings rows are created without naming that
+      # column, every new self-hoster was quietly offered the old rate. It is
+      # invisible on any instance that already has the row, which is why it
+      # survived several releases.
+      #
+      # --exit-code makes a difference fail the job (0 empty, 2 not empty).
+      - name: Migrations must produce exactly what schema.prisma describes
+        run: pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       - run: cd sync && python -m pytest
 
   security:
