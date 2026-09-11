@@ -148,7 +148,24 @@ describe("internal-transfer pass", () => {
 
     const pool = txFindManyMock.mock.calls[0][0];
     expect(pool.where.isSecuritiesMovement).toBe(false);
-    expect(pool.where.NOT).toEqual({ sourceEventType: { startsWith: "CARD_" } });
+  });
+
+  it("admits a row whose event type is unknown, via an explicit null branch", async () => {
+    // Pins the SHAPE because the failure is SQL-level and no mock can express
+    // it: `NOT (NULL LIKE 'CARD_%')` is NULL, not TRUE, so the bare NOT this
+    // filter was first written as excluded every row whose column is null -
+    // which is every row from every other source and everything synced before
+    // the column existed. Measured against a real database: the pool went from
+    // 628 rows to zero, disabling internal-transfer detection outright, with
+    // nothing raised anywhere. Whoever simplifies this back to one NOT will
+    // reintroduce that, and this assertion is the only warning they get.
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    const pool = txFindManyMock.mock.calls[0][0];
+    expect(pool.where.OR).toEqual([
+      { sourceEventType: null },
+      { NOT: { sourceEventType: { startsWith: "CARD_" } } },
+    ]);
   });
 
   it("writes nothing when no pair is detected", async () => {

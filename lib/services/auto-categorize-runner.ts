@@ -166,7 +166,16 @@ async function flagInternalTransfers(accountIds: string[], userId: string): Prom
       // Null passes, and has to: it is what every other source and every row
       // synced before this column existed carries. This narrows the pool where
       // there is evidence, it does not require evidence to enter it.
-      NOT: { sourceEventType: { startsWith: "CARD_" } },
+      //
+      // Hence the explicit null branch rather than a bare NOT, which is the
+      // trap this exact filter fell into first: `NOT (NULL LIKE 'CARD_%')` is
+      // NULL in SQL, not TRUE, so a negated match silently excludes every row
+      // whose column is null. Measured against a real database before it
+      // shipped - the pool went from 628 rows to ZERO, disabling
+      // internal-transfer detection entirely, with no error anywhere. A filter
+      // that fails by matching nothing is invisible; only running it against
+      // real rows and counting them showed it.
+      OR: [{ sourceEventType: null }, { NOT: { sourceEventType: { startsWith: "CARD_" } } }],
       accountId: { in: accountIds },
     },
     select: {
