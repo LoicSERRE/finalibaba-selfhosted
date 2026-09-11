@@ -300,7 +300,7 @@ async function checkBudgetOverrunRule(
 // One Prisma key (amountCents) built from two independent rule fields, in one
 // place - built separately they produce two amountCents objects and the spread
 // silently drops one.
-function buildNewTransactionAmountFilter(
+export function buildNewTransactionAmountFilter(
   direction: "DEBIT" | "CREDIT" | null,
   minimumCents: bigint | null
 ): { amountCents?: { lt: bigint } | { gt: bigint } | { lte: bigint } | { gte: bigint }; OR?: { amountCents: AmountRange }[] } {

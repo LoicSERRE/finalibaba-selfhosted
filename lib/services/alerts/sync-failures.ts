@@ -31,9 +31,9 @@ const FIXED_SOURCE_LABELS: Record<string, string> = {
   yahoo_sector_data: "Données sectorielles Yahoo Finance",
 };
 
-type InstitutionLite = { id: string; name: string; woobModule: string | null; trPhone: string | null };
+export type InstitutionLite = { id: string; name: string; woobModule: string | null; trPhone: string | null };
 
-function friendlySourceLabel(source: string, institutions: Map<string, InstitutionLite>): string {
+export function friendlySourceLabel(source: string, institutions: Map<string, InstitutionLite>): string {
   if (FIXED_SOURCE_LABELS[source]) return FIXED_SOURCE_LABELS[source];
   // Through the shared parser, never a per-prefix branch: a `woob:`-only one
   // let per-user Trade Republic sources fall through and be announced by their
@@ -54,7 +54,7 @@ function friendlySourceLabel(source: string, institutions: Map<string, Instituti
 // or an Institution deleted / its config cleared. Checked every run, not only
 // at alert-creation time, so one retired AFTER its state row exists is cleaned
 // up too.
-function isSourceRetired(source: string, institutions: Map<string, InstitutionLite>): boolean {
+export function isSourceRetired(source: string, institutions: Map<string, InstitutionLite>): boolean {
   if (source === SOURCE_LCL) return !process.env.LCL_LOGIN;
   if (source === SOURCE_TRADE_REPUBLIC) return !process.env.TR_PHONE;
   const institutionId = sourceInstitutionId(source);
@@ -82,7 +82,7 @@ function isSourceRetired(source: string, institutions: Map<string, InstitutionLi
 // sync error) are enough to say something clear and actionable; the exact
 // technical detail is still in Paramètres → sync status / SyncLog for
 // anyone who wants to dig further.
-function formatSyncFailureBody(label: string, status: string): string {
+export function formatSyncFailureBody(label: string, status: string): string {
   if (status === SYNC_STATUS_CAPTCHA_REQUIRED) {
     // Says what to do AND why it will not stop happening, because this one
     // never resolves itself - see lib/domain/sync-status.ts. Sent once only.
