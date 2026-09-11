@@ -13,30 +13,25 @@ import { getAccountTaxRate } from "@/lib/domain/tax";
 import { isTrCashAccount } from "@/lib/domain/sync-ids";
 import { FR_PFU_TOTAL_RATE } from "@/lib/domain/tax-locale";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
-import { computeGoalProgress } from "@/lib/domain/goals";
-import { estimateYearEndInterestCents, estimateYearEndInterestSeries, quinzaineBoundaries } from "@/lib/domain/savings-projection";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import {
-  DIVIDEND_YIELDS,
-  ISIN_TO_YF_SYMBOL,
-  holdingMarketValue,
-  dividendEffectiveTaxRate,
-  computeIndexCAGR,
+  computeSavingsInterestProjection,
+  computeGoalRows,
+  computeDebtAccounts,
+  computeBenchmarkCAGRs,
+  analyseHoldings,
+} from "@/lib/domain/analytics-sections";
+import {
 } from "@/lib/domain/analytics-market";
 import type {
-  AnalyticsAccount,
   AnalyticsInput,
   AnalyticsResult,
   AllocationSliceResult,
   AssetRow,
-  BenchmarkCAGRs,
-  DebtAccountRow,
   DividendCalendarRow,
-  GoalRow,
   InvestPerfRow,
   MonthlyHistoryPoint,
   PerformanceRow,
-  SavingsInterestHistoryPoint,
   TopAssetRow,
 } from "@/lib/domain/analytics-types";
 
@@ -125,49 +120,14 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
       allocation[account.type === "AUTOMOBILE" ? "auto" : "realEstate"] += equity;
       grossAssets += value;
     } else if (account.type === "INVESTMENT" || account.type === "CRYPTO") {
-      for (const h of account.holdings) {
-        const mv = holdingMarketValue(h);
-        value += mv;
-
-        // Dividends - real Yahoo Finance yield, falls back to hard-coded rate
-        const symbol = ISIN_TO_YF_SYMBOL[h.ticker];
-        const yfInfo = symbol ? yfData[symbol] : null;
-        const divYield = yfInfo?.annualYield ?? DIVIDEND_YIELDS[h.ticker] ?? 0;
-        if (divYield > 0) {
-          const divCents = BigInt(Math.round(Number(mv) * divYield));
-          const subtype = account.investmentSubtype ?? null;
-          // A broker that already withholds the full French tax before the
-          // dividend lands (see Account.dividendsAlreadyNet's own comment)
-          // must not have dividendEffectiveTaxRate applied on top - that
-          // would double-count a deduction already taken.
-          const divTaxRate = account.dividendsAlreadyNet ? 0 : dividendEffectiveTaxRate(h.ticker, subtype);
-          const divNetCents = BigInt(Math.round(Number(divCents) * (1 - divTaxRate)));
-          annualDividendsCents += divCents;
-          annualDividendsNetCents += divNetCents;
-          if (symbol) {
-            dividendRowsData.push({
-              isin: h.ticker,
-              name: h.name ?? h.ticker,
-              symbol,
-              subtype,
-              country: h.ticker.slice(0, 2).toUpperCase(),
-              valueCents: mv,
-              annualEstCents: divCents,
-              annualNetCents: divNetCents,
-              alreadyNet: account.dividendsAlreadyNet,
-              taxRate: divTaxRate,
-              divYield,
-            });
-          }
-        }
-
-        if (h.costBasisCents != null && taxRate !== null) {
-          hasBasis = true;
-          const gain = mv - h.costBasisCents;
-          accountCostBasis += h.costBasisCents;
-          accountGain += gain;
-        }
-      }
+      const contrib = analyseHoldings(account, taxRate, yfData);
+      value += contrib.value;
+      accountCostBasis += contrib.costBasis;
+      accountGain += contrib.gain;
+      hasBasis = contrib.hasBasis;
+      annualDividendsCents += contrib.dividendsGrossCents;
+      annualDividendsNetCents += contrib.dividendsNetCents;
+      dividendRowsData.push(...contrib.dividendRows);
       if (hasBasis && taxRate !== null) {
         accountTax = accountGain > BigInt(0)
           ? BigInt(Math.round(Number(accountGain) * taxRate))
@@ -316,21 +276,11 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     return { ...row, returnPct, gainNet, cagr };
   });
 
-  // ── Benchmark comparison ─────────────────────────────────────────────────
-  // Same lookback window as investCAGR, applied to 3 reference indices - a
-  // point-in-time comparison (two price snapshots), not a historical chart,
-  // for the same reason investCAGR itself isn't a smooth curve (investment
-  // HistoricalBalance snapshots are event-driven, not scheduled, so there's
-  // no reliable daily series here).
-  const benchmarkNow = new Date(nowMs);
-  const benchmarkCAGRs: BenchmarkCAGRs | null =
-    investCAGRWeightedYears !== null
-      ? {
-          msciWorld: computeIndexCAGR(input.msciWorldHistory, new Date(nowMs - investCAGRWeightedYears * 365.25 * 86_400_000), benchmarkNow),
-          sp500: computeIndexCAGR(input.sp500History, new Date(nowMs - investCAGRWeightedYears * 365.25 * 86_400_000), benchmarkNow),
-          cac40: computeIndexCAGR(input.cac40History, new Date(nowMs - investCAGRWeightedYears * 365.25 * 86_400_000), benchmarkNow),
-        }
-      : null;
+  const benchmarkCAGRs = computeBenchmarkCAGRs(
+    { msciWorld: input.msciWorldHistory, sp500: input.sp500History, cac40: input.cac40History },
+    investCAGRWeightedYears,
+    nowMs,
+  );
 
   // "Net worth" means AFTER latent tax, here as in lib/domain/dashboard.ts.
   // These two files used to disagree - this one called the pre-tax figure
@@ -409,23 +359,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   // (net-worth-tracking) never needs a lookup, but every account-linked
   // goal does, and a fresh Map lookup per goal is cheap either way for the
   // handful of goals a personal instance realistically has.
-  const assetValueById = new Map(assetRows.map((r) => [r.id, r.value]));
-  const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
-  const goalRows: GoalRow[] = goals.map((g) => {
-    const currentCents = g.accountId !== null ? (assetValueById.get(g.accountId) ?? BigInt(0)) : netWorth;
-    const { pct, remaining } = computeGoalProgress(currentCents, g.targetCents);
-    return {
-      id: g.id,
-      name: g.name,
-      targetCents: g.targetCents,
-      targetDate: g.targetDate,
-      accountId: g.accountId,
-      accountName: g.accountId !== null ? (accountNameById.get(g.accountId) ?? null) : null,
-      currentCents,
-      pct,
-      remaining,
-    };
-  });
+  const goalRows = computeGoalRows(goals, assetRows, accounts, netWorth);
 
   // ── Cash-flow metrics (require user settings) ───────────────────────────
   const hasSalary = settings.salaryNetCents > BigInt(0);
@@ -437,60 +371,8 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     : null;
 
   // ── Year-end savings interest projection (méthode des quinzaines) ───────
-  // See lib/domain/savings-projection.ts's own header for the method and
-  // why it's a deliberate simplification of the real bank rule.
-  const balancesByAccount = new Map<string, { recordedAt: Date; balanceCents: bigint }[]>();
-  for (const b of allBalances) {
-    if (!balancesByAccount.has(b.accountId)) balancesByAccount.set(b.accountId, []);
-    balancesByAccount.get(b.accountId)!.push({ recordedAt: b.recordedAt, balanceCents: b.balanceCents });
-  }
-  // An account earns from this estimate when it has a rate NOW or had one
-  // earlier in the year - a rate that has since been set to zero still paid
-  // for the fortnights it covered, and skipping the account outright would
-  // silently drop them.
-  const earnsInterest = (a: AnalyticsAccount) =>
-    a.type === "SAVINGS" &&
-    (((a.interestRatePct ?? 0) > 0) || (a.interestRateHistory ?? []).some((r) => r.ratePct > 0));
-
-  let estimatedYearEndSavingsInterestCents = BigInt(0);
-  for (const account of accounts) {
-    if (!earnsInterest(account)) continue;
-    const currentBalanceCents = account.history[0]?.balanceCents ?? BigInt(0);
-    estimatedYearEndSavingsInterestCents += estimateYearEndInterestCents(
-      balancesByAccount.get(account.id) ?? [],
-      currentBalanceCents,
-      account.interestRatePct ?? 0,
-      now,
-      account.interestRateHistory ?? []
-    );
-  }
-
-  // Re-runs the same projection as of each past quinzaine boundary this
-  // year, summed across every SAVINGS account with a rate, so a chart can
-  // show how the estimate has moved (a deposit, a withdrawal, a rate
-  // change) rather than only ever showing today's single figure.
-  const interestHistoryBoundaries = quinzaineBoundaries(now.getUTCFullYear()).filter((b) => b.getTime() <= now.getTime());
-  const interestHistoryTotals = new Map<number, bigint>();
-  for (const account of accounts) {
-    if (!earnsInterest(account)) continue;
-    const series = estimateYearEndInterestSeries(
-      balancesByAccount.get(account.id) ?? [],
-      account.interestRatePct ?? 0,
-      interestHistoryBoundaries,
-      account.interestRateHistory ?? []
-    );
-    for (const point of series) {
-      const key = point.date.getTime();
-      interestHistoryTotals.set(key, (interestHistoryTotals.get(key) ?? BigInt(0)) + point.estimatedCents);
-    }
-  }
-  const estimatedYearEndInterestHistory: SavingsInterestHistoryPoint[] = interestHistoryBoundaries
-    .filter((b) => interestHistoryTotals.has(b.getTime()))
-    .map((b) => ({
-      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(b),
-      isoDate: b.toISOString().slice(0, 10),
-      estimatedCents: Number(interestHistoryTotals.get(b.getTime())!),
-    }));
+  const { estimatedYearEndSavingsInterestCents, estimatedYearEndInterestHistory } =
+    computeSavingsInterestProjection(accounts, allBalances, now, intlLocale);
 
   // ── History ─────────────────────────────────────────────────────────────
   const liabMap = new Map<string, bigint>();
@@ -571,22 +453,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
 
   // ── Debt accounts ────────────────────────────────────────────────────────
   // Asset-backed liabilities (real estate, auto) only - LOAN accounts have their own tab
-  const debtAccounts: DebtAccountRow[] = accounts
-    .filter((a) => a.type !== "LOAN" && (a.liabilityCents ?? BigInt(0)) > BigInt(0))
-    .map((a) => {
-      const value = a.manualValueCents ?? BigInt(0);
-      const liability = a.liabilityCents ?? BigInt(0);
-      return {
-        id: a.id,
-        name: a.name,
-        institution: a.institution?.name ?? "",
-        type: a.type,
-        value,
-        liability,
-        equity: value - liability,
-        ltv: value > BigInt(0) ? Math.round((Number(liability) / Number(value)) * 100) : 0,
-      };
-    });
+  const debtAccounts = computeDebtAccounts(accounts);
 
   // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
   // real payments) but zero gross assets by design (pure liability, no
