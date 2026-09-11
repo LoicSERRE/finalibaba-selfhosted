@@ -61,7 +61,10 @@ function assertAllFieldsReferenced(
 
 describe("analytics export completeness", () => {
   it("every AnalyticsResult field is either exported or explicitly excused", () => {
-    const analyticsSource = readFileSync(resolve(__dirname, "../lib/domain/analytics.ts"), "utf-8");
+    // Both moved out of analytics.ts at v2.10.2 when it was split for size.
+    // Read from where they live, not from the module that re-exports them -
+    // this reads SOURCE TEXT, so a re-export would find nothing to scan.
+    const analyticsSource = readFileSync(resolve(__dirname, "../lib/domain/analytics-export.ts"), "utf-8");
     const buildAnalyticsExportSource = extractFunctionSource(
       analyticsSource,
       "export function buildAnalyticsExport("

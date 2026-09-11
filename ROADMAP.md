@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.1**
+Current release: **v2.10.2**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -17,8 +17,15 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
 - **Plaid** - US/Canada coverage, where this app has no users yet.
-- **Split `lib/domain/analytics.ts`** (1148 lines) - flagged by four audits running.
+- **Split `app/api/alerts/check/route.ts`** (915 lines) - flagged by five audits running, and now the largest file in the repo.
 - **Variable-amount recurring detection, second pass** - v2.10 finds a consistent series inside a noisy label; a merchant with *two* subscriptions still only yields one.
+
+---
+
+## v2.10.2 - A hand-marked transfer no longer strands its other leg
+
+- **Marking one leg of a transfer by hand left the other counting as spending, for good.** A hand-marked row left the detection pool entirely, so the leg that should pair with it had no partner available and could never be flagged. Found on a real database where a transfer moves through three accounts: 1 100 EUR of Livret A debits still counted while their credits did not, understating a month's "reste à vivre". The pool now keeps hand-marked rows as partners, never as rows it may revoke.
+- **`lib/domain/analytics.ts` split**, 1148 lines into 654 plus three siblings (market data, types, export payload). Flagged by four audits running. Text moved, nothing else: the fifteen call sites were untouched.
 
 ---
 
