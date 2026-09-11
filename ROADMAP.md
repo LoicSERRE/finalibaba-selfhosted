@@ -431,6 +431,10 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 
 - [X] **The migration that moved the French social-levies rate changed the data and not the column default.** `schema.prisma` has said 0.186 and every database has said 0.172 since v2.9.2, and `UserSettings` rows are created without naming that column - so Postgres supplied the default and the migration's own `WHERE "taxRatePea" = 0.172` had already run long before the row existed. Every self-hoster installing since was quietly offered 17.2% when creating a PEA. Invisible on any instance that already had the row, which is why it survived several releases, and found only by replaying the chain into an empty database. CI does that replay now and fails on any difference between the migrations and `schema.prisma` - it was the only drift in the whole chain.
 
+### The transfers no matcher could ever find
+
+- [X] **`scripts/flag-internal-transfers.sh`.** Pairing needs both legs stored, and a bank only serves so much history to scrape: on a real instance the current account everything passes through had history from 1 January while the savings and broker accounts went back two years, so **54 transfers totalling ~24 285 EUR** had no counterpart to match and looked like income indefinitely. No amount of matching fixes that - a person has to say so, and this is the bulk version of the per-row toggle. It records the decision as a person's, so the detector never revisits it; it skips any row already recorded as a dividend or interest payment; and it is a script taking a label pattern rather than a rule in the app, because matching a name is exactly the text matching the detector exists to avoid.
+
 ### From the release-boundary audit, logged rather than done
 
 - `lib/domain/analytics.ts` is at **1148 lines** and has been the flagged split candidate for four audits running, now ahead of `app/api/alerts/check/route.ts` (915). It carries the dashboard aggregation, the dividend estimate, the sector pass, the savings projection and the tax blend in one file. Not blocking anything; it needs to be a real item rather than a fifth note.
