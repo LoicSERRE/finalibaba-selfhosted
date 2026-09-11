@@ -185,6 +185,8 @@
   "accountDetail": {
     "backToAccounts": "Comptes",
     "positions": "Positions · {count} actif{suffix}",
+    "holdingsStaleSince": "Positions non confirmées depuis le {since} : le dernier relevé complet date du {reported}. Les lignes ci-dessous sont conservées telles quelles.",
+    "holdingsStaleUnknown": "Positions non confirmées depuis le {since} : la banque ne renvoie plus de lignes. Elles sont conservées telles quelles.",
     "transactions": "Transactions · {count} opération{suffix}",
     "viewAllTransactions": "Voir toutes les transactions",
     "importEmptyTitle": "Aucune donnée pour ce compte",
@@ -287,6 +289,7 @@
       "errorLabelRequired": "Indique un libellé.",
       "errorFutureDate": "La date ne peut pas être dans le futur : ce relevé deviendrait aussitôt le solde affiché.",
       "errorInvalidDate": "Date invalide.",
+      "errorNoPriorBalance": "Aucun solde connu avant cette date : corrige d'abord le solde du compte.",
       "errorNotFound": "Cette opération n'existe plus.",
       "errorNotManual": "Seule une saisie manuelle peut être supprimée ici."
     }
@@ -667,7 +670,7 @@
       "countryUnset": "Non précisé",
       "countryHint": "Détermine les enveloppes et les taux proposés (PEA, ISA, 401(k)…). L'app ne calcule jamais ton impôt à ta place : ce sont des suggestions que tu peux corriger.",
       "interestRate": "Taux d'intérêt annuel",
-      "interestRateHint": "Sers-t'en pour estimer tes revenus passifs. Laisse vide si le compte ne rapporte rien : vide et 0 % donnent le même résultat, mais l'export signale les comptes non renseignés.",
+      "interestRateHint": "Sers-t'en pour estimer tes revenus passifs. Saisis un taux NET (après impôt) : sur un compte imposable, le taux brut annoncé par la banque gonflerait l'estimation. Laisse vide si le compte ne rapporte rien : vide et 0 % donnent le même résultat, mais l'export signale les comptes non renseignés.",
       "countries": {
         "FR": "France",
         "BE": "Belgique",
@@ -685,6 +688,13 @@
         "OTHER": "Autre pays"
       },
       "interestRateStale": "Les taux réglementés changent : celui-ci est proposé d'après les barèmes connus au {date}. Vérifie-le auprès de ta banque.",
+      "rateHistoryTitle": "Changements de taux",
+      "rateHistoryEmpty": "Aucun changement enregistré : le taux ci-dessus vaut pour toute l'année.",
+      "rateHistoryRow": "{rate} % jusqu'au {date}",
+      "rateHistoryRateLabel": "Ancien taux",
+      "rateHistoryUntilLabel": "Jusqu'au",
+      "rateHistoryAdd": "Ajouter",
+      "rateHistoryHint": "Les taux réglementés changent en cours d'année. Enregistre l'ancien taux et la date à laquelle il a cessé de s'appliquer : l'estimation de fin d'année valorise alors chaque quinzaine au taux qu'elle portait vraiment.",
       "interestRateUnset": "Aucun taux renseigné : ce compte ne compte pas dans l'estimation des revenus passifs."
     },
     "language": {

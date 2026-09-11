@@ -599,6 +599,11 @@ def _timeline_item_to_transaction(item: dict) -> dict | None:
         "label": label,
         "amount_cents": int(Decimal(str(value)) * 100),
         "is_securities_movement": is_securities_movement(item, label),
+        # The bank's own name for what this is. Stored raw and used as
+        # evidence the label cannot give: a card payment is never one leg of a
+        # transfer between two of your own accounts, however well its amount
+        # happens to match something elsewhere.
+        "source_event_type": (item.get("eventType") or None),
     }
 
 
@@ -641,6 +646,7 @@ def _sync_transactions(cur, account_id: str, items: list[dict]) -> int:
                 label=resolved["label"],
                 amount_cents=resolved["amount_cents"],
                 is_securities_movement=resolved["is_securities_movement"],
+                source_event_type=resolved["source_event_type"],
             )
             count += 1
         log.info("TR transactions - %d nouvelle(s) sur %d élément(s) reçus", count, len(items))

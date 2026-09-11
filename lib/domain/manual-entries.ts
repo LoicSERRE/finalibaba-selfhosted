@@ -71,7 +71,32 @@ export type ManualMovementInput = {
   date: string;
 };
 
-export type ManualEntryError = "amount_required" | "label_required" | "future_date" | "invalid_date";
+export type ManualEntryError =
+  | "amount_required"
+  | "label_required"
+  | "future_date"
+  | "invalid_date"
+  | "no_prior_balance";
+
+/**
+ * Whether the account's balance is known on the day before an entry.
+ *
+ * `anchorBalanceFor` builds its anchor from the balance strictly before the
+ * entry and falls back to zero when there is none - which reads as arithmetic
+ * and is actually an assertion: on an account created without a starting
+ * balance, recording a 12 EUR spend wrote -12 EUR and the account page then
+ * showed that as its balance, indistinguishable from a real one. Same shape as
+ * the recurring pattern this repo has already named twice - an absent value
+ * rendered as a legitimate zero.
+ *
+ * So the caller asks first, and a movement with nothing behind it is refused
+ * rather than invented. The way out is the correction mode, which states a
+ * balance outright instead of deriving one.
+ */
+export function hasBalanceBefore(snapshots: readonly BalanceSnapshot[], at: Date): boolean {
+  const stamp = at.getTime();
+  return snapshots.some((s) => s.recordedAt.getTime() <= stamp);
+}
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 

@@ -70,7 +70,10 @@ export default async function AnalyticsPage() {
       include: {
         institution: true,
         holdings: true,
-        history: { orderBy: { recordedAt: "desc" }, take: 1 },
+        history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
+        // Only the savings estimate reads this, and only a handful of rows
+        // per account ever exist (one per rate change).
+        interestRateHistory: { select: { ratePct: true, until: true } },
       },
     }),
     prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
@@ -215,6 +218,7 @@ export default async function AnalyticsPage() {
             realYtdPassiveNetCents={result.realYtdPassiveNetCents}
             realYtdDividendsNetCents={result.realYtdDividendsNetCents}
             realYtdInterestNetCents={result.realYtdInterestNetCents}
+            readOnly={readOnly}
           />
 
           <SavingsInterestEstimateSection

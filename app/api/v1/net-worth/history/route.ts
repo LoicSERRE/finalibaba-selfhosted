@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const [accounts, allBalances] = await Promise.all([
     prisma.account.findMany({
       where: { id: { in: accountIds } },
-      include: { institution: true, holdings: true, history: { orderBy: { recordedAt: "desc" }, take: 1 } },
+      include: { institution: true, holdings: true, history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 } },
     }),
     prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
   ]);

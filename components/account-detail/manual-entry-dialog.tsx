@@ -210,6 +210,7 @@ const ERROR_KEY: Record<string, string> = {
   label_required: "errorLabelRequired",
   future_date: "errorFutureDate",
   invalid_date: "errorInvalidDate",
+  no_prior_balance: "errorNoPriorBalance",
   not_found: "errorNotFound",
   not_manual: "errorNotManual",
 };

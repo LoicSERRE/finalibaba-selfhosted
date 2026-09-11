@@ -84,7 +84,16 @@ export interface AccountDetailAccount {
   loanStartDate: Date | null;
   institution: { name: string } | null;
   holdings: AccountDetailHolding[];
-  /** Most recent first (matches the page's `orderBy: { recordedAt: "desc" }`). */
+  /**
+   * Most recent first. Every caller orders by
+   * `[{ recordedAt: "desc" }, { id: "desc" }]`, and the second key is not
+   * decoration: `recordedAt` is not unique, and two rows on the same instant
+   * left the displayed balance up to whatever order the database happened to
+   * return - a corrected balance re-imported for a day it already had would
+   * sometimes show the old figure and sometimes the new one. `id` is a cuid,
+   * so ordering by it descending resolves the tie toward the row written last,
+   * which is the one that meant to win.
+   */
   history: AccountDetailBalance[];
   /** Most recent first (matches the page's `orderBy: { date: "desc" }`). */
   transactions: AccountDetailTransaction[];

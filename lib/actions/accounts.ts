@@ -293,3 +293,49 @@ export async function updateAccountInterestRate(formData: FormData) {
   await prisma.account.update({ where: { id }, data: { interestRatePct } });
   revalidateAccount(id);
 }
+
+/**
+ * Records what this account paid BEFORE a date - see AccountInterestRate and
+ * rateAtDate. One row expresses one change, because the account's own
+ * interestRatePct already holds what it pays now: "1.5% until 1 August 2026"
+ * plus a current 1.7% describes the real French regulated year exactly, and
+ * the year-end estimate then values each fortnight at the rate that fortnight
+ * actually carried instead of applying one number to all 24.
+ *
+ * Upserts on (accountId, until): correcting a change you already recorded is
+ * re-entering it, not a duplicate to reject.
+ */
+export async function addInterestRateChange(formData: FormData) {
+  const accountId = formData.get("id") as string;
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, accountId);
+
+  const until = ((formData.get("until") as string) || "").trim();
+  const ratePct = parseTaxRatePct((formData.get("ratePct") as string) || "");
+  // Both halves are required and neither has a sensible default: a date with
+  // no rate says nothing, and a rate with no date is what the account column
+  // already holds.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || ratePct === undefined) return;
+
+  const at = new Date(`${until}T00:00:00.000Z`);
+  if (Number.isNaN(at.getTime())) return;
+
+  await prisma.accountInterestRate.upsert({
+    where: { accountId_until: { accountId, until: at } },
+    create: { accountId, until: at, ratePct },
+    update: { ratePct },
+  });
+  revalidateAccount(accountId);
+}
+
+export async function deleteInterestRateChange(formData: FormData) {
+  const id = formData.get("rateId") as string;
+  const viewer = await getViewer();
+  const row = await prisma.accountInterestRate.findUnique({ where: { id }, select: { accountId: true } });
+  if (!row) return;
+  // Resolved from the row itself, never from anything the caller supplied.
+  await assertAccountWritable(viewer.id, row.accountId);
+
+  await prisma.accountInterestRate.delete({ where: { id } });
+  revalidateAccount(row.accountId);
+}

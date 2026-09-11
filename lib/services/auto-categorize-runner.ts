@@ -155,6 +155,18 @@ async function flagInternalTransfers(accountIds: string[], userId: string): Prom
     where: {
       internalTransferManual: null,
       isSecuritiesMovement: false,
+      // A card payment cannot be one leg of a transfer between two of your own
+      // accounts, whatever its amount happens to match. Measured on a real
+      // account: a 105 EUR incoming transfer from a third party was paired
+      // with an unrelated 105 EUR card payment two days later on the broker's
+      // cash account, and both were excluded from budgets for it. The bank
+      // says which is which - Trade Republic tags every timeline item with an
+      // eventType - and the sync now keeps that rather than discarding it.
+      //
+      // Null passes, and has to: it is what every other source and every row
+      // synced before this column existed carries. This narrows the pool where
+      // there is evidence, it does not require evidence to enter it.
+      NOT: { sourceEventType: { startsWith: "CARD_" } },
       accountId: { in: accountIds },
     },
     select: {

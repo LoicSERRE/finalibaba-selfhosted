@@ -45,6 +45,23 @@ export async function upsertHolding(formData: FormData) {
 
   const existing = await prisma.holding.findUnique({ where: { accountId_ticker: { accountId, ticker } } });
 
+  // A blank cost-basis field means "leave it alone", the convention this form
+  // has always documented - and only half the writes below honoured it, which
+  // broke a foreign-currency position outright. Blank made `unchanged` false,
+  // so the price was re-converted at today's rate; the EUR basis was then
+  // skipped by the update and kept its old rate, while the native basis was
+  // written as null regardless. The two halves of one figure ended up on
+  // different rates with one of them empty, and nothing could reconcile them
+  // again. Resolving the effective value once, here, is what keeps every
+  // decision downstream reading the same number.
+  //
+  // Only carried over while the currency is the same: a position moved from
+  // USD to GBP has a stored basis in the currency it is leaving, and reusing
+  // that figure as a GBP amount would be a silent 20% error.
+  const carriedNativeCostBasisCents =
+    existing !== null && existing.currency === currency ? (existing.nativeCostBasisCents ?? null) : null;
+  const effectiveNativeCostBasisCents = nativeCostBasisCents ?? carriedNativeCostBasisCents;
+
   let lastPriceCents = nativePriceCents;
   let costBasisCents = nativeCostBasisCents;
   let fxRateToEur: number | null = null;
@@ -59,7 +76,7 @@ export async function upsertHolding(formData: FormData) {
       existing !== null &&
       existing.currency === currency &&
       existing.nativePriceCents === nativePriceCents &&
-      (existing.nativeCostBasisCents ?? null) === nativeCostBasisCents;
+      (existing.nativeCostBasisCents ?? null) === effectiveNativeCostBasisCents;
 
     if (unchanged && existing.fxRateToEur != null) {
       fxRateToEur = existing.fxRateToEur;
@@ -71,7 +88,8 @@ export async function upsertHolding(formData: FormData) {
         throw new Error(`Impossible de récupérer le taux de change ${currency}→EUR - réessaie ou utilise l'EUR.`);
       }
       lastPriceCents = applyFxRate(nativePriceCents, fxRateToEur);
-      costBasisCents = nativeCostBasisCents !== null ? applyFxRate(nativeCostBasisCents, fxRateToEur) : null;
+      costBasisCents =
+        effectiveNativeCostBasisCents !== null ? applyFxRate(effectiveNativeCostBasisCents, fxRateToEur) : null;
     }
   }
 
@@ -87,7 +105,7 @@ export async function upsertHolding(formData: FormData) {
       targetPct: targetPct ?? undefined,
       currency,
       nativePriceCents: currency !== "EUR" ? nativePriceCents : undefined,
-      nativeCostBasisCents: currency !== "EUR" ? (nativeCostBasisCents ?? undefined) : undefined,
+      nativeCostBasisCents: currency !== "EUR" ? (effectiveNativeCostBasisCents ?? undefined) : undefined,
       fxRateToEur: fxRateToEur ?? undefined,
     },
     update: {
@@ -100,7 +118,7 @@ export async function upsertHolding(formData: FormData) {
       ...(costBasisCents !== null ? { costBasisCents } : {}),
       ...(targetPct !== null ? { targetPct } : {}),
       nativePriceCents: currency !== "EUR" ? nativePriceCents : null,
-      nativeCostBasisCents: currency !== "EUR" ? nativeCostBasisCents : null,
+      nativeCostBasisCents: currency !== "EUR" ? effectiveNativeCostBasisCents : null,
       fxRateToEur: currency !== "EUR" ? fxRateToEur : null,
     },
   });

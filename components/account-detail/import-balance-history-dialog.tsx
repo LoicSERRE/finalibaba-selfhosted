@@ -6,8 +6,8 @@ import { History } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { importBalanceHistory } from "@/lib/actions/balances";
-import { parseCents, formatCurrency } from "@/lib/utils/format";
-import { parseCsvDate, isFutureDate, looksNumeric, makeHeaderNormalizer } from "@/lib/domain/csv-import";
+import { formatCurrency } from "@/lib/utils/format";
+import { parseCsvDate, isFutureDate, looksNumeric, makeHeaderNormalizer, parseImportedCents } from "@/lib/domain/csv-import";
 import { useTranslations } from "next-intl";
 
 type ParsedRow = {
@@ -66,7 +66,7 @@ export function ImportBalanceHistoryDialog({
         }
         const parsed: ParsedRow[] = results.data.map((raw) => {
           const isoDate = parseCsvDate(raw.date ?? "");
-          const balanceCents = Number(parseCents(raw.balance ?? ""));
+          const balanceCents = Number(parseImportedCents(raw.balance ?? ""));
           const error = !isoDate
             ? t("invalidDate")
             : isFutureDate(isoDate)

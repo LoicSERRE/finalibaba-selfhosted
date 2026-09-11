@@ -185,6 +185,8 @@
   "accountDetail": {
     "backToAccounts": "Accounts",
     "positions": "Positions · {count} asset{suffix}",
+    "holdingsStaleSince": "Positions unconfirmed since {since}: the last full statement was {reported}. The lines below are kept as they were.",
+    "holdingsStaleUnknown": "Positions unconfirmed since {since}: the bank no longer returns any lines. They are kept as they were.",
     "transactions": "Transactions · {count} transaction{suffix}",
     "viewAllTransactions": "View all transactions",
     "importEmptyTitle": "No data for this account yet",
@@ -287,6 +289,7 @@
       "errorLabelRequired": "Enter a label.",
       "errorFutureDate": "The date cannot be in the future: that snapshot would immediately become the displayed balance.",
       "errorInvalidDate": "Invalid date.",
+      "errorNoPriorBalance": "No balance known before this date: correct the account balance first.",
       "errorNotFound": "This entry no longer exists.",
       "errorNotManual": "Only a manual entry can be deleted here."
     }
@@ -667,7 +670,7 @@
       "countryUnset": "Not set",
       "countryHint": "Decides which wrappers and rates are suggested (PEA, ISA, 401(k)…). The app never computes your tax for you: these are suggestions you can correct.",
       "interestRate": "Annual interest rate",
-      "interestRateHint": "Used to estimate your passive income. Leave empty if the account pays nothing: empty and 0% give the same result, but the export flags accounts left unset.",
+      "interestRateHint": "Used to estimate your passive income. Enter a NET rate (after tax): on a taxable account, the gross rate your bank advertises would inflate the estimate. Leave empty if the account pays nothing: empty and 0% compute the same, but the export flags accounts with no rate set.",
       "countries": {
         "FR": "France",
         "BE": "Belgium",
@@ -685,6 +688,13 @@
         "OTHER": "Other country"
       },
       "interestRateStale": "Regulated rates change: this one is suggested from the schedule known on {date}. Check it with your bank.",
+      "rateHistoryTitle": "Rate changes",
+      "rateHistoryEmpty": "No change recorded: the rate above applies to the whole year.",
+      "rateHistoryRow": "{rate}% until {date}",
+      "rateHistoryRateLabel": "Previous rate",
+      "rateHistoryUntilLabel": "Until",
+      "rateHistoryAdd": "Add",
+      "rateHistoryHint": "Regulated rates change mid-year. Record the previous rate and the date it stopped applying: the year-end estimate then values each fortnight at the rate it actually carried.",
       "interestRateUnset": "No rate set: this account is excluded from the passive-income estimate."
     },
     "language": {

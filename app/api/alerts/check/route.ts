@@ -49,7 +49,7 @@ async function checkNetWorthAlert(settings: UserSettingsModel, accountIds: strin
       include: {
         institution: true,
         holdings: true,
-        history: { orderBy: { recordedAt: "desc" }, take: 1 },
+        history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
       },
       orderBy: { name: "asc" },
     }),
@@ -427,7 +427,7 @@ function findActiveAlertRules(userId: string) {
     include: {
       account: {
         include: {
-          history: { orderBy: { recordedAt: "desc" }, take: 1 },
+          history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
           holdings: true,
         },
       },
@@ -773,14 +773,31 @@ async function checkNewTransactionRule(
     return null;
   }
 
+  const sinceCursor = { ...where, createdAt: { gt: rule.lastNotifiedTransactionAt } };
+
+  // The count and the newest timestamp come from ALL matching rows, not from
+  // the page fetched for the digest. Advancing the cursor to the last row of a
+  // capped page was silently lossy, and reliably so rather than rarely: a sync
+  // writes its rows in one createMany, so a whole batch shares one createdAt,
+  // and the next run's strictly-greater comparison then skipped every row past
+  // the cap - permanently, with no error and nothing in the alert to suggest
+  // anything was missing. Now the cursor moves past everything counted, and
+  // the message says how many there were rather than how many fit.
+  const totals = await prisma.transaction.aggregate({
+    where: sinceCursor,
+    _count: true,
+    _max: { createdAt: true },
+  });
+  if (totals._count === 0 || totals._max.createdAt === null) return null;
+
   const newTransactions = await prisma.transaction.findMany({
-    where: { ...where, createdAt: { gt: rule.lastNotifiedTransactionAt } },
-    orderBy: { createdAt: "asc" },
+    where: sinceCursor,
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: MAX_NEW_TRANSACTION_DIGEST,
   });
   if (newTransactions.length === 0) return null;
 
-  const { title, body } = evaluateNewTransactionAlert(newTransactions);
+  const { title, body } = evaluateNewTransactionAlert(newTransactions, totals._count);
   await dispatchAlert(settings, title, rule.message ? `${body}\n\n${rule.message}` : body);
   // Deliberately NOT resetting on a later threshold/direction edit, unlike
   // every threshold-crossing kind's own dedup flag - this cursor means
@@ -788,7 +805,7 @@ async function checkNewTransactionRule(
   // regardless of a later filter change.
   await prisma.alertRule.update({
     where: { id: rule.id },
-    data: { lastNotifiedTransactionAt: newTransactions.at(-1)!.createdAt },
+    data: { lastNotifiedTransactionAt: totals._max.createdAt },
   });
 
   return `new_transaction_rule:${rule.id}`;

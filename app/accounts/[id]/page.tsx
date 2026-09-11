@@ -52,8 +52,9 @@ export default async function AccountDetailPage({
       where: { id, AND: { id: { in: accountIds } } },
       include: {
         institution: true,
-        history: { orderBy: { recordedAt: "desc" }, take: 120 },
+        history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 120 },
         holdings: { orderBy: { ticker: "asc" } },
+        interestRateHistory: { orderBy: { until: "asc" } },
         transactions: {
           orderBy: { date: "desc" },
           take: 200,
@@ -154,6 +155,7 @@ export default async function AccountDetailPage({
           <InterestRateForm
             accountId={account.id}
             interestRatePct={account.interestRatePct}
+            rateHistory={account.interestRateHistory}
             country={userSettings?.country ?? null}
             readOnly={readOnly}
           />
@@ -181,6 +183,9 @@ export default async function AccountDetailPage({
             accountName={account.name}
             holdingsWithTax={result.holdingsWithTax}
             isSynced={result.isSynced}
+            staleSince={account.holdingsStaleSince}
+            reportedAt={account.holdingsReportedAt}
+            intlLocale={intlLocale}
           />
 
           <RebalancingSection td={td} rebalancingRows={result.rebalancingRows} />

@@ -12,6 +12,7 @@ card spending (supermarkets, restaurants), so the line has to be drawn per
 transaction.
 """
 
+import sync_tr
 from sync_tr import is_securities_movement
 
 
@@ -65,3 +66,37 @@ def test_an_unknown_event_type_falls_back_to_the_label():
     unrecognised event type must not silently disable the classification."""
     assert is_securities_movement({"eventType": "SOMETHING_NEW"}, "Ferrari - Kauforder")
     assert not is_securities_movement({"eventType": "SOMETHING_NEW"}, "Burger King")
+
+
+def test_timeline_item_keeps_the_banks_own_event_type():
+    """The field that tells a card payment from a transfer.
+
+    The mapper read the title and the amount and discarded eventType, so the
+    internal-transfer matcher had only amount and date to go on and paired a
+    105 EUR card payment with an unrelated 105 EUR incoming transfer two days
+    later. Kept raw: the vocabulary is Trade Republic's and has changed under
+    this project before, so mapping it onto an enum of our own would silently
+    misfile whatever it did not recognise.
+    """
+    resolved = sync_tr._timeline_item_to_transaction(
+        {
+            "id": "abc",
+            "timestamp": "2026-06-05T10:00:00.000+0000",
+            "title": "Crous",
+            "amount": {"value": -105.0},
+            "eventType": "CARD_SUCCESSFUL_TRANSACTION",
+        }
+    )
+    assert resolved is not None
+    assert resolved["source_event_type"] == "CARD_SUCCESSFUL_TRANSACTION"
+
+
+def test_timeline_item_without_an_event_type_is_null_not_empty():
+    """Null is what every other source carries, and the transfer pool admits
+    it - the exclusion narrows where there is evidence rather than demanding
+    evidence to enter."""
+    resolved = sync_tr._timeline_item_to_transaction(
+        {"id": "abc", "timestamp": "2026-06-05T10:00:00.000+0000", "title": "x", "amount": {"value": 5.0}}
+    )
+    assert resolved is not None
+    assert resolved["source_event_type"] is None

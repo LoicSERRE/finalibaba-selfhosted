@@ -392,7 +392,32 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 - [X] **The net-worth history subtracted the original loan capital, for every past day.** A loan repaid over three years showed as a constant liability at its day-one amount, so the entire curve sat below the truth by however much had been repaid. Each day now amortises the loan to that day.
 - [X] **The projection never deducted the latent tax already owed.** It taxed the gain it projected and ignored the unrealised gain sitting there on day one, so the after-tax curve started too high and stayed too high by a constant.
 
-**Known limit, measured rather than assumed**: amount-and-date matching still produces the occasional false pair - a 105 EUR incoming transfer from a third party and an unrelated 105 EUR card payment two days later on another account. Tightening the tolerance would not help: of 63 pairs on a real account, 29 are same-day, 28 one day apart and 6 two days apart, and 5 of those 6 are genuine. The durable fix is Trade Republic's own `eventType`, which distinguishes a card payment from a transfer and which the sync does not yet capture.
+- [X] **The bank's own word for what a movement is, kept instead of discarded.** Amount-and-date matching still produced the occasional false pair - a 105 EUR incoming transfer from a third party matched against an unrelated 105 EUR card payment two days later. Tightening the tolerance would not help: of 63 pairs on a real account, 29 are same-day, 28 one day apart and 6 two days apart, and 5 of those 6 are genuine. Trade Republic tags every timeline item with an `eventType` and the sync read the title and the amount and threw it away; `Transaction.sourceEventType` keeps it, and a card payment no longer competes to be one leg of a transfer. **Honest limit**: nothing already stored carries the field and guessing it from a label is the text matching it exists to replace, so this applies to transactions synced from here on.
+
+### Imports and manual entries
+
+- [X] **`1,234` imported as 1,23 EUR.** The comma was only ever read as a decimal separator, so a file exported with it grouping thousands divided every amount by a thousand and passed validation. The rule is now structural rather than a locale guess: with both separators present the last one is the decimal; a lone separator before exactly three digits groups thousands, because money carries two decimals or none, never three.
+- [X] **An invalid date landed silently on another day.** The shape was checked, the calendar was not: `new Date("2026-02-30")` does not fail, it rolls forward to 2 March, and 31 April to 1 May - on a row the preview had shown as accepted.
+- [X] **A manual entry on an account with no balance invented one.** Recording a 12 EUR spend on an account created without a starting balance wrote -12 EUR, which the account page then showed as its balance, indistinguishable from a real one. A movement with no known balance behind it is refused now, pointing at the correction mode, which states a balance outright instead of deriving one.
+- [X] **The balance importer trusted the browser.** Neither the future-date check nor the date validation existed server-side, and a Server Action is reachable whatever the UI renders - a year typed as 2062 becomes the displayed balance permanently, on every screen, with no delete UI to undo it.
+- [X] **Two statements on one day made the displayed balance arbitrary.** Re-importing a corrected balance kept both rows at the identical instant and which one won was down to the database's own row order. The importer now replaces rather than appends, and every "latest balance" read carries an explicit tiebreaker.
+
+### Positions, alerts and the rest
+
+- [X] **Clearing a foreign-currency position's cost basis broke it permanently.** A blank field means "unchanged", and only half the writes honoured it: the price was re-converted at today's rate, the EUR basis kept the old rate, and the native basis was written as null regardless. The two halves of one figure ended up on different rates with one of them empty, and nothing could reconcile them again.
+- [X] **"New transaction" alerts skipped rows for good.** The cursor advanced to the last row of a capped page, and a sync writes its batch in one `createMany` so the whole batch shares one `createdAt` - the next run's strictly-greater comparison then skipped everything past the cap, permanently, with no error. The cursor now moves past everything counted and the message says how many there were rather than how many fit.
+- [X] **The Woob sync truncated cents instead of rounding**, where the Trade Republic sync documents the opposite rule in its own comments. 500 shares at 134,5678 EUR recorded 67 280 EUR instead of 67 283,90 - systematically downward, so it never averages out.
+- [X] **A securities account that stops reporting keeps its positions, and now says so.** An empty statement is genuinely ambiguous - a failed scrape or a closed account - and deleting on it would destroy a real portfolio, so the lines stay. What was missing is the saying: the account records when it was last confirmed and when it stopped, and the holdings table prints both.
+
+### Savings estimates
+
+- [X] **One rate per account, applied to all 24 fortnights, for a rate that moves mid-year.** France's Livret A paid 1.5% until 31 July 2026 and 1.7% from 1 August, so whichever single number was stored, the year was wrong on one side of that date by the whole spread over half of it. `AccountInterestRate` records what an account paid *until* a date - one row per change, with the account's own field still holding today's figure - and the estimate values each fortnight at the rate it actually carried. Measured on a real portfolio: 486,35 EUR dated, against 503,45 EUR at a flat 1.7% and 476,98 EUR at a flat 1.5%.
+- [X] **The suggested regulated rates were six weeks stale**, still proposing 1.5% for the Livret A and the LDDS. The generic "any other livret" fallback was a second copy of the same literal and had to be updated separately, which is the drift the dated-suggestion design was introduced to prevent, reached from the inside.
+- [X] **The rate field never said it wanted a net figure**, so entering the gross rate a bank advertises inflated the estimate on a taxable account.
+
+### Elsewhere
+
+- [X] **The passive-income card linked out of someone else's portfolio into your own pages.** `/income`, `/tax-report` and `/budgets` are deliberately outside the portfolio switcher's scope, so a figure read from a grantor's portfolio led to a page showing zero. The links are not offered while viewing someone else's data rather than leading to a contradiction.
 
 ---
 

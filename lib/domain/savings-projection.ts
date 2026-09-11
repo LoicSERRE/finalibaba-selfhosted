@@ -74,20 +74,48 @@ export function estimateYearEndInterestCents(
   balances: readonly { recordedAt: Date; balanceCents: bigint }[],
   currentBalanceCents: bigint,
   ratePct: number,
-  now: Date
+  now: Date,
+  rateHistory: readonly RateUntil[] = []
 ): bigint {
-  if (ratePct <= 0) return BigInt(0);
   const boundaries = quinzaineBoundaries(now.getUTCFullYear());
   const earliestBalanceCents = earliestKnownBalance(balances);
   let totalCents = 0;
   for (const boundary of boundaries) {
+    // The rate is resolved per fortnight, not once for the year: a regulated
+    // rate moves mid-year, and one number applied to all 24 of them is wrong
+    // on one side of that date by the whole spread over half a year.
+    const rate = rateAtDate(ratePct, rateHistory, boundary);
+    if (rate <= 0) continue;
     const balanceCents = boundary.getTime() <= now.getTime()
       ? balanceAtOrBefore(balances, boundary) ?? earliestBalanceCents
       : currentBalanceCents;
     if (balanceCents === null) continue;
-    totalCents += (Number(balanceCents) * ratePct) / boundaries.length;
+    totalCents += (Number(balanceCents) * rate) / boundaries.length;
   }
   return BigInt(Math.round(totalCents));
+}
+
+/** What the account paid until `until` (exclusive) - see AccountInterestRate. */
+export type RateUntil = { ratePct: number; until: Date };
+
+/**
+ * The rate in force on `at`.
+ *
+ * History rows say what the rate WAS until a date, so the answer is the
+ * earliest row still open on that day, and today's rate when none is. Storing
+ * changes the other way round ("became X on this date") would need two rows to
+ * describe one change and would leave every day before the first row
+ * undefined; this shape needs one row and has no undefined region.
+ *
+ * `until` is exclusive: a row until 2026-08-01 covers 31 July, not 1 August.
+ */
+export function rateAtDate(currentRatePct: number, history: readonly RateUntil[], at: Date): number {
+  let best: RateUntil | null = null;
+  for (const row of history) {
+    if (row.until.getTime() <= at.getTime()) continue;
+    if (best === null || row.until.getTime() < best.until.getTime()) best = row;
+  }
+  return best ? best.ratePct : currentRatePct;
 }
 
 /** The balance from the oldest snapshot in the array, or null if empty. */
@@ -124,7 +152,8 @@ function earliestKnownBalance(balances: readonly { recordedAt: Date; balanceCent
 export function estimateYearEndInterestSeries(
   balances: readonly { recordedAt: Date; balanceCents: bigint }[],
   ratePct: number,
-  evaluationDates: readonly Date[]
+  evaluationDates: readonly Date[],
+  rateHistory: readonly RateUntil[] = []
 ): { date: Date; estimatedCents: bigint }[] {
   const earliestBalanceCents = earliestKnownBalance(balances);
   if (earliestBalanceCents === null) return [];
@@ -132,7 +161,10 @@ export function estimateYearEndInterestSeries(
   const points: { date: Date; estimatedCents: bigint }[] = [];
   for (const date of evaluationDates) {
     const balanceAsOfDate = balanceAtOrBefore(balances, date) ?? earliestBalanceCents;
-    points.push({ date, estimatedCents: estimateYearEndInterestCents(balances, balanceAsOfDate, ratePct, date) });
+    points.push({
+      date,
+      estimatedCents: estimateYearEndInterestCents(balances, balanceAsOfDate, ratePct, date, rateHistory),
+    });
   }
   return points;
 }

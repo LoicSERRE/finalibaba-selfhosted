@@ -1,0 +1,13 @@
+-- Trade Republic labels every timeline item with its own eventType
+-- ("CARD_SUCCESSFUL_TRANSACTION", "ACCOUNT_TRANSFER_INCOMING",
+-- "INTEREST_PAYOUT"...) and the sync read the title and the amount and threw
+-- it away. Measured consequence on a real account: a 105 EUR incoming
+-- transfer from a third party and an unrelated 105 EUR card payment two days
+-- later were paired as the two legs of one internal transfer, because amount
+-- and date were the only evidence available.
+--
+-- Deliberately not backfilled: nothing already stored carries the field, and
+-- guessing it from a label is exactly the text matching this column exists to
+-- replace. The exclusion it drives therefore applies to transactions synced
+-- from here on.
+ALTER TABLE "Transaction" ADD COLUMN "sourceEventType" TEXT;

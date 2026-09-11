@@ -22,9 +22,12 @@ from db import (
     get_conn,
     infer_account_type,
     legacy_composite_sync_id,
+    mark_holdings_reported,
+    mark_holdings_stale,
     promote_account_to_investment,
     record_balance,
     replace_holdings,
+    to_cents,
     upsert_account,
     upsert_transaction,
     write_sync_log,
@@ -152,13 +155,13 @@ def _investment_to_holding(inv) -> dict | None:
 
     cost = None
     if unitprice is not None:
-        cost = int(Decimal(str(unitprice)) * Decimal(str(quantity)) * 100)
+        cost = to_cents(Decimal(str(unitprice)) * Decimal(str(quantity)))
 
     return {
         "ticker": ticker,
         "name": str(label) if label else None,
         "quantity": Decimal(str(quantity)),
-        "last_price_cents": int(Decimal(str(unitvalue)) * 100),
+        "last_price_cents": to_cents(unitvalue),
         "cost_basis_cents": cost,
     }
 
@@ -184,9 +187,17 @@ def _sync_account_investments(w, backend_name, institution_name, account, accoun
             return 0
 
         if not holdings:
+            # Ambiguous by nature: a read that failed quietly, or an account
+            # genuinely emptied. Deleting on that would destroy a real
+            # portfolio on one bad scrape, so the lines stay - but the account
+            # is marked, or they sit there forever as facts nothing can ever
+            # correct. Set once, so the recorded date stays the first empty
+            # statement rather than sliding forward with every later sync.
+            mark_holdings_stale(cur, account_db_id)
             return 0
 
         count = replace_holdings(cur, account_db_id, holdings)
+        mark_holdings_reported(cur, account_db_id)
         if promote_account_to_investment(cur, account_db_id):
             log.info("%s - %s: retyped as an investment account", institution_name, account.label)
         log.info("%s - %s: %d holding(s) imported", institution_name, account.label, count)
@@ -212,7 +223,7 @@ def _sync_account_transactions(w, backend_name, institution_id, institution_name
             for tx in w.do("iter_history", account, backends=backend_name):
                 if tx.amount is None or tx.date is None:
                     continue
-                amount_cents = int(Decimal(str(tx.amount)) * 100)
+                amount_cents = to_cents(tx.amount)
                 label = (tx.label or tx.raw or "").strip() or "-"
                 base = f"woob:{institution_id}:{account.id}"
                 legacy_sync_id = None
@@ -373,7 +384,7 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
     with balance=None)."""
     if account.balance is None:
         return None
-    balance_cents = int(Decimal(str(account.balance)) * 100)
+    balance_cents = to_cents(account.balance)
     sync_id = f"woob:{institution_id}:{account.id}"
     account_type = infer_account_type(account.label)
     account_db_id = upsert_account(

@@ -239,6 +239,10 @@ model Account {
   // creation (see lib/domain/tax-locale.ts), but the stored number is what is
   // computed from, so a user anywhere can see it and correct it.
   interestRatePct       Float?
+  // What the rate USED to be, and until when - see AccountInterestRate.
+  // interestRatePct above stays "the rate today", so every reader of it is
+  // unchanged; this is only consulted when estimating a past fortnight.
+  interestRateHistory   AccountInterestRate[]
   loanAmountCents       BigInt? // LOAN: initial borrowed amount
   loanTaeg              Float? // LOAN: annual interest rate in % (e.g. 5.47)
   loanDurationMonths    Int? // LOAN: total duration in months
@@ -247,6 +251,21 @@ model Account {
   // LOAN: dedup flag for the "nearly paid off" alert - one-way, a loan only
   // crosses the threshold once. See lib/domain/alerts.ts.
   loanPaidOffAlertSent  Boolean                @default(false)
+  // When the bank last reported the lines inside this account, and when it
+  // first stopped. A statement that comes back empty is genuinely ambiguous -
+  // a silent read failure, or an account that really was emptied - and the
+  // sync used to resolve it by keeping the old lines with nothing said, so a
+  // position sold years ago could keep inflating net worth and no later sync
+  // could ever remove it.
+  //
+  // Keeping them is still the right call: deleting on an empty read would
+  // destroy a real portfolio on one bad scrape. What was missing is saying so.
+  // A non-empty statement sets holdingsReportedAt and clears
+  // holdingsStaleSince; an empty one on an account that has holdings sets
+  // holdingsStaleSince once and leaves it there, so the screen can say the
+  // figures are unconfirmed and since when.
+  holdingsReportedAt    DateTime?
+  holdingsStaleSince    DateTime?
   holdings              Holding[]
   history               HistoricalBalance[]
   transactions          Transaction[]
@@ -507,6 +526,38 @@ model Goal {
   @@index([userId])
 }
 
+// A rate this account carried BEFORE a given date - the shape a regulated
+// savings rate actually has, and the one the year-end estimate needs.
+//
+// The estimate applies one rate to all 24 fortnights, and a French regulated
+// rate moves twice a year: in 2026 the Livret A paid 1.5% until 31 July and
+// 1.7% from 1 August. Whichever single number was stored, the year's figure
+// was wrong on one side of that date - not by rounding, by the whole spread
+// over half a year.
+//
+// Rows say what the rate WAS, not what it BECAME, and that is what lets one
+// row express one change: "1.5% until 2026-08-01", with Account.
+// interestRatePct still holding today's 1.7%. Storing it the other way round
+// would need two rows to say the same thing and would leave "before the first
+// row" undefined. The rate on a day is the earliest row whose `until` is
+// after it, and today's rate when none is - see rateAtDate in
+// lib/domain/savings-projection.ts.
+//
+// `until` is exclusive: a row until 2026-08-01 covers 31 July and not 1
+// August. Unique per account so the same boundary cannot be recorded twice
+// with two different answers.
+model AccountInterestRate {
+  id        String   @id @default(cuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ratePct   Float
+  until     DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, until])
+  @@index([accountId, until])
+}
+
 model HistoricalBalance {
   id           String   @id @default(cuid())
   accountId    String
@@ -551,6 +602,22 @@ model Transaction {
   // carries 293 rows of real card spending (supermarkets, restaurants), so
   // the distinction has to be made per transaction, not per account.
   isSecuritiesMovement Boolean            @default(false)
+  // The bank's OWN name for what this movement is, when it supplies one.
+  // Trade Republic's timeline carries an eventType on every item
+  // ("CARD_SUCCESSFUL_TRANSACTION", "INTEREST_PAYOUT",
+  // "ACCOUNT_TRANSFER_INCOMING"...) and the sync read the title and the
+  // amount and threw it away - so a 105 EUR card payment and a 105 EUR
+  // incoming transfer two days apart on another account were, to the
+  // internal-transfer matcher, indistinguishable, and it paired them.
+  //
+  // Kept as the raw upstream string rather than mapped onto an enum of our
+  // own: the vocabulary belongs to the bank and has already changed under
+  // this project once (see the real-time listener's topic names), so a
+  // mapping would silently misfile whatever it did not recognise. Null for
+  // every other source, and for every row synced before this existed - there
+  // is nothing to backfill it from, which is why the pairing exclusion it
+  // drives only applies going forward.
+  sourceEventType      String?
   createdAt            DateTime           @default(now())
   // Reverse side of IncomeEvent.transactionId - lets "Mark as income"
   // (see IncomeEvent below) tell whether this transaction already has one,

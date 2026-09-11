@@ -55,7 +55,7 @@ export default async function SharedDashboardPage({
       include: {
         institution: true,
         holdings: true,
-        history: { orderBy: { recordedAt: "desc" }, take: 1 },
+        history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
       },
       orderBy: { name: "asc" },
     }),

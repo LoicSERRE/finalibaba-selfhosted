@@ -7,6 +7,7 @@ import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard"
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import {
   anchorBalanceFor,
+  hasBalanceBefore,
   atNoonUtc,
   isManualEntry,
   MANUAL_SYNC_PREFIX,
@@ -53,11 +54,17 @@ export async function recordManualMovement(
   const at = atNoonUtc(input.date);
   const delta = BigInt(Math.round(input.amountCents));
 
-  await prisma.$transaction(async (tx) => {
+  const refusal = await prisma.$transaction(async (tx) => {
     const snapshots = await tx.historicalBalance.findMany({
       where: { accountId },
       select: { recordedAt: true, balanceCents: true },
     });
+
+    // Nothing is written before this check, so returning here is a clean exit
+    // rather than a rollback. An account with no balance on or before this day
+    // has no arithmetic to offer: deriving one from zero would state a balance
+    // the app was never told.
+    if (!hasBalanceBefore(snapshots, at)) return "no_prior_balance" as const;
 
     // Computed from the rows BEFORE the shift below, and only ever from those
     // strictly earlier than this entry - see anchorBalanceFor's own note on
@@ -85,7 +92,9 @@ export async function recordManualMovement(
         categoryId: input.categoryId || null,
       },
     });
+    return null;
   });
+  if (refusal) return { ok: false, error: refusal };
 
   // Only ever touches rows still sitting at categoryId null, so an explicit
   // pick above is left alone - same sweep importTransactions runs, for the

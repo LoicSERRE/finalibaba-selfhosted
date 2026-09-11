@@ -67,8 +67,15 @@ export type WrapperPreset = {
  */
 export type SavingsPreset = { key: string; ratePct: number; knownAt: string };
 
-/** Displayed with every suggested savings rate - see SavingsPreset. */
-export const SAVINGS_RATES_KNOWN_AT = "2026-02-01";
+/** Displayed with every suggested savings rate - see SavingsPreset.
+ *
+ *  Moved from 2026-02-01 when the Livret A and the LDDS went from 1.5% to
+ *  1.7% on 1 August 2026 - which the presets kept suggesting as 1.5% for six
+ *  weeks afterwards, i.e. the exact staleness the date exists to announce,
+ *  reached from the other side. The date is not decoration: whoever bumps a
+ *  rate here bumps this too, or the screen keeps vouching for a figure nobody
+ *  re-checked. */
+export const SAVINGS_RATES_KNOWN_AT = "2026-09-11";
 
 /**
  * The two components of the French PFU ("flat tax"), kept separate rather
@@ -122,8 +129,10 @@ const PRESETS: Record<CountryCode, CountryPreset> = {
       { key: "PER", treatment: DEFERRED, ratePct: null },
     ],
     savings: [
-      { key: "Livret A", ratePct: 0.015, knownAt: SAVINGS_RATES_KNOWN_AT },
-      { key: "LDDS", ratePct: 0.015, knownAt: SAVINGS_RATES_KNOWN_AT },
+      // 1.7% since 1 August 2026, up from the 1.5% that had held since
+      // 1 February 2026.
+      { key: "Livret A", ratePct: 0.017, knownAt: SAVINGS_RATES_KNOWN_AT },
+      { key: "LDDS", ratePct: 0.017, knownAt: SAVINGS_RATES_KNOWN_AT },
       { key: "LEP", ratePct: 0.025, knownAt: SAVINGS_RATES_KNOWN_AT },
       { key: "Livret Jeune", ratePct: 0.025, knownAt: SAVINGS_RATES_KNOWN_AT },
     ],
@@ -282,7 +291,13 @@ export function suggestedSavingsRate(country: string | null | undefined, account
     .sort((a, b) => b.key.length - a.key.length)
     .find((p) => name.includes(p.key.toLowerCase()));
   if (match) return match.ratePct;
-  // France only: a generic "Livret <something>" is still a regulated product.
-  if (isCountryCode(country) && country === "FR" && name.includes("livret")) return 0.015;
+  // France only: a generic "Livret <something>" is still a regulated product,
+  // and pays what the Livret A pays. Read from the preset rather than repeated
+  // as a literal - it was a copy of the same 1.5%, and when the real rate moved
+  // to 1.7% the copy stayed behind, which is the whole defect this line is part
+  // of fixing.
+  if (isCountryCode(country) && country === "FR" && name.includes("livret")) {
+    return products.find((p) => p.key === "Livret A")?.ratePct ?? null;
+  }
   return null;
 }

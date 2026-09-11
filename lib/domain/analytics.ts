@@ -135,6 +135,10 @@ export interface AnalyticsAccount {
   dividendsAlreadyNet: boolean;
   /** Annual savings interest, 0-1 ratio. Null = unknown, contributes nothing. */
   interestRatePct: number | null;
+  /** What the rate was before it last changed - see AccountInterestRate.
+   *  Optional so every caller that does not estimate savings interest (the
+   *  API routes, the share view) stays unchanged. */
+  interestRateHistory?: { ratePct: number; until: Date }[];
   manualValueCents: bigint | null;
   liabilityCents: bigint | null;
   syncId: string | null;
@@ -817,15 +821,24 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     if (!balancesByAccount.has(b.accountId)) balancesByAccount.set(b.accountId, []);
     balancesByAccount.get(b.accountId)!.push({ recordedAt: b.recordedAt, balanceCents: b.balanceCents });
   }
+  // An account earns from this estimate when it has a rate NOW or had one
+  // earlier in the year - a rate that has since been set to zero still paid
+  // for the fortnights it covered, and skipping the account outright would
+  // silently drop them.
+  const earnsInterest = (a: AnalyticsAccount) =>
+    a.type === "SAVINGS" &&
+    (((a.interestRatePct ?? 0) > 0) || (a.interestRateHistory ?? []).some((r) => r.ratePct > 0));
+
   let estimatedYearEndSavingsInterestCents = BigInt(0);
   for (const account of accounts) {
-    if (account.type !== "SAVINGS" || account.interestRatePct === null || account.interestRatePct <= 0) continue;
+    if (!earnsInterest(account)) continue;
     const currentBalanceCents = account.history[0]?.balanceCents ?? BigInt(0);
     estimatedYearEndSavingsInterestCents += estimateYearEndInterestCents(
       balancesByAccount.get(account.id) ?? [],
       currentBalanceCents,
-      account.interestRatePct,
-      now
+      account.interestRatePct ?? 0,
+      now,
+      account.interestRateHistory ?? []
     );
   }
 
@@ -836,11 +849,12 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   const interestHistoryBoundaries = quinzaineBoundaries(now.getUTCFullYear()).filter((b) => b.getTime() <= now.getTime());
   const interestHistoryTotals = new Map<number, bigint>();
   for (const account of accounts) {
-    if (account.type !== "SAVINGS" || account.interestRatePct === null || account.interestRatePct <= 0) continue;
+    if (!earnsInterest(account)) continue;
     const series = estimateYearEndInterestSeries(
       balancesByAccount.get(account.id) ?? [],
-      account.interestRatePct,
-      interestHistoryBoundaries
+      account.interestRatePct ?? 0,
+      interestHistoryBoundaries,
+      account.interestRateHistory ?? []
     );
     for (const point of series) {
       const key = point.date.getTime();

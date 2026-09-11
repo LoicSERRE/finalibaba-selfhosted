@@ -2,6 +2,7 @@
 import hashlib
 import os
 import uuid
+from decimal import Decimal
 
 import psycopg2
 import psycopg2.extras
@@ -84,6 +85,32 @@ def replace_holdings(cur, account_db_id: str, holdings: list[dict]) -> int:
             (account_db_id, seen),
         )
     return len(seen)
+
+
+def mark_holdings_reported(cur, account_db_id: str):
+    """Record that the bank just reported this account's lines, and clear any
+    stale mark - a statement that carries lines is the confirmation a previous
+    empty one was waiting for."""
+    cur.execute(
+        'UPDATE "Account" SET "holdingsReportedAt" = NOW(), "holdingsStaleSince" = NULL WHERE id = %s',
+        (account_db_id,),
+    )
+
+
+def mark_holdings_stale(cur, account_db_id: str):
+    """Record that the bank returned no lines for an account that has some.
+
+    Only ever set once: the useful date is the FIRST statement that came back
+    empty, not the most recent one, and moving it forward on every sync would
+    make a months-old silence look like it started this morning. An account
+    with no holdings is left alone - there is nothing to be unsure about.
+    """
+    cur.execute(
+        'UPDATE "Account" SET "holdingsStaleSince" = NOW()'
+        ' WHERE id = %s AND "holdingsStaleSince" IS NULL'
+        ' AND EXISTS (SELECT 1 FROM "Holding" h WHERE h."accountId" = %s)',
+        (account_db_id, account_db_id),
+    )
 
 
 def promote_account_to_investment(cur, account_db_id: str) -> bool:
@@ -300,10 +327,32 @@ def upsert_account(cur, *, sync_id: str, name: str, account_type: str, instituti
     return account_id
 
 
+def to_cents(amount) -> int:
+    """Cents from a decimal amount, ROUNDED rather than truncated.
+
+    `int(Decimal(...) * 100)` truncates, and always downward: 500 shares at
+    134.5678 EUR record 67 280 EUR instead of 67 283.90. Systematic, silent, and
+    in one direction, so it never averages out. sync_tr.py already documented
+    this rule against its own positions ("to_integral_value() (rounds,
+    ROUND_HALF_EVEN) not int() (truncates)"); sync_woob.py did the opposite on
+    every figure it wrote, which is exactly the divergence this module's own
+    "do not duplicate inline" note exists to prevent.
+
+    ROUND_HALF_EVEN is Decimal's default and matches the TypeScript display
+    layer's own Decimal(...).round(), so a stored figure and the one on screen
+    agree instead of drifting by a cent.
+    """
+    return int((Decimal(str(amount)) * 100).to_integral_value())
+
+
 def record_balance(cur, account_id: str, balance_cents: int):
     # Only insert a new entry if the balance actually changed
+    # id breaks the tie, same as every app-side read of this table: recordedAt
+    # is not unique, so two rows on one instant otherwise left "the latest
+    # balance" up to whatever order the database happened to return.
     cur.execute(
-        'SELECT "balanceCents" FROM "HistoricalBalance" WHERE "accountId" = %s ORDER BY "recordedAt" DESC LIMIT 1',
+        'SELECT "balanceCents" FROM "HistoricalBalance" WHERE "accountId" = %s'
+        ' ORDER BY "recordedAt" DESC, id DESC LIMIT 1',
         (account_id,),
     )
     row = cur.fetchone()
@@ -419,6 +468,7 @@ def upsert_transaction(
     legacy_sync_id: str | None = None,
     near_duplicate: str = "amount",
     is_securities_movement: bool = False,
+    source_event_type: str | None = None,
 ):
     """Insert transaction if not already stored.
 
@@ -544,10 +594,12 @@ def upsert_transaction(
 
     cur.execute(
         """
-        INSERT INTO "Transaction" (id, "accountId", "syncId", date, label, "amountCents", "isSecuritiesMovement", "createdAt")
-        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+        INSERT INTO "Transaction" (id, "accountId", "syncId", date, label, "amountCents",
+                                   "isSecuritiesMovement", "sourceEventType", "createdAt")
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """,
-        (str(uuid.uuid4()), account_id, sync_id, date, label, amount_cents, is_securities_movement),
+        (str(uuid.uuid4()), account_id, sync_id, date, label, amount_cents, is_securities_movement,
+         source_event_type),
     )
 
 

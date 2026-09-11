@@ -61,7 +61,7 @@ export default async function AccountsPage({
         where: { id: { in: accountIds }, type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
         include: {
           institution: true,
-          history: { orderBy: { recordedAt: "desc" }, take: 14 },
+          history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 14 },
         },
         orderBy: [{ institution: { name: "asc" } }, { name: "asc" }],
       }),

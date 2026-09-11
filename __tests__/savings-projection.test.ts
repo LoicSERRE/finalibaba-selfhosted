@@ -4,6 +4,7 @@ import {
   estimateYearEndInterestCents,
   estimateYearEndInterestSeries,
   quinzaineBoundaries,
+  rateAtDate,
 } from "@/lib/domain/savings-projection";
 
 describe("quinzaineBoundaries", () => {
@@ -147,5 +148,65 @@ describe("estimateYearEndInterestSeries", () => {
   it("returns an empty series for an account with no balance history at all", () => {
     const points = estimateYearEndInterestSeries([], 0.015, [new Date("2026-06-01T00:00:00.000Z")]);
     expect(points).toEqual([]);
+  });
+});
+
+describe("rateAtDate", () => {
+  const AUG = new Date(Date.UTC(2026, 7, 1));
+
+  it("uses today's rate when nothing was ever recorded", () => {
+    expect(rateAtDate(0.017, [], new Date(Date.UTC(2026, 2, 15)))).toBeCloseTo(0.017, 10);
+  });
+
+  it("uses the recorded rate before its date and today's rate from it on", () => {
+    // A row says what the account paid UNTIL a date, so one row plus the
+    // current rate describes a whole French regulated year: 1.5% until
+    // 1 August 2026, 1.7% after.
+    const history = [{ ratePct: 0.015, until: AUG }];
+    expect(rateAtDate(0.017, history, new Date(Date.UTC(2026, 6, 31)))).toBeCloseTo(0.015, 10);
+    expect(rateAtDate(0.017, history, AUG)).toBeCloseTo(0.017, 10);
+    expect(rateAtDate(0.017, history, new Date(Date.UTC(2026, 8, 1)))).toBeCloseTo(0.017, 10);
+  });
+
+  it("picks the earliest row still open, with several changes on file", () => {
+    const history = [
+      { ratePct: 0.03, until: new Date(Date.UTC(2025, 1, 1)) },
+      { ratePct: 0.024, until: new Date(Date.UTC(2026, 1, 1)) },
+      { ratePct: 0.015, until: AUG },
+    ];
+    expect(rateAtDate(0.017, history, new Date(Date.UTC(2024, 5, 1)))).toBeCloseTo(0.03, 10);
+    expect(rateAtDate(0.017, history, new Date(Date.UTC(2025, 5, 1)))).toBeCloseTo(0.024, 10);
+    expect(rateAtDate(0.017, history, new Date(Date.UTC(2026, 5, 1)))).toBeCloseTo(0.015, 10);
+    expect(rateAtDate(0.017, history, new Date(Date.UTC(2026, 10, 1)))).toBeCloseTo(0.017, 10);
+  });
+});
+
+describe("estimateYearEndInterestCents across a rate change", () => {
+  const balances = [{ recordedAt: new Date(Date.UTC(2026, 0, 1)), balanceCents: BigInt(1_000_000) }];
+  const now = new Date(Date.UTC(2026, 11, 31));
+
+  it("values each fortnight at the rate that fortnight carried", () => {
+    // 10 000 EUR held all year. 14 of the 24 fortnights start before
+    // 1 August and pay 1.5%; the other 10 pay 1.7%.
+    const mixed = estimateYearEndInterestCents(balances, BigInt(1_000_000), 0.017, now, [
+      { ratePct: 0.015, until: new Date(Date.UTC(2026, 7, 1)) },
+    ]);
+    const expected = Math.round((1_000_000 * 0.015 * 14) / 24 + (1_000_000 * 0.017 * 10) / 24);
+    expect(Number(mixed)).toBe(expected);
+
+    // And it sits between the two figures a single rate would have produced -
+    // which is the whole point: whichever one was stored, the year was wrong
+    // by the spread over half of it.
+    const allOld = estimateYearEndInterestCents(balances, BigInt(1_000_000), 0.015, now);
+    const allNew = estimateYearEndInterestCents(balances, BigInt(1_000_000), 0.017, now);
+    expect(Number(mixed)).toBeGreaterThan(Number(allOld));
+    expect(Number(mixed)).toBeLessThan(Number(allNew));
+  });
+
+  it("still earns for the fortnights covered when the rate has since gone to zero", () => {
+    const earned = estimateYearEndInterestCents(balances, BigInt(1_000_000), 0, now, [
+      { ratePct: 0.02, until: new Date(Date.UTC(2026, 6, 1)) },
+    ]);
+    expect(Number(earned)).toBeGreaterThan(0);
   });
 });

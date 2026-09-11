@@ -36,12 +36,15 @@ describe("an unset or unknown country inherits nothing from France", () => {
   });
 });
 
-describe("France keeps exactly the behaviour it had", () => {
-  // An upgrading instance must see identical figures - the migration backfills
-  // from these same numbers, so a drift here is a drift in real net worth.
+describe("France suggests the rate that is actually in force", () => {
+  // These were 1.5% until the Livret A and the LDDS moved to 1.7% on
+  // 1 August 2026, and the preset kept suggesting the old figure for six
+  // weeks afterwards. A number here is a fact with an expiry, not a constant:
+  // when one changes, SAVINGS_RATES_KNOWN_AT moves with it, and this test is
+  // what makes the pair impossible to update by halves.
   it.each([
-    ["Livret A", 0.015],
-    ["LDDS", 0.015],
+    ["Livret A", 0.017],
+    ["LDDS", 0.017],
     ["LEP", 0.025],
     ["Livret Jeune", 0.025],
   ])("%s -> %s", (name, rate) => {
@@ -49,18 +52,18 @@ describe("France keeps exactly the behaviour it had", () => {
   });
 
   it("matches case-insensitively, like the code it replaces", () => {
-    expect(suggestedSavingsRate("FR", "LIVRET A - BNP")).toBeCloseTo(0.015, 10);
-    expect(suggestedSavingsRate("FR", "mon ldds")).toBeCloseTo(0.015, 10);
+    expect(suggestedSavingsRate("FR", "LIVRET A - BNP")).toBeCloseTo(0.017, 10);
+    expect(suggestedSavingsRate("FR", "mon ldds")).toBeCloseTo(0.017, 10);
   });
 
   it("prefers the more specific product over the generic livret rule", () => {
     // "Livret Jeune" contains "livret"; the looser rule must not win, or a
-    // 2.5% account would silently be valued at 1.5%.
+    // 2.5% account would silently be valued at the plain regulated rate.
     expect(suggestedSavingsRate("FR", "Livret Jeune")).toBeCloseTo(0.025, 10);
   });
 
   it("falls back to the regulated rate for any other livret", () => {
-    expect(suggestedSavingsRate("FR", "Livret Bleu")).toBeCloseTo(0.015, 10);
+    expect(suggestedSavingsRate("FR", "Livret Bleu")).toBeCloseTo(0.017, 10);
   });
 
   it("says nothing about an account that is not a regulated product", () => {

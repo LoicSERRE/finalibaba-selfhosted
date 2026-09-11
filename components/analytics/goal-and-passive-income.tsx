@@ -63,6 +63,7 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents,
   realYtdDividendsNetCents,
   realYtdInterestNetCents,
+  readOnly = false,
 }: Readonly<{
   t: T;
   tIncome: T;
@@ -70,6 +71,13 @@ export function GoalAndPassiveIncome({
   realYtdPassiveNetCents: bigint;
   realYtdDividendsNetCents: bigint;
   realYtdInterestNetCents: bigint;
+  /** True when someone else's portfolio is on screen. The figures above are
+   *  theirs, and /income, /tax-report and /budgets are all deliberately
+   *  outside the portfolio switcher's scope (see CLAUDE.md) - so those links
+   *  led from their numbers to YOUR pages, which showed zero. Reading a
+   *  number and clicking through to a contradiction is worse than the number
+   *  standing on its own, so the links are simply not offered here. */
+  readOnly?: boolean;
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 space-y-5">
@@ -96,9 +104,11 @@ export function GoalAndPassiveIncome({
           <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
             {t("passive.title")}
           </p>
-          <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
-            {t("passive.viewDetail")}
-          </Link>
+          {!readOnly && (
+            <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+              {t("passive.viewDetail")}
+            </Link>
+          )}
         </div>
         {realYtdPassiveNetCents > BigInt(0) ? (
           <div className="grid grid-cols-3 gap-2 sm:gap-4">
@@ -124,17 +134,21 @@ export function GoalAndPassiveIncome({
         ) : (
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-[var(--muted)]">{t("passive.emptyPrompt")}</p>
-            <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
-              {t("passive.emptyAction")}
-            </Link>
+            {!readOnly && (
+              <Link href="/income" className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]">
+                {t("passive.emptyAction")}
+              </Link>
+            )}
           </div>
         )}
-        <Link
-          href="/tax-report"
-          className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
-        >
-          {t("passive.taxReportLink")}
-        </Link>
+        {!readOnly && (
+          <Link
+            href="/tax-report"
+            className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 inline-block mt-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
+          >
+            {t("passive.taxReportLink")}
+          </Link>
+        )}
       </div>
     </div>
   );

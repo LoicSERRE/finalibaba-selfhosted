@@ -7,8 +7,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { importTransactions } from "@/lib/actions/transactions";
-import { parseCents, formatCurrency } from "@/lib/utils/format";
-import { parseCsvDate, looksNumeric, makeHeaderNormalizer } from "@/lib/domain/csv-import";
+import { formatCurrency } from "@/lib/utils/format";
+import { parseCsvDate, looksNumeric, makeHeaderNormalizer, parseImportedCents } from "@/lib/domain/csv-import";
 import { useTranslations } from "next-intl";
 
 type ParsedRow = {
@@ -73,7 +73,7 @@ export function ImportTransactionsDialog({
         const parsed: ParsedRow[] = results.data.map((raw) => {
           const isoDate = parseCsvDate(raw.date ?? "");
           const label = (raw.label ?? "").trim();
-          const amountCents = Number(parseCents(raw.amount ?? ""));
+          const amountCents = Number(parseImportedCents(raw.amount ?? ""));
           const error = !isoDate
             ? t("invalidDate")
             : !label

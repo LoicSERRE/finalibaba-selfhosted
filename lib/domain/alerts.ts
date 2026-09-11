@@ -161,10 +161,18 @@ export function computeHoldingDriftPts(
 // file, just producing a title/body pair instead of a boolean.
 const MAX_TRANSACTIONS_IN_DIGEST = 5;
 
+/**
+ * `totalCount` is how many transactions the cursor is about to move past,
+ * which is not the same as how many were fetched to show: the caller pages the
+ * digest. Defaults to the list's own length so a caller with nothing to page
+ * reads unchanged, but passing it is what keeps "+ N autre(s)" honest instead
+ * of describing the page as if it were everything.
+ */
 export function evaluateNewTransactionAlert(
-  transactions: { label: string; amountCents: bigint }[]
+  transactions: { label: string; amountCents: bigint }[],
+  totalCount: number = transactions.length
 ): { title: string; body: string } {
-  if (transactions.length === 1) {
+  if (totalCount === 1 && transactions.length === 1) {
     const t = transactions[0];
     const amount = (Number(t.amountCents) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return {
@@ -178,12 +186,12 @@ export function evaluateNewTransactionAlert(
     const amount = (Number(t.amountCents) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return `${t.label} · ${t.amountCents >= BigInt(0) ? "+" : ""}${amount} €`;
   });
-  if (transactions.length > MAX_TRANSACTIONS_IN_DIGEST) {
-    lines.push(`+ ${transactions.length - MAX_TRANSACTIONS_IN_DIGEST} autre(s)`);
+  if (totalCount > shown.length) {
+    lines.push(`+ ${totalCount - shown.length} autre(s)`);
   }
 
   return {
-    title: `${transactions.length} nouvelles transactions`,
+    title: `${totalCount} nouvelles transactions`,
     body: lines.join("\n"),
   };
 }

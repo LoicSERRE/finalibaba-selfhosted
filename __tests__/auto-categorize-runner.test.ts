@@ -139,6 +139,18 @@ describe("internal-transfer pass", () => {
     expect(pool.where.internalTransferManual).toBeNull();
   });
 
+  it("keeps out the two kinds of row that can never be half of a transfer", async () => {
+    // A share purchase has no second bank account recording the other side,
+    // and a card payment is not a movement between your own accounts - both
+    // only ever competed with the real counterpart, and on real data both won
+    // a tie against one.
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    const pool = txFindManyMock.mock.calls[0][0];
+    expect(pool.where.isSecuritiesMovement).toBe(false);
+    expect(pool.where.NOT).toEqual({ sourceEventType: { startsWith: "CARD_" } });
+  });
+
   it("writes nothing when no pair is detected", async () => {
     queueTransactionQueries([
       { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },

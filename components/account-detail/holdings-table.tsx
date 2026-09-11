@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrency, formatDateShort } from "@/lib/utils/format";
 import { AddHoldingDialog } from "@/components/account-detail/add-holding-dialog";
 import { SellHoldingDialog } from "@/components/account-detail/sell-holding-dialog";
 import { RefreshHoldingFxButton } from "@/components/account-detail/refresh-holding-fx-button";
@@ -15,6 +15,9 @@ export function HoldingsTable({
   accountName,
   holdingsWithTax,
   isSynced,
+  staleSince,
+  reportedAt,
+  intlLocale,
   readOnly = false,
 }: Readonly<{
   td: T;
@@ -23,6 +26,15 @@ export function HoldingsTable({
   accountName: string;
   holdingsWithTax: HoldingWithTax[];
   isSynced: boolean;
+  /** Set when the bank's latest statement carried no lines at all while these
+   *  positions were on file. They are kept - an empty read is as likely to be
+   *  a failed scrape as a closed account, and deleting on it would destroy a
+   *  real portfolio - so the figures below are last known rather than
+   *  confirmed, and saying so is the whole point of keeping them. */
+  staleSince?: Date | null;
+  /** The last statement that did carry lines. */
+  reportedAt?: Date | null;
+  intlLocale?: string;
   /** True when a granted (read-only) portfolio is on screen. The Server
    *  Actions behind these controls guard ownership themselves; this only
    *  avoids rendering buttons that could not succeed. */
@@ -35,6 +47,16 @@ export function HoldingsTable({
           {td("positions", { count: holdingsWithTax.length, suffix: holdingsWithTax.length !== 1 ? "s" : "" })}
         </h2>
       </div>
+      {staleSince && (
+        <p className="px-6 py-3 border-b border-[var(--border)] text-xs text-[var(--warning)]">
+          {reportedAt
+            ? td("holdingsStaleSince", {
+                since: formatDateShort(staleSince, intlLocale ?? "fr-FR"),
+                reported: formatDateShort(reportedAt, intlLocale ?? "fr-FR"),
+              })
+            : td("holdingsStaleUnknown", { since: formatDateShort(staleSince, intlLocale ?? "fr-FR") })}
+        </p>
+      )}
       {holdingsWithTax.length === 0 ? (
         <div className="px-6 py-10 text-center text-sm text-[var(--muted)]">
           {t("noHoldings")}

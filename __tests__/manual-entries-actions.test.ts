@@ -115,8 +115,33 @@ describe("recordManualMovement", () => {
   });
 
   it("keeps a top-up positive", async () => {
+    balanceFindManyMock.mockResolvedValue([{ recordedAt: atNoonUtc("2026-01-01"), balanceCents: BigInt(0) }]);
     await recordManualMovement("acc-1", { amountCents: 10_000, label: "Recharge", date: "2026-01-05" });
     expect(txCreateMock.mock.calls[0][0].data.amountCents).toBe(BigInt(10_000));
+  });
+
+  it("refuses a movement on an account whose balance is unknown that day", async () => {
+    // The default mock is an account with no snapshots at all. Deriving an
+    // anchor from zero would state a balance the app was never told: on an
+    // account created without a starting balance, a 12 EUR spend wrote
+    // -12 EUR and the account page then showed that as fact.
+    const result = await recordManualMovement("acc-1", { amountCents: -1_200, label: "Café", date: "2026-01-05" });
+
+    expect(result).toEqual({ ok: false, error: "no_prior_balance" });
+    expect(txCreateMock).not.toHaveBeenCalled();
+    expect(balanceCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a movement dated before the account's first known balance", async () => {
+    // Same reasoning one step further: history starting in January says
+    // nothing about December, so a backdated entry there has no arithmetic
+    // behind it either.
+    balanceFindManyMock.mockResolvedValue([{ recordedAt: atNoonUtc("2026-01-10"), balanceCents: BigInt(5_000) }]);
+
+    const result = await recordManualMovement("acc-1", { amountCents: -500, label: "Oubli", date: "2025-12-15" });
+
+    expect(result).toEqual({ ok: false, error: "no_prior_balance" });
+    expect(txCreateMock).not.toHaveBeenCalled();
   });
 
   // The case a naive implementation gets wrong: the anchor must be built on
