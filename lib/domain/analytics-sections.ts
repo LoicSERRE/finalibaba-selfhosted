@@ -41,6 +41,41 @@ import type {
   SavingsInterestHistoryPoint,
 } from "@/lib/domain/analytics-types";
 
+/** How the year-end estimate got where it is, fortnight by fortnight. Its own
+ *  function: it re-walks every account a second time for a different purpose,
+ *  and sharing a loop with the total would only tangle two answers. */
+function buildInterestHistory(
+  accounts: AnalyticsAccount[],
+  balancesByAccount: Map<string, { recordedAt: Date; balanceCents: bigint }[]>,
+  earnsInterest: (a: AnalyticsAccount) => boolean,
+  now: Date,
+  intlLocale: string,
+): SavingsInterestHistoryPoint[] {
+  const interestHistoryBoundaries = quinzaineBoundaries(now.getUTCFullYear()).filter((b) => b.getTime() <= now.getTime());
+  const interestHistoryTotals = new Map<number, bigint>();
+  for (const account of accounts) {
+    if (!earnsInterest(account)) continue;
+    const series = estimateYearEndInterestSeries(
+      balancesByAccount.get(account.id) ?? [],
+      account.interestRatePct ?? 0,
+      interestHistoryBoundaries,
+      account.interestRateHistory ?? []
+    );
+    for (const point of series) {
+      const key = point.date.getTime();
+      interestHistoryTotals.set(key, (interestHistoryTotals.get(key) ?? BigInt(0)) + point.estimatedCents);
+    }
+  }
+  const estimatedYearEndInterestHistory: SavingsInterestHistoryPoint[] = interestHistoryBoundaries
+    .filter((b) => interestHistoryTotals.has(b.getTime()))
+    .map((b) => ({
+      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(b),
+      isoDate: b.toISOString().slice(0, 10),
+      estimatedCents: Number(interestHistoryTotals.get(b.getTime())!),
+    }));
+  return estimatedYearEndInterestHistory;
+}
+
 /** The year-end interest estimate, and how it got there fortnight by fortnight. */
 export function computeSavingsInterestProjection(
   accounts: AnalyticsAccount[],
@@ -80,28 +115,9 @@ export function computeSavingsInterestProjection(
   // year, summed across every SAVINGS account with a rate, so a chart can
   // show how the estimate has moved (a deposit, a withdrawal, a rate
   // change) rather than only ever showing today's single figure.
-  const interestHistoryBoundaries = quinzaineBoundaries(now.getUTCFullYear()).filter((b) => b.getTime() <= now.getTime());
-  const interestHistoryTotals = new Map<number, bigint>();
-  for (const account of accounts) {
-    if (!earnsInterest(account)) continue;
-    const series = estimateYearEndInterestSeries(
-      balancesByAccount.get(account.id) ?? [],
-      account.interestRatePct ?? 0,
-      interestHistoryBoundaries,
-      account.interestRateHistory ?? []
-    );
-    for (const point of series) {
-      const key = point.date.getTime();
-      interestHistoryTotals.set(key, (interestHistoryTotals.get(key) ?? BigInt(0)) + point.estimatedCents);
-    }
-  }
-  const estimatedYearEndInterestHistory: SavingsInterestHistoryPoint[] = interestHistoryBoundaries
-    .filter((b) => interestHistoryTotals.has(b.getTime()))
-    .map((b) => ({
-      date: new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(b),
-      isoDate: b.toISOString().slice(0, 10),
-      estimatedCents: Number(interestHistoryTotals.get(b.getTime())!),
-    }));
+  const estimatedYearEndInterestHistory = buildInterestHistory(
+    accounts, balancesByAccount, earnsInterest, now, intlLocale,
+  );
   return { estimatedYearEndSavingsInterestCents, estimatedYearEndInterestHistory };
 }
 
