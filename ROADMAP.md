@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.3**
+Current release: **v2.10.4**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -17,9 +17,18 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
 - **Plaid** - US/Canada coverage, where this app has no users yet.
-- **Tests for the code the refactor just made visible** - moving the markdown builders out of `components/` and the alert checkers out of `app/api/` took them into the coverage-measured half of the repo, where they report **0%**. `buildMarkdown` is 52 cyclomatic complexity and has never had a test; neither have the eight `AlertRule` checkers. Being testable was the point of moving them.
-- **The complexity hotspots, for real** - `computeAnalytics` is CCN 68 and `computeDashboard` CCN 60. v2.10.2 split the file around the first one without touching the function. 24 lizard warnings in total.
+- **Finish covering the alert checkers** - `custom-rules.ts` is at 28.9%. The six kinds beyond ACCOUNT_BALANCE/OVERDRAFT need their own prisma fixtures.
 - **Variable-amount recurring detection, second pass** - v2.10 finds a consistent series inside a noisy label; a merchant with *two* subscriptions still only yields one.
+
+---
+
+## v2.10.4 - Auditing the audit, and the complexity behind the line counts
+
+- **Five blind spots in the release audit**, found by asking each of its seven points the question that exposed the `sync/` one. It greps one direction of the layering rule, counts lines rather than complexity, measures JS coverage only, audits npm dependencies only, and triages two scanners out of eight - most of the rest running `continue-on-error`, so a green job proves nothing was blocked rather than nothing found.
+- **`computeAnalytics` 68 -> 44 and `computeDashboard` 60 -> 34**, the two most complex functions in the repo, both deciding what net worth says. Guarded by a characterization test that pins their entire output to the cent; it never moved.
+- **The second layering inversion**, in `lib/domain/accounts-page.ts`. `export-accounts-button.tsx` 488 -> 250.
+- **From 0% to covered**: the two markdown builders (97% and 80%) and the pure half of the alert machinery, 55 new tests on code that had never had one. Two of those functions had each been fixed twice in production.
+- **A path-scoped Sonar suppression does not follow the code it excuses** - 0 issues became 56 without a line changing, because two exemptions are keyed by file path. Back to 0, A/A/A, 0 hotspots.
 
 ---
 
