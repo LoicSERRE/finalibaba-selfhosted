@@ -13,6 +13,8 @@
  * state between functions, which trades one kind of complexity for a worse one.
  */
 import { computeGoalProgress } from "@/lib/domain/goals";
+import { isTrCashAccount } from "@/lib/domain/sync-ids";
+import { FR_PFU_TOTAL_RATE } from "@/lib/domain/tax-locale";
 import {
   estimateYearEndInterestCents,
   estimateYearEndInterestSeries,
@@ -252,4 +254,83 @@ export function analyseHoldings(
         }
 
   return { value, costBasis, gain, hasBasis, dividendsGrossCents, dividendsNetCents, dividendRows };
+}
+
+/**
+ * What one fiat account contributes: its balance, which bucket it lands in,
+ * and the interest it is estimated to earn over a year.
+ *
+ * Extracted from the same loop as analyseHoldings. `missingRate` is the part
+ * that has to be counted rather than inferred: a null rate contributes nothing,
+ * which is correct, and is indistinguishable on screen from an account that
+ * genuinely pays none - the pattern the release audit names in its own right.
+ */
+export function analyseFiatAccount(account: AnalyticsAccount): {
+  value: bigint;
+  bucket: "savings" | "cash";
+  annualInterestCents: bigint;
+  weightedRateSum: number;
+  balanceWithRateCents: bigint;
+  missingRate: boolean;
+} {
+  const value = account.history[0]?.balanceCents ?? BigInt(0);
+  let annualInterestCents = BigInt(0);
+  let weightedRateSum = 0;
+  let balanceWithRateCents = BigInt(0);
+  let missingRate = false;
+
+        if (account.type === "SAVINGS") {
+          // bucket: savings
+          // The account's own stored rate, not a guess from its name. This used
+          // to match French product names ("livret a", "ldds", "lep") against
+          // account.name on every render, which meant a savings account in any
+          // other country contributed exactly zero to passive income - silently,
+          // with nothing on screen to suggest a number was missing rather than
+          // genuinely nil. It also made a rate change a code change.
+          //
+          // lib/domain/tax-locale.ts still SUGGESTS these same French rates when
+          // a France-configured user names an account "Livret A", and the v2.4
+          // migration backfilled every existing account from the old rules - so
+          // an upgrading French instance sees identical figures. The difference
+          // is that the number now lives on the account, where it is visible and
+          // editable by anyone, anywhere.
+          const rate = account.interestRatePct;
+          if (rate === null) {
+            missingRate = true;
+          } else {
+            weightedRateSum += rate * Number(value);
+            balanceWithRateCents += value;
+            if (rate > 0) annualInterestCents += BigInt(Math.round(Number(value) * rate));
+          }
+        } else {
+          // bucket: cash
+          // A rate the user set wins over any built-in guess - a current account
+          // can pay interest anywhere, and only its holder knows what.
+          //
+          // The Trade Republic fallback below stays for accounts with no stored
+          // rate, so nothing changes for an existing install, but note what it
+          // bakes in: 2% gross nets down only under the FRENCH flat tax
+          // (FR_PFU_TOTAL_RATE - see tax-locale.ts). A German or Italian Trade
+          // Republic user is taxed differently on the same 2%. Setting the
+          // rate on the account is how they correct it, which was not
+          // possible before this field existed.
+          const cashRate = account.interestRatePct;
+          if (cashRate !== null && cashRate > 0) {
+            annualInterestCents += BigInt(Math.round(Number(value) * cashRate));
+          } else if (cashRate === null && isTrCashAccount(account.syncId)) {
+            const TR_CASH_FALLBACK_GROSS_RATE = 0.02;
+            annualInterestCents += BigInt(
+              Math.round(Number(value) * TR_CASH_FALLBACK_GROSS_RATE * (1 - FR_PFU_TOTAL_RATE))
+            );
+          }
+        }
+
+  return {
+    value,
+    bucket: account.type === "SAVINGS" ? "savings" : "cash",
+    annualInterestCents,
+    weightedRateSum,
+    balanceWithRateCents,
+    missingRate,
+  };
 }

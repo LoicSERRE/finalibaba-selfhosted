@@ -10,8 +10,6 @@
  * fifteen call sites keep importing from one module.
  */
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { isTrCashAccount } from "@/lib/domain/sync-ids";
-import { FR_PFU_TOTAL_RATE } from "@/lib/domain/tax-locale";
 import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import {
@@ -20,6 +18,7 @@ import {
   computeDebtAccounts,
   computeBenchmarkCAGRs,
   analyseHoldings,
+  analyseFiatAccount,
 } from "@/lib/domain/analytics-sections";
 import {
 } from "@/lib/domain/analytics-market";
@@ -171,52 +170,13 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
       // Skip assetRows - this is a liability, not an asset
       continue;
     } else {
-      value = account.history[0]?.balanceCents ?? BigInt(0);
-      if (account.type === "SAVINGS") {
-        allocation["savings"] += value;
-        // The account's own stored rate, not a guess from its name. This used
-        // to match French product names ("livret a", "ldds", "lep") against
-        // account.name on every render, which meant a savings account in any
-        // other country contributed exactly zero to passive income - silently,
-        // with nothing on screen to suggest a number was missing rather than
-        // genuinely nil. It also made a rate change a code change.
-        //
-        // lib/domain/tax-locale.ts still SUGGESTS these same French rates when
-        // a France-configured user names an account "Livret A", and the v2.4
-        // migration backfilled every existing account from the old rules - so
-        // an upgrading French instance sees identical figures. The difference
-        // is that the number now lives on the account, where it is visible and
-        // editable by anyone, anywhere.
-        const rate = account.interestRatePct;
-        if (rate === null) {
-          accountsMissingInterestRate += 1;
-        } else {
-          weightedSavingsRateSum += rate * Number(value);
-          savingsBalanceWithRateCents += value;
-          if (rate > 0) annualInterestCents += BigInt(Math.round(Number(value) * rate));
-        }
-      } else {
-        allocation["cash"] += value;
-        // A rate the user set wins over any built-in guess - a current account
-        // can pay interest anywhere, and only its holder knows what.
-        //
-        // The Trade Republic fallback below stays for accounts with no stored
-        // rate, so nothing changes for an existing install, but note what it
-        // bakes in: 2% gross nets down only under the FRENCH flat tax
-        // (FR_PFU_TOTAL_RATE - see tax-locale.ts). A German or Italian Trade
-        // Republic user is taxed differently on the same 2%. Setting the
-        // rate on the account is how they correct it, which was not
-        // possible before this field existed.
-        const cashRate = account.interestRatePct;
-        if (cashRate !== null && cashRate > 0) {
-          annualInterestCents += BigInt(Math.round(Number(value) * cashRate));
-        } else if (cashRate === null && isTrCashAccount(account.syncId)) {
-          const TR_CASH_FALLBACK_GROSS_RATE = 0.02;
-          annualInterestCents += BigInt(
-            Math.round(Number(value) * TR_CASH_FALLBACK_GROSS_RATE * (1 - FR_PFU_TOTAL_RATE))
-          );
-        }
-      }
+      const fiatContrib = analyseFiatAccount(account);
+      value = fiatContrib.value;
+      allocation[fiatContrib.bucket] += value;
+      annualInterestCents += fiatContrib.annualInterestCents;
+      weightedSavingsRateSum += fiatContrib.weightedRateSum;
+      savingsBalanceWithRateCents += fiatContrib.balanceWithRateCents;
+      if (fiatContrib.missingRate) accountsMissingInterestRate += 1;
       grossAssets += value;
     }
 
