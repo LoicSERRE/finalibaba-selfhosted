@@ -19,15 +19,10 @@ export const AMOUNT_TOLERANCE_RATIO = 0.1;
 export const AMOUNT_TOLERANCE_FLOOR_CENTS = 500; // 5€
 export const MIN_MATCH_RATIO = 0.7;
 export const DEFAULT_GRACE_DAYS = 5;
-// Median day-gap must fall in this band to be inferred as this
-// (frequency, intervalCount) pair. Every band still uses the same ~10%
-// tolerance as the original MONTHLY×1 band (27-33 = 30±3) scaled to its own
-// interval (54-66 = 60±6, 81-99 = 90±9) - not a looser threshold for the
-// wider intervals. Bounded to MONTHLY×2/×3 specifically (bimonthly/
-// quarterly) per the roadmap's own scope, not a general "any interval"
-// inference - the gaps between bands (34-53, 67-80) are deliberately
-// uncovered rather than guessed at, and WEEKLY/YEARLY stay ×1-only (a
-// biweekly or biennial pattern falls through to no match, same as before).
+// The median day-gap band for each (frequency, intervalCount) pair, every one
+// at the same ~10% tolerance scaled to its own interval. The gaps between
+// bands (34-53, 67-80) are deliberately uncovered rather than guessed at, and
+// WEEKLY/YEARLY stay x1-only.
 const GAP_BANDS: { frequency: RecurringFrequency; intervalCount: number; min: number; max: number }[] = [
   { frequency: "WEEKLY", intervalCount: 1, min: 6, max: 8 },
   { frequency: "MONTHLY", intervalCount: 1, min: 27, max: 33 },
@@ -192,18 +187,13 @@ export type DismissedPattern = {
 };
 
 /**
- * A dismissal covers the occurrences the user saw, not the rest of time.
+ * A dismissal covers the occurrences the user saw, not the rest of time -
+ * "stop suggesting Netflix" is unreasonable to be held to when you resubscribe
+ * eight months later.
  *
- * "Stop suggesting Netflix" is a reasonable thing to say about a subscription
- * you just cancelled, and an unreasonable thing to be held to when you
- * resubscribe eight months later - the app would stay silent about a real
- * recurring charge forever, with no hint that it was ever detected.
- *
- * The distinguishing signal is a GAP, not new occurrences on their own: a
- * subscription that never stopped also keeps producing occurrences after the
- * dismissal, and re-suggesting those is exactly the nagging the dismissal
- * exists to end. So a pattern only comes back if it went quiet for
- * meaningfully longer than its own cycle and then resumed.
+ * The signal is a GAP, never new occurrences on their own: a subscription that
+ * never stopped also keeps producing those, and re-suggesting them is exactly
+ * the nagging a dismissal exists to end.
  */
 const REAPPEARANCE_GAP_CYCLES = 3;
 
@@ -226,12 +216,9 @@ export function hasResumedAfterDismissal(dismissal: DismissedPattern, occurrence
 }
 
 /**
- * Whether a group of same-label transactions looks like a regular series, and
- * on what cadence. Null when it does not - too few occurrences, amounts too
- * scattered, or spacing that matches no GAP_BANDS entry.
- *
- * Extracted from detectCandidates so that function reads as what it is (group,
- * filter, emit) rather than carrying every rejection rule inline.
+ * Whether a group of same-label transactions is a regular series, and on what
+ * cadence. Null for too few occurrences, amounts too scattered, or spacing
+ * matching no GAP_BANDS entry.
  */
 function analyseSeries(
   group: TxLike[],
@@ -315,21 +302,14 @@ function analyseAmountCluster(
 }
 
 /**
- * Groups transactions by (accountId, normalized label) and flags groups whose
- * amounts and date spacing look regular enough to be a subscription or
- * regular income. Proposes intervalCount 2 or 3 for a MONTHLY pattern whose
- * spacing matches a bimonthly/quarterly GAP_BANDS entry (a semi-annual
- * insurance premium or a quarterly tax payment, for example) - beyond that,
- * inferring an arbitrary "every N months/weeks/years" cadence from noisy
- * gaps is still out of scope; the manual create/edit form covers that case.
+ * Groups by (accountId, normalized label) and flags the groups regular enough
+ * to be a subscription or regular income. Infers intervalCount 2 or 3 for a
+ * MONTHLY pattern only; an arbitrary "every N" cadence from noisy gaps is out
+ * of scope and the manual form covers it.
  *
- * `existingKeys` (each `${accountId}|${normalizeLabel(label)}`) excludes
- * patterns already represented by a live RecurringTransaction row - confirmed
- * or paused - so they never resurface as suggestions.
- *
- * `dismissed` is deliberately separate rather than folded into that set: a
- * dismissal is suppressed only until the pattern stops and comes back, so it
- * needs the evidence to compare against. See hasResumedAfterDismissal.
+ * `existingKeys` excludes patterns that already have a live row. `dismissed` is
+ * separate rather than folded in, because a dismissal expires and therefore
+ * needs its evidence - see hasResumedAfterDismissal.
  */
 export function detectCandidates(
   transactions: TxLike[],
@@ -377,18 +357,13 @@ export function detectCandidates(
 }
 
 /**
- * "Mensuel"/"Hebdomadaire"/"Annuel" for intervalCount 1 (every existing
- * case before multi-interval detection), or "Tous les {n} mois" for a
- * detected bimonthly/quarterly MONTHLY candidate - the only multi-interval
- * case detectCandidates can produce (see its own comment). Deliberately
- * doesn't handle WEEKLY/YEARLY with intervalCount > 1 (only reachable via
- * the manual create/edit form, never detection) - "semaines" needs
- * "Toutes les", not "Tous les", and guessing at that agreement without a
- * confirmed real case to test against isn't worth the risk; those fall back
- * to the plain frequency label unchanged, same as before this feature.
- * Takes a plain (key: string) => string translator, not next-intl's own
- * richer type, so this works unmodified from both a Server Component's
- * getTranslations and a Client Component's useTranslations.
+ * "Mensuel"/"Hebdomadaire"/"Annuel", or "Tous les {n} mois" for the one
+ * multi-interval case detection can produce. WEEKLY/YEARLY above 1 fall back to
+ * the plain label: "semaines" needs "Toutes les", and guessing that agreement
+ * without a real case to test is not worth it.
+ *
+ * Takes a plain translator function so both getTranslations and
+ * useTranslations can call it.
  */
 export function formatFrequencyLabel(
   frequency: RecurringFrequency,

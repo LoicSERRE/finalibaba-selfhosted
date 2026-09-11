@@ -16,31 +16,21 @@ import {
 } from "@/lib/domain/manual-entries";
 
 /**
- * Editing an account nobody else writes to: a meal-voucher card, a cash
- * envelope, a bank the sync cannot reach.
+ * Editing an account nobody else writes to. Every write is guarded by
+ * assertManualAccountEligible: a Server Action is reachable whatever the UI
+ * renders, and letting one shift a bank's own recorded balances destroys real
+ * history rather than merely annoying.
  *
- * Every write here is guarded by assertManualAccountEligible, which refuses a
- * synced or GoCardless-linked account - a Server Action is reachable directly
- * whatever the UI renders, and letting one shift a bank's own recorded balances
- * is the one outcome that could destroy real history rather than just annoy.
- *
- * Failures come back as VALUES with stable keys, never thrown sentences:
- * Next replaces a thrown Server Action error with an opaque digest in
- * production, so a carefully worded message reaches the developer in dev and
- * nobody at all once deployed. This repo has paid for that twice already (see
- * CLAUDE.md). Authorization failures still throw, deliberately - someone
- * reaching for another person's account is not an expected error and must not
- * get a readable explanation.
+ * Failures come back as VALUES with stable keys - a thrown Server Action error
+ * is an opaque digest in production. Authorization still throws: reaching for
+ * someone else's account is not an expected error.
  */
 export type ManualEntryResult = { ok: true } | { ok: false; error: ManualEntryError | "not_found" | "not_manual" };
 
 /**
- * Records a spend or a top-up: one Transaction, plus the balance movement it
- * implies.
- *
- * Both writes or neither. A Transaction without the balance shift shows a
- * ledger that does not add up to the figure printed above it; a balance shift
- * without the Transaction moves the number with nothing to explain it.
+ * A spend or top-up: one Transaction plus the balance movement it implies, both
+ * writes or neither. One without the other gives a ledger that does not add up
+ * to the figure above it, or a number that moves with nothing to explain it.
  */
 export async function recordManualMovement(
   accountId: string,
@@ -107,14 +97,12 @@ export async function recordManualMovement(
 }
 
 /**
- * "My card says 87,50 EUR, make it so." A snapshot, not a movement: it writes
- * no Transaction, because nothing happened that a budget should see - the
- * figure was simply wrong.
+ * "My card says 87,50 EUR, make it so." A snapshot and no Transaction, because
+ * nothing happened a budget should see - the figure was simply wrong.
  *
- * Deliberately fixed to today rather than taking a date. Correcting a past day
- * would leave every later snapshot contradicting it, and the two ways out
- * (shift them, or let them disagree) are both surprising. A backdated fix is
- * what recordManualMovement is for, where the arithmetic is unambiguous.
+ * Fixed to TODAY: correcting a past day leaves every later snapshot
+ * contradicting it, and both ways out are surprising. A backdated fix is what
+ * recordManualMovement is for.
  */
 export async function setManualBalance(accountId: string, balanceCents: number): Promise<ManualEntryResult> {
   await assertManualAccountEligible(accountId);
@@ -144,16 +132,13 @@ export async function setManualBalance(accountId: string, balanceCents: number):
 }
 
 /**
- * Removes an entry this person typed in, and undoes what it did to the balance.
+ * Removes an entry and undoes what it did to the balance. Scoped by syncId
+ * prefix, never any transaction on the account: a CSV or synced row never
+ * shifted a balance, so reversing one invents a movement that never happened.
  *
- * Scoped to manual entries by syncId prefix, never any transaction on the
- * account: a CSV-imported or synced row never shifted a balance in the first
- * place, so "reversing" one would invent a movement that never existed.
- *
- * The anchor row the entry may have created is left behind on purpose. After
- * the shift it holds exactly the balance that preceded the entry, so it draws
- * no step on the chart - a harmless extra point, against the alternative of
- * deciding whether some later entry has since come to depend on it.
+ * The anchor row is left behind - after the shift it holds exactly the
+ * preceding balance and draws no step, which beats deciding whether a later
+ * entry has come to depend on it.
  */
 export async function deleteManualEntry(transactionId: string): Promise<ManualEntryResult> {
   const row = await prisma.transaction.findUnique({

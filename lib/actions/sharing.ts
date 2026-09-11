@@ -8,31 +8,22 @@ import { getViewer, VIEWING_PORTFOLIO_COOKIE } from "@/lib/auth-context";
 import { normalizeUsername } from "@/lib/domain/users";
 
 /**
- * The two sharing mechanisms of v2.0 - see CLAUDE.md's "Multi-user
- * architecture". They are deliberately different things, not two settings of
- * one feature:
+ * Two sharing mechanisms, deliberately not two settings of one:
  *
- * - **Co-ownership** (`AccountCoOwner`) is per ACCOUNT and grants WRITE access.
- *   A joint Livret A appears in both people's portfolios, pointing at the same
- *   rows - no duplication, either can categorize a transaction on it.
- * - **A portfolio grant** (`PortfolioGrant`) is per PERSON and grants READ
- *   access to everything the grantor owns. This is the "my partner can see my
- *   accounts but touch nothing" case.
+ * - **Co-ownership** is per ACCOUNT and grants WRITE - a joint Livret A in both
+ *   portfolios, pointing at the same rows.
+ * - **A portfolio grant** is per PERSON and grants READ over everything the
+ *   grantor owns.
  *
- * Neither ever widens what a mutation may touch beyond the acting session's
- * own base set: co-ownership does it by putting the account IN that set
- * (baseAccountIds unions it in), a grant does it by never being consulted for
- * writes at all.
+ * Neither widens what a MUTATION may touch: co-ownership puts the account in
+ * baseAccountIds, a grant is never consulted for writes at all.
  */
 
 /**
- * Resolves a typed-in username to a real user id.
- *
- * Deliberately returns the same error for "no such user" and for an empty
- * input rather than confirming whether a username exists - the same
- * non-disclosure rule assertOwned follows. Sharing is invitation-driven
- * (the admin hands out a link, see lib/actions/users.ts), so anyone
- * legitimately sharing already knows the username they invited.
+ * A typed-in username to a user id. Same error for "no such user" and for empty
+ * input, rather than confirming a username exists - the non-disclosure rule
+ * assertOwned follows. Sharing is invitation-driven, so anyone legitimate
+ * already knows the name.
  */
 export type ShareFailure = { ok: false; error: "username_required" | "no_such_user" | "that_is_you" };
 export type ShareResult = { ok: true } | ShareFailure;
@@ -59,12 +50,9 @@ async function resolveUsername(
 // ── Co-ownership ───────────────────────────────────────────────────────────
 
 /**
- * Only the account's DIRECT owner manages its co-owners - a co-owner cannot
- * add further co-owners. That keeps the permission graph one level deep: the
- * `Account.userId` row is always the single answer to "who decides who sees
- * this", which is checkable in one query and explainable in one sentence.
- * assertAccountWritable deliberately isn't used here, since it also passes for
- * co-owners.
+ * Only the DIRECT owner manages co-owners, so the permission graph stays one
+ * level deep and `Account.userId` is the single answer to "who decides who sees
+ * this". Not assertAccountWritable, which also passes for co-owners.
  */
 async function assertAccountOwner(accountId: string, userId: string): Promise<void> {
   const count = await prisma.account.count({ where: { id: accountId, userId } });
@@ -109,16 +97,12 @@ export async function addAccountCoOwner(
 }
 
 /**
- * H4 - removing a co-owner has to clean up what that person built ON this
- * account, because no FK cascade will ever fire: the account itself survives,
- * so their AlertRules and Goals pointing at it would simply keep existing,
- * now targeting something they can no longer see. An alert rule in that state
- * is worse than useless - checkCustomAlertRules would still evaluate it and
- * push them a notification quoting a balance they have no way to look at.
+ * Needs an explicit cleanup because no FK cascade fires: the account survives,
+ * so the removed person's AlertRules and Goals would keep pointing at something
+ * they can no longer see - and such a rule still evaluates, pushing them a
+ * notification quoting a balance they cannot look at.
  *
- * Deliberately scoped to the removed user's OWN rows: the account owner's
- * rules on their own account are untouched, and so is anything the removed
- * co-owner has elsewhere.
+ * Scoped to the removed user's OWN rows on THIS account, nothing else.
  */
 export async function removeAccountCoOwner(accountId: string, userId: string): Promise<void> {
   const viewer = await getViewer();
@@ -180,12 +164,10 @@ export async function grantPortfolioAccess(formData: FormData): Promise<ShareRes
 }
 
 /**
- * Revoking is immediate and needs no cleanup pass: a grant is only ever read
- * at request time by viewAccountIds, which falls back to the grantee's own
- * accounts the moment the row is gone - including for a browser still holding
- * the viewing cookie. Nothing derived from a grant can outlive it, which is
- * exactly why baseAccountIds (the set behind share links and API keys) never
- * includes granted accounts in the first place.
+ * Immediate, with no cleanup pass: a grant is only read at request time, so a
+ * browser still holding the cookie falls back to its own accounts. Nothing
+ * derived can outlive it - which is why baseAccountIds, the set behind share
+ * links and API keys, never includes granted accounts.
  */
 export async function revokePortfolioGrant(granteeUserId: string): Promise<void> {
   const viewer = await getViewer();
@@ -196,14 +178,10 @@ export async function revokePortfolioGrant(granteeUserId: string): Promise<void>
 }
 
 /**
- * The H6 channel: which portfolio the sidebar switcher is currently pointed
- * at. A cookie rather than session state because it's a per-browser-tab-ish UI
- * preference, not a claim - it is re-validated against PortfolioGrant on every
- * single read (see viewAccountIds), and an unknown/revoked value silently
- * resolves back to the viewer's own data instead of erroring.
- *
- * Mutations never consult it, by construction: every Server Action derives its
- * writable set from the session user alone.
+ * Which portfolio the switcher points at. A cookie because it is a UI
+ * preference, not a claim: re-validated against PortfolioGrant on EVERY read,
+ * and an unknown or revoked value resolves back to the viewer's own data rather
+ * than erroring. Mutations never consult it.
  */
 export async function setViewingPortfolio(grantorUserId: string | null): Promise<void> {
   const viewer = await getViewer();

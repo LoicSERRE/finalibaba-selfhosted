@@ -12,15 +12,10 @@ export async function getUserSettings() {
 }
 
 /**
- * One settings row per user, created on first read.
- *
- * NOT exported, deliberately: every export of a "use server" module is
- * directly invocable from the browser with attacker-chosen arguments, and this
- * returns the row holding `smtpPassword` and `ntfyAuthToken` in plaintext (see
- * schema.prisma) - exporting a userId-parameterized version of it would hand
- * any authenticated user every other user's alert credentials. Callers with a
- * session use getUserSettings() above; the alert cron, which has no session,
- * runs its own scoped upsert per user in app/api/alerts/check/route.ts.
+ * NOT exported, and that is the point: every export of a "use server" module is
+ * invocable from the browser with attacker-chosen arguments, and this returns
+ * the row holding smtpPassword and ntfyAuthToken in plaintext. A
+ * userId-parameterised export would hand any user everyone else's credentials.
  */
 async function getUserSettingsFor(userId: string) {
   return prisma.userSettings.upsert({
@@ -31,28 +26,16 @@ async function getUserSettingsFor(userId: string) {
 }
 
 /**
- * Two actions, one per Settings card - NOT one shared action, and that
- * distinction is the whole point rather than tidiness.
+ * ONE ACTION PER SETTINGS CARD, never one shared action, and that is a
+ * correctness rule rather than tidiness.
  *
- * `/settings` renders two separate forms against this module: the financial
- * profile (salary/expenses/saved) and the tax section (country + the three
- * suggested rates). A single action reading every field from `formData` wrote
- * all six columns on every submit, and a field absent from the submitted form
- * does not arrive as "unchanged" - it arrives as `null`, which each parser
- * then turned into a real value: `|| "0"` for the money fields, the FR default
- * for the rates, and `isCountryCode("")` being false for the country.
+ * A field absent from a submitted form does not arrive as "unchanged" - it
+ * arrives as null, and each parser then turns it into a real value. One action
+ * writing all six columns therefore had each card silently erase the other's
+ * data: reported as "I can't pick a country, saving does nothing", where the
+ * country saved and the next profile save wiped it.
  *
- * So each card silently erased the other's data. Reported as "I can't pick a
- * country, saving does nothing" - the country did save, and was then wiped by
- * the next save of the financial profile. Confirmed against a real production
- * database: `country` empty next to a populated `salaryNetCents`, with
- * `taxRatePea` sitting at exactly `0.18600000000000003` - the float you get
- * from `parseFloat("18.6")/100`, i.e. the default this action writes when the
- * field is absent, not a value anyone typed.
- *
- * Same split, for the same reason, as updateAlertChannels/updateAlertTriggers
- * (see CLAUDE.md's "Settings UI split"). When adding a third Settings card,
- * give it its own action too rather than widening one of these.
+ * A third card gets its own action too, rather than widening one of these.
  */
 export async function updateFinancialProfile(formData: FormData) {
   const data = {

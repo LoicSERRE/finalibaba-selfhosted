@@ -7,12 +7,9 @@ import Decimal from "decimal.js";
 const LOAN_NEARLY_PAID_OFF_RATIO_PCT = 5;
 
 /**
- * wasAbove=null means this net worth threshold has never been evaluated
- * before (just set, or first run since the app started tracking it) - the
- * first check only establishes the baseline `isAbove` state, it never
- * fires. Otherwise a real net worth 20% above a freshly-set 100k€ threshold
- * would immediately "cross" it on the very next scheduled check, which
- * isn't what "notify me when it crosses" means.
+ * wasAbove=null means never evaluated: the first check only establishes the
+ * baseline and never fires. Otherwise a net worth already above a freshly-set
+ * threshold "crosses" it on the very next run.
  */
 export function evaluateNetWorthAlert(
   current: bigint,
@@ -51,13 +48,9 @@ export function evaluateAccountBalanceAlert(
 }
 
 /**
- * Budget overrun re-arms every calendar month, unlike the edge-triggered
- * rule above - a category that overran its budget in July should alert
- * again in August even though spend never "un-overran" in between (it just
- * resets at the month boundary). `period` is "YYYY-MM" (UTC, computed by
- * the caller) so this stays pure/testable without mocking Date.
- * Level-triggered within a period: exceeding the budget at all during the
- * period fires once for that period.
+ * Re-arms every calendar month rather than edge-triggering: a category that
+ * overran in July should alert again in August, though spend never
+ * "un-overran". `period` is "YYYY-MM", passed in so this stays pure.
  */
 export function evaluateBudgetOverrunAlert(
   spentCents: bigint,
@@ -68,27 +61,16 @@ export function evaluateBudgetOverrunAlert(
   return { shouldFire: spentCents > budgetCents && lastFiredPeriod !== period };
 }
 
-/**
- * Same isolated-duplicate as lib/domain/accounts-page.ts's `holdingValue` /
- * lib/domain/account-detail.ts's `holdingMarketValue` - kept local to this
- * file rather than imported, matching how those two already don't share a
- * copy with each other either (each feature area's alert/page logic stays
- * self-contained, see CLAUDE.md's per-feature isolation notes elsewhere in
- * this file).
- */
+/** Deliberately a local copy, like accounts-page.ts's and account-detail.ts's
+ *  own - each feature area's logic stays self-contained. */
 export function holdingMarketValueCents(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
   return BigInt(new Decimal(h.quantity.toString()).mul(h.lastPriceCents.toString()).round().toNumber());
 }
 
 /**
- * Sums market value and cost basis across a set of holdings (one account's,
- * or every investment/crypto account's combined for the "all accounts"
- * UNREALIZED_GAIN mode), skipping any holding with unknown cost basis
- * (costBasisCents === null) - same convention accounts-page.ts's per-account
- * gain sum already uses, since an unknown-cost-basis holding can't
- * contribute a meaningful gain figure. gainPct is null when every
- * considered holding had a zero or unknown cost basis, since a percentage
- * gain isn't meaningful without a real cost-basis denominator.
+ * Market value and cost basis across a set of holdings, skipping any with an
+ * unknown cost basis - it cannot contribute a meaningful gain. gainPct is null
+ * when nothing had a real denominator.
  */
 export function computeUnrealizedGain(
   holdings: { quantity: Decimal; lastPriceCents: bigint; costBasisCents: bigint | null }[]
@@ -105,12 +87,9 @@ export function computeUnrealizedGain(
 }
 
 /**
- * Same edge-triggered shape as evaluateAccountBalanceAlert, but over a plain
- * float percentage instead of bigint cents - UNREALIZED_GAIN's gainUnit =
- * PERCENT case, and REBALANCING_DRIFT (fed |driftPts| - see
- * computeHoldingDriftPts below). Kept separate rather than coercing percent
- * into cents, since a stored threshold's unit must never be ambiguous (see
- * AlertRule.gainThresholdPct in schema.prisma).
+ * evaluateAccountBalanceAlert's shape over a float percentage rather than
+ * cents. Kept separate rather than coercing percent into cents: a stored
+ * threshold's unit must never be ambiguous.
  */
 export function evaluatePercentAlert(
   currentPct: number,
@@ -123,20 +102,11 @@ export function evaluatePercentAlert(
 }
 
 /**
- * REBALANCING_DRIFT's "current value" - how many points a holding's actual
- * weight has drifted from its Holding.targetPct. Same rounding as
- * lib/domain/account-detail.ts's computeAccountDetail (Math.round to an
- * integer percent before subtracting, both for the holding's own weight and
- * for the target) - this alert must never disagree with what the
- * account-detail page's own "Rééquilibrage" section shows for the same
- * holding. Kept as its own isolated copy in this file rather than importing
- * from account-detail.ts, same "each feature area's alert/page logic stays
- * self-contained" precedent already documented on holdingMarketValueCents
- * above. Returns null when the holding has no target set (a rule can
- * outlive the target being cleared after creation - malformed-row guard,
- * same shape as every other per-kind checker in app/api/alerts/check/route.ts)
- * or the account's total holdings value is 0 (division by zero guard - can
- * only happen if every holding in the account has a 0 price/quantity).
+ * How many points a holding has drifted from its targetPct. MUST round the
+ * same way computeAccountDetail does (integer percent before subtracting, both
+ * sides), or this alert disagrees with the "Rééquilibrage" section for the same
+ * holding. Null when no target is set - a rule outlives one being cleared - or
+ * when the account totals zero.
  */
 export function computeHoldingDriftPts(
   holding: { targetPct: number | null; quantity: Decimal; lastPriceCents: bigint },
@@ -151,14 +121,9 @@ export function computeHoldingDriftPts(
   return pct - targetPctInt;
 }
 
-// NEW_TRANSACTION doesn't fit the threshold-crossing shape every other kind
-// above does - "a new transaction exists" isn't a value crossing a line, so
-// there's no isAbove/wasAbove pair here. The caller (checkNewTransactionRule
-// in app/api/alerts/check/route.ts) already did the DB work of finding which
-// transactions are new (createdAt after the rule's own cursor) and matching
-// the rule's own account/threshold/direction filters - this function is pure
-// text formatting only, same "no I/O" bar as every other evaluator in this
-// file, just producing a title/body pair instead of a boolean.
+// "A new transaction exists" is not a value crossing a line, so there is no
+// isAbove/wasAbove pair here. The caller has already found the rows; this is
+// pure text formatting.
 const MAX_TRANSACTIONS_IN_DIGEST = 5;
 
 /**

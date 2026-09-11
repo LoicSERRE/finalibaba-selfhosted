@@ -1,16 +1,8 @@
-// Long-term net worth projection (v1.14) - pure compound-growth math,
-// mirrors lib/domain/loan.ts's "params in, computed stats out" shape.
-// Deliberately a closed-form formula per year rather than an iterative
-// simulation - same convention loan.ts already uses for its own annuity
-// math, and avoids float drift accumulating across 30 loop iterations.
+// Long-term net worth projection: closed-form per year rather than an
+// iterative simulation, which avoids float drift across 30 iterations.
 //
-// Takes plain `number` cents, not `bigint` - this is called client-side
-// from a component driven by a live input, recomputed on every change;
-// the caller converts from `bigint` once at the boundary. Growth math in
-// `Number` (not `bigint`) matches how investCAGR/goalPct already mix
-// Number(bigintCents) ratios elsewhere in lib/domain/analytics.ts - JS's
-// 53-bit safe-integer range comfortably covers real personal net-worth
-// magnitudes.
+// Plain `number` cents, not `bigint` - this runs client-side on every keystroke
+// of a live input, and the caller converts once at the boundary.
 export interface ProjectionPoint {
   year: number; // 0 = today
   netWorthCents: number;
@@ -52,31 +44,16 @@ export function projectNetWorth(params: {
   return points;
 }
 
-// A single blended return rate applied to the *entire* net worth (the
-// plain projectNetWorth above) silently assumes every euro - including
-// cash sitting in a checking account or a low-yield livret - compounds at
-// the same rate as the invested portion. Real user feedback: "on ne sait
-// pas où va l'épargne" - a livret at ~2-3% and a PEA at ~7% can't share
-// one number without materially over- or under-stating the real outcome.
+// One blended rate over the ENTIRE net worth assumes cash in a current account
+// compounds like a PEA. This splits today's net worth and the future
+// contribution into two growing buckets - invested (the only one
+// effectiveTaxRate applies to) and liquid - plus a non-compounding fixedCents
+// offset for property and vehicles, frozen because this app models no
+// home-price appreciation anywhere and inventing one would be optimistic.
 //
-// This splits both today's net worth AND the future annual contribution
-// into two growing buckets - "invested" (compounds at investedReturnRate,
-// the only bucket effectiveTaxRate applies to, matching how latent tax is
-// scoped to investment/crypto accounts elsewhere in this app) and "liquid"
-// (cash + savings accounts, compounds at a separate, usually much lower
-// liquidReturnRate) - plus a third, non-compounding fixedCents offset for
-// everything else (real estate/automobile equity net of any standalone
-// loan capital) added unchanged at every year. This app has no home-price-
-// appreciation model anywhere else either, so freezing that portion is the
-// honest "we don't model this" stance rather than a silent, more
-// optimistic assumption.
-//
-// The contribution is split in the same proportion as today's real
-// liquidCents/investedCents balance - this app doesn't track which
-// account declared monthly savings actually lands in, so "assume future
-// savings keep the same habit as today's real portfolio split" is the
-// best available grounded default (vs. inventing a number, or - the
-// previous behavior - implicitly assuming 100% goes to the invested rate).
+// The contribution splits in today's own liquid/invested proportion: the app
+// does not track where declared savings land, so "the same habit as today" is
+// the grounded default rather than assuming it all goes to the invested rate.
 export function projectNetWorthSplit(params: {
   liquidCurrentCents: number;
   investedCurrentCents: number;
@@ -86,14 +63,10 @@ export function projectNetWorthSplit(params: {
   investedReturnRate: number;
   horizonYears: number;
   effectiveTaxRate?: number;
-  /** Latent tax already owed on today's unrealized gains. Deducted from the
-   *  after-tax series at every point, including year 0.
-   *
-   *  Without it that series only ever taxed FUTURE gains, so year 0 came out
-   *  equal to the pre-tax figure - and the chart opened on a number the KPI
-   *  card directly above it had already reduced by this exact amount. The
-   *  money is owed today and stays owed; nothing about holding the position
-   *  longer makes it go away. */
+  /** Latent tax already owed on today's gains, deducted at every point
+   *  INCLUDING year 0. Taxing only future gains made year 0 equal the pre-tax
+   *  figure, so the chart opened on a number the card above it had already
+   *  reduced by exactly this amount. */
   currentLatentTaxCents?: number;
 }): ProjectionPoint[] {
   const {

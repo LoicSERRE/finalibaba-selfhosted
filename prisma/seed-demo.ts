@@ -3,18 +3,10 @@ import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-// Declared here rather than imported from lib/domain/users.ts: the production
-// image ships prisma/ but deliberately not lib/ (see the runner stage in
-// Dockerfile), so `import { OWNER_USER_ID } from "../lib/domain/users"` throws
-// MODULE_NOT_FOUND the moment this runs inside a container. It did, on the
-// v2.0.0 demo deploy.
-//
-// The value is already a literal in schema.prisma's own @default() 15 times
-// over - Prisma cannot reference TypeScript - so this is one more copy of a
-// string that has no single source of truth to begin with.
-// __tests__/owner-id-consistency.test.ts fails if any of them drift apart, and
-// the "No owner user found" guard below turns a mismatch into an immediate,
-// explicit error rather than silently seeding orphaned rows.
+// Declared, not imported: the production image ships prisma/ and NOT lib/, so
+// importing from lib/domain/users throws MODULE_NOT_FOUND inside a container.
+// __tests__/owner-id-consistency.test.ts fails if this drifts from the
+// schema's own literals.
 const OWNER_USER_ID = "user-owner";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
@@ -117,22 +109,10 @@ async function main() {
     institutionId: tr.id,
     investmentSubtype: "CTO",
     investmentStartDate: new Date("2022-06-01"),
-    // taxTreatment stays TAXABLE (the schema default, see the PEA comment
-    // above) - but taxRatePct has no schema default (nullable, meaningful
-    // only when TAXABLE), and was missing here entirely: real gap found
-    // checking why the tax-aware projection chart showed no effect on
-    // this demo data. getAccountTaxRate() correctly treats a null rate on
-    // a TAXABLE account as "unknown" (excluded from totalLatentTax/
-    // effectiveTaxRate) rather than silently defaulting to 0 - exactly
-    // right for a real misconfigured account, but it meant every TAXABLE
-    // account in this demo (CTO + both crypto accounts below) contributed
-    // nothing to latent tax anywhere in the app, not just the new
-    // projection. 31.4% matches this app's own suggested CTO default
-    // (add-account-dialog.tsx: PEA suggests the social-levies rate alone,
-    // CTO/Crypto suggest the full PFU rate - see FR_PFU_TOTAL_RATE in
-    // lib/domain/tax-locale.ts - a second real bug, found during the
-    // pre-v2.0 audit, had this account using the *PEA* rate instead by
-    // mistake).
+    // taxRatePct has no schema default and was missing here, so every TAXABLE
+    // account in the demo contributed nothing to latent tax anywhere - a null
+    // rate is correctly read as "unknown", not as 0. 31.4% is the app's own
+    // suggested CTO default (the full PFU rate, not the PEA one).
     taxRatePct: 0.314,
   }});
 
@@ -208,24 +188,15 @@ async function main() {
   // fixed snapshot.
   const usdToEur = 0.92;
   await prisma.holding.createMany({ data: [
-    // PEA - trackers monde. targetPct set to showcase portfolio rebalancing:
-    // current weights (45×113=5 085€ / 20×618=12 360€ -> ~29%/71%) sit far
-    // from the 70%/30% target, so the account page shows a clear suggested
-    // trade in both directions rather than a "nothing to do" empty state.
-    // IWDA.L (iShares MSCI World, LSE) ≈ 113 € · CSPX.L (S&P 500, LSE) ≈ 618 €
-    // `ticker` is the fund's real ISIN, not the exchange ticker symbol - a
-    // real gap found checking why the demo's own "Exposition Tech" showed
-    // 0% despite directly holding Apple/Microsoft: TECH_WEIGHTS/
-    // DIVIDEND_YIELDS/ISIN_TO_YF_SYMBOL (all in lib/domain/analytics.ts)
-    // and dividendEffectiveTaxRate() all key/parse off Holding.ticker as a
-    // real ISIN (matching how this app's actual sync sources - GoCardless/
-    // Woob/Trade Republic - report positions), so a friendly symbol like
-    // "AAPL" instead of "US0378331005" silently misses every one of those
-    // lookups at once, not just tech exposure. `name` (shown as the
-    // holdings table's own bold primary label) stays human-readable
-    // either way, so this only changes the small secondary ticker line -
-    // which is also a more accurate depiction of what real synced data
-    // actually looks like in this app.
+    // PEA - trackers monde. targetPct deliberately far from the current
+    // weights (~29%/71% against a 70%/30% target), so the rebalancing section
+    // shows a real suggested trade in both directions rather than an empty
+    // state.
+    //
+    // `ticker` is the fund's real ISIN, never an exchange symbol: the sector,
+    // dividend and tax lookups all parse Holding.ticker AS an ISIN, matching
+    // what the real sync sources report, so "AAPL" silently misses all of them
+    // at once. `name` stays human-readable either way.
     { accountId: pea.id, ticker: "IE00B4L5Y983", name: "iShares Core MSCI World ETF",  quantity: "45",   lastPriceCents: EUR(113),    costBasisCents: EUR(3_798), targetPct: 0.7 },
     { accountId: pea.id, ticker: "IE00B5BMR087", name: "iShares Core S&P 500 ETF",     quantity: "20",   lastPriceCents: EUR(618),    costBasisCents: EUR(10_240), targetPct: 0.3 },
     // CTO - actions US, priced natively in USD (currency/native*/fxRateToEur
@@ -374,15 +345,9 @@ async function main() {
   await prisma.transaction.createMany({ data: txRows });
 
   // ── Recurring transactions ───────────────────────────────────────────────
-  // A mix of states to showcase the /recurring page fully:
-  //  - confirmed & active (Netflix, salary, home insurance)
-  //  - paused - user switched mobile carrier, kept the row for history (SFR)
-  //  - missed - Internet has no transaction the last 2 months (see the
-  //    conditional push above), so isMissed() flags it regardless of today's
-  //    actual date.
-  // Everything else left un-confirmed (Carrefour, Lidl, EDF, restaurant, the
-  // savings/PEA transfers, both loan payments) still surfaces live as
-  // detectCandidates() suggestions - no seeding needed for those.
+  // A mix of states, so /recurring shows all of them: active, paused (SFR), and
+  // missed (Internet has no transaction for two months, so isMissed flags it
+  // whatever today's date is). Everything else surfaces live as a suggestion.
   console.log("Creating recurring transactions…");
   await prisma.recurringTransaction.createMany({ data: [
     {

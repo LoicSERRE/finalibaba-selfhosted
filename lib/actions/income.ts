@@ -10,16 +10,10 @@ import { excludeInternalTransfers } from "@/lib/domain/transaction-filters";
 
 const INCOME_TYPES = new Set(Object.values(IncomeType));
 
-// Mirrors the DIVIDEND_ACCOUNT_TYPES/INTEREST_ACCOUNT_TYPES filter in
-// add-income-dialog.tsx. That filter only controls what's selectable in the
-// UI - Server Actions are reachable directly regardless of what's on screen,
-// so the same rule must be enforced here too before writing anything.
-// DIVIDEND also allows CHECKING (not just INVESTMENT/CRYPTO): Trade
-// Republic's timeline sync writes every money-movement event - trades,
-// dividends, interest, card payments - onto one shared CHECKING-typed
-// "Compte espèces" account (see "Trade Republic transaction history" in
-// CLAUDE.md), so a real dividend payout can legitimately land on a
-// CHECKING account, not just a dedicated investment account.
+// The dialog's own filter controls what is SELECTABLE; a Server Action is
+// reachable whatever the UI renders, so the rule is enforced here too.
+// DIVIDEND allows CHECKING because Trade Republic writes every event -
+// trades, dividends, card payments - onto one shared cash account.
 const ELIGIBLE_ACCOUNT_TYPES: Record<IncomeType, Set<string>> = {
   DIVIDEND: new Set(["INVESTMENT", "CRYPTO", "CHECKING"]),
   INTEREST: new Set(["CHECKING", "SAVINGS"]),
@@ -120,15 +114,9 @@ export async function deleteIncomeEvent(id: string) {
   revalidateIncome(event.accountId);
 }
 
-// "Mark as income" - creates an IncomeEvent directly from an existing
-// Transaction (amount + date pre-filled from it, linked via
-// transactionId) instead of the user retyping everything by hand on
-// /income. `type` still comes from the caller rather than being inferred
-// from the account alone: CHECKING/SAVINGS accounts are usually
-// unambiguous (interest), but Trade Republic's combined cash account can
-// hold both real dividend payouts and card payments (see the
-// ELIGIBLE_ACCOUNT_TYPES comment above) - assertIncomeEventEligible below
-// still rejects a mismatched type/account pair either way.
+// Creates an IncomeEvent from an existing Transaction rather than making the
+// user retype it. `type` comes from the caller, not inferred from the account:
+// a combined cash account holds both dividends and card payments.
 export async function createIncomeEventFromTransaction(
   transactionId: string,
   formData: FormData
@@ -160,25 +148,13 @@ export async function createIncomeEventFromTransaction(
 
   revalidateIncome(transaction.accountId);
 
-  // Same reasoning as setTransactionCategory's siblingCount in
-  // lib/actions/transactions.ts: how many other not-yet-linked, credit
-  // transactions in this account share the same
-  // normalizeLabelForCategorization label (year-suffix included), so the
-  // UI can offer to mark them as income too in one click rather than
-  // requiring this to be repeated for every occurrence. Never offered for
-  // a generic transfer label ("VIREMENT SEPA" and friends) - same reason
-  // as that function: a French bank reuses this boilerplate for both real
-  // internal transfers and real external payments, so treating every
-  // same-labeled transaction as "also income" would be just as wrong here
-  // as it was for categorization.
+  // Other unlinked credits sharing the same normalised label, so the UI can
+  // offer to mark them too rather than repeating this per occurrence.
   //
-  // The label denylist alone was not enough, and internal transfers are why:
-  // it only knows the two boilerplate wordings a French bank reuses, so a
-  // transfer that arrives with a real name attached ("VIREMENT M ...") sailed
-  // through it and got recorded as a dividend or as interest - money the app
-  // has already established is not income at all, landing in the one place
-  // meant to be accurate enough to declare. The pairing detector knows about
-  // exactly those, so the sweep asks it rather than the label.
+  // Excludes internal transfers by the FLAG, not the label: the denylist knows
+  // only two boilerplate wordings, so a transfer arriving with a real name
+  // attached sailed through it and was recorded as a dividend - in the one
+  // place meant to be accurate enough to declare.
   let siblingCount = 0;
   if (!isGenericTransferLabel(transaction.label)) {
     const normalized = normalizeLabelForCategorization(transaction.label);
@@ -197,17 +173,10 @@ export async function createIncomeEventFromTransaction(
   return { siblingCount };
 }
 
-// Propagates "mark as income" to every other not-yet-linked, credit
-// transaction in the same account sharing the same
-// normalizeLabelForCategorization label as the one just marked - fixes the
-// same practical problem applyCategoryToSimilarTransactions
-// (lib/actions/transactions.ts) solves for categorization: a once-a-year
-// interest credit or a recurring dividend shouldn't need this done by hand
-// for every single occurrence. Unlike that function, this one *skips*
-// already-linked transactions rather than overwriting them - marking a
-// transaction as income creates a new fiscal record, it doesn't correct an
-// existing one, so an already-marked sibling is left untouched instead of
-// being double-recorded.
+// Propagates to every other unlinked credit with the same label, so a
+// once-a-year interest credit is not marked by hand every year. SKIPS
+// already-linked rows rather than overwriting: this creates a fiscal record,
+// it does not correct one, so an already-marked sibling must not double up.
 export async function markSimilarTransactionsAsIncome(
   transactionId: string,
   formData: FormData

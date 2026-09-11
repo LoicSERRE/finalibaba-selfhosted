@@ -9,16 +9,10 @@ import { getViewer, assertOwned, OWNER_USER_ID } from "@/lib/auth-context";
 // eslint-disable-next-line sonarjs/no-clear-text-protocols
 const SYNC_URL = process.env.SYNC_SERVICE_URL ?? "http://sync:8000";
 
-// Real production report: none of the fetch() calls below to the sync
-// service ever had a timeout - a genuinely slow/hung bank sync (e.g. no
-// internet reaching the bank from inside the sync container, or a Woob
-// session stuck mid-negotiation) left the triggering button spinning
-// forever with zero feedback, no way to know it had failed vs. was just
-// slow. 2 minutes is generous enough for a real sync/2FA round-trip
-// (these do genuinely scrape a real bank site, not just call a fast local
-// API) while still bounding the worst case instead of hanging
-// indefinitely. AbortSignal.timeout() is the built-in way to do this
-// without manually wiring an AbortController per call.
+// Every call below needs a timeout: without one a hung bank sync leaves the
+// button spinning forever with no way to tell "failed" from "slow". Two
+// minutes is generous for a real scrape and 2FA round-trip while still
+// bounding the worst case.
 const SYNC_TIMEOUT_MS = 2 * 60 * 1000;
 
 // Completing a setup can legitimately outlast the default: a bank that ends in
@@ -35,13 +29,10 @@ const REALTIME_STATUS_TIMEOUT_MS = 2000;
 /**
  * A failure worth showing the user, as opposed to a bug.
  *
- * Next redacts a thrown Server Action error in production and replaces it with
- * an opaque digest, so every carefully-worded message in this file reached the
- * user in dev and NOTHING in production - a real report was "POST /settings
- * 500" plus React error #441, which is exactly that redaction. Next's own
- * guidance is to model expected errors as return values, which is what the
- * three exported actions below do; this type is the internal carrier they
- * convert into one.
+ * Next replaces a THROWN Server Action error with an opaque digest in
+ * production, so every message in this file reached the user in dev and
+ * nothing at all once deployed. Expected errors are returned as values; this
+ * type is the internal carrier.
  */
 class SyncServiceError extends Error {}
 
@@ -79,14 +70,9 @@ const SYNC_PATHS = {
 // CUID format produced by Prisma @default(cuid())
 const CUID_RE = /^c[a-z0-9]{20,30}$/;
 
-// The LCL/Trade Republic dedicated integrations are configured through .env
-// (LCL_LOGIN/TR_PHONE), which is deploy-time config, not per-user state -
-// so they belong to the owner and only the owner can drive them (decision D3
-// of the v2.0 plan). This is about the CREDENTIALS, not the data: the
-// accounts those syncs import are co-ownable and grant-viewable exactly like
-// a manual account, they just can't be re-synced or re-authenticated by
-// anyone but the owner. In mono mode the viewer is always the owner, so this
-// never fires.
+// .env credentials are deploy-time config, so the env-configured syncs belong
+// to the owner and only the owner can drive them. About the CREDENTIALS, not
+// the data: their accounts stay co-ownable and grant-viewable.
 async function assertOwnsEnvSync(): Promise<void> {
   const viewer = await getViewer();
   if (viewer.id !== OWNER_USER_ID) {
@@ -170,19 +156,13 @@ export async function getSyncStatus() {
 }
 
 /**
- * Which Trade Republic connections currently hold a live real-time websocket.
+ * Which connections hold a live real-time websocket. "listening" is the only
+ * state where a portfolio updates by itself, and a portfolio sitting still
+ * otherwise looks identical whether real-time is working, off, or reconnecting.
  *
- * "listening" is the only state where a portfolio updates by itself; every
- * other one means it moves on the 4h cron instead. That distinction had no way
- * of reaching the interface, so a portfolio sitting still looked identical
- * whether real-time was working, switched off, or waiting for a reconnect - and
- * for anyone who moved off the .env connection it was silently the last two.
- *
- * A plain read with no ownership check: it reports process state (which
- * listeners are running), names no account and no balance, and every id in it
- * is one the caller already passed in. Failures degrade to null rather than
- * throwing - the sync service is optional and simply absent in local dev, and
- * an indicator is never worth breaking Settings over.
+ * No ownership check: it reports PROCESS state, names no account or balance,
+ * and every id in it came from the caller. Degrades to null rather than
+ * throwing - the sync service is optional and absent in local dev.
  */
 export type RealtimeStatus = {
   enabled: boolean;
@@ -260,14 +240,9 @@ export async function getWoobBankModules(): Promise<WoobBankModule[]> {
   }
 }
 
-// Shared by both institution setup backends: /sync/institution/{id}/setup/*
-// dispatches on whether the institution carries Woob or Trade Republic
-// credentials, so a caller gets one of these either way. Named for the route
-// rather than for Woob (which it was, before v2.1) precisely because it is no
-// longer one provider's shape. The optional fields are what differs between
-// them - Woob reports the medium it used ("SMS to 06 12..."), Trade Republic
-// reports how long its pushed code stays valid, and neither knows about the
-// other's.
+// Shared by both setup backends, which is why it is named for the route rather
+// than for Woob. The optional fields are what differs: Woob reports the medium
+// it used, Trade Republic how long its pushed code stays valid.
 export type InstitutionSetupResult =
   /** `synced` is how many accounts the setup itself WROTE, using the session
    *  the user just authorised. Present means the data is already in the
@@ -367,18 +342,14 @@ export async function completeInstitutionSetup(
   }
 }
 
-// Fired by <AutoSync /> on page load. Scoped to the viewer's own sources
-// (v2.0): before this, any page load by anyone triggered an instance-wide
-// sync, which in multi-user would mean a member's visit re-scraping the
-// owner's banks - and the staleness check would read the owner's last
-// success and conclude the member's own institutions were fresh.
+// Fired by <AutoSync /> on page load, scoped to the viewer's OWN sources: an
+// instance-wide sync would have a member's page load re-scrape the owner's
+// banks, and the staleness check would read the owner's last success.
 //
-// The owner keeps the instance-wide /sync/all/async call (byte-identical to
-// mono-mode behavior, and the only path that can drive the .env-configured
-// LCL/TR integrations per D3). A member instead triggers each of their own
-// Woob-configured institutions individually - the sync service has no notion
-// of users, so "everything that belongs to me" has to be expressed as an
-// explicit list of institution ids rather than a scope on its side.
+// The owner keeps the instance-wide call, the only path that can drive the
+// .env integrations. A member triggers their own institutions one by one -
+// the sync service has no notion of users, so "mine" has to be an explicit
+// list of ids.
 export async function autoTriggerSync(): Promise<{ triggered: boolean }> {
   const viewer = await getViewer();
   const lastSync = await prisma.syncLog.findFirst({

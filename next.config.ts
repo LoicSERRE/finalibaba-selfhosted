@@ -11,15 +11,11 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 // injected <img>/<iframe>/third-party-script content, just not a strict CSP.
 const CSP = [
   "default-src 'self'",
-  // www.google.com/recaptcha + www.gstatic.com serve the reCAPTCHA widget a
-  // bank like Amundi puts in front of its login (components/settings/
-  // recaptcha-widget.tsx). Worth being explicit about what this does and does
-  // not cost: script-src already carries 'unsafe-inline', so anyone able to
-  // inject markup into this app can already run arbitrary JS - adding two
-  // host allowlist entries alongside it changes nothing about that ceiling.
-  // frame-src below is the one genuinely new capability, and it is the
-  // narrowest form of it (one host, no wildcard, framing outward only -
-  // frame-ancestors 'none' still refuses to let anyone frame US).
+  // The two Google hosts serve the reCAPTCHA widget some banks put in front of
+  // their login. script-src already carries 'unsafe-inline', so two host
+  // entries change nothing about that ceiling; frame-src is the one new
+  // capability, narrowed to one host, and frame-ancestors 'none' still refuses
+  // to let anyone frame US.
   "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com",
   "frame-src 'self' https://www.google.com",
   // Falls back to script-src without this, which already covers same-origin
@@ -54,41 +50,26 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          // No Strict-Transport-Security here deliberately: this app is
-          // commonly reached over plain HTTP on a private LAN/VPN (see
-          // CLAUDE.md's "Authentication" section - AUTH_ENABLED defaults to
-          // off precisely because network-level trust is the expected
-          // setup). HSTS is a browser-cached, self-reinforcing header - if a
-          // LAN user's browser ever received it over plain HTTP, it would
-          // then refuse all future plain-HTTP connections to this host until
-          // manually cleared. Reverse proxies that terminate real TLS
-          // (Nginx Proxy Manager, Caddy, Traefik) should set HSTS themselves
-          // at that layer instead, where "this connection is actually HTTPS"
-          // is actually true.
+          // No Strict-Transport-Security, deliberately: this app is commonly
+          // reached over plain HTTP on a LAN, and HSTS is browser-cached and
+          // self-reinforcing - a browser that once received it over HTTP then
+          // refuses all future HTTP to this host until manually cleared. A
+          // reverse proxy terminating real TLS should set it at that layer.
         ],
       },
       {
-        // Every page here is force-dynamic and reads live, per-user
-        // financial data (see CLAUDE.md's route table - almost nothing is
-        // static) - Next.js does not itself emit a Cache-Control header for
-        // that, which leaves the gap open for a browser or an intermediary
-        // (a reverse proxy, a CDN) to apply its OWN default caching
-        // heuristic instead. Real production report: Settings' financial
-        // profile fields showed 0/blank after a redeploy, which turned out
-        // to be exactly this - a stale HTML response served from in front
-        // of the app, not a database issue.
+        // Every page is force-dynamic and reads live financial data, and Next
+        // emits no Cache-Control for that - leaving a browser or a CDN free to
+        // apply its own heuristic. Settings showed blank fields after a
+        // redeploy for exactly this reason, from a stale HTML response in
+        // front of the app.
         //
-        // Excludes the same static-asset set proxy.ts's own matcher already
-        // excludes, for the mirror-image reason: those genuinely are
-        // build-time-fixed or content-hashed and SHOULD be cached. Reusing
-        // that exact list rather than a second, independently-maintained one
-        // that could drift from it.
+        // Excludes the same static-asset set as proxy.ts's matcher, reusing
+        // that list rather than maintaining a second one that could drift.
         //
-        // This alone does not guarantee a downstream cache is bypassed - a
-        // CDN's own "Browser Cache TTL"-style setting can still override an
-        // origin's Cache-Control regardless of what it says, which is a
-        // dashboard setting on the CDN side, not something this header can
-        // force. It is still the correct, necessary origin-side signal.
+        // Not a guarantee: a CDN's own browser-TTL setting can override an
+        // origin's Cache-Control. It is still the necessary origin-side
+        // signal.
         source:
           "/((?!_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|site\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
         headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],

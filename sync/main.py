@@ -242,14 +242,8 @@ def _check_alerts():
 
 
 def _auto_categorize():
-    # Same call shape as _check_alerts() below, and called first - a
-    # transaction that gets auto-categorized here can immediately make a
-    # BUDGET_OVERRUN custom alert rule fire in the same cycle instead of
-    # lagging a cycle behind. See lib/domain/auto-categorize.ts for the
-    # self-learning label -> category matching itself; this just triggers
-    # it after every automatic 4h sync run, same as CLAUDE.md's "Alerts &
-    # webhooks" reasoning for why the alert check lives here rather than
-    # only on-demand.
+    # Called BEFORE _check_alerts, so a transaction categorised here can make
+    # a BUDGET_OVERRUN rule fire in the same cycle rather than one behind.
     app_url = os.environ.get("APP_SERVICE_URL")
     secret = os.environ.get("NEXTAUTH_SECRET")
     if not app_url or not secret:
@@ -269,15 +263,9 @@ def _auto_categorize():
 
 
 def _snapshot_investment_balances():
-    # Real production feedback: investment/crypto HistoricalBalance rows are
-    # event-driven (only written when a holding is upserted/deleted/sold/FX-
-    # refreshed), so a rarely-edited position's own value chart stayed stuck
-    # on "not enough data" indefinitely - unlike a synced fiat account, which
-    # already gets a fresh balance snapshot on every sync cycle. Same call
-    # shape as _check_alerts()/_auto_categorize() below; this doesn't fetch
-    # new market prices for holdings (still a manual action, unchanged) -
-    # only records today's already-known valuation more regularly. See
-    # CLAUDE.md's "Historical value chart per investment account".
+    # Investment HistoricalBalance rows are event-driven, so a rarely-edited
+    # position's chart stayed on "not enough data" forever. Records today's
+    # ALREADY-KNOWN valuation more often; fetches no new prices.
     app_url = os.environ.get("APP_SERVICE_URL")
     secret = os.environ.get("NEXTAUTH_SECRET")
     if not app_url or not secret:
@@ -298,20 +286,14 @@ def _snapshot_investment_balances():
 
 # ── Real-time listener supervision ────────────────────────────────────────────
 #
-# One websocket per Trade Republic connection, kept alive for the process's
-# lifetime. Until v2.3 there was exactly one, hardcoded to the .env connection
-# and started once at boot - so a user who moved off .env to the per-user
-# connections v2.1 introduced silently lost real-time updates entirely, with
-# nothing anywhere saying so. Their portfolio value went back to moving once
-# every four hours and they reported it as "ça ne bouge pas".
+# One websocket per Trade Republic connection, alive for the process's lifetime.
+# A RECONCILE LOOP rather than a one-shot start, because connections come and go
+# while the process runs: it compares configured connections against live tasks
+# every REALTIME_RESCAN_S. Started once at boot instead, moving off .env silently
+# ended real-time updates with nothing saying so.
 #
-# Connections come and go while the process runs (a family member configures
-# theirs, someone reconnects an expired session, an institution is deleted), so
-# this is a reconcile loop rather than a one-shot start: it compares the set of
-# configured connections against the set of live tasks, every REALTIME_RESCAN_S.
-#
-# `None` is the key for the .env connection - it has no Institution row, which
-# is exactly what distinguishes it, so it is the one key that is not an id.
+# `None` keys the .env connection - it has no Institution row, which is exactly
+# what distinguishes it.
 
 REALTIME_RESCAN_S = 60
 
@@ -508,18 +490,9 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _keepalive_tr)
 
-    # Real-time Trade Republic listeners - opt-in (TR_REALTIME_ENABLED), a
-    # genuinely new pattern for this codebase: long-lived asyncio tasks that
-    # keep a websocket open for the process's whole lifetime, unlike every
-    # other sync path here which is a bounded executor-thread job. See
-    # CLAUDE.md's "Trade Republic real-time tracking" for the full design and
-    # why this is off by default.
-    #
-    # A supervisor rather than a single task since v2.3: there can be one
-    # connection per user now, and they are configured and reconnected while
-    # the process is running. Gated on the flag alone - it used to also require
-    # TR_PHONE, which meant moving off .env (what v2.1 invited users to do)
-    # silently ended real-time for good.
+    # Opt-in, and the one long-lived pattern in this file - every other sync
+    # path is a bounded executor job. Gated on the FLAG ALONE: it used to also
+    # require TR_PHONE, so moving off .env ended real-time for good.
     supervisor_task = None
     if realtime_enabled():
         supervisor_task = asyncio.create_task(_realtime_supervisor())
@@ -764,14 +737,10 @@ def _run_tr_institution(inst_id: str):
             log.exception("TR sync: failed to write the error to SyncLog")
 
 
-# The one message every setup failure surfaces to the client. Deliberately
-# fixed and generic: the branches below catch anything that was never
-# translated into a SetupError, so the real exception could carry a
-# connection string, a file path or library internals that have no business
-# reaching an HTTP client. Full detail goes to the service logs instead -
-# CodeQL flagged the previous str(e) here as information exposure (alerts
-# #1345-#1348), the same class of fix as the backup route's pg_dump/psql
-# stderr handling.
+# Fixed and generic on purpose: the branches below catch anything never
+# translated into a SetupError, so the real exception could carry a connection
+# string or library internals. Detail goes to the service logs. CodeQL flagged
+# the previous str(e) as information exposure.
 SETUP_FAILURE_MESSAGE = "Échec de la configuration - vérifie les logs du service sync"
 
 
@@ -943,12 +912,8 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    # Suppressed below (python:S8392) - 0.0.0.0 is required here, not a
-    # mistake: this is the actual production entrypoint (entrypoint.sh runs
-    # `exec python main.py`), running inside the sync container. Binding to 127.0.0.1
-    # would make it unreachable from the app container on the same Docker
-    # network - the whole point of this service. The real security boundary
-    # is that port 8000 is never published to the host in docker-compose.yml
-    # (only app's 3000 is) - see SECURITY.md: "Docker-network-only, never
-    # expose port 8000 publicly."
+    # 0.0.0.0 is required, not an oversight: 127.0.0.1 would be unreachable
+    # from the app container on the same Docker network, which is this
+    # service's whole purpose. The boundary is that port 8000 is never
+    # published to the host - see SECURITY.md.
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")  # NOSONAR

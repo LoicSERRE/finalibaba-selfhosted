@@ -1,39 +1,18 @@
 /**
- * Maps a Merchant Category Code (ISO 18245, the same 4-digit code Visa/
- * Mastercard assign to every registered merchant) to one of this app's
- * default category names - see lib/domain/merchant-categories.ts for the
- * sibling text-pattern dictionary and the shared category taxonomy both
- * use. Deliberately a small set of *broad* categories (Alimentation,
- * Transport, Abonnements, Logement, Santé, Shopping, Loisirs) rather than
- * one per merchant type - e.g. restaurants/fast food fold into
- * Alimentation, and gym/telecom/insurance/streaming all fold into
- * Abonnements (grouped by "is this a recurring subscription-style
- * payment", not by what it's for) - a deliberate choice to keep the
- * category list short and legible rather than maximizing granularity.
+ * Merchant Category Code (ISO 18245) to a default category name - the sibling
+ * of merchant-categories.ts's text dictionary, sharing its broad taxonomy.
  *
- * A more authoritative signal than free-text label matching when present:
- * this code is assigned by the card network at merchant registration time,
- * not guessed from a label substring. GoCardless's PSD2 (Berlin Group)
- * transaction data can carry it in `merchantCategoryCode`
- * (lib/services/gocardless.ts's getTransactions) - but it's an optional
- * field, populated only when the account's own bank chooses to fill it in,
- * so plenty of GoCardless-synced transactions will still have none. Woob,
- * Trade Republic, and CSV import have no equivalent concept at all - this
- * map is only ever consulted for GoCardless-sourced transactions.
+ * A more authoritative signal than label matching, because the card network
+ * assigns it at merchant registration. Only GoCardless carries it, and only
+ * when the bank fills it in; Woob, Trade Republic and CSV have no equivalent.
  *
- * Every code/description below was checked against
- * github.com/greggles/mcc-codes, not guessed from memory - MCC numbers are
- * easy to misremember and a wrong mapping here would mis-categorize real
- * transactions. Where no clean matching code exists for a real-world
- * category (e.g. gyms/fitness clubs, online marketplaces/e-commerce
- * platforms in general - checked, neither has a dedicated MCC in the
- * dataset), it's left out rather than force-fit onto an unrelated code -
- * the text dictionary covers those by brand name instead.
+ * Every code was checked against github.com/greggles/mcc-codes rather than
+ * recalled - a wrong number here mis-categorises real transactions silently.
+ * Where no clean code exists (gyms, online marketplaces), the entry is left out
+ * rather than force-fit, and the text dictionary covers it by brand.
  *
- * Notably absent on purpose: 6011 (cash disbursement/ATM withdrawal) and
- * 4829 (wire transfer/money order) - an ATM withdrawal or a transfer isn't
- * "spent" on a category, so leaving these unmapped (uncategorized) is the
- * honest behavior, not a gap to fill.
+ * Absent on purpose: 6011 (ATM) and 4829 (wire transfer) - a withdrawal is not
+ * "spent" on a category, so unmapped is the honest answer.
  */
 export const MCC_CATEGORIES: Record<string, string> = {
   // Alimentation - groceries, restaurants, fast food, bakeries, convenience

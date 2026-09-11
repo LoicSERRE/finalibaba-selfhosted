@@ -29,17 +29,11 @@ export async function createInstitution(formData: FormData) {
 
   const viewer = await getViewer();
 
-  // Institution names are unique per user, and prisma/seed.ts ships reference
-  // rows for the common ones - "Trade Republic", "LCL", "Coinbase" - with no
-  // credentials on them. So on a seeded install, which is the documented
-  // default, picking one of those banks from the list is a name collision, and
-  // creating blind fails. Attaching the credentials to the empty row is what
-  // the user meant anyway: they picked a bank, not a database row.
-  //
-  // An institution that already syncs is a different story - silently
-  // repointing it would swap a working connection for another under the same
-  // name, so that says so instead. Editing it stays where it belongs, on its
-  // own row in Settings.
+  // Names are unique per user and prisma/seed.ts ships credential-less
+  // reference rows, so on a seeded install picking a common bank is a name
+  // collision. Attaching to the empty row is what the user meant. One that
+  // already syncs is refused instead - silently repointing a working
+  // connection is the one outcome nobody could have meant.
   const existing = await prisma.institution.findFirst({
     where: { userId: viewer.id, name },
     select: { id: true, woobModule: true, trPhone: true },
@@ -65,21 +59,13 @@ export async function setGocardlessInstitutionId(id: string, gcId: string) {
   });
 }
 
-// Clears a stale/incomplete GoCardless link (gocardlessInstitutionId set,
-// possibly gocardlessRequisitionId too if a requisition was created but its
-// OAuth consent was never finished) - the only way to detach one, since
-// setGocardlessInstitutionId has no counterpart. Real gap found in
-// production: GOCARDLESS_SECRET_ID had been removed from this instance's
-// env after an abandoned connection attempt, which hid every GoCardless
-// button (all gated on gcConfigured in app/settings/page.tsx) - leaving the
-// "· Open Banking" badge permanently shown next to that institution with no
-// way to act on it, even though nothing was actually connected.
+// Detaches a stale or half-finished GoCardless link - the only way to, since
+// setGocardlessInstitutionId has no counterpart. Without it, removing
+// GOCARDLESS_SECRET_ID from .env hides every GoCardless button and strands the
+// "Open Banking" badge with no way to act on it.
 //
-// Refuses to run if any account already has a real gocardlessAccountId for
-// this institution - clearing the link at that point wouldn't delete their
-// data, only hide their sync button, and there's no legitimate reason to do
-// that, so it's not offered (mirrors migrateDedicatedSyncToWoob's own
-// can't-touch-real-data guard above).
+// Refuses once any account carries a real gocardlessAccountId: that would hide
+// a working sync button rather than detach anything.
 export async function clearGocardlessConnection(id: string) {
   const viewer = await getViewer();
   await assertOwned("institution", id, viewer.id);
@@ -118,17 +104,11 @@ export async function setWoobConfig(id: string, module: string, login: string, p
 }
 
 /**
- * Trade Republic credentials for one institution (v2.1), the per-user
- * counterpart to setWoobConfig above.
- *
- * An institution carries one provider or the other, never both: the sync
- * service dispatches on which set is populated, so leaving Woob config in
- * place would make which backend runs depend on the order of two `if`s
- * rather than on what the user chose. Clearing it here makes the choice
- * explicit at the point it is made.
- *
- * trPin is stored in plaintext, the same trust model as woobPassword right
- * above it - see the schema comment and SECURITY.md.
+ * Trade Republic credentials for one institution, the per-user counterpart to
+ * setWoobConfig. An institution carries one provider or the other, never both:
+ * the sync dispatches on whichever set is populated, so leaving the Woob config
+ * would make the backend depend on the order of two `if`s. trPin is plaintext,
+ * same trust model as woobPassword.
  */
 export async function setTradeRepublicConfig(id: string, phone: string, pin: string) {
   const viewer = await getViewer();
@@ -152,12 +132,8 @@ export async function setTradeRepublicConfig(id: string, phone: string, pin: str
 }
 
 /**
- * Removes the Trade Republic connection from an institution.
- *
- * Deliberately leaves the Account rows and their whole history in place, the
- * same as clearWoobConfig below: disconnecting a sync must never destroy the
- * data it already imported. The accounts simply stop updating, and reconnecting
- * later picks them back up by syncId.
+ * Removes the connection, never the Account rows: disconnecting a sync must not
+ * destroy what it imported. Reconnecting picks them back up by syncId.
  */
 export async function clearTradeRepublicConfig(id: string) {
   const viewer = await getViewer();
@@ -201,14 +177,9 @@ const DEDICATED_SYNC_PREFIXES: Record<string, string> = {
 };
 
 /**
- * A Prisma filter matching exactly the accounts the .env sync owns.
- *
- * For LCL a prefix is safe - nothing else writes `lcl:`. For Trade Republic it
- * is not: `tr:` also matches the per-user `tr:<institutionId>:` shape, so
- * deleting by prefix during a migration would take the accounts the migration
- * had just created along with the ones it meant to remove. That is the same
- * history-loss the v1.11 LCL incident produced, and it would land on whoever
- * moves off TR_PHONE - so the two are matched differently on purpose.
+ * Exactly the accounts the .env sync owns. A prefix is safe for LCL and NOT for
+ * Trade Republic: `tr:` also matches the per-user `tr:<institutionId>:` shape,
+ * so deleting by prefix takes the accounts a migration just created.
  */
 function legacyAccountFilter(institutionName: string) {
   if (institutionName.toLowerCase() === "trade republic") {
@@ -219,13 +190,9 @@ function legacyAccountFilter(institutionName: string) {
 }
 
 /**
- * The per-user accounts that prove the new sync actually produced something.
- *
- * Either backend counts: an institution moving off `.env` goes to Woob or, for
- * Trade Republic, to the per-user Trade Republic path added in v2.1. Before
- * that, only `woob:` counted, so someone migrating from TR_PHONE to their own
- * Trade Republic credentials could never satisfy the guard and the migration
- * refused forever.
+ * Proof the new sync produced something. EITHER backend counts - counting only
+ * `woob:` meant a move from TR_PHONE to per-user Trade Republic could never
+ * satisfy the guard, and the migration refused forever.
  */
 function perUserAccountFilter(institutionId: string) {
   return {
@@ -257,14 +224,9 @@ async function oldestHistoryDate(accountIds: string[]): Promise<Date | null> {
   return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b), dates[0]) : null;
 }
 
-// Compares how far back each side's history actually goes, for the same
-// institution's dedicated-sync (lcl:/tr:) vs Woob (woob:<id>:) accounts -
-// the comparison ConfigureWoobDialog's confirmation step is missing today,
-// see the incident note above. Returns { null, null } for an institution
-// that isn't a dedicated-sync one at all (mirrors migrateDedicatedSyncToWoob's
-// own prefix lookup) rather than throwing - this is a read-only display
-// helper, not a guard, so a non-applicable institution just renders no
-// warning instead of erroring the whole settings page.
+// How far back each side's history goes. A read-only display helper, not a
+// guard: a non-applicable institution returns nulls and renders no warning
+// rather than erroring the whole settings page.
 export async function getMigrationHistoryDepth(
   institutionId: string,
 ): Promise<{ legacyOldest: Date | null; woobOldest: Date | null }> {

@@ -1,12 +1,7 @@
 /**
- * Pure aggregation for the Analytics "Full sector-exposure breakdown"
- * section (v1.16) - no I/O, no fetch. Fetching/resolving per-holding sector
- * data lives in lib/services/yahoo-finance.ts and
- * lib/services/sector-fallback-providers.ts; this file only combines
- * already-resolved SectorWeights into a portfolio-wide breakdown. See
- * CLAUDE.md's "Full sector-exposure breakdown" for the full design and the
- * real scoping research (why Yahoo + two optional fallback providers,
- * instead of one hardcoded source) behind this feature.
+ * Pure aggregation for the sector-exposure breakdown - no I/O. Resolving a
+ * holding's sectors lives in the two service modules; this only combines
+ * already-resolved weights into a portfolio-wide picture.
  */
 
 // 0-1 fractions, keyed by the canonical sector keys below. A resolved ETF's
@@ -14,17 +9,11 @@
 // portion); a resolved individual stock has exactly one key at 1.
 export type SectorWeights = Record<string, number>;
 
-// The 11 canonical GICS-style sector keys this app buckets into - matches
-// Yahoo Finance's own topHoldings.sectorWeightings key set (confirmed live
-// against real ETF data during scoping), used as the single internal
-// taxonomy every data source (Yahoo search, Yahoo topHoldings, FMP, Alpha
-// Vantage) gets normalized into. Two more keys exist outside this list and
-// outside normalizeSectorKey's domain entirely, both assigned directly by
-// the caller (app/analytics/page.tsx) rather than resolved from any source:
-// "crypto" (CRYPTO-account holdings - BTC/ETH-style tickers have no GICS
-// sector, so classifying them as one of these 11 would be a real inaccuracy,
-// not a data gap) and "unclassified" (aggregateSectorExposure's own fallback
-// for a genuinely unresolved holding).
+// The 11 GICS-style keys, matching Yahoo's own sectorWeightings set - the one
+// internal taxonomy every source normalises into. Two more keys live OUTSIDE
+// this list and outside normalizeSectorKey, assigned by the caller: "crypto"
+// (no GICS sector exists, so bucketing it into one of these 11 would be an
+// inaccuracy rather than a gap) and "unclassified".
 export const SECTOR_KEYS = [
   "technology",
   "financial_services",
@@ -42,18 +31,12 @@ export const SECTOR_KEYS = [
 export type SectorKey = (typeof SECTOR_KEYS)[number];
 
 /**
- * Normalizes a raw sector label from Yahoo Finance into one of SECTOR_KEYS.
- * Yahoo itself uses two different casings for the same 11 sectors depending
- * on the endpoint - confirmed live during scoping, not guessed:
- * `/v1/finance/search`'s per-stock `sector` field is Title Case with spaces
- * ("Consumer Cyclical"), while `quoteSummary`'s `topHoldings.sectorWeightings`
- * keys are already snake_case ("consumer_cyclical"). Lowercasing + replacing
- * spaces with underscores unifies both - except one real quirk found live:
- * topHoldings' real-estate key is the unbroken word `realestate`, not
- * `real_estate`, while search's stock sector string ("Real Estate") would
- * naturally normalize to `real_estate` - handled as an explicit special
- * case below rather than silently producing two different keys for the same
- * sector.
+ * A raw Yahoo sector label into one of SECTOR_KEYS. Yahoo uses two casings for
+ * the same 11 sectors depending on the endpoint - Title Case from search,
+ * snake_case from topHoldings - which lowercase-and-underscore unifies. One
+ * real quirk needs an explicit case: topHoldings spells real estate
+ * `realestate`, unbroken, so the generic rule would produce two different keys
+ * for one sector.
  */
 export function normalizeSectorKey(raw: string): string {
   const key = raw.trim().toLowerCase().replace(/\s+/g, "_");

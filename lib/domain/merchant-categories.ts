@@ -1,58 +1,26 @@
 /**
- * A curated set of well-known merchant name patterns mapped to standard
- * budgeting category names - a complement to the self-learning engine in
- * auto-categorize.ts, not a replacement for it. Self-learned history
- * (this user's own confirmed categorization) always takes priority when it
- * exists and is confident; this dictionary only fills in when no such
- * history exists yet - solving the cold-start problem for a brand new
- * user (or for a merchant this user has genuinely never categorized
- * before), where the self-learning engine's only option is "nothing to
- * learn from yet, leave it uncategorized".
+ * Well-known merchant patterns mapped to broad budgeting categories - the
+ * cold-start complement to the self-learning engine, which always wins when it
+ * has an answer. Extend as real gaps show up; no static list covers "any
+ * merchant", and self-learning is what generalises.
  *
- * Deliberately a small set of *broad* categories (Alimentation, Transport,
- * Abonnements, Logement, Santé, Shopping, Loisirs), not one per merchant
- * type - e.g. restaurants/fast food fold into Alimentation, and gym/
- * telecom/insurance/streaming all fold into Abonnements (grouped by "is
- * this a recurring subscription-style payment", not by what it's for).
- * Same taxonomy as lib/domain/mcc-categories.ts's MCC map.
+ * Broad categories on purpose (restaurants fold into Alimentation; gym,
+ * telecom, insurance and streaming into Abonnements - grouped by "recurring
+ * subscription-style payment", not by what it is for). Same taxonomy as
+ * mcc-categories.ts. A FLAT map, not `{ categoryName, color, patterns }`
+ * objects: the nested shape repeats itself seven times and Sonar's copy-paste
+ * detector flags it as 80%+ duplication.
  *
- * A flat `pattern -> categoryName` map, mirroring mcc-categories.ts's own
- * MCC_CATEGORIES shape, rather than an array of `{ categoryName, color,
- * patterns: [...] }` objects (an earlier draft) - that nested-array-per-
- * category shape repeats the same object structure 7 times with only the
- * string contents differing, which SonarQube's copy-paste detector treats
- * as duplicated code (normalized-literal token matching flagged 80%+
- * duplication in this file alone). The flat map has no such repeating
- * structure.
- *
- * No static list, however large, can genuinely cover "any merchant,
- * however obscure" - new businesses appear constantly and local/regional
- * shops are infinite in variety. This is deliberately broad (aiming for
- * the common, recognizable brands most self-hosted users' bank statements
- * will actually show) rather than an attempt at completeness - the
- * self-learning engine above is what actually generalizes to a genuinely
- * unknown merchant, once the user has categorized it once. Extend this
- * map as real gaps show up in practice.
- *
- * A real false positive, found in production: Trade Republic's own labels
- * are German ("Kauf", "Verkauf", "Sparplan ausgeführt") and built from the
- * traded instrument's name - which for popular French blue-chip stocks
- * (TotalEnergies, Orange, Engie, Veolia, AXA...) is the *same word* as a
- * real merchant this dictionary also matches for genuine spending (gas
- * station, telecom bill, insurance premium). A label like "TotalEnergies -
- * Kauf" and a real TotalEnergies fuel purchase are currently
- * indistinguishable by text alone. "spar" (the Spar supermarket chain) was
- * removed after exactly this collision: it's a substring of "Sparplan"
- * (savings plan), Trade Republic's standard wording for every recurring
- * investment purchase (crypto or stock), which was silently
- * mis-categorizing investment activity as Alimentation. Known, not yet
- * fully fixed: the broader stock-name-collision class above (totalenergies/
- * orange/engie/veolia/axa/allianz/shell/esso/"bp "/"air france" are all
- * both a real merchant AND a stock a French investor might hold). Confirm
- * against real labels (scripts/debug-categorization.sh) before removing or
- * renaming any more of these patterns.
- */
-export const MERCHANT_PATTERNS: Record<string, string> = {
+ * **A known, unfixed false-positive class.** Trade Republic labels are German
+ * and built from the traded instrument's name, so a French blue chip is the
+ * SAME WORD as a real merchant here: `totalenergies`, `orange`, `engie`,
+ * `veolia`, `axa`, `allianz`, `shell`, `esso`, `"bp "`, `"air france"` are each
+ * both a merchant and a stock. "TotalEnergies - Kauf" and a fuel purchase are
+ * indistinguishable by text. `"spar"` was removed after exactly this: it is a
+ * substring of "Sparplan", so every recurring investment purchase was landing
+ * in Alimentation. Confirm against real labels
+ * (scripts/debug-categorization.sh) before touching these patterns.
+ */export const MERCHANT_PATTERNS: Record<string, string> = {
   // Alimentation - supermarkets / grocery
   carrefour: "Alimentation",
   leclerc: "Alimentation",
@@ -244,16 +212,10 @@ export const MERCHANT_PATTERNS: Record<string, string> = {
   "zoo de": "Loisirs",
   aquarium: "Loisirs",
 
-  // Revenus - the one category here that isn't spending. "zinsen" (German
-  // for "interest") is Trade Republic's own literal transaction title for
-  // interest payouts on uninvested cash - confirmed from a real API
-  // response captured in sync/tests/test_sync_tr.py
-  // (test_timeline_item_to_transaction_omits_subtitle_when_identical_to_title
-  // uses title="Zinsen" as its example), not guessed. This is safe in a way
-  // a brand-name match isn't: it's TR's own structural vocabulary for what
-  // kind of event this is, not a company name that could coincidentally
-  // also be a purchase. Deliberately not doing the same for dividends yet -
-  // no confirmed real label text for that one, see CLAUDE.md.
+  // The one entry here that is not spending. "zinsen" is Trade Republic's own
+  // title for an interest payout, captured from a real API response - safe in a
+  // way a brand name is not, because it is TR's structural vocabulary for the
+  // KIND of event, not a company that could also be a purchase.
   zinsen: "Revenus",
 };
 
@@ -273,12 +235,9 @@ export const MERCHANT_CATEGORY_COLORS: Record<string, string> = {
 };
 
 /**
- * Matches a transaction label against the dictionary above - the first
- * pattern that's a substring of the (lowercased) label wins. A plain
- * substring match, not fuzzy/scored: real bank labels are typically
- * boilerplate ("CB ", a date, a city) wrapped around one clear merchant
- * name, so a substring match is enough without the false-positive risk a
- * fuzzy match would add.
+ * First pattern that is a substring of the lowercased label wins. Plain
+ * substring, never fuzzy: a bank label is boilerplate wrapped around one clear
+ * merchant name, so fuzzy only adds false positives.
  */
 export function matchMerchantCategory(label: string): { categoryName: string; color: string } | null {
   const normalized = label.toLowerCase();

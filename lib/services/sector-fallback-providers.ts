@@ -2,36 +2,20 @@ import type { SectorWeights } from "@/lib/domain/sector-exposure";
 import { normalizeSectorKey } from "@/lib/domain/sector-exposure";
 
 /**
- * Two optional, deploy-time fallback providers for ETF sector weightings,
- * used only when Yahoo Finance's own crumb-gated quoteSummary path fails
- * (lib/services/yahoo-finance.ts's resolveHoldingSectorWeights/
- * probeYahooSectorHealth) - see CLAUDE.md's "Full sector-exposure breakdown"
- * for the full scoping writeup behind picking these two specifically.
+ * Two optional fallbacks for ETF sector weightings, tried only when Yahoo's
+ * crumb-gated path fails. Both are documented, key-authenticated REST APIs
+ * rather than scraping workarounds; both keys are optional .env variables.
  *
- * Both are real, documented, API-key-authenticated REST APIs (not scraping
- * workarounds like Yahoo's crumb mechanism) - `FMP_API_KEY` and
- * `ALPHA_VANTAGE_API_KEY` are optional `.env` variables, same category as
- * `GOCARDLESS_SECRET_ID`/`GOCARDLESS_SECRET_KEY` (a third-party credential a
- * self-hoster can configure for extra resilience, never required for setup).
- *
- * Honesty note, not glossed over: neither provider's response shape could be
- * confirmed end-to-end against an arbitrary real ISIN in the session this was
- * built in (no registered API key was available). Alpha Vantage's public
- * `demo` key did confirm the real, correctly-shaped response for its own
- * canned example symbol (QQQ) - see fetchAlphaVantageEtfSectorWeights below.
- * FMP's shape is implemented against its public documentation only (its own
- * docs site returned a 403 to a direct fetch attempt during scoping).
- * Whoever configures either key first should sanity-check the Analytics
- * page's sector section actually shows data for their own holdings.
+ * **Unverified end to end.** Alpha Vantage's shape was confirmed live via its
+ * public demo key on QQQ; FMP's is implemented from documentation alone.
+ * Whoever configures a key first should check the sector section actually
+ * shows data for their own holdings.
  */
 
 /**
- * Pure response-shape parsing, extracted from the fetch call below so it's
- * testable without mocking `fetch`/network I/O - matches this file's own
- * documentation-only confirmation of FMP's shape (see the top-of-file
- * comment): these tests assert against that documented shape, not a live
- * response, so they'd need updating if FMP's real API ever disagrees with
- * its own docs.
+ * Pure parsing, split from the fetch so it is testable without mocking network
+ * I/O. Asserts the DOCUMENTED shape, not a live response - see the top of the
+ * file.
  */
 import { fetchExternal } from "@/lib/services/external-fetch";
 
@@ -67,18 +51,10 @@ async function fetchFmpEtfSectorWeightings(symbol: string): Promise<SectorWeight
   }
 }
 
-// Alpha Vantage's ETF_PROFILE uses official GICS sector names, which don't
-// share Yahoo's own casing/wording convention - confirmed live via the
-// public `demo` key against QQQ (a real response, not documentation-only):
-// "INFORMATION TECHNOLOGY", "CONSUMER DISCRETIONARY", "CONSUMER STAPLES",
-// "FINANCIALS", "MATERIALS" name the same 4 sectors Yahoo calls
-// "Technology"/"Consumer Cyclical"/"Consumer Defensive"/"Financial
-// Services"/"Basic Materials" - normalizeSectorKey's generic
-// lowercase-and-underscore alone would produce a different, non-matching key
-// for each of these, so they're aliased explicitly here rather than merged
-// by guesswork. The remaining sectors ("Communication Services",
-// "Industrials", "Utilities", "Energy", "Real Estate", "Healthcare") already
-// match Yahoo's own wording once normalized, so they don't need an entry.
+// Alpha Vantage uses official GICS names where Yahoo uses its own wording, so
+// the generic normaliser produces a non-matching key for these five. Aliased
+// explicitly rather than merged by guesswork; every other sector already
+// matches Yahoo once normalised.
 const ALPHA_VANTAGE_SECTOR_ALIASES: Record<string, string> = {
   "information technology": "technology",
   "consumer discretionary": "consumer_cyclical",
