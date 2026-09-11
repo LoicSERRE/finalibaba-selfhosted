@@ -433,6 +433,22 @@ def composite_sync_id(base: str, date, amount_cents: int, label: str, occurrence
 
 
 def _label_fingerprint(label: str) -> str:
+    """8 hex chars of the normalised label, to tell two same-day, same-amount
+    movements apart inside a syncId.
+
+    SHA-1 on purpose, and it must stay SHA-1. This is a content fingerprint,
+    never a signature: it authenticates nothing, guards no secret, and is
+    truncated to 32 bits anyway, so collision resistance was never the
+    property being bought. Semgrep flags it as an insecure hash (triaged
+    2026-09-12, its only finding on this repo).
+
+    Switching to SHA-256 is the dangerous "fix". The output goes into
+    Transaction.syncId, which is PERSISTED, so a different digest gives the
+    same movement a different id, and the next sync inserts it again beside
+    the row already there. Duplicate transactions are what v2.9.2, v2.9.3 and
+    v2.9.4 were each spent on.
+    """
+    # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
     return hashlib.sha1(_normalise_label(label).encode("utf-8")).hexdigest()[:8]
 
 
