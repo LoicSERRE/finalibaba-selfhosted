@@ -34,7 +34,7 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-popover": "^1.1.23",
     "@simplewebauthn/browser": "^13.3.0",
-    "@simplewebauthn/server": "^13.3.3",
+    "@simplewebauthn/server": "^14.0.0",
     "@swc/helpers": "^0.5.23",
     "bcryptjs": "^3.0.3",
     "decimal.js": "^10.6.0",
