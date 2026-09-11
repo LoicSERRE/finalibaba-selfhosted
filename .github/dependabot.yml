@@ -14,10 +14,23 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # @simplewebauthn/server and /browser share their request-option types
+      # across the network boundary, so a major that moves one and not the
+      # other cannot compile: the server builds a
+      # PublicKeyCredentialCreationOptionsJSON from v14 and the browser
+      # expects v13's, which are structurally different types with the same
+      # name. Dependabot opened them as two separate major PRs and CI failed
+      # on both, correctly - neither is mergeable alone, and both together
+      # would have been fine. Grouped by name so they can only ever move
+      # together; `update-types` is left out deliberately, since it is the
+      # MAJOR bumps that need this most.
+      simplewebauthn:
+        patterns:
+          - "@simplewebauthn/*"
       # Patch/minor bumps across a lockfile this size happen constantly and
       # rarely need individual review - group them into one PR per week.
       # Majors (the ones actually worth reading a changelog for) stay
-      # ungrouped, one PR each.
+      # ungrouped, one PR each, unless a group above says otherwise.
       minor-and-patch:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 10
