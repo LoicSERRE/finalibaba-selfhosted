@@ -118,15 +118,29 @@ async function flagInternalTransfers(accountIds: string[], userId: string): Prom
     // no second bank account records the other side - and on real data each
     // won a tie against the genuine counterpart.
     where: {
-      internalTransferManual: null,
       isSecuritiesMovement: false,
-      // Null MUST pass - it is what every other source and every pre-existing
-      // row carries. Hence the explicit null branch and not a bare NOT:
-      // `NOT (NULL LIKE 'CARD_%')` is NULL in SQL, not TRUE, so a negated
-      // match excludes every null row. Written that way first, it took the
-      // pool from 628 rows to zero and switched detection off silently.
-      OR: [{ sourceEventType: null }, { NOT: { sourceEventType: { startsWith: "CARD_" } } }],
       accountId: { in: accountIds },
+      AND: [
+        // A row marked a transfer BY HAND stays in, as a partner others can
+        // pair against. Leaving it out stranded its counterpart for good:
+        // marking one leg removed it from the pool, so the leg that should
+        // pair with it had none left and could never be flagged. Measured on
+        // a real database - a 500 and a 600 EUR debit kept counting as
+        // spending while their credits did not, understating one month by
+        // 1 100 EUR. `false` still stays out: that is a person saying "not a
+        // transfer", and it must never be paired.
+        //
+        // Two OR blocks under AND rather than one object with two OR keys,
+        // where the second silently replaces the first - and never
+        // `{ not: false }`, which is the same three-valued trap as below.
+        { OR: [{ internalTransferManual: null }, { internalTransferManual: true }] },
+        // Null MUST pass - it is what every other source and every pre-existing
+        // row carries. Hence the explicit null branch and not a bare NOT:
+        // `NOT (NULL LIKE 'CARD_%')` is NULL in SQL, not TRUE, so a negated
+        // match excludes every null row. Written that way first, it took the
+        // pool from 628 rows to zero and switched detection off silently.
+        { OR: [{ sourceEventType: null }, { NOT: { sourceEventType: { startsWith: "CARD_" } } }] },
+      ],
     },
     select: {
       id: true,
@@ -134,6 +148,7 @@ async function flagInternalTransfers(accountIds: string[], userId: string): Prom
       amountCents: true,
       date: true,
       isInternalTransfer: true,
+      internalTransferManual: true,
       internalTransferPairId: true,
     },
   });
@@ -146,18 +161,21 @@ async function flagInternalTransfers(accountIds: string[], userId: string): Prom
   }
   const poolIds = new Set(candidates.map((c) => c.id));
 
-  const newlyPaired: Array<{ id: string; pairId: string }> = [];
+  const newlyPaired: Array<{ id: string; pairId: string; decided: boolean }> = [];
   const unpaired: string[] = [];
   for (const c of candidates) {
     const partner = partnerById.get(c.id);
+    const decided = c.internalTransferManual === true;
     if (partner) {
       // Rewritten when the partner changed too, not only when the flag did -
       // a re-pairing has to leave the stored evidence pointing at the leg
       // that actually justifies it.
       if (!c.isInternalTransfer || c.internalTransferPairId !== partner) {
-        newlyPaired.push({ id: c.id, pairId: partner });
+        newlyPaired.push({ id: c.id, pairId: partner, decided });
       }
-    } else if (c.isInternalTransfer && c.internalTransferPairId && poolIds.has(c.internalTransferPairId)) {
+      // A hand-marked leg keeps its flag whatever the matching says, so it is
+      // only ever written to record which row it paired with.
+    } else if (!decided && c.isInternalTransfer && c.internalTransferPairId && poolIds.has(c.internalTransferPairId)) {
       unpaired.push(c.id);
     }
   }
@@ -177,7 +195,9 @@ async function flagInternalTransfers(accountIds: string[], userId: string): Prom
     }),
   ]);
 
-  const matchedIds = newlyPaired.map((p) => p.id);
+  // Only rows this pass itself flagged. A hand-marked leg is left alone, the
+  // same way setInternalTransferFlag never touches a category either.
+  const matchedIds = newlyPaired.filter((p) => !p.decided).map((p) => p.id);
   if (matchedIds.length === 0) return;
 
   // Retroactive cleanup for the exact incident this was built to fix: a

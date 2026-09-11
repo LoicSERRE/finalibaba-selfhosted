@@ -108,8 +108,8 @@ describe("account scoping", () => {
 describe("internal-transfer pass", () => {
   /** Two unflagged legs of one transfer, nobody has ruled on either. */
   const FRESH_PAIR = [
-    { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
-    { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
+    { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferManual: null, internalTransferPairId: null },
+    { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: false, internalTransferManual: null, internalTransferPairId: null },
   ];
 
   it("flags detected pairs and clears only this user's own \"Revenus\"", async () => {
@@ -131,12 +131,55 @@ describe("internal-transfer pass", () => {
     expect(cleared?.[0].where.id.in).toEqual(["t1", "t2"]);
   });
 
-  it("never considers a row a person has ruled on, in either direction", async () => {
-    // The whole point of the third state: the pool is what nobody decided.
+  it("keeps a hand-marked leg in the pool, and a hand-rejected one out", async () => {
+    // Not symmetric, and the asymmetry is the fix. "This IS a transfer" leaves
+    // the row available as a PARTNER, or the leg that should pair with it has
+    // none and can never be flagged - measured on a real database as a 500 and
+    // a 600 EUR debit still counting as spending while their credits did not.
+    // "This is NOT a transfer" must never be paired with anything.
+    //
+    // Pinned as a shape because the failure is SQL-level: `{ not: false }`
+    // reads as `NOT (NULL = false)`, which is NULL rather than TRUE, so every
+    // unruled row would silently leave the pool.
     await autoCategorizeForUser("user-a", ACCOUNTS);
 
     const pool = txFindManyMock.mock.calls[0][0];
-    expect(pool.where.internalTransferManual).toBeNull();
+    const decided = pool.where.AND.find((b: { OR?: Array<Record<string, unknown>> }) =>
+      b.OR?.some((o) => "internalTransferManual" in o)
+    );
+    expect(decided.OR).toEqual([{ internalTransferManual: null }, { internalTransferManual: true }]);
+  });
+
+  it("flags the unruled leg of a pair whose other half was marked by hand", async () => {
+    const HAND_MARKED = { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: true, internalTransferManual: true, internalTransferPairId: null };
+    const STRANDED = { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferManual: null, internalTransferPairId: null };
+    queueTransactionQueries([STRANDED, HAND_MARKED]);
+    detectPairingsMock.mockReturnValue([{ creditId: "t2", debitId: "t1" }]);
+
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    // The stranded leg is flagged; the hand-marked one only records its partner
+    // and is never revoked.
+    expect(pairWrites()).toEqual([
+      { where: { id: "t1" }, data: { isInternalTransfer: true, internalTransferPairId: "t2" } },
+      { where: { id: "t2" }, data: { isInternalTransfer: true, internalTransferPairId: "t1" } },
+    ]);
+    // A person's own row keeps whatever category they left on it.
+    const cleared = txUpdateManyMock.mock.calls.find(([a]) => a.data?.categoryId === null);
+    expect(cleared?.[0].where.id.in).toEqual(["t1"]);
+  });
+
+  it("never revokes a hand-marked leg the matching could not pair", async () => {
+    // The 54 rows bulk-marked because one leg predates the account's own
+    // history: they are in the pool now, and nothing there can match them.
+    const LONE = { id: "t9", accountId: "acc-1", amountCents: BigInt(-300), date: new Date(), isInternalTransfer: true, internalTransferManual: true, internalTransferPairId: "gone" };
+    queueTransactionQueries([LONE]);
+    detectPairingsMock.mockReturnValue([]);
+
+    await autoCategorizeForUser("user-a", ACCOUNTS);
+
+    const revoked = txUpdateManyMock.mock.calls.find(([a]) => a.data?.isInternalTransfer === false);
+    expect(revoked?.[0].where.id.in ?? []).toEqual([]);
   });
 
   it("keeps out the two kinds of row that can never be half of a transfer", async () => {
@@ -162,7 +205,10 @@ describe("internal-transfer pass", () => {
     await autoCategorizeForUser("user-a", ACCOUNTS);
 
     const pool = txFindManyMock.mock.calls[0][0];
-    expect(pool.where.OR).toEqual([
+    const source = pool.where.AND.find((b: { OR?: Array<Record<string, unknown>> }) =>
+      b.OR?.some((o) => "sourceEventType" in o)
+    );
+    expect(source.OR).toEqual([
       { sourceEventType: null },
       { NOT: { sourceEventType: { startsWith: "CARD_" } } },
     ]);
@@ -170,7 +216,7 @@ describe("internal-transfer pass", () => {
 
   it("writes nothing when no pair is detected", async () => {
     queueTransactionQueries([
-      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: false, internalTransferManual: null, internalTransferPairId: null },
     ]);
 
     await autoCategorizeForUser("user-a", ACCOUNTS);
@@ -181,8 +227,8 @@ describe("internal-transfer pass", () => {
 
   it("leaves an already-correct pairing completely alone", async () => {
     queueTransactionQueries([
-      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t2" },
-      { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t1" },
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferManual: null, internalTransferPairId: "t2" },
+      { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: true, internalTransferManual: null, internalTransferPairId: "t1" },
     ]);
     detectPairingsMock.mockReturnValue([{ creditId: "t2", debitId: "t1" }]);
 
@@ -196,9 +242,9 @@ describe("internal-transfer pass", () => {
     // credit around; t2 has since arrived on the same day and wins. Nothing
     // used to revisit this - both wrong halves stayed out of every total.
     queueTransactionQueries([
-      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t3" },
-      { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: false, internalTransferPairId: null },
-      { id: "t3", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "t1" },
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferManual: null, internalTransferPairId: "t3" },
+      { id: "t2", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: false, internalTransferManual: null, internalTransferPairId: null },
+      { id: "t3", accountId: "acc-2", amountCents: BigInt(500), date: new Date(), isInternalTransfer: true, internalTransferManual: null, internalTransferPairId: "t1" },
     ]);
     detectPairingsMock.mockReturnValue([{ creditId: "t2", debitId: "t1" }]);
 
@@ -219,7 +265,7 @@ describe("internal-transfer pass", () => {
     // stakeholder's pass matched. Revoking here and re-flagging there would
     // flip the row between them forever.
     queueTransactionQueries([
-      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: "elsewhere" },
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferManual: null, internalTransferPairId: "elsewhere" },
     ]);
 
     await autoCategorizeForUser("user-a", ACCOUNTS);
@@ -232,7 +278,7 @@ describe("internal-transfer pass", () => {
     // backfill: no evidence either way, so it keeps its flag until a person
     // says otherwise rather than being dropped on nothing.
     queueTransactionQueries([
-      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferPairId: null },
+      { id: "t1", accountId: "acc-1", amountCents: BigInt(-500), date: new Date(), isInternalTransfer: true, internalTransferManual: null, internalTransferPairId: null },
     ]);
 
     await autoCategorizeForUser("user-a", ACCOUNTS);
