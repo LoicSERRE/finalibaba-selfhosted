@@ -1,592 +1,127 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current stable release: **v2.9.4**
+Current release: **v2.10.0**
 
-Versions follow [Semantic Versioning](https://semver.org). Minor versions (1.x) are additive and backwards-compatible. v2.0 is a breaking architectural change (multi-user).
+[SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
-Before starting a new version's work (or right before tagging one), run the release-boundary health audit in `CLAUDE.md` - layering, complexity hotspots, real test-coverage gaps, recurring-bug patterns, doc drift, dependency health, and open security alerts. v1.13 is the first version planned with this as a standing step, not a one-off.
+**What goes where.** This file is the *what* and *when*, one line per item. The *why* - the reasoning, the measurements, the traps worth not falling into twice - lives in `CLAUDE.md`, next to the code it constrains. Anything finer than that is in `git log`.
 
----
-
-## v1.1.0 - Released ✓
-
-- [X] **English & French UI** - `next-intl` integration, language auto-detected from browser (`Accept-Language`), manual switcher in Settings. No URL prefix per locale.
-- [X] **User-configurable tax rates** - PEA, CTO, and Crypto rates editable in Settings.
-- [X] **Mobile UX improvements** - WCAG-compliant touch targets (44×44px), responsive header layouts, icon-only buttons on narrow viewports.
-- [X] **Auto-sync on app open** - sync triggered automatically when opening the app (all sources: LCL, Trade Republic, Woob institutions). Badge shown during sync.
+Before tagging a `vX.Y`, run the release-boundary health audit in `CLAUDE.md`.
 
 ---
 
-## v1.2 - Data import & resilience - Released ✓
+## Next
 
-*The most-requested gap vs alternatives: getting data in without auto-sync, and keeping it safe.*
+Demand-driven, not scheduled. Each needs a real user asking, or a materially bigger integration than anything shipped so far.
 
-- [X] **CSV import** - bulk import of transactions for accounts not covered by auto-sync
-- [X] **Historical net worth import** - import past balance snapshots (CSV/spreadsheet) to backfill the historical chart for users migrating from Excel or Finary
-- [X] **Backup & restore** - one-command database export and full restore; critical for self-hosters before upgrades
-
----
-
-## v1.3 - Budgeting & cash-flow - Released ✓
-
-*The main gap vs Firefly III: spending visibility and forward projection.*
-
-- [X] **Transaction categories & budgets** - categorize transactions (food, transport, housing…), set monthly budget envelopes per category, track spending vs budget
-- [X] **Recurring transactions** - flag subscriptions and regular income; project future cash flow and detect missed payments
+- **Interactive Brokers** - no Woob module exists; would need a direct integration.
+- **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
+- **Plaid** - US/Canada coverage, where this app has no users yet.
+- **Split `lib/domain/analytics.ts`** (1148 lines) - flagged by four audits running.
+- **Variable-amount recurring detection, second pass** - v2.10 finds a consistent series inside a noisy label; a merchant with *two* subscriptions still only yields one.
 
 ---
 
-## v1.4 - Advanced analytics & international fiscal support - Released ✓
+## v2.10.0 - The audit's own findings, patched
 
-*Power features for investors, and making the tax layer work correctly regardless of where you live.*
+The end-of-version audit found twenty-five defects. v2.9.2-v2.9.4 fixed the ones losing data; this closes the rest. Verified against a copy of a real database throughout - three decisions below were made one way by reasoning and reversed by measurement.
 
-- [x] **Benchmark comparison** - overlay portfolio CAGR against a reference index (MSCI World, S&P 500, CAC 40)
-- [x] **Portfolio rebalancing** - define a target allocation per account, show current drift, suggest trades to rebalance
-- [X] **Interest & dividend income tracking** - record interest earned on savings accounts (taxable or exempt) and dividends received on investment accounts as discrete income events, separate from balance snapshots; display as income in analytics
-- [X] **Flexible account tax treatment** - each investment account gets a user-defined tax status (tax-exempt like PEA/ISA/Roth IRA, tax-deferred like PER/401k, or fully taxable); latent tax calculation uses the account's own status instead of a global type - makes the app correct for non-French users who have no PEA equivalent
-- [x] **Annual tax report** - yearly fiscal summary: realised gains, dividend income, taxable events; designed to be country-agnostic (exportable data) with a French IFU-ready view as a first implementation
-- [x] **Multi-currency** - hold positions in USD, GBP, CHF and display everything converted to the reference currency (EUR)
+**Budgets and transfers**
 
----
+- Buying shares was counted as spending; 438 rows reclassified, September's "reste à vivre" went from -252,76 EUR to +126,31.
+- Un-marking a transfer by hand did not survive the next sync. Three-state model (`internalTransferManual`).
+- A wrong pairing was permanent. The pass re-derives its own pairings, and `internalTransferPairId` is what makes revoking one safe.
+- The matcher lost legs: rewritten as an augmenting-path matching. On real data, 32 legs newly flagged, 35 re-paired, 1 revoked.
+- A card payment no longer competes to be one leg of a transfer (`Transaction.sourceEventType`, the bank's own word for the movement). Not backfillable - applies to transactions synced from here on.
+- Internal transfers stopped being offered as recurring subscriptions, and the bulk "mark as income" stopped recording them as dividends.
+- `scripts/flag-internal-transfers.sh` - bulk-marks the transfers no matcher can find, because one leg predates the account's history. 54 rows, ~24 285 EUR on a real instance.
 
-## v1.5 - Security & sharing - Released ✓
+**The same figure on every screen**
 
-*Hardening the built-in auth and enabling controlled access for advisors or family.*
+- Three screens disagreed about what net worth is; it is after latent tax everywhere now, and the projection draws both curves.
+- The net-worth history subtracted the original loan capital for every past day instead of amortising it.
+- The projection never deducted the latent tax already owed on day one.
+- The passive-income card linked out of someone else's portfolio into your own pages.
 
-- [X] **2FA (TOTP)** - two-factor authentication for the built-in credentials provider (`AUTH_ENABLED=true`)
-- [X] **Read-only share link** - generate a token-protected view-only URL to share the dashboard with an advisor or spouse without giving write access
-- [X] **Alerts & webhooks** - notify via ntfy or email when net worth crosses a threshold, a loan is nearly paid off, or a sync fails
+**Imports and manual entries**
 
----
+- `1,234` imported as 1,23 EUR - the comma was only ever read as a decimal separator.
+- An invalid date rolled forward silently: the 30th of February landed on 2 March.
+- A manual entry on an account with no starting balance derived one from zero and showed it as fact.
+- The balance importer trusted the browser for its date checks, and appended where it should have replaced.
 
-## v1.6 - Custom alert rules - Released ✓
+**Positions, alerts, sync**
 
-*Extends v1.5's alerts with user-defined conditions on top of the 3 fixed triggers, which stay non-editable in content.*
+- Clearing a foreign-currency position's cost basis put the two halves of one figure on different rates, unreconcilable.
+- "New transaction" alerts skipped every row past the cap, permanently - one sync batch shares one timestamp.
+- The Woob sync truncated cents where the Trade Republic sync documents rounding; 500 shares at 134,5678 EUR recorded 67 280 instead of 67 283,90.
+- A securities account that stops reporting keeps its positions and now records when it was last confirmed.
 
-- [X] **Custom alert rules** - six rule kinds: account balance threshold, account overdraft, investment/crypto account value threshold, a specific holding's price threshold, unrealized gain (percentage or amount, one account or the whole portfolio), and per-category budget overruns (re-arms every calendar month); each rule supports an optional custom message, configurable in Settings
+**Savings estimates**
 
----
+- One rate for all 24 fortnights, for a rate that moves mid-year. `AccountInterestRate` records what an account paid *until* a date: 486,35 EUR on a real portfolio, against 503,45 at a flat 1.7% and 476,98 at a flat 1.5%.
+- The suggested regulated rates were six weeks stale, and the generic-livret fallback was a second copy of the same literal.
+- The rate field never said it wanted a net figure.
+- A fresh install was offered the old 17.2%: the migration that moved the rate changed the data and never the column default. CI now replays the chain into an empty database.
 
-## v1.7 - Automatic transaction categorization - Released ✓
+**Recurring**
 
-*The main remaining friction in budgeting: manually picking a category for every transaction.*
+- A merchant can be a subscription and a shop at once, and detection only saw the average. A label that fails as a whole is re-examined for a consistent series inside it - finds a 6,99 EUR monthly Amazon charge, and a salary whose bonuses defeated the amount test.
+- Savings-plan executions left the suggestion list (reversed on measurement: 11 of 26 suggestions were Sparplan lines).
 
-- [X] **Self-learning categorization** - learns a per-account `label -> category` mapping from the user's own categorization history, and applies it automatically to future transactions with the same label (min. 2 prior occurrences, 70% category consistency)
-- [X] **Merchant Category Code (MCC) matching** - for GoCardless-synced accounts whose bank populates the PSD2 `merchantCategoryCode` field, maps the card network's own merchant classification to a default category
-- [X] **Curated merchant dictionary** - ~180 well-known French/international brand patterns (supermarkets, restaurants, transport, streaming, telecom, gyms, insurance, shopping, leisure) mapped to 7 broad default categories, grouped by payment nature (e.g. gym memberships and streaming subscriptions both fall under "Abonnements") rather than by life domain
-- [X] **GoCardless transaction sync** - `Transaction` rows (not just balances) are now synced from GoCardless-linked accounts, feeding both budgets and the MCC signal above
-- [X] **"Auto-catégoriser" button** on `/budgets` for an on-demand backfill, plus automatic runs after every CSV import, GoCardless sync, and scheduled sync cycle
+**Tooling**
 
----
-
-## v1.8 - "Mark as income" & categorization fixes - Released ✓
-
-*Closes the gap between "a real dividend/interest transaction exists" and "it's recorded for the tax report" - and fixes two real production issues found using v1.7's automatic categorization.*
-
-- [X] **Mark as income** - create an `IncomeEvent` directly from a real transaction row (amount/date pre-filled, linked back to it) instead of retyping everything by hand on `/income`; offers to apply to every other not-yet-recorded transaction with the same label in one click
-- [X] **Dividend income allowed on checking accounts** - Trade Republic's combined cash account can legitimately receive a dividend payout, not just a dedicated investment account
-- [X] **Fix: recurring-label categorization now ignores an embedded year** - "INTERETS 2025"/"INTERETS 26" (a once-a-year Livret interest credit) are recognized as the same label regardless of 2 vs 4-digit year formatting
-- [X] **Fix: Trade Republic "Sparplan" (recurring investment purchase) false positive** - was being mis-categorized as a supermarket purchase (v1.7.1)
-
----
-
-## v1.9 - Internal transfer detection & clearer alerts - Released ✓
-
-*Fixes two more real production issues: a bank's generic transfer label mis-categorizing internal transfers as income, and unreadable sync-failure push notifications.*
-
-- [X] **Internal transfer detection** - a transaction is now recognized as money moving between two of your own accounts by matching amount/date pairs across accounts, independent of the bank's label text; detected transfers are excluded from automatic categorization (never land in "Revenus" or any other category on their own) and from the budgets page's uncategorized-spend nagging - still categorizable by hand if you want to track them
-- [X] **Fix: generic transfer labels no longer drive bulk categorization** - a bank's catch-all wording ("VIREMENT SEPA") is reused for both real internal transfers and real external payments with no way to tell them apart from text alone; self-learning and "apply to similar"/"mark similar as income" no longer treat this as a trustworthy group
-- [X] **Clearer sync-failure notifications** - replaced a raw internal source id ("woob:cmqpvbok4...") with the actual institution name, and the sync script's own CLI-oriented error text ("lance --setup") with a plain, translated sentence
+- `scripts/check-balance-reconciliation.sh` - stored transactions against the bank's own reported balance.
+- `scripts/fix-restated-label-duplicates.sh` corrected twice, both found by running it rather than reading it.
 
 ---
 
-## v1.10 - Explicit income/expense categories - Released ✓
+## v2.9.x - Data the sync was losing
 
-*Fixes a UX complaint found using v1.9's income tracking: an income category ("Revenus") permanently read as €0 spent on `/budgets`, since that page only ever summed debits.*
+- **v2.9.4** - one movement described twice is not two movements: a restated LCL label stored as a second row, and Trade Republic emitting both a `Kauforder` and a `PEA` event for one purchase. Settled against the bank's own balance (-325,41 EUR real vs -3 470,52 stored). Plus `scripts/fix-restated-label-duplicates.sh`.
+- **v2.9.3** - v2.9.2 prevented new collisions and could not undo the old ones; the recovery lookup was label-blind, so a survivor answered for its lost twin.
+- **v2.9.2** - two transactions with the same date and amount became one; the ±3-day near-duplicate window ignored the label; each Settings card erased the other's data; the interest chart contradicted the figure above it.
+- **v2.9.1** - the projection's "épargne" rate ignored the weighted savings rate v2.9.0 had just added.
+- **v2.9.0** - a manual override for internal-transfer detection; the year-end interest estimate was understating real accounts; its own card and a chart of how it moved through the year.
 
-- [X] **Category type (Dépense/Revenu)**, chosen explicitly at creation - `/budgets` now only ever lists expense categories (a "budget" cap has no meaning for income); income categories (salary, or anything else pointed at real income) get their own section on `/income` instead, with a real year-to-date total
-- [X] **"Reste à vivre"** summary on `/budgets` - total income minus total spending for the current month, internal transfers excluded, independent of how completely things are categorized
-- [X] Considered and rejected: auto-detecting a category's type from that month's transactions (income vs expense framing would silently flip month to month) - an explicit, stable choice is the correct UX, not an inferred one
+## v2.8.0 - Real savings estimates, and why the numbers kept reverting
 
----
+Every rebuild invalidated open tabs' ability to save (`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`), plus the same stale-value shape at three more layers. Balance-weighted livret rate, full-year projection by the *méthode des quinzaines*, `Account.dividendsAlreadyNet`, and period navigation on `/budgets` and `/income`.
 
-## v1.10.1 - Categorization & export fixes - Released ✓
+## v2.4-v2.7 - Banks a human can actually connect
 
-*Two real issues found while validating v1.10.0 against production data.*
+- **v2.7 / v2.7.1** - a captcha bank could connect and import nothing (four stacked defects); holdings read from the bank rather than just a balance; every login failure classified once (`sync/woob_errors.py`); `scripts/audit-bank-modules.py` with a monthly CI job. v2.7.1: the settings page showed yesterday's numbers, the French social-levies rate moved to 18.6%, and an LCL 502 no longer fails a whole sync.
+- **v2.6 / v2.6.1** - a phone approval after the captcha was fatal; manual entries on an account nobody else writes to; `assertManualAccountEligible`.
+- **v2.5 / v2.5.1** - a captcha is solved by the person, in Settings, rather than the bank being told to give up.
+- **v2.4.x** - real-time tracking had never processed a single push (two independent causes, four releases apart); banks that cannot be synced say so; a share link showed the app-lock screen to a stranger; the fiscal model stops assuming France (`UserSettings.country`, `Account.interestRatePct`); `/settings` regrouped by subject; a dismissed recurring suggestion stopped adding a row to the list.
 
-- [X] **Fix: internal-transfer matching now assigns pairs by global date-priority** instead of one credit at a time in arbitrary order - fixes a real case where an unrelated same-amount transaction could permanently claim the debit that was the true same-day match for a different transfer
-- [X] **Fix: tax report export now shows 2 decimals per line** (dividends, interest, sale proceeds/gain/tax), matching what the page itself already shows - the export was rounding every line to the nearest euro, so a real 0,46€ dividend displayed as "0 €" in the downloaded file
+## v2.0-v2.3 - Multi-user
 
----
-
-## v1.10.2 - Accessibility & responsive-layout fixes - Released ✓
-
-*Full visual pass over every page in desktop and mobile, verified with real screenshots rather than assumption - not one specific bug report this time, a systematic audit.*
-
-- [X] **Fix: every navigation link now has a visible keyboard-focus ring** - only buttons and inputs had one before
-- [X] **Fix: bank transaction/instrument labels no longer get silently cut off** on mobile with no way to read the full text - affected 11 different lists across the app
-- [X] **Fix: table headers no longer wrap onto 2-3 lines** on narrow columns, across every table in the app
-- [X] **Fix: unified page width** - three different content widths across pages produced a visible jump navigating between them
-- [X] **Fix: consistent action-button styling** - pause/edit/delete buttons no longer mix icon-only and icon+text style in the same row, in 5 places
-- [X] **Fix: the transactions table no longer overflows the viewport** on desktop because of a long button label
-- [X] **Polish: simplified the dialog open/close animation** - fade + scale only, no more diagonal wobble from combining a scale and a slide
+- **v2.3** - real-time for every connection, not just the env one; a feature broken by a migration it did not participate in.
+- **v2.1 / v2.1.1** - per-user bank connections (`Institution.trPhone`/`trPin`), and `adoptDedicatedTrAccounts` to move off `TR_PHONE` without losing history.
+- **v2.0** - multi-user: one always-present owner, `baseAccountIds` vs `viewAccountIds`, co-ownership and portfolio grants, followed by a dedicated security audit.
 
 ---
 
-## v1.11.0 - Connect any Woob bank without a terminal - Released ✓
-
-*Adding a bank via Settings → "Configurer Woob" that needed a 2FA confirmation on first connect used to be a dead end - the app pointed at a `--setup` command that didn't actually exist. LCL and Trade Republic already had a full in-browser setup flow for their own hardcoded integration; this generalizes the same flow to any of the hundreds of banks Woob supports.*
-
-- [X] **Interactive 2FA setup for any Woob-configured bank** - the app now detects, per bank, whether it needs to wait for an app approval or a typed code (SMS/email/app-generated), and shows the right prompt directly in Settings instead of a broken CLI instruction
-- [X] **Fix: banks needing a typed code (not just app approval) are now recognized at all** - previously fell straight into a generic, unhelpful error
-
----
-
-## v1.11.1 - Full Woob catalog, searchable bank picker & institution-deletion fix - Released ✓
-
-*Real-world testing of v1.11.0's new bank-connection flow surfaced a cluster of related gaps in the same area - fixed together rather than one release each.*
-
-- [X] **Full Woob bank catalog everywhere** - "Ajouter une institution" carried its own separate hardcoded 17-bank list that never got wired to the live ~96-bank catalog `GET /woob/modules` already exposed for "Configurer Woob" - fixed so both bank pickers show the full catalog
-- [X] **Searchable bank picker** - replaced the native `<select>` (which rendered as a browser dropdown covering nearly the whole screen with ~96 entries) with a compact, accent-insensitive search-as-you-type picker
-- [X] **Fix: deleting a bank connection now actually deletes its accounts** - the confirmation dialog always promised this, but the underlying database relation silently detached accounts instead of removing them, leaving orphaned balances/transactions still counted in net worth with no way to manage them from Settings
-- [X] **Fix: Woob sync controls no longer disappear for a bank named "LCL"/"Trade Republic"** - the dedicated `.env`-configured LCL/Trade Republic integrations and a user's own Woob-configured connection of the same name were being conflated, hiding the sync button, status, and config dialog entirely for the latter
-- [X] **Fix: the dedicated auto-sync section only shows when actually configured** - it used to always display "Never synced" for LCL/Trade Republic even on installs with no `.env` credentials for either
-
----
-
-## v1.11.2 - Warn before double-configuring a dedicated sync via Woob - Released ✓
-
-*Real production incident found right after v1.11.1 shipped: configuring Woob credentials on an institution that also has an active `.env`-dedicated sync (LCL/Trade Republic) silently created a full second set of duplicated accounts.*
-
-- [X] **Warn before configuring Woob on a dedicated `.env`-synced bank** - `sync_lcl.py`/`sync_tr.py` and `sync_woob.py` write different `syncId` formats for what can be the exact same real account, so neither sync path recognizes the other's rows as already-known. "Ajouter une institution" and "Configurer Woob" now show a warning banner (not a hard block - a deliberate, supervised migration off `.env` to Woob is legitimate) whenever the bank being configured matches an institution with an active `LCL_LOGIN`/`TR_PHONE` integration
-
----
-
-## v1.11.3 - One-click cleanup for duplicate dedicated-sync accounts - Released ✓
-
-*v1.11.2's warning banner only prevented new duplication going forward - it did nothing for a bank that had already been double-configured, which is exactly what happened in production on a real "LCL" institution running both the dedicated `.env` sync and a Woob config at once.*
-
-- [X] **"Migrer maintenant" - one-click cleanup for duplicate `.env`-synced accounts** - once a Woob sync has produced its own `woob:<id>:`-prefixed accounts for a bank that also has legacy `lcl:`/`tr:`-prefixed accounts from the dedicated `.env` sync, "Configurer Woob" now offers to delete the old duplicates (full history cascades automatically) after showing both account counts side by side for confirmation. Deliberately available even after the `.env` credentials have already been removed - the whole point of removing them is to stop the duplication, so gating the cleanup tool behind them still being set would hide it exactly when it's needed most
-
----
-
-## v1.12 - Integrations & platform - Released ✓
-
-*Broader bank coverage, automation hooks, and better mobile experience.*
-
-- [X] **More broker integrations via Woob - Degiro, Boursorama, Binance, Kraken** - already reachable today through the generic "Configurer Woob" flow shipped in v1.11.0-v1.11.3, no new code needed. Confirmed against Woob's own live module repository (not guessed): all four carry `CapBank` in their capabilities, same as any of the ~96 banks already listed in the picker
-- [X] **Public REST API** - read-only, versioned under `/api/v1/` (`net-worth`, `net-worth/history`, `accounts`, `transactions`), authenticated via individually-revocable API keys (Settings → API) rather than the app password or a NextAuth session. Deliberately stops at these four endpoints for now, not a full data export - weighed directly against "profitable to the greatest number": the stated use cases (a Home Assistant sensor, a dashboard widget) are glanceable-summary consumers where budgets/holdings/analytics detail adds little real value but meaningfully raises the blast radius of a leaked key. See `CLAUDE.md`'s "Public REST API" for the full reasoning - more endpoints are additive on the same pattern if real usage asks for them
-- [X] **PWA / installable, offline-capable** - proper 512×512 manifest icons (`any` + a correctly safe-zoned `maskable` variant - the previous manifest reused the same unpadded icon for both, which Android's mask would crop), plus a service worker for offline page viewing when `AUTH_ENABLED` isn't `"true"` (never falls back to a stale cached page when auth is on, to avoid bypassing a session that expired or was revoked server-side - see `CLAUDE.md`'s "PWA / offline support"). "Swipe-friendly views" from this item's original wording was dropped - no concrete gap was found, and the rest of the mobile-responsiveness work (touch targets, scrollable tables, the searchable bank picker) was already shipped incrementally in earlier releases
-- [X] **Light theme** - opt-in only (Settings → Apparence), same cookie-based pattern as the language switcher - dark stays the default regardless of OS preference, never auto-switches from `prefers-color-scheme`. Every light-mode color pairing verified against the real WCAG contrast formula, not eyeballed - see `CLAUDE.md`'s "Light theme". Also caught and fixed a real gap this surfaced in `proxy.ts`'s auth matcher: several PWA-generated routes (icons, manifest, service worker) had no exclusion and would have been silently redirected to `/login` on an `AUTH_ENABLED=true` instance
-- [X] **Richer read-only share view** - `/shared/<token>` now optionally shows holdings and the last 20 transactions, opt-in per link (`includeHoldings`/`includeTransactions`, both default off) since this link may be reachable from the public internet - see `CLAUDE.md`'s "Read-only share links"
-
-*Three items from this version's original scope were deliberately dropped rather than shipped - each needs either real community demand or a materially bigger integration than the rest of this version, so they were moved to the Backlog section below instead of blocking v1.12 as "released": **Interactive Brokers**, **GoCardless webhooks**, **Plaid integration**.*
-
----
-
-## v1.13 - Transaction visibility & budget depth - Released ✓
-
-*A full feature-parity audit against Finary, Firefly III, Actual Budget, Monarch, and Kubera found the categorization/alerting layers already ahead of most of these - but two basics that nearly every one of them has were still missing entirely. Fixing the foundation before building further on top of it.*
-
-- [X] **Global transaction ledger** (`/transactions`) - search and filter every transaction across every account by label, date range, amount, and category, instead of only per-account or via the `/budgets/[categoryId]` drill-down as today. No schema change - reads the existing `Transaction` table with the same `isInternalTransfer` exclusion and category filters already used elsewhere. The amount filter is a magnitude range (`|amountCents|` between min/max in euros, both optional) rather than a signed one - a user filtering "at least 50€" means either a big debit or a big credit, matching how every other magnitude-based threshold in this app already works (`AlertRule.balanceThresholdCents`, the uncategorized-groups sort). Not linked from the sidebar/mobile nav - same "off nav, linked contextually" precedent as `/tax-report` (see "Public REST API" above), reached instead via the new "View all transactions" link on each account's own transactions table
-- [X] **Split transactions** - a single transaction across multiple categories (e.g. one supermarket trip: groceries + household goods), each split summing to the transaction's total (`TransactionSplit`, `lib/domain/transaction-splits.ts`'s `validateSplitLines`). `Transaction.categoryId` goes `null` once split - the breakdown lives entirely in `TransactionSplit` rows instead - so a real correctness fix had to go alongside this everywhere the app treats `categoryId: null` as "genuinely uncategorized": self-learning/MCC/dictionary auto-categorization now also requires `splits: { none: {} } }`, or a split transaction's manual categorization would have been silently overwritten the next sync cycle (confirmed live - a split survived an "Auto-catégoriser" run). `/budgets`, its `[categoryId]` drill-down, budget rollover, the `BUDGET_OVERRUN` custom alert, and `/income`'s "Autres revenus" totals all now also sum each category's `TransactionSplit` contribution alongside its plain-transaction one (`lib/domain/budgets.ts`'s `mergeCentsMaps`) - verified end-to-end against real numbers in a dev database, not just reasoned through. Also fixed a real pre-existing gap found while touching `BUDGET_OVERRUN`: it never filtered `isInternalTransfer: false` at all, unlike `/budgets`' own figure for the same category. See `CLAUDE.md`'s "Split transactions" for the full design
-- [X] **Budget rollover** (opt-in per category) - unused envelope carries into next month instead of resetting to zero, matching YNAB's "give every dollar a job" model. Off by default (`Category.budgetRolloverEnabled`) so every existing budget keeps today's behavior. Only a positive leftover compounds forward, floored at 0 each month - a deliberately simpler, safer variant than YNAB's own model (which carries a negative balance forward as visible debt): an overspent month never creates a deficit the next month has to pay down first, matching the roadmap wording's own "instead of resetting to zero" framing, which only ever talks about surplus. `Category.budgetRolloverEnabledAt` anchors the walk-forward computation to when rollover was actually turned on (re-enabling after a pause starts a fresh carry, doesn't resurrect a stale one) and is left untouched on an already-on re-save, so editing an unrelated field (e.g. the budget amount) never resets an accumulated carry back to zero - confirmed live, not just reasoned through, in manual testing. See `CLAUDE.md`'s "Budget rollover" for the full math and why it's computed live from `Transaction` history rather than a maintained running balance
-
----
-
-## v1.14 - Goals & long-term projection - Released ✓
-
-*Turns "where did my money go" into "am I actually on track" - reuses the CAGR/savings-rate/runway math Analytics already computes, rather than building a new calculation engine from scratch.*
-
-- [X] **Multiple named savings goals** - replaces `UserSettings.savingsGoalCents`'s single global figure with a `Goal` model (name, target amount, optional target date, optional linked account), so "down payment: 40k/80k" and "emergency fund: 8k/10k" can be tracked independently, each with its own progress bar. Migration backfills the existing global goal as the first row so nothing already in use is lost. `accountId: null` tracks total net worth (the old single goal's exact math); `accountId: <id>` tracks that one account's own current value instead, reusing `lib/domain/analytics.ts`'s existing per-account `assetRows` - verified live end-to-end (migration backfill exact-cents match, create/edit/delete, an account-linked goal's progress matching that account's real balance, and cascade-delete when the linked account is removed). See `CLAUDE.md`'s "Savings goals" for the full design
-- [X] **Long-term net worth projection** - a compound-growth chart from current net worth, savings rate, and an assumed return, answering "at this pace, where am I in 10/20/30 years" - the one analytics gap against Finary's own "Vision" feature, the product this README already positions against directly. The assumed return is a live, client-side input (not a persisted setting) pre-filled from the portfolio's own real CAGR when available - a "what-if" exploration tool, recomputed instantly with no network round-trip. No schema change needed - every input (`netWorth`, `hasDeclaredSavings`, `monthlySavedCents`, `investCAGR`) already existed on `AnalyticsResult`. See `CLAUDE.md`'s "Long-term net worth projection" for the full design
-
----
-
-## v1.15 - Mobile depth & a full UI/UX pass - Released ✓
-
-*Closes the mobile gap without a native rewrite - stays inside the existing PWA architecture - then a systematic design audit now that the feature surface has grown well past the last one (v1.10.2), covering both older pages and the new transaction ledger/split UI/goals screens from v1.13-v1.14.*
-
-- [X] **App-lock (WebAuthn biometric/PIN)** for the installed PWA - independent of `AUTH_ENABLED`, a fast local unlock layer for a device that's already trusted, matching what Finary/Monarch/Copilot's native apps offer without needing a native rewrite
-- [X] **Web Push notifications** alongside ntfy - broader device support (iOS 16.4+, Android, desktop) without depending on a third-party push relay; existing ntfy/email configs keep working unchanged
-- [X] **Full UI/UX audit** - a systematic pass in the same spirit as v1.10.2's (verified against real screenshots, not assumed), but broader in scope this time: visual hierarchy, empty states, loading states, and spacing consistency across every page, old and new. Screenshotted all 13 pages at 375px/1280px. Visual hierarchy, spacing, and empty-state coverage were already clean - `EmptyState` is used everywhere a real user-managed list needs one, and the sections that `return null` on empty (financing/dividend-calendar/top-assets/rebalancing/etc.) are correctly "not applicable" insights, not stubs. Two real gaps found and fixed: `/transactions` had no `loading.tsx` (was inheriting the dashboard-shaped root skeleton on a slow load - now has its own matching its real filter-bar/table/pagination layout), and its `max-w-5xl` (vs. every other page's `max-w-4xl`) was undocumented drift - confirmed deliberate and correct (it's the one page with a real 5-column table behind a 5-field filter bar) and now has a comment explaining why. A third candidate finding (`balance-history-table.tsx` silently dropping its CSV-import buttons when a fiat account's balance history is empty) turned out to be a false positive on cross-file check - `app/accounts/[id]/page.tsx` already renders a sibling `EmptyState` with its own copies of those buttons for exactly that case - left alone, just documented in a comment so a future read doesn't repeat the same mistaken conclusion
-- [X] **"Auto" theme option, following the device's OS theme live** - a 3rd choice alongside today's Sombre/Clair, so the app follows the phone's own scheduled light/dark switch (e.g. light during the day, dark in the evening) without the user manually flipping it. Confirmed feasible and scoped by reading the current theme system, not assumed: today's `THEME` cookie + `data-theme="light"` override (`app/globals.css`, `app/layout.tsx`, `lib/actions/theme.ts`) is deliberately opt-in-only (see `CLAUDE.md`'s "Light theme" - dark never auto-switches from `prefers-color-scheme` today, by design, so an *existing* user never gets silently switched). Adding "Auto" as an explicit 3rd user choice doesn't contradict that decision, it's additive to it. The live-follow behavior (reacting to the OS changing theme while the tab is already open, this feature's actual point) is handled by the CSS `prefers-color-scheme` media query itself with zero JS - browsers re-evaluate it automatically the instant the OS setting changes, and it also has zero flash-of-wrong-theme on initial paint since it's resolved at CSS-parse time, before any JS runs. Needs: (1) a real `@media (prefers-color-scheme: light) { :root:not([data-theme]) {...} }` rule added to `globals.css` for the auto case, (2) a **new** `:root[data-theme="dark"]` explicit override (doesn't exist today - dark has only ever been the bare unconditional default, never something a user could force via attribute) so an explicit "Sombre" choice can still override a light-preferring OS once the media query exists, (3) `app/layout.tsx` rendering no `data-theme` attribute at all when `THEME=auto` (letting the media query win) instead of today's binary light/dark resolution, and (4) `generateViewport()`'s `colorScheme` becoming `"light dark"` (not a fixed value) in auto mode so native browser chrome (scrollbars, form controls) follows live too, not just the app's own tokens
-- [X] **Clarify the "Répartition des actifs" cash-vs-savings split** - real user report, confirmed not a bug by reading `lib/domain/dashboard.ts` directly: the dashboard's allocation pie chart splits fiat balances into "Liquidités" (`CHECKING`/`MEAL_VOUCHER` accounts) and "Épargne" (`SAVINGS` accounts) rather than one combined slice - the exact same "a checking account earns 0%, unlike a livret" distinction `projection-chart.tsx` already makes explicit with its own `InfoTooltip`, but the dashboard chart never explains it, so a user with both account types has no way to tell why their money shows as two slices instead of one. Fix is small: add the same `InfoTooltip` pattern to this chart's section header
-
----
-
-## v1.16 - Depth on existing strengths - Released ✓
-
-*Levels up features already shipped and working rather than leaving them stalled at "good enough" once something more urgent came along - portfolio rebalancing, recurring detection, multi-currency, and the dashboard's allocation view each get one concrete, scoped next step.*
-
-- [X] **Rebalancing drift alerts** - a 7th `AlertRule` kind ("this holding/account has drifted more than X points from its target"), reusing the existing 6-kind alert engine, instead of the rebalancing section only being visible on-demand on the account detail page
-- [X] **Multi-interval recurring detection** - recognizes "every 2 months"/"every 3 months" cadences during auto-detection, not just `intervalCount = 1` as today (manual editing already supports any interval - only the detection heuristic itself is limited)
-- [X] **On-demand multi-currency revaluation** - re-fetch the FX rate and price for a foreign-currency holding on request, on top of the existing snapshot-at-entry model, without needing to re-enter the native price by hand to trigger a refresh
-- [X] **Historical asset-allocation chart** - extends the dashboard's current-moment allocation breakdown (liquidités/épargne/investissements…) into a stacked-area view over time, built from the same per-account `HistoricalBalance` rows already recorded - no new data collection needed
-- [X] **Trade-Republic-style historical value chart per investment account** - a different, narrower ask than the dashboard-wide chart above: a smooth value-over-time line on the account-detail page for a single `INVESTMENT`/`CRYPTO` account, matching what Trade Republic's own app shows for a position. Real gap confirmed by reading the code: unlike fiat accounts (`HistoricalBalance` recorded daily), investment/crypto `HistoricalBalance` rows are event-driven - only written when a holding actually changes (see `CLAUDE.md`'s "Benchmark comparison" section) - so there's no daily series to chart today. Scoped before building: a synthetic daily series was rejected (no general ISIN→Yahoo-symbol resolver exists, only a 6-entry hand-verified map, and it would silently misrepresent any account traded since the charted start) in favor of the honest, accurate event-driven line with a clear "not enough data yet" state when sparse - see `CLAUDE.md`'s "Historical value chart per investment account" for the full scoping writeup
-- [X] **Full sector-exposure breakdown** - generalizes Analytics' current Tech-only exposure card (`allocation-radar-section.tsx`'s `TECH_WEIGHTS`) into a per-sector view (financials, healthcare, energy, industrials, etc.) across every holding, not just one hardcoded sector. Scoped live before building: OpenFIGI (wrong data granularity) and iShares' own site (rebuilt, single-issuer-only) were checked and rejected; Yahoo Finance's free ISIN search + crumb-gated `topHoldings` covers it, with two optional fallback providers (FMP, Alpha Vantage) for resilience against the crumb mechanism breaking, plus a degradation alert reusing the existing sync-failure machinery. See `CLAUDE.md`'s "Full sector-exposure breakdown" for the full scoping writeup
-
----
-
-## v1.17 - Sync freshness - Released ✓
-
-*Scoped live during the v1.16.1 retrospective, not assumed - checked pytr's actual API, GoCardless's actual docs, and Powens' actual sync cadence before committing to anything here. The headline finding: true instant "just spent 5€" notifications only turn out to be achievable for Trade Republic, because its own API is genuinely push-capable (a persistent websocket, not batch polling) - LCL and every other Woob-scraped or GoCardless-synced bank has no equivalent mechanism to tap into, PSD2 aggregation being fundamentally batch/rate-limited on the bank's own side, not something this app's own engineering effort can route around. Scope here is set accordingly: real for Trade Republic, honestly partial for everything else.*
-
-- [X] **Trade Republic real-time tracking** - not a push notification (Trade Republic's own app already sends one per purchase, a second notification from Finalibaba would be redundant) but keeping Finalibaba's *own* data current without waiting for the next 4h cron tick, so opening the dashboard/account page always shows what actually happened, not what happened as of the last sync. Confirmed live during scoping: the real Trade Republic API is websocket-based (`tr.subscribe(topic)` / `tr.recv()`, one initial response then a push on every change) - `sync_tr.py` today only ever uses this in a poll-once-and-disconnect fashion. Needs a new long-lived listener process (separate from the existing APScheduler cron, which stays as the fallback/catch-up path) that stays subscribed and upserts into the DB the moment an update arrives. **Also evaluate migrating off `pytr`'s Playwright-based WAF bypass while touching this module** - found during scoping that it's reportedly getting rate-limited by Trade Republic more often as of mid-2026, and a community successor (`tr-api`, proper ECDSA device-pairing auth, no browser automation) already exists - worth checking before building new functionality on top of a degrading approach.
-- [X] **Reduced sync interval for Woob-synced banks** - shortened LCL/other Woob-scraped institutions' polling cadence from the 4h cron to **30 minutes** (picked directly with the user, weighing 15/30/60 min - a real, disclosed tradeoff, not a free win: more frequent scraping raises the risk of a bank's own anti-automation detection flagging the account), the realistic freshness ceiling for these sources given Woob has no push mechanism at all. Global, not per-institution, for this pass. **Deliberately excludes GoCardless-synced accounts** - GoCardless's own PSD2 rate limit (4-10 requests/day per account per endpoint, confirmed in `CLAUDE.md`'s "GoCardless" section) makes anything faster than the current cadence structurally impossible regardless of what this app does. See `CLAUDE.md`'s "Reduced sync interval for Woob-synced banks" for the full design (`sync/main.py`'s `_run_all()` split into `_run_woob_sources()`/`_run_all()`).
-- [X] **New-transaction-detected alert** - a more honest, scoped-down version of the old "instant payment notifications" idea: notify (reusing the existing `dispatchAlert`/ntfy/email/push infrastructure) whenever any sync run - the new Trade Republic listener above, the shortened Woob poll, or a regular GoCardless cycle - discovers a genuinely new transaction. Freshness follows whatever that source's own sync cadence ends up being (near-instant for Trade Republic, 30 min for Woob, still every several hours for GoCardless) rather than promising uniform real-time across every source. Built as an 8th `AlertRule` kind (`NEW_TRANSACTION`) rather than a global toggle, per the user's explicit "perfectly customizable" ask - per-rule account scope, an optional minimum amount, and a debit/credit/both direction filter, so "notify me on any spending over 50€" and "notify me on any income" can coexist as two separate rules. See `CLAUDE.md`'s "Custom alert rules" for the full design (including why this kind needed its own cursor-based dedup instead of the shared threshold-crossing columns every other kind uses).
-- [X] **Research: Powens as a bank-sync provider** *(carried over from the backlog, scope corrected)* - checked live during this retrospective: Powens syncs on its own schedule (up to ~4x/day by default) and its webhooks fire after that scheduled sync completes, not per real bank-side event - so it does **not** solve the traditional-bank instant-alert goal any better than GoCardless does. Researched specifically for **Trade Republic coverage/reliability** as scoped - **confirmed real** (Trade Republic has been part of Powens' "Wealth" crypto/trading data service since April 2022) and **architecturally compatible** with this project (a fully hosted API, deploy-time credentials, the same shape as GoCardless - no self-hosted infrastructure of their own to run). **Verdict: not worth building against, not for a technical reason** - Powens publishes no pricing and offers no free/self-serve production tier, only a sales-gated custom quote; a free sandbox exists but is for integration testing (a fake "Connecteur de test"), not a path to real production use without a sales conversation. That's a real accessibility barrier this project's other integrations (GoCardless's genuine free tier, Woob/pytr needing no account at all) don't have, and it cuts against the "`docker compose up` and a `.env` filled in under 5 minutes" goal for anyone without an existing commercial Powens relationship. Left here rather than promoted into a real version - revisit only if Powens ever publishes a self-serve tier, or a user with their own paid Powens contract asks for it directly.
-
----
-
-## v2.0 - Multi-user - Released ✓
-
-*Breaking architectural change: all data gains user ownership, requiring a migration. Planned as a dedicated, focused push once the single-user feature set (everything above) is mature and well-tested, rather than interleaved with it - multi-user plus a full security audit belong together, since every new sharing/permission boundary this adds is exactly the kind of surface a security review needs to cover anyway. A native mobile app may fold into this same push too, but only if it turns out to be genuinely worth the build effort relative to the PWA that already exists - not committed as of this writing, needs its own scoping pass first.*
-
-- [X] **Multi-user support** - independent portfolios for multiple users on the same instance; admin-generated single-use invitations; whole-portfolio read-only sharing and per-account co-ownership. See `CLAUDE.md`'s "Multi-user architecture" for the full design and `README.md`'s "Multiple users" for the user-facing story
-- [X] **Security audit** - ran as its own phase after the multi-user build. Three real fixes: `/invite/[token]` was missing from the middleware's auth-exempt list, so **the entire invitation flow was unreachable** on an `AUTH_ENABLED=true` instance; a 64ms timing gap in `resolveUser` was a working username-enumeration oracle; and `/api/gocardless/institutions` forwarded upstream error bodies verbatim to the caller. Full findings - including what was verified sound, and the items deliberately left open with reasons - are in `CLAUDE.md`'s "Security audit (post-v2.0)" section
-- [X] **Native mobile app** *(scoped - recommendation: Capacitor, Play Store only, iOS self-built)*
-
-**Native mobile app - scoping pass.**
-
-*Brief, as set by the maintainer: one language/framework covering both platforms, published to the Play Store if the opportunity comes up, and **Apple deliberately dropped** - iOS users build it themselves from a tutorial.*
-
-**The architectural constraint that decides the framework.** This app exposes **114 Server Action exports across 27 files** and only **4 public REST endpoints**. Server Actions are an RSC-internal RPC - they need the Next.js client runtime, a per-build action id and the `Next-Action` header - so **no native client can call them**. A React Native or Flutter app would therefore need a full authenticated REST API mirroring those 114 functions *before* a single screen was written, plus re-implementing all 14 pages. That is a larger project than the entire multi-user architecture, for a client that would then have to be kept in sync with every future action.
-
-**Recommendation: Capacitor.** It wraps the existing app in a native WebView, so Server Actions, sessions, the service worker and every screen keep working unchanged - the thing being shipped is the app that already exists, not a reimplementation of it. It produces a signed Android App Bundle that Play Store accepts, and it generates a real Xcode project, which is exactly the "build it yourself" path iOS gets. Rejected alternatives: React Native/Flutter (blocked by the REST-API problem above), TWA (smaller output but Android-only and no native plugin surface).
-
-**Apple is correctly dropped, and for a documented reason**: WebView wrappers are routinely rejected under App Store Guideline 4.2 ("minimum functionality"). Capacitor's Xcode project still builds and installs on a personal device, so a tutorial is a real answer rather than a consolation.
-
-**The one piece of genuinely new work**: a self-hosted app has no single URL. One published APK must let each user point at *their own* instance, so the shell needs a first-run "enter your server address" screen persisting the URL before loading it - plus honest handling of the LAN/VPN-only and self-signed-certificate cases this project's own README already documents as normal deployments. Everything past that screen is the existing web app.
-
-**Play Store friction worth knowing before committing** (checked, not assumed): a personal developer account is $25 one-time, but accounts created after 13 November 2023 must run a **closed test with 12 testers opted in for 14 consecutive days** before a production release. Still in force in 2026. That is the real gate on "if I get the chance to publish it", not the build.
-
-**Shipped from this pass regardless of whether the app gets built**: the **Badging API** (`public/sw.js` + `service-worker-registration.tsx`), supported on iOS 16.4+ - the same gate Web Push already requires - and simply unused until now. An alert leaves a dot on the installed app icon, cleared when the app is next opened or resumed. Called with no count deliberately: this app dispatches alerts but stores no read/unread state, so any number would be invented.
-
-*Correction to an earlier draft of this section, kept as a warning.* Several 2026 guides still list "EU: push notifications disabled, standalone mode removed, badges removed" as a live iOS restriction. That was Apple's **announced-then-reversed** plan, withdrawn on 1 March 2024; home-screen web apps work normally in the EU on iOS 17.4+. Taking it at face value would have described this project's own primary audience as running a crippled PWA.
-
-**Retrospective on the multi-user build.** Shipped in four gated lots (identity and migration; per-user isolation; sharing; documentation), each verified against a real two-user database rather than only unit-tested.
-
-The decision everything else rests on: the migration creates a **fixed-id owner row and backfills every existing row to it**, so there is no `userId | null` anywhere and no "is multi-user on?" branch inside any query. Mono mode resolves to that row without a login. That single choice is what makes the mono-mode guarantee provable instead of hopeful, and it makes the day-180 switch (an instance that ran solo for months and only now turns auth on) attach its history to the admin *by construction* - the bootstrap screen only sets credentials on a row that already owns everything.
-
-Three real security holes were found and fixed **while building**, not by the audit that follows:
-
-- `getUserSettingsFor(userId)` was exported from a `"use server"` module and returned the row holding `smtpPassword` and `ntfyAuthToken` in plaintext. Every export of such a module is directly invocable from the browser with attacker-chosen arguments, so this would have handed any authenticated user every other user's alert credentials.
-- `/api/gocardless/connect` had no ownership check at all - anyone with a session could start a bank-consent flow against another user's institution.
-- The read-only share view (`/shared/[token]`) queried balances instance-wide, so a link minted by one user would have exposed everyone's net worth.
-
-The generalizable lesson is the first one: **a userId parameter on a `"use server"` export is an impersonation primitive.** A scripted check for that shape is worth re-running whenever an action file gains a parameter.
-
-Two things were deliberately *not* built, and are scoped out rather than forgotten: fractional ownership of a co-owned account (each co-owner counts the full value in their own view - this is a per-viewer dashboard, not a fiscal filing), and per-account grants to non-co-owners (sharing is whole-portfolio or nothing). Open self-registration is also deliberately absent; revisit after the security audit, not before.
-
----
-
-## v2.1 - Per-user bank connections - Released ✓
-
-*v2.0 gave every user their own portfolio but left the bank credentials behind: `LCL_LOGIN`/`TR_PHONE` live in `.env`, so they belong to the instance owner and nobody else can sync their own accounts. That was a documented, accepted constraint of that release. It is also the first thing real users hit, because inviting family only helps if they can actually connect their own bank.*
-
-- [X] **Per-user Trade Republic** - add a Trade Republic account from Settings, the way Woob institutions already work, so every user can connect their own (and more than one). Before this it was impossible by architecture rather than configuration: `sync_tr.py` read `TR_PHONE`/`TR_PIN` from the environment, a single value for the whole instance, with no per-institution equivalent of Woob's `woobLogin`/`woobPassword`. See `CLAUDE.md`'s "Per-user Trade Republic" for the full design.
-
-  **The blocker, solved first and before any UI**: `sync_tr.py` wrote fixed account identifiers (`tr:cash`, `tr:pea`, `tr:cto`, `tr:crypto`), and `Account.syncId` is globally unique - two users each with a Trade Republic cash account collide on the very first insert, and the second silently overwrites the first's. They are now `tr:<institutionId>:cash` on the per-user path, mirroring `woob:<institutionId>:<id>`, while the `.env` path keeps writing the legacy two-segment id so existing rows are untouched. `lib/domain/sync-ids.ts` is the one place that shape is parsed, precisely so the next reader of a `syncId` cannot get it subtly wrong.
-
-  **The unknown that could have sunk this settled favourably.** Read against the exact commit `requirements.txt` pins (`1cff3d70`), not a local install: `TradeRepublicApi.__init__` takes a `cookies_file` parameter, and when it is omitted the path defaults to `cookies.<phone_no>.txt` rather than a single fixed file. So two users never share a session even by accident, and passing the parameter explicitly (which the per-institution path does) gives deterministic control. No process or working-directory isolation was needed.
-
-- [ ] **Per-user LCL and other env-configured syncs** *(follows from the above)* - the same treatment for the remaining `.env`-driven integration, now that the Trade Republic work has established the pattern. Lower priority: LCL is already reachable per-user through the generic Woob picker, so this is about removing a special case rather than unblocking anyone.
-
-**Retrospective.** Shipped in five gated lots: the syncId namespacing (with its own tests before a single line of sync code changed), the per-institution sync path, the interactive setup flow and route dispatch, the Settings UI, and documentation.
-
-**The namespacing alone did not actually fix the collision, and only a real database proved it.** After `sync_tr.py` was writing `tr:<institutionId>:cash`, a two-user test still produced **one shared row**. The cause was `upsert_account`'s native-id fallback in `sync/db.py` - a `LIKE '%:<native_id>'` lookup added after the v1.11 LCL/Woob duplicate-account incident, which matches on the trailing colon segment. For Woob that segment is a unique bank-side account id, which is what makes the fallback correct there. For Trade Republic it is an account *kind* (`cash`), shared by every user on the instance, so the fallback confidently matched two different people's accounts as the same one. Fixed by exempting Trade Republic ids from that fallback specifically, and re-verified that the LCL/Woob dedup it exists for still works. A unit test would not have caught this: both writes were individually correct, and the bug lived in the third function that read them back.
-
-**One provider per institution, decided at the point of choice.** `setWoobConfig` and `setTradeRepublicConfig` each clear the other's credential fields. Without that, an institution could hold both, and which backend actually ran would depend on the order of two `if`s in the sync service rather than on anything the user chose - a silent, order-dependent outcome nobody selected. The Settings row follows the same rule: both configuration buttons appear while nothing is set up (that is the real choice), and only the configured provider's remains afterwards.
-
-**What deliberately did not change**: `setup_tr.py`, `sync_tr.py`'s `run()`, and the `TR_PHONE`/`TR_PIN` environment path all keep working exactly as before, the same way `setup_lcl.py` was left alone when `setup_woob.py` generalised the Woob path in v1.12. An instance that never touches the new UI cannot tell this release happened.
-
----
-
-## v2.3 - Real-time for every connection, and a UX pass on getting there - Released ✓
-
-*v2.1 gave every user their own Trade Republic connection, but real-time tracking - the persistent websocket listener that keeps balances moving without waiting for the 4h cron - stayed hardcoded to the `.env` connection alone, "a real scoping decision rather than a line of plumbing" at the time. The same release then invited users to migrate off `.env` entirely. Nobody priced what happens when a feature is left on a path a later release retires.*
-
-- [X] **A per-user sync did not refresh that user's open tabs.** `/api/realtime/notify` was only ever called by `sync_tr_realtime.py`, which follows the `.env` connection, so the owner's tabs live-updated and nobody else's did. `sync/main.py`'s `_notify_owner()` now fires after every successful per-institution Woob or Trade Republic sync, addressed to that institution's owner. Best-effort throughout: a refresh that does not arrive costs a manual reload and must never turn a successful sync into a failed one.
-- [X] **Moving off `.env` silently ended real-time updates.** The listener was started only `if TR_PHONE and TR_REALTIME_ENABLED`, so completing the per-user migration v2.1 invited stopped it - no error, no log line, no indicator, just a portfolio back to moving every four hours. One listener per connection now, supervised, plus a Settings indicator that says whether each one is actually running. See `CLAUDE.md`'s "Per-user real-time listeners", including why this is a different bug class from the ones the release audit already tracks: nothing in the listener was wrong, it was keyed on a path the data had left.
-- [X] **The Trade Republic reconnection flow was cramped and went quiet at the end.** The code panel rendered into the institution row's right-hand button cluster, which is a `flex-wrap` sized to its buttons, so it was squeezed into whatever width was left. And confirming the code reset the component, put the "Connecter" button back, and left the first sync running invisibly until the row abruptly said it was synced. It is a dialog now, running the whole ceremony - request, code, sync - through to a stated result, with a step indicator and a named wait at each stage.
-- [X] **Two v2.1 leftovers of the same shape**, both the `woob:`-only assumption surviving a release that added a second per-institution prefix: a Trade Republic sync failure was announced by its raw cuid, and a removed Trade Republic connection kept reminding "still broken" every 24h with no way to clear itself.
-
-**Retrospective.** The headline bug is not the same shape as the recurring patterns the release-boundary audit already tracks (a heuristic inferring identity from a string segment, a thrown error redacted in production) - it is new: **a feature can be broken by a migration it does not participate in.** Nothing in `sync_tr_realtime.py` was wrong on its own terms. The `.env` path it followed was simply no longer the path the data took once a user finished the v2.1 migration, and the gate joining the two lived in a third file (`main.py`'s boot condition). Worth watching for again: whenever a release moves users from path A to path B, what else on A was never re-checked against B?
-
-The fix turned a single hardcoded task into a small supervisor - connections are configured, reconnected and deleted while the process runs now, not just once at boot - with three properties load-bearing enough to each get their own test: a stopped listener is never retried on a timer (retrying a dead Trade Republic session every minute is exactly the traffic pattern that gets an account flagged), reconnecting from Settings is the only thing that lifts that stop, and a failed database read leaves every running listener alone rather than tearing all of them down on one transient error.
-
-A real user report ("many components do not update when you change them") turned into a genuine finding of a different kind: **not reproduced**, and the reason is worth keeping. `revalidatePath`'s own documentation implies the specific path matters; three measurements against a production build showed it does not, in this app - every page is `force-dynamic`, so any revalidation refreshes whatever route is on screen regardless of which path was named. Nine real edit flows were then exercised end to end and all refreshed correctly. Nothing was "fixed" on a guess; a test now asserts the one mechanism that is known to cause the symptom (a mutation that revalidates nothing at all), and the report stays open pending a screen and an edit that actually reproduces it.
-
-## v2.5 - Captcha banks can be connected by a human - Released ✓
-
-*Issue #51 reported Amundi as a stack trace. v2.4.1 fixed the traceback by classifying captchas as `unsupported`, reasoning that a captcha exists precisely to defeat automation. That reasoning was wrong, and it is the kind of wrong that sounds final: the bank is refusing a robot, and the answer is to stop being one for one screen rather than to give up. Reading the module settled it in a single look - it raises only when nothing has filled in `captcha_response`, and logs in normally once something has.*
-
-- [X] **A captcha is now solved by the person, in Settings.** The exception already carries the reCAPTCHA site key for exactly this purpose. The flow reuses the OTP plumbing verbatim - `captcha_response` is just another config field id, so the solved token travels through the same `code` parameter an SMS code does and `complete_setup` needed zero changes. Verified against the real Amundi module: a live key, the real Google checkbox rendered in the app, Confirm disabled until it is ticked, zero CSP violations.
-- [X] **A captcha bank was being told to give up.** `unsupported` hid the Connect button on a bank that in fact works. It now reports `captcha_required`, which is its own status because the two existing ones are each wrong in a *different* direction: `unsupported` hides the button, and `auth_required` would have the failure alert remind the user every 24h **forever**, since no scheduled run can ever satisfy a captcha. Two questions, two predicates, and a test pinning that `captcha_required` is the only status answering yes to both.
-- [X] **The alert says its piece once and stops.** Worth one notification - unlike `unsupported`, there is something the user can actually do - and its body says both what to do and that the automatic sync will not do it. The state row is kept rather than cleared, because it is what suppresses every later reminder.
-- [X] **A refused captcha no longer reports success.** `complete_setup`'s return goes straight back as a 200, so a token that expired (they last about two minutes) would have announced a connection that never happened. It raises now, and the browser drops back to the Connect button rather than leaving one whose only possible outcome is the same error.
-- [X] **`error-callback` was treated as fatal.** It fires on a transient network hiccup that the widget recovers from by itself; tearing the panel down replaced a working checkbox with "the captcha could not load", observed happening to a widget that had in fact loaded.
-- [X] **The four-way status branch existed three times** in the settings page - colour, aria-label, icon - so adding a status meant editing one decision in three places. One function now, with the tone and icon tables side by side.
-
-**The honest limit, and how nearly it was missed.** Amundi's site key **restricts its allowed domains**, so Google refuses to render it on a self-hosted origin. Measured across three origins with the same key: `localhost` renders the checkbox, `127.0.0.1` is refused, and a realistic `finalibaba.example.com` returns "Domaine non valide pour la clé de site reCAPTCHA". So for Amundi this works only when the app is reached at `localhost` - a leftover in *their* allow-list, not something to rely on. An earlier note in `CLAUDE.md` claimed the opposite, because the check scanned for the English "Invalid domain" on a page rendering in French and concluded "no errors". **A negative result from a string match is only as good as the string**; the probe now asserts on the presence of the `.recaptcha-checkbox` element instead.
-
-Shipped anyway, with the failure explained rather than hidden: the restriction is per-bank, so a captcha bank with an unrestricted key works fully on any domain (verified), and where it cannot work the user sees Google's own localised error plus a line saying it is the bank's restriction and not their misconfiguration. Declaring the bank's origin to defeat the check - what commercial solving services effectively do - would make it work everywhere and is **deliberately not done**: it is circumventing a control the bank configured, which is a different thing from clicking a checkbox yourself. Whether Amundi's *backend* even verifies the token was left unproven here, because the login endpoint answers a bare 403 for a bad password and (apparently) for a bad captcha alike, and Woob's own module collapses both into "wrong password" since there is no other way to tell. **Settled in v2.6 on a real account: it does not check the solving origin.** A token solved at `http://localhost`, reached through a tunnel to an instance bound to loopback, was accepted and the login advanced to Amundi's phone approval - so the localhost restriction above is a complete answer rather than a half one.
-
----
-
-## v2.6 - A captcha bank that actually connects, and accounts you keep by hand - Released ✓
-
-*Two threads. v2.5 put a real reCAPTCHA in front of a person and stopped there; on a real Amundi account the flow turned out to still be impossible to finish. And an account with no sync had no way to say what happened on it, which is the whole point of tracking a meal-voucher card.*
-
-- [X] **A phone approval after the captcha was fatal, so the bank stayed unconnectable.** Amundi answers a solved captcha with an approval push. `complete_setup` *raised* for that state, and the UI - correctly - drops a spent single-use captcha widget on any failure, so the user landed back on the Connect button and every retry restarted at a fresh captcha and a fresh phone prompt. **Each step worked while the sequence could never terminate**, which is exactly why the captcha looked broken when it was not. The Woob session was already kept alive with no fields left to fill, so the state had been resumable from the start; it is returned rather than raised now, and routed through the same panel logic the start path uses. Tests pin the whole captcha -> approval -> connected loop end to end, both confirmed failing against the previous behaviour.
-- [X] **The localhost workaround is documented in the app, not just discovered.** A bank restricting its site key to its own domains cannot be fixed from here, but `localhost` is often in that list, and any local port forward puts the app there - only the hostname matters to reCAPTCHA, and the port does not. The panel offers the tunnel, states the two things that actually block it (the sync stays manual, and `NEXTAUTH_URL` has to match when auth is on, or `__Host-`/`__Secure-` cookies are refused over plain HTTP), and Google's script now has a loading state and a 20s ceiling so a blocked fetch names itself instead of leaving an empty box.
-- [X] **Manual entries on an account nobody else writes to.** A meal-voucher card, a cash envelope, a bank the sync cannot reach: spend, top-up, correct the balance, delete an entry. The balance shown for a fiat account is the newest snapshot and is never re-derived from transactions, so an entry writes **both** a transaction and a balance movement in one transaction - one without the other gives either a balance that changes with nothing to explain it, or a ledger that does not add up to the figure above it. A backdated entry shifts the snapshots after it and anchors on the balance *strictly before* it, which is the one genuinely error-prone step and is a separately tested pure function. Correcting the balance deliberately writes no transaction, and says so on screen, because nothing happened that a budget should count. Deleting reverses only what a manual entry caused, never a CSV or synced row, which never moved a balance in the first place. **Verified against a real database**, not just reasoned through.
-- [X] **One name for one rule.** `assertCsvImportEligible` is now `assertManualAccountEligible` - the condition was already identical (`isFiat && !syncId && !gocardlessAccountId`), and the worst case it guards is no longer an annoyance: a manual entry shifting a bank's own recorded balances would destroy real history.
-- [X] **A library exception was reaching the browser.** `setup_tr_institution.py` built a `SetupError` from `str(e)` on a refused Trade Republic code - the single place breaking the invariant `main.py`'s own handler states, that these messages are written at raise time and never derived from an upstream exception. Found by the pre-release audit, not by a report. Logged server-side now, with a fixed message that says what to do.
-
----
-
-## v2.7 - Banks that actually connect, and the positions inside them - Released ✓
-
-*v2.5 rendered a captcha and v2.6 fixed the panel after it, and a real Amundi account still could not be connected. Four defects were stacked, each hidden by the one in front of it. Fixing them turned out to fix a whole family: an audit built during this work showed 24 of 95 banks whose connection broke as soon as their second factor fired.*
-
-- [X] **A captcha bank could connect and still import nothing.** Four causes, in order: Woob was created without a storage so nothing survived the call; a decoupled validation was never resumed (Woob continues one only when the `resume` config key is set - its own reference CLI hardcodes exactly that); a competing sync invalidated the pending approval; and the setup counted the accounts it fetched then threw them away. That last one is why every earlier fix looked ineffective - for an MFA bank the follow-up sync cannot re-fetch, since the module refuses a non-interactive login once MFA is on. Accounts are now written while the approved session is alive.
-- [X] **Holdings are read from the bank, not just a balance.** 72 of 96 modules expose `CapBankWealth` and this project asked none of them, so a PEE arrived as a current account offering an "annual interest rate". Positions now feed real `Holding` rows, and an account that reports lines retypes itself as an investment - from `CHECKING` only, so a guess is corrected and a choice never overridden. Verified on a real PEE: correct ISIN, share count and unit price, totalling the balance it previously showed as a lump.
-- [X] **Every login failure is classified once.** Measured rather than guessed: `BrowserIncorrectPassword` is raised by **61 of 95 modules**, carries no message, and was falling through to the generic handler - so the most likely failure of all produced an empty `SyncLog` and a UI with nothing to say. A single ordered table now covers it plus lockouts, expired passwords, unsupported auth methods and modules that give up. Order is meaning: `BrowserUserBanned` subclasses `BrowserIncorrectPassword`, so a naive chain would tell a locked-out user to check their password, and retrying is what prolongs the lockout.
-- [X] **A bank only a human can refresh no longer offers a button that cannot work.** On a captcha bank the Synchronize button is hidden: it could only fail, and its failure overwrote the connection that had just succeeded, showing a warning triangle seconds after it worked. Sync messages are also printed under the row instead of living in a `title` attribute no phone can reach *(issue #54)*.
-- [X] **reCAPTCHA v3 support**, for the 2 banks that use it. v2 is a checkbox, v3 is invisible and scored from behaviour; rendering one for the other gets "Invalid input" from Google. **Written and unit-tested but never exercised end to end** - the only account available to test it fails earlier, at the login.
-- [X] **`scripts/audit-bank-modules.py` and a monthly CI job.** The modules declare their authentication mechanisms, so "what does each supported bank need?" is answerable without a bank account. Scheduled as well as triggered on a Woob bump, because the catalogue lives on `updates.woob.tech` and moves independently of the pinned version.
-
-**Swile cannot be connected, and it is not this project's bug.** Its module implements no second factor at all, and only does an OAuth `grant_type=password` round-trip. Measured against the live API: a nonexistent e-mail returns `invalid_grant`, a real account returns `server_error` - the account is recognised and the token still refused, which is what an SSO or 2FA account looks like to a module that cannot carry either. Fixing it means fixing the Woob module upstream.
-
----
-
-## v2.7.1 - The settings page was showing yesterday's numbers - Released ✓
-
-- [X] **The financial profile reverted to 0 after every redeploy, and it was a caching bug, not a database one.** Every page here is force-dynamic and reads live per-user data, but Next.js never emitted an explicit `Cache-Control` header for that - leaving the gap open for whatever sits in front of the app (a reverse proxy, a CDN) to apply its own default instead. A redeploy's brief restart window was consistently enough to surface it. Every route now sends `Cache-Control: no-store, must-revalidate`, excluding the same static-asset set `proxy.ts`'s own matcher already excludes for the mirror reason - confirmed `_next/static` and the icon routes keep their real caching, `/settings` and `/` do not.
-- [X] **The French social-levies rate moved from 17.2% to 18.6%, and it was a literal copied by hand into five different files.** `FR_SOCIAL_LEVIES_RATE`/`FR_PFU_TOTAL_RATE` (`lib/domain/tax-locale.ts`) are the one source of truth now - the Settings page, the account-creation suggestion, the dividend/CTO tax estimate (which was actually wrong even under the old rate, at 30%/32.2% instead of the correct 31.4%/33.6%), and the Trade Republic cash fallback all read from it. A migration bumps any `UserSettings.taxRatePea` still sitting on the old default; a rate already typed in by hand is left alone.
-- [X] **LCL's own backend blips with a plain 502 every so often, and one blip used to fail the whole sync.** Confirmed transient - a manual retry a minute later always worked - so `sync_woob.py` now retries twice (5s, then 15s) before giving up and firing a sync-failure alert. `ScrapingBlocked` is deliberately excluded from the retry even though it shares the same exception family: that one means the bank detected automation, and retrying seconds later is the wrong response to that.
-
----
-
-## v2.10 - The audit's own findings, patched - Released ✓
-
-*The end-of-version audit that produced v2.9.2 to v2.9.4 found twenty-five defects; those three releases fixed the ones losing data. This one closes the rest, plus what looking for them turned up.*
-
-*Verified against a copy of a real database throughout, and that is not a formality here: three of the decisions below were made one way by reasoning and reversed by measurement, and one change shipped into a passing build while doing the exact opposite of what its own comment claimed.*
-
-### Tooling that came with the audit
-
-- [X] **`scripts/check-balance-reconciliation.sh`** - stored transactions against the balance the bank itself reports, which is the one arbiter that does not depend on the code being tested. It is what settled v2.9.4's duplicate question, and this release documents where it is meaningful and where it is not (see the Trade Republic cash account, which cannot reconcile by construction).
-- [X] **`scripts/fix-restated-label-duplicates.sh` corrected twice, both found by running it end to end** rather than reading it: its dry run listed the merge case under "skipped", under-reporting what `--apply` would do, and its safety guard refused rows carrying a category even when the survivor carried the same one.
-
-### Money that was never spent
-
-- [X] **Buying shares was counted as spending.** A broker's cash account is a `CHECKING` account, so every `Kauforder` and `Sparplan` landed in the budget totals as an expense and every sale as income. Measured on a real instance: one month showed 8 EUR of spending on the actual bank account against **-3 233 EUR** on the brokerage account, almost all of it two share purchases, which made "reste à vivre" describe nothing. Across its whole history, 323 of the rows the app was asking the user to categorise were stock orders. `Transaction.isSecuritiesMovement` is set by the sync and backfilled by the migration from Trade Republic's own vocabulary; 438 rows reclassified, September's "reste à vivre" went from **-252,76 EUR to +126,31 EUR** and the categorisation backlog from 687 to 337, with zero rows caught that lacked a securities keyword. Deliberately **not** solved by excluding the account: the same account also carries 293 rows of real card spending, so the distinction has to be per transaction. Equally deliberately, it excludes a row from *totals* and never from a browsing surface - a trade did happen, and hiding it in the ledger would be lying about the account.
-
-### Human decisions about transfers now survive, and pairings can be revisited
-
-- [X] **Un-marking a transfer by hand did not hold.** The detector's candidate pool was every row not yet flagged, which is exactly where un-marking one put it - so the next sync flagged it straight back and "this is real income, not a transfer" never survived the hour. `Transaction.internalTransferManual` is the third state: null means the detector owns the row, true and false are a person's decision, and neither is ever overwritten automatically. Un-marking one leg also releases the other, which is no longer half of anything.
-- [X] **A wrong pairing was permanent.** Once flagged, a row left the pool for good, so a debit matched to an unrelated same-amount credit stayed matched even after its true counterpart turned up - both wrong halves out of budgets and income forever. The pass now re-derives its own pairings over everything nobody has ruled on. Revoking a flag was structurally impossible before (the write only ever set it to true, which is also what kept two users' passes over a co-owned account from thrashing one row between them); `internalTransferPairId` replaces that guarantee, by only ever revoking a flag whose partner is in the same pool.
-- [X] **The matcher itself had to be rewritten in the same pass, and only real data showed why.** Assigning the closest candidate pair first and never reconsidering it loses legs: 1200 EUR moving Livret -> current account -> broker over two days gives two credits, two debits and four valid pairs, and the Livret-to-broker pair wins on closeness and blocks **both** true pairings. So the first re-derivation on a production copy revoked 5 flags, 4 of them unmistakable real transfers a locally-closer pair had displaced. Now an augmenting-path matching, which pairs as many legs as the candidates allow and prefers closeness within that. Securities movements also leave the pool - a 10 EUR `Bitcoin - Sparplan ausgeführt` sat exactly as close to a 10 EUR Livret credit as the genuine transfer did, and took the tie. Re-measured on the same database: **32 legs newly flagged, 35 re-paired onto a better counterpart, 1 revoked**.
-- [X] **Internal transfers were being offered as recurring subscriptions.** A standing order into a savings account is the most detectable pattern there is - same amount, same day, same label, every month - so it cleared every threshold, on both legs, and would then have been projected as a real outgoing. Savings-plan executions are deliberately *kept*: one really does leave the cash account on a schedule, and a cash-flow projection asks "is this regular", not "is this household spending".
-- [X] **"Mark as income" in bulk ignored the flag.** Its only guard was the generic-label denylist, which knows two boilerplate wordings - so a transfer arriving with a real name attached ("VIREMENT M ...") was swept in and recorded as a dividend or as interest, in the one place meant to be accurate enough to declare.
-
-### The same figure, the same meaning, on every screen
-
-- [X] **Three screens disagreed about what net worth is.** The dashboard reported it before latent tax and analytics after it, so the same portfolio had two headline numbers. `netWorth` is after tax everywhere now, with `netWorthBeforeTax` kept alongside it, and the projection draws both curves - some countries tax on withdrawal, so both are worth seeing.
-- [X] **The net-worth history subtracted the original loan capital, for every past day.** A loan repaid over three years showed as a constant liability at its day-one amount, so the entire curve sat below the truth by however much had been repaid. Each day now amortises the loan to that day.
-- [X] **The projection never deducted the latent tax already owed.** It taxed the gain it projected and ignored the unrealised gain sitting there on day one, so the after-tax curve started too high and stayed too high by a constant.
-
-- [X] **The bank's own word for what a movement is, kept instead of discarded.** Amount-and-date matching still produced the occasional false pair - a 105 EUR incoming transfer from a third party matched against an unrelated 105 EUR card payment two days later. Tightening the tolerance would not help: of 63 pairs on a real account, 29 are same-day, 28 one day apart and 6 two days apart, and 5 of those 6 are genuine. Trade Republic tags every timeline item with an `eventType` and the sync read the title and the amount and threw it away; `Transaction.sourceEventType` keeps it, and a card payment no longer competes to be one leg of a transfer. **Honest limit**: nothing already stored carries the field and guessing it from a label is the text matching it exists to replace, so this applies to transactions synced from here on. **And it nearly shipped switched off**: written as a bare `NOT`, the exclusion matched nothing at all, because `NOT (NULL LIKE 'CARD_%')` is NULL in SQL rather than TRUE - so every row from every other source, and everything synced before the column existed, fell out of the pool. Found by running the real engine against a copy of production and counting rows (628 to zero), not by reading it, building it, or testing it against a mock.
-
-### Imports and manual entries
-
-- [X] **`1,234` imported as 1,23 EUR.** The comma was only ever read as a decimal separator, so a file exported with it grouping thousands divided every amount by a thousand and passed validation. The rule is now structural rather than a locale guess: with both separators present the last one is the decimal; a lone separator before exactly three digits groups thousands, because money carries two decimals or none, never three.
-- [X] **An invalid date landed silently on another day.** The shape was checked, the calendar was not: `new Date("2026-02-30")` does not fail, it rolls forward to 2 March, and 31 April to 1 May - on a row the preview had shown as accepted.
-- [X] **A manual entry on an account with no balance invented one.** Recording a 12 EUR spend on an account created without a starting balance wrote -12 EUR, which the account page then showed as its balance, indistinguishable from a real one. A movement with no known balance behind it is refused now, pointing at the correction mode, which states a balance outright instead of deriving one.
-- [X] **The balance importer trusted the browser.** Neither the future-date check nor the date validation existed server-side, and a Server Action is reachable whatever the UI renders - a year typed as 2062 becomes the displayed balance permanently, on every screen, with no delete UI to undo it.
-- [X] **Two statements on one day made the displayed balance arbitrary.** Re-importing a corrected balance kept both rows at the identical instant and which one won was down to the database's own row order. The importer now replaces rather than appends, and every "latest balance" read carries an explicit tiebreaker.
-
-### Positions, alerts and the rest
-
-- [X] **Clearing a foreign-currency position's cost basis broke it permanently.** A blank field means "unchanged", and only half the writes honoured it: the price was re-converted at today's rate, the EUR basis kept the old rate, and the native basis was written as null regardless. The two halves of one figure ended up on different rates with one of them empty, and nothing could reconcile them again.
-- [X] **"New transaction" alerts skipped rows for good.** The cursor advanced to the last row of a capped page, and a sync writes its batch in one `createMany` so the whole batch shares one `createdAt` - the next run's strictly-greater comparison then skipped everything past the cap, permanently, with no error. The cursor now moves past everything counted and the message says how many there were rather than how many fit.
-- [X] **The Woob sync truncated cents instead of rounding**, where the Trade Republic sync documents the opposite rule in its own comments. 500 shares at 134,5678 EUR recorded 67 280 EUR instead of 67 283,90 - systematically downward, so it never averages out.
-- [X] **A securities account that stops reporting keeps its positions, and now says so.** An empty statement is genuinely ambiguous - a failed scrape or a closed account - and deleting on it would destroy a real portfolio, so the lines stay. What was missing is the saying: the account records when it was last confirmed and when it stopped, and the holdings table prints both.
-
-### Savings estimates
-
-- [X] **One rate per account, applied to all 24 fortnights, for a rate that moves mid-year.** France's Livret A paid 1.5% until 31 July 2026 and 1.7% from 1 August, so whichever single number was stored, the year was wrong on one side of that date by the whole spread over half of it. `AccountInterestRate` records what an account paid *until* a date - one row per change, with the account's own field still holding today's figure - and the estimate values each fortnight at the rate it actually carried. Measured on a real portfolio: 486,35 EUR dated, against 503,45 EUR at a flat 1.7% and 476,98 EUR at a flat 1.5%.
-- [X] **The suggested regulated rates were six weeks stale**, still proposing 1.5% for the Livret A and the LDDS. The generic "any other livret" fallback was a second copy of the same literal and had to be updated separately, which is the drift the dated-suggestion design was introduced to prevent, reached from the inside.
-- [X] **The rate field never said it wanted a net figure**, so entering the gross rate a bank advertises inflated the estimate on a taxable account.
-
-### The regular charge hiding behind a merchant who is also a shop
-
-- [X] **A merchant can be a subscription and a shop at once, and detection saw only the average.** Asked for directly - "paiement amazon aussi ça peut etre l'abonnnement qui lui est régulier ... ou alors un achat sur amazon ça peut etre 20€ comme 500" - and judging the label as a whole let the purchases drag the median around until the 70% amount test failed, so the real charge inside was never suggested. A label that fails as a whole is now re-examined for an amount-consistent series within it, held to a stricter standard than a whole group. Measured on a real account: it found the 6,99 EUR monthly Amazon charge, and a **salary** whose bonuses had always defeated the amount test.
-- [X] **Savings-plan executions left the suggestion list**, reversing a call made earlier in the same release. Keeping them was defensible in the abstract - a Sparplan really does leave the cash account on a schedule - and measuring settled it: 11 of 26 suggestions were Sparplan and Saveback lines, which are the same shape as the internal transfers already excluded.
-
-### A stale rate that only a fresh install ever saw
-
-- [X] **The migration that moved the French social-levies rate changed the data and not the column default.** `schema.prisma` has said 0.186 and every database has said 0.172 since v2.9.2, and `UserSettings` rows are created without naming that column - so Postgres supplied the default and the migration's own `WHERE "taxRatePea" = 0.172` had already run long before the row existed. Every self-hoster installing since was quietly offered 17.2% when creating a PEA. Invisible on any instance that already had the row, which is why it survived several releases, and found only by replaying the chain into an empty database. CI does that replay now and fails on any difference between the migrations and `schema.prisma` - it was the only drift in the whole chain.
-
-### The transfers no matcher could ever find
-
-- [X] **`scripts/flag-internal-transfers.sh`.** Pairing needs both legs stored, and a bank only serves so much history to scrape: on a real instance the current account everything passes through had history from 1 January while the savings and broker accounts went back two years, so **54 transfers totalling ~24 285 EUR** had no counterpart to match and looked like income indefinitely. No amount of matching fixes that - a person has to say so, and this is the bulk version of the per-row toggle. It records the decision as a person's, so the detector never revisits it; it skips any row already recorded as a dividend or interest payment; and it is a script taking a label pattern rather than a rule in the app, because matching a name is exactly the text matching the detector exists to avoid.
-
-### From the release-boundary audit, logged rather than done
-
-- `lib/domain/analytics.ts` is at **1148 lines** and has been the flagged split candidate for four audits running, now ahead of `app/api/alerts/check/route.ts` (915). It carries the dashboard aggregation, the dividend estimate, the sector pass, the savings projection and the tax blend in one file. Not blocking anything; it needs to be a real item rather than a fifth note.
-- **One leftover duplicate in production**, found while checking whether the Trade Republic cash account reconciles: a 80 EUR deposit from December 2023 stored twice, 46 milliseconds apart under two distinct TR event ids - the deposit-side twin of the `Kauforder`+`PEA` pair v2.9.4 fixed for purchases. The near-duplicate window prevents new insertions and cannot remove what predates it, so this is one row to delete by hand. The other four same-day/same-amount/same-label pairs in the whole database are 2h, 2h, 9h and 11h apart and are all genuine.
-
-### Elsewhere
-
-- [X] **The passive-income card linked out of someone else's portfolio into your own pages.** `/income`, `/tax-report` and `/budgets` are deliberately outside the portfolio switcher's scope, so a figure read from a grantor's portfolio led to a page showing zero. The links are not offered while viewing someone else's data rather than leading to a contradiction.
-
----
-
-## v2.9.4 - One movement, described twice, is not two movements - Released ✓
-
-*v2.9.3 recovered real transactions and introduced two duplication bugs doing it. Both were found by diffing production dumps a day later, and the second only by asking the bank's own balance instead of trusting the reasoning that produced it.*
-
-- [X] **A restated label was being stored as a second transaction.** LCL shows a movement under a placeholder ("VIREMENT SEPA", "VIREMENT INSTANTANE") and restates it with the real counterparty on a later sync. v2.9.3's requirement that labels match turned every such restatement into a new row - four in a single production day, accumulating every half hour. A restatement now updates the stored row's label instead of inserting, so the movement keeps one row and gains the real counterparty name. **Honest limit, pinned by its own test**: when the row that displaced a lost twin still carries a placeholder, "one movement restated" and "two movements, one unnamed" are the same two strings, so that twin stays lost - the lesser error.
-- [X] **Trade Republic describes one purchase with two events.** v2.9.2 switched the near-duplicate window off for sources supplying real transaction ids, reasoning it was pure downside there. A purchase inside a PEA emits both a `Kauforder` and a `PEA` event: same amount, same day, different ids. Measured against the bank's own reported balance for one day - the only arbiter that does not depend on the reasoning under test - the account moved **-325,41 EUR**, while the stored transactions summed to **-334,14 EUR** with the window on and **-3 470,52 EUR** with it off. The boolean became a three-way mode: `amount` (the old behaviour, now the default) for sources that describe one movement several times, `label` for id-less sources where that same window was destroying genuinely distinct movements, `off` for nothing but the id.
-- [X] **`scripts/fix-restated-label-duplicates.sh`** cleans up what already landed, both families, dry-run by default - and skips any row the user has categorised, split or marked as income, because merging their work into another row is not a script's call.
-
-**The lesson worth keeping, and it cost three releases**: a real transaction id proves a *row* is unique, never that a *movement* is described once. Dedup correctness cannot be established by reasoning about identifiers; it has to be checked against the balance the bank itself reports, because that is the one figure not derived from the code being tested.
-
----
-
-## v2.9.3 - The displaced transactions can actually come back - Released ✓
-
-- [X] **v2.9.2 stopped new collisions but could not undo the old ones.** Its lookup for the pre-label id matched on that id alone, and that id is label-blind by construction - so both halves of a same-day/same-amount pair resolve to it, the surviving row answered for its lost twin as well, and the twin stayed suppressed on every subsequent sync. Found by checking a production database after deploying v2.9.2 rather than by assuming the fix had worked: no duplicates and the 84 hand-recovered rows intact, but not one of the ten known-missing movements back. The lookup now compares the label too. Replayed against that same database: all 192 stored rows still recognised (108 by the legacy id, 84 by the same-amount/same-label window, zero duplicates), and every missing leg still inside the bank's own history window would be re-inserted.
-
-**Worth keeping as a pattern**: a fix that provably prevents the *next* occurrence of a bug can leave every past occurrence permanently in place, and the mechanism that does so is usually the compatibility path written to protect existing data. Verify recovery against real data, not just prevention.
-
----
-
-## v2.9.2 - The sync was throwing real transactions away - Released ✓
-
-*First fixes out of the end-of-version audit (eight deep passes plus a verification against a copy of a real production database). The two critical ones were losing data on every sync.*
-
-- [X] **Two transactions with the same date and amount became one.** LCL through Woob supplies no transaction id, so one was synthesised from date + amount alone - identical for two transfers of the same amount on the same day, and the second was refused as a duplicate it never was. Measured: the account whose bank *does* supply ids held 142 same-day/same-amount pairs; the id-less account held **zero** across its entire history. The id now carries a label fingerprint plus an occurrence number for rows sharing date, amount *and* label; the pre-label id is looked up separately, verified against a real database so that not one existing row would be re-inserted.
-- [X] **The ±3-day near-duplicate window ignored the label.** Same account + same amount within three days meant "skip", on every source: a 300 EUR transfer to a livret suppressed a 300 EUR transfer to a broker three days later. On the reporting instance, ten movements totalling ~3 850 EUR had no sending leg stored - which is exactly what left their counterparts unmatchable and showing up as income, the symptom v2.9.0's manual override could only mask. Now requires the label to match too, and only runs for sources with no bank id (Trade Republic has real ids, so the heuristic was pure downside there). **Kept rather than removed**, on evidence: 84 of that instance's LCL rows carry `recovered_*` ids from a hand-restored backup and match no computable id, so this window is the only thing standing between them and duplication. Removing it - the first instinct, once `iter_coming` turned out never to be called - would have duplicated a hand-recovered history.
-- [X] **Each Settings card silently erased the other one's data.** Both forms posted to one action that wrote all six columns, and a field absent from the submitted form arrives as `null`, not as "unchanged" - so saving the financial profile wiped the country and reset the tax rates, and saving the tax card zeroed salary/expenses/savings. Reported as "I can't pick a country, saving does nothing": it saved, then the next profile save wiped it. Confirmed in production data by a `taxRatePea` sitting at exactly `0.18600000000000003`, the float an absent field produces. Split into two actions, same remedy as `updateAlertChannels`/`updateAlertTriggers`.
-- [X] **The interest-estimate chart contradicted the figure printed above it.** v2.9.0's backward-extrapolation fix had landed only in the single-value path, so the chart still read an account's unsynced months as a 0 EUR balance: a Livret A synced since January plus a LEP synced from June showed 400 EUR as the headline against a curve reading 150 EUR until June, then stepping to 400 EUR on 1 July.
-
----
-
-## v2.9.1 - The projection chart had its own, disconnected livret guess - Released ✓
-
-- [X] **The long-term projection's "épargne" rate ignored the real weighted savings rate v2.9.0 just added.** It still defaulted to a hardcoded 1.5% - the same guess `lib/domain/analytics.ts`'s old name-matching estimate used, kept as an independent constant even after that estimate itself was replaced by a real per-account rate. Two livret-return numbers sat on the same page and could have been the same number. Now pre-fills from `weightedSavingsRatePct`, the exact balance-weighted rate the new estimate card already shows, falling back to 1.5% only when no SAVINGS account has a rate set yet. Found by direct user feedback, not an internal audit.
-
----
-
-## v2.9.0 - A manual escape hatch for internal transfers, and a real bug in the interest estimate - Released ✓
-
-*Direct user feedback on v2.8.0's own new figures, both real reports rather than assumed gaps: internal transfers still leaking into budget/income totals with no way to correct one by hand, and a year-end savings-interest estimate that came back implausibly low against what the user already knew their own Livret/LEP had earned.*
-
-- [X] **A manual override for internal-transfer detection.** The automatic pairing (`lib/domain/internal-transfers.ts`, unchanged in this release) needs an exact amount match on both sides within a few days, with a real `Transaction` row on *both* accounts - a transfer fee, a slower settlement, or a receiving account whose sync never records the deposit each defeat it silently, and there was no way to correct the result. A small ↔ toggle next to every transaction's category cell (`/transactions` and each account's own table) flags/unflags it by hand, immediately excluding it from every category total the automatic flag already excludes a detected transfer from. This does not change what the automatic detector can find - a pair that fails its strict criteria still needs the manual toggle after this release too.
-- [X] **The year-end savings-interest estimate was silently understating real accounts.** `estimateYearEndInterestCents` skipped every fortnight before an account's earliest known balance snapshot, on the assumption the account "likely did not exist yet" - but for the common case (an old account whose balance history in this app only starts from whenever sync began), that treated every unsynced month as a 0€ balance and understated a full year's real interest. Reported directly, with real numbers: a ~377€ total that couldn't be right against a LEP alone that had already earned ~250€. Now extrapolates backward from the earliest known balance, symmetric with the existing forward extrapolation from today's balance.
-- [X] **The estimate got its own card, readably sized.** The two figures used to live as two tiny (`text-[10px]`/`text-xs`) muted lines under the real passive-income numbers - "j'ai vu les chiffres c'est vraiment petit". Pulled into a dedicated section with normal-sized stats, which is also where an unset interest rate on a paying account is now disclosed on screen (`accountsMissingInterestRate` - previously markdown-export only).
-- [X] **A chart of how that estimate has moved through the year.** Re-derives the same projection as of each past quinzaine boundary, from the exact historical balances already collected - no new data collection. A deposit, a withdrawal, or a rate change on any savings account now shows as a step on the chart instead of a number that silently changed since the last visit.
-- [X] **`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` hardened from a build `ARG` to a real Docker secret mount** (post-v2.8.0, found by Docker's own build linter) - an `ARG`/`ENV` value is retrievable from the image's layer history; a `RUN --mount=type=secret` value never persists anywhere. No leak existed in the published image (the release workflow never passed the arg), but the local-build path is now correct by construction rather than by omission.
-
----
-
-## v2.8.0 - Real savings estimates, and why the numbers kept reverting - Released ✓
-
-*v2.7.1's `Cache-Control` fix turned out not to be the whole story - the financial profile kept reverting on one specific device even after it shipped. Chasing that down properly surfaced the same bug shape at three more layers, each hidden behind the one in front of it, the same way v2.7's four stacked captcha defects were.*
-
-- [X] **Every rebuild silently logs out every open tab's ability to save anything.** Next.js encrypts Server Action calls with a key generated fresh on each build unless pinned - confirmed with a real build-twice test (byte-identical action IDs with the key pinned, genuinely different without it). A phone tab left open across a redeploy got "Failed to find Server Action" on its next save - not a caching issue at all, a second, independent bug behind the first one. `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` is now wired through the Dockerfile and both compose files' build args; only takes effect for a local build, not the published `ghcr.io` image.
-- [X] **The same "shows a value that already changed elsewhere" shape, found at three more layers by a dedicated audit.** An uncontrolled `defaultValue`/`defaultChecked` or a `useState` seeded from a server prop only takes that value once, at mount - a later refresh (another settings section saved, or the real-time SSE mechanism waking an open tab after another device's change) does not update it, and saving from that stale state silently reverts the newer value. Fixed by keying each affected form on exactly the fields it seeds from: the alert-channels form (directly relevant to editing settings from more than one device), the account tax-treatment form, and the two per-row edit dialogs on categories and income events.
-- [X] **Some brokers (reported for Trade Republic) already withhold everything before a dividend lands**, both the foreign treaty rate and the French social levies - unlike a plain custodian, which only withholds the treaty rate and leaves the rest for the annual return. Applying this app's own tax estimate on top double-counted the deduction. `Account.dividendsAlreadyNet` (per-account, off by default) skips it for that account's holdings.
-- [X] **A balance-weighted average interest rate across every livret**, not a plain average - a small Livret Jeune no longer counts as much as a much larger Livret A. An account with no rate set is excluded from the weighting entirely, not assumed to earn 0%.
-- [X] **A full-year interest projection using the real "méthode des quinzaines"** French banks compute interest with: 24 fortnights, each using the real historical balance at its own start where known, the current balance projected flat for the fortnights still ahead. A dedicated audit then caught the new figure sitting unexplained next to the older, cruder estimate in the export - both now say why they can disagree.
-- [X] **`/budgets` and `/income` can look at a previous period.** `/budgets?month=` (arrows, same convention as `/tax-report`'s own `?year=`) - every query, the rollover carry-in, and "Reste à vivre" now follow the viewed month; the all-time uncategorized-transactions section stays scoped to the current month only, since it has no date filter of its own and bulk-fixing transactions unrelated to a past month's numbers would be a distraction. `/income?year=` follows the same cadence `/tax-report` already uses for the same `IncomeEvent` model, with a distinct "nothing this year" message instead of a false first-time prompt on an empty year.
-- [X] **Nodemailer bumped for a quadratic-complexity DoS** (GHSA-2x7j-588g-ccc2) flagged by CI's own audit gate.
-
-**The generalisable pattern worth naming**, since this is the second time a release has been organized around it (see v2.4.2's "a log line that says connected is not evidence of working"): a value can be *correct* and still show as stale, for reasons that have nothing to do with the calculation itself - a CDN caching a dynamic page, a rebuilt server unable to decrypt an old tab's action call, a form that only reads its own props once. Fixing the database query was never going to find any of these three.
-
----
-
-## v2.4.3 - Real-time subscribes to topics that exist - Released ✓
-
-- [X] **Two of the three real-time topics were not topics.** With v2.4.2's receive loop fixed, the listener reached a real Trade Republic answer for the first time: `BAD_SUBSCRIPTION_TYPE: Unknown topic type: neonPortfolio.31`. Neither `neonPortfolio` nor `cryptoPortfolio` appears in pytr's vocabulary; only `cash` was ever real. The rejection arrives asynchronously and killed the whole session, so the listener reconnected forever. Now `cash` plus `compactPortfolioByType` per securities account (the pair the working 4h sync proves TR accepts), a subscription step that keeps whatever TR actually answers so a future vocabulary change costs coverage rather than the feature, and a 30s floor between fetch cycles so a chatty topic cannot cause a fetch storm.
-
----
-
-## v2.4.2 - Real-time tracking actually works now - Released ✓
-
-- [X] **The real-time listener had never processed a single push.** It ran one receive task per subscribed topic, which is several concurrent reads on one websocket, which the library forbids. It raised on the first iteration every time, so it connected, logged "listening on [...]", died and reconnected in a loop. Shipped in v1.17 and survived four releases because the success log line is emitted before the code that fails, an ordinary reconnect warning looks the same as a blip, and the tests faked the one function containing the bug. One `recv()` per iteration replaces the whole thing, since the client already multiplexes. Tests now drive the real loop and fail against the old one.
-
----
-
-## v2.4.1 - Banks that cannot be synced now say so - Released ✓
-
-- [X] **A captcha-protected bank produced a stack trace** (issue #51, Amundi). `setup_woob.py` already classified captchas, browser redirects and "do this on our site" actions as unsupported; the sync path did not, so they landed in the generic error handler. Now a distinct `unsupported` status with a readable message, deliberately not `auth_required` (which would send the user round a setup loop that cannot succeed), and the alert machinery stops reminding daily about a bank that can never work. Reproduced independently on a second Amundi account.
-- [X] **Four new HIGH `fast-uri` advisories.** The existing override floor (`>=3.1.5`) was satisfied by 4.1.2, which every one of them still hits; raised to `>=4.1.3`. Same never-invoked `prisma dev` chain as before, bumped rather than exempted because it costs nothing.
-
----
-
-## v2.4 - Audit fixes, and the app stops assuming France - Released ✓
-
-*A full audit (data security, cross-user isolation, UI/UX, performance, features, monetisation) run against a real two-user instance rather than by reading code. Isolation held on every assertion, including the escalation case - a read-only guest cannot turn a live grant into an API key or a share link that carries the grantor's data. Seven defects came out of it, none blocking, all fixed here.*
-
-- [X] **A share link showed the app-lock screen to a stranger.** `AppLockGate` wrapped everything in the root layout with no bare-route guard, unlike the sidebar, `MainContent` and `AutoSync`. Worse on `/shared/*` specifically: an anonymous visitor has no session, so `getViewer()` falls back to the instance owner and it was the *owner's* lock setting gating a link they had deliberately published.
-- [X] **No timeout on any outbound market-data call.** `/analytics` is a Server Component that awaits Yahoo, FX and the sector fallbacks in sequence; a provider that *hangs* (rather than fails) blocked the render indefinitely. The same lesson `lib/actions/sync.ts` learned from a real spinning-button report, never applied here. Now one `fetchExternal` helper with a deadline, covering GoCardless and ntfy too.
-- [X] **Real estate rendered in the same grey as "unclassified".** On a typical French portfolio it is the largest holding, so the biggest wedge of the donut read as missing data. Now terracotta - 31° clear of crypto's amber, 37° of automobile's pink, and five times the saturation, so it reads as a category rather than an absence.
-- [X] **A zero change displayed as a green gain.** "▲ 0 € (+0.0%)" on the dashboard's hero figure. Three states now, not two.
-- [X] **`checkSyncFailures` ran three queries per source per user**, sequentially, inside a route that already loops per user. Batched into three total.
-- [X] **A guard `CLAUDE.md` described did not exist.** H4 claimed the alert checkers defensively ignore rules on unreachable accounts; `checkNewTransactionRule` used `rule.accountId` unchecked. Not exploitable - every path that could orphan a rule cascades or cleans it - but written now rather than left as a doc-vs-code divergence.
-- [X] **Sonar suppression count had drifted again** (10 documented, 11 real). Second time; the note now says to re-count rather than trust the number.
-
-- [X] **Deleting a recurring transaction brought it straight back as a suggestion.** Reproduced: 7 suggestions, delete one, 8 suggestions, no way out. `detectCandidates` suppresses a pattern by finding a row that still exists, so deleting removed the only thing holding it back. `dismissedAt` is the tombstone; a separate action really removes it. Same field also stops a dismissed suggestion appearing in the visible list wearing a "Paused" badge - dismissing used to make the page longer.
-- [X] **A dismissal now expires when the pattern stops and comes back.** The first fix made "stop suggesting this" permanent, which would have silenced a resubscribed service forever. The signal is a gap of 3+ quiet cycles, not merely new charges - a subscription that never stopped also keeps billing, and re-suggesting that is the nagging the dismissal exists to end.
-- [X] **`/recurring` led with suggestions.** Projection first now, then the templates you manage, then suggestions (collapsed unless you have none), then hidden ones.
-- [X] **`/settings` was 6800px of 22 sections in historical order.** Regrouped by subject: data sources, then identity and security together (the password used to sit ~3000px down between share links and portfolio grants), then financial parameters, sharing, notifications, appearance last.
-- [X] **Co-ownership was buried below the transactions table.** Up to 200 rows of scrolling to reach it, and invisible to anyone who did not already know it existed - which for a sharing feature means it may as well not be there. It is a header control now, next to rename, showing the co-owner count so the header states whether an account is shared rather than only offering the action.
-- [X] **A suggested rate now carries the date it was known.** Raised directly: the Livret A is at 1.5% and about to move to 1.7%. That exposed the preset perpetuating the exact problem it was meant to fix - a hardcoded rate with no date is indistinguishable from one the user verified. It is dated in the code and printed in the form now. An unset rate is also *visible* instead of silently zero, and the export discloses how many accounts it could not count - `annualInterestCents` appears nowhere in the UI, only in that export, so a shortfall had no way of being noticed.
-- [X] **The fiscal model stops being French-only.** `taxTreatment`/`taxRatePct` was already country-agnostic and stayed; what changed is everything that bypassed it. The savings-interest estimate matched account *names* against French products on every render, so an account anywhere else silently contributed zero passive income - it is a real `Account.interestRatePct` column now, backfilled from the old rules so no French figure moves. `UserSettings.country` drives which wrappers and rates get *suggested* (PEA/CTO, ISA/SIPP, Roth IRA/401(k)…) and never what is computed. Deliberately **not** a tax engine: several countries carry a null rate on purpose, because a confidently wrong tax figure is worse than an empty field. See `CLAUDE.md`'s "Country presets, and why there is no tax engine".
-
-**Still open from the audit**, logged rather than fixed: the rebalancing view stops at a diagnosis instead of pre-filling the trade dialogs; exports still flatten split transactions; LCL remains an env special case now that Trade Republic has a per-user path; and `dividendEffectiveTaxRate` plus the Trade Republic cash fallback are still French-specific, though both are now overridable per account. The largest single risk is unchanged and unrelated to any of the seven: `pytr`'s Playwright-based WAF bypass, which real-time now depends on, and which the v1.17 scoping already flagged as degrading.
-
----
-
----
-
-## UI/UX polish - noted from real usage
-
-*Small, real annoyances found while using the app on a live instance. Not urgent, not forgotten. Grouped here rather than scattered so a future pass can take them together.*
-
-- [X] **Sharing a portfolio with an unknown username showed a raw error.** The messages existed and were in French; they were *thrown*, and production replaces a thrown Server Action error with an opaque digest, so what reached the screen was an unreadable internal error. Returned as keys now, translated by the caller, with an empty input distinguished from an unknown user. This path remains the username oracle noted in `CLAUDE.md`'s post-v2.0 audit (item 4) - a readable message does not make it more of one, and tests pin that the failure never echoes the name that was looked up.
-- [X] **A co-owned account did not say whose it is.** The account detail header now carries a "Compte de {name}" chip when the account belongs to someone else, shown only with auth on and only when the owner differs from the viewer, where it would otherwise be noise.
-- [ ] **"Many components do not update when you change them."** Reported from real usage, and **not reproduced**: nine real edit flows were exercised in a production build and every one refreshed correctly. The investigation did settle the mechanism (see `CLAUDE.md`'s "Revalidation, and what actually makes a screen update" - the obvious explanation was measurably wrong) and added a test asserting every mutating Server Action revalidates something, which is the one cause known to produce this. Left open pending a specific screen and edit to reproduce.
-
----
-
-## Backlog - demand-driven
-
-*Not scheduled into a version. Each of these was scoped out of the version it originally belonged to (see that version's own retrospective note) because it needs either confirmed community demand or a materially bigger integration effort than the rest of that version - not because it was forgotten. Move an item here into a real version once that condition is met.*
-
-- [ ] **Interactive Brokers** - the one broker from the original v1.12 list with genuinely no Woob module (confirmed absent from the live repository, same way Revolut was confirmed absent - see `CLAUDE.md`'s "Sync service" section). Would need a real direct-API integration (IBKR's Client Portal/TWS API, which means running and managing an IB Gateway session) rather than just a picker entry
-- [ ] **GoCardless webhooks** *(downgraded from a planned item - re-checked live during the v1.17 scoping pass above)* - the webhook/event documentation findable for GoCardless is under its Payments (mandates, billing requests) product, not the Bank Account Data (PSD2 account-info) product this project actually integrates with; a transaction-level webhook for Bank Account Data specifically could not be confirmed to exist at all from public docs. Would also still need the self-hosted instance reachable from the public internet either way (the opposite direction of the existing polling sync). Left here rather than promoted, pending someone actually checking with a real GoCardless account
-- [ ] **Plaid integration** - US and Canadian banks (only if there is clear community demand)
-
----
-
-## v1.0.0 - Released ✓
-
-- [X] `docker compose up` one-command setup
-- [X] All account types: checking/savings, PEA/CTO, crypto, real estate, automobile, loan, meal vouchers
-- [X] Live prices via Yahoo Finance (stocks, ETFs, crypto)
-- [X] French tax calculations - latent taxes: PEA 17.2%, CTO 31.4%, Crypto 31.4%
-- [X] Analytics: savings rate, runway, passive income, CAGR, sector allocation, benchmark radar
-- [X] Auto-sync: Trade Republic (18 EU countries), LCL via Woob, generic Woob for other FR banks
-- [X] GoCardless PSD2 open banking - 2,200+ banks across EU and UK
-- [X] Optional built-in password authentication (`AUTH_ENABLED=true`)
-- [X] CSV and PDF export
-- [X] Demo mode - pre-seeded fictional data, read-only (`DEMO_MODE=true`), cron reset
-- [X] WCAG 2.1 accessibility (keyboard navigation, screen reader, focus management)
-- [X] AGPL-3.0 open-source release *(that licence governed every release through v2.0.1; see LICENSE.md for what applies after)*
+## v1.x
+
+| Version | What it added |
+|---|---|
+| v1.17 | Trade Republic real-time tracking; 30-minute Woob sync; new-transaction alerts |
+| v1.16 | Rebalancing-drift alerts; sector-exposure breakdown; historical allocation chart; on-demand FX revaluation |
+| v1.15 | App-lock (WebAuthn); Web Push; "Auto" theme; full UI/UX audit |
+| v1.14 | Multiple named savings goals; long-term net worth projection |
+| v1.13 | Global transaction ledger; split transactions; budget rollover |
+| v1.12 | Public REST API; PWA; light theme; richer share view |
+| v1.11.x | Connect any Woob bank without a terminal; full catalog; duplicate-account cleanup |
+| v1.10.x | Explicit income/expense categories; "reste à vivre"; accessibility and responsive pass |
+| v1.9 | Internal transfer detection; clearer sync-failure notifications |
+| v1.8 | "Mark as income" from a real transaction |
+| v1.7 | Automatic categorization: self-learning, MCC, merchant dictionary |
+| v1.6 | Custom alert rules |
+| v1.5 | 2FA (TOTP); read-only share links; alerts and webhooks |
+| v1.4 | Benchmarks; rebalancing; income tracking; per-account tax treatment; multi-currency |
+| v1.3 | Categories and budgets; recurring transactions |
+| v1.2 | CSV import; historical balance import; backup and restore |
+| v1.1 | English/French UI; editable tax rates; auto-sync on open |
+| v1.0 | `docker compose up`; every account type; live prices; Trade Republic, LCL and Woob sync; GoCardless PSD2; AGPL-3.0 |

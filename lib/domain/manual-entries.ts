@@ -1,31 +1,20 @@
 /**
- * Manual entries on an account nobody else writes to.
+ * Manual entries on an account nobody else writes to - a meal-voucher card, a
+ * cash envelope, a bank the sync cannot reach. Pure arithmetic, no I/O.
  *
- * A meal-voucher card, a cash envelope, a bank the sync cannot reach: these
- * accounts have no external source of truth, so the only way their balance
- * moves is a person saying so. This module holds the arithmetic for that, with
- * no I/O, so the one part that is easy to get wrong is testable on its own.
+ * **The fact everything follows from**: a fiat account's balance on screen is
+ * `history[0].balanceCents`, the newest snapshot, NEVER a sum of transactions.
+ * So "I spent 12 EUR" must write BOTH a Transaction (or budgets never see it)
+ * AND a snapshot (or the figure does not move). One without the other gives a
+ * balance that changes with no explanation, or a list that does not add up to
+ * the number above it.
  *
- * **The fact everything here follows from**: for a fiat account the balance on
- * screen is `history[0].balanceCents` - the most recent HistoricalBalance row
- * (see lib/domain/account-detail.ts). It is NEVER re-derived by summing
- * transactions. So recording "I spent 12 EUR" has to write BOTH a Transaction
- * (or budgets, categorisation and recurring detection never see it) AND a
- * balance snapshot (or the figure on screen does not move). Writing only one of
- * the two produces the two failures worth naming: a balance that changes with
- * no explanation, or a list of movements that does not add up to the balance
- * printed above it.
- *
- * **Why a past date shifts the rows after it.** A snapshot is what the app
- * believed the balance was on that day. Learning about a movement on the 7th
- * means every belief held from the 7th onward was too high (or too low) by that
- * amount, so they all move by the same delta and the days before it do not.
- * Rewriting recorded history would be indefensible on a synced account, where
- * the rows came from a bank; here they only ever came from this same person,
- * which is exactly why the eligibility guard restricts all of this to accounts
- * with no sync.
+ * **A past date shifts every snapshot after it**, because a snapshot is what
+ * the app believed that day, and learning about a movement on the 7th means
+ * every belief from the 7th on was off by that amount. Defensible only because
+ * these rows only ever came from this same person - which is what the
+ * eligibility guard enforces.
  */
-
 /** One HistoricalBalance row, narrowed to what the arithmetic needs. */
 export type BalanceSnapshot = { recordedAt: Date; balanceCents: bigint };
 
@@ -79,19 +68,12 @@ export type ManualEntryError =
   | "no_prior_balance";
 
 /**
- * Whether the account's balance is known on the day before an entry.
- *
- * `anchorBalanceFor` builds its anchor from the balance strictly before the
- * entry and falls back to zero when there is none - which reads as arithmetic
- * and is actually an assertion: on an account created without a starting
- * balance, recording a 12 EUR spend wrote -12 EUR and the account page then
- * showed that as its balance, indistinguishable from a real one. Same shape as
- * the recurring pattern this repo has already named twice - an absent value
- * rendered as a legitimate zero.
- *
- * So the caller asks first, and a movement with nothing behind it is refused
- * rather than invented. The way out is the correction mode, which states a
- * balance outright instead of deriving one.
+ * Is the balance known on or before this day? Asked first, because
+ * `anchorBalanceFor` falls back to zero when nothing precedes the entry, and
+ * that reads as arithmetic while being an assertion: on an account with no
+ * starting balance, a 12 EUR spend wrote -12 EUR and the page showed it as
+ * fact. A movement with nothing behind it is refused; the correction mode
+ * states a balance outright instead of deriving one.
  */
 export function hasBalanceBefore(snapshots: readonly BalanceSnapshot[], at: Date): boolean {
   const stamp = at.getTime();

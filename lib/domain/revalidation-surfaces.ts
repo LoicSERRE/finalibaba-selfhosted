@@ -1,39 +1,18 @@
 /**
  * Which pages render which entity - the input to every revalidatePath call.
  *
- * **What actually makes a screen update, measured rather than assumed.** Three
- * experiments against a production build (`next start`), each one a real
- * category assignment on /transactions filtered to uncategorised rows, so the
- * server-rendered row count is the evidence and not a DOM value the browser
- * could be holding on its own:
+ * Measured, because the obvious reading is wrong here: **a mutating action must
+ * revalidate something, and which path it names does not decide what you are
+ * looking at.** Three experiments against a production build settled it -
+ * naming the on-screen path refreshes, omitting it still refreshes, stubbing
+ * revalidatePath out entirely leaves it stale. Local cause: every page is
+ * `force-dynamic`, so there is no Full Route Cache to purge.
  *
- *   1. every path revalidated, including the one on screen -> refreshes
- *   2. the path on screen deliberately REMOVED from the list -> still refreshes
- *   3. revalidatePath stubbed out entirely -> stays stale
- *
- * So the rule for this app is: **a mutating action must revalidate something,
- * and which path it names does not decide what you are looking at.** Any
- * revalidation makes the router refresh the current route.
- *
- * This is narrower than revalidatePath's own documentation suggests ("Updates
- * the UI immediately (if viewing the affected path)"), and the reason is local
- * to this codebase: every page is `force-dynamic`, so there is no Full Route
- * Cache for a path to purge, and Next's default `staleTimes.dynamic` of 0
- * means other routes refetch on navigation whether or not they were named.
- * Experiment 3 confirmed that too - with nothing revalidated at all,
- * navigating from /transactions to /budgets still showed the new figure.
- *
- * That is why this module exists and also why it stays modest. The lists below
- * are honest documentation of what shows what, and they cost one call instead
- * of five per action - but the load-bearing part is that **every mutation
- * calls one of these at all**. `__tests__/revalidation-surfaces.test.ts`
- * enforces exactly that, and checks each path is a real route so a renamed
- * page cannot leave a dead entry behind.
- *
- * Adding a page? Add it to the surfaces that render its data. That is the
- * whole maintenance burden, and it is now in one file instead of 27.
+ * So the load-bearing part of this module is not the lists, it is that **every
+ * mutation calls one of these at all** - which
+ * `__tests__/revalidation-surfaces.test.ts` enforces, along with each path
+ * being a real route.
  */
-
 /** Every route that shows account balances, values or net worth. */
 const ACCOUNT_VALUE_SURFACES = ["/", "/accounts", "/analytics"] as const;
 

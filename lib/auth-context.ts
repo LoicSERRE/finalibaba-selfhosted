@@ -66,23 +66,12 @@ export function isDeletedSessionUser(e: unknown): boolean {
 /**
  * The current user.
  *
- * **The owner fallback below is only ever reachable with no live session.**
- * That distinction is the whole security property of this function, and it was
- * missing: a session naming a user who had been deleted failed the lookup,
- * fell through, and came back as the owner - with `role: "ADMIN"`. A member
- * whose account an admin had just removed became that admin on their next
- * refresh, with full read/write over the entire instance. Reported from a real
- * instance, and reproduced here before fixing (see
- * __tests__/auth-context.test.ts).
- *
- * A deleted user now raises DeletedSessionUserError instead. Deliberately not
- * a redirect: this is called from app/layout.tsx, which renders on /login too,
- * so redirecting there would loop forever. The layout catches it and signs the
- * browser out, which is the one action that actually resolves the state.
- *
- * Throws for a different reason if the DB has no owner row at all - that means
- * the v2 migration never ran, a broken install rather than a state to paper
- * over.
+ * **The owner fallback is only ever reachable with NO live session** - that is
+ * the security property of this function. Reachable with one, a session naming
+ * a deleted user fell through and came back as the owner with role ADMIN.
+ * A deleted user raises DeletedSessionUserError instead; app/layout.tsx catches
+ * it and signs the browser out (not a redirect - the layout renders on /login
+ * too, so it would loop).
  */
 export async function getViewer(): Promise<Viewer> {
   if (isAuthEnabled()) {
@@ -187,24 +176,18 @@ export async function grantedPortfolios(
 }
 
 /**
- * Everything a READ surface needs, resolved in one call: who is asking, whose
- * portfolio is on screen, which accounts that means, and whether the viewer may
- * change any of it.
+ * Everything a READ surface needs in one call.
  *
- * `ownerId` is the distinction that makes the portfolio switcher correct rather
- * than half-working. `accountIds` covers everything hanging off an account
- * (transactions, holdings, balances), but a page also reads entities owned by a
- * PERSON - categories, goals, the UserSettings row feeding analytics. Those must
- * follow the portfolio being displayed, not the session: rendering the grantor's
- * transactions against the viewer's own categories would show every row
- * uncategorized, which looks like broken data rather than a permission boundary.
+ * `ownerId` is what makes the portfolio switcher correct: `accountIds` covers
+ * what hangs off an account, but categories, goals and UserSettings are owned
+ * by a PERSON and must follow the portfolio on screen - the grantor's
+ * transactions against the viewer's categories render as entirely
+ * uncategorised, which reads as broken data rather than a boundary.
  *
- * `readOnly` is true exactly when a granted portfolio is being displayed. Pages
- * pass it down to suppress mutation affordances - not as the access control
- * itself (that lives in the Server Actions, which never consult this) but so a
- * guest is never shown a button that would only fail.
+ * `readOnly` only suppresses mutation affordances; the access control is in the
+ * Server Actions.
  *
- * MUTATIONS MUST NOT USE THIS. They resolve their writable set from
+ * MUTATIONS MUST NOT USE THIS - they resolve their writable set from
  * getWritableContext/baseAccountIds, which know nothing about the cookie.
  */
 export interface ViewContext {

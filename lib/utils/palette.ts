@@ -24,35 +24,18 @@ export const AVATAR_COLORS = [
   "#22c55e", "#f59e0b", "#ec4899", "#ef4444",
 ] as const;
 
-// Net-worth allocation-by-category color coding - one fixed hue per asset
-// category, shared by the dashboard pie chart (app/page.tsx), the analytics
-// pie chart (lib/analytics.ts), and the analytics "safe vs risky" radar bar
-// (components/analytics/allocation-radar-section.tsx) so the same category
-// always reads as the same color everywhere in the app, not three
-// independently-typed copies that could silently drift apart.
+// One fixed hue per asset category, shared by the dashboard pie, the analytics
+// pie and the "safe vs risky" radar bar, so a category always reads as the same
+// colour everywhere rather than three copies that drift.
 //
-// UI/UX audit finding: `savings` and `cash` used to be #8b5cf6/#6366f1
-// (19° apart in hue - indigo and violet), and `realEstate` used #3b82f6
-// (also blue-family, 22° from cash) - three of the six categories
-// clustered in the same narrow blue-purple band, nearly indistinguishable
-// as small legend dots/pie slices (confirmed visually, not just by hue
-// math, in a real rendered screenshot). `savings` moved to teal (67° from
-// cash) and `realEstate` out of the blue band entirely.
-//
-// Second audit finding, on that same `realEstate` entry: the warm neutral
-// gray it moved to (#78716c, 5% saturation) fixed the hue clash but created
-// a semantic one. On a typical French portfolio real estate is the LARGEST
-// holding, so the biggest wedge of the allocation donut rendered in the one
-// color the eye reads as "no data" - and the sector palette below then
-// deliberately matched `unclassified` to it, giving a real category and a
-// missing one the same visual language.
-//
-// Now terracotta: hue 7°, a genuine earth tone for property, 31° clear of
-// crypto's amber and 37° of automobile's pink, at 26% saturation - five
-// times the gray's, enough to read as a deliberate choice rather than an
-// absence, while staying muted enough that it is never confused with those
-// two vivid neighbours. Deliberately not moved back toward blue, which is
-// what the first fix above existed to escape.
+// Two audit findings shaped these values and both are easy to undo by accident.
+// Hue: cash, savings and realEstate were once all in the same narrow
+// blue-purple band and indistinguishable as small legend dots. Semantics:
+// realEstate then spent a while as a warm grey, which made the largest wedge of
+// a typical French portfolio render in the one colour the eye reads as "no
+// data" - and the sector palette below matches `unclassified` to grey
+// deliberately. Terracotta is a real earth tone, clear of crypto's amber and
+// automobile's pink, and saturated enough to read as a choice, not an absence.
 export const ALLOCATION_CATEGORY_COLORS: Record<string, string> = {
   cash: "#6366f1",
   savings: "#14b8a6",

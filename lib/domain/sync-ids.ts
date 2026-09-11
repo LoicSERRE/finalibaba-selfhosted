@@ -1,10 +1,9 @@
 /**
  * Account.syncId shapes, in one place.
  *
- * Every sync source stamps the accounts it creates with a `syncId` so the next
- * run recognises its own rows instead of duplicating them. That column is
- * globally unique, which is fine while a source can only ever run once per
- * instance, and a real collision as soon as it can run once per user:
+ * Every sync stamps the accounts it creates so the next run recognises its own
+ * rows. The column is globally unique, so a source that can run once per user
+ * needs the user in the id:
  *
  *   lcl:<nativeId>                  env-configured LCL, owner only
  *   tr:<suffix>                     env-configured Trade Republic, owner only
@@ -13,11 +12,9 @@
  *   gocardless_<transactionId>      GoCardless (transactions, not accounts)
  *   csv_<uuid>                      CSV import (transactions)
  *
- * The two Trade Republic shapes coexist deliberately, the same way `lcl:` and
- * `woob:<id>:` already do: the env-driven sync keeps writing the legacy
- * two-segment id so existing installs are untouched, and the per-user path
- * writes the three-segment one. They are unambiguous because the suffix set
- * below never contains a colon, so segment count alone tells them apart.
+ * The two Trade Republic shapes coexist: the env sync keeps writing the legacy
+ * two-segment id so existing installs are untouched. Segment count tells them
+ * apart, because no suffix below contains a colon.
  */
 
 /** The account kinds Trade Republic can produce - mirrors sync_tr.py's ACC_TYPE_MAP. */
@@ -48,25 +45,18 @@ export function parseTrSuffix(syncId: string | null | undefined): TrAccountSuffi
 }
 
 /**
- * Whether this is Trade Republic's cash account, under either shape.
- *
- * lib/domain/analytics.ts used to compare against the literal `"tr:cash"` to
- * apply TR's own cash interest rate to the passive-income estimate. That
- * comparison silently stops matching the moment an account is synced through
- * the per-user path, and the failure is invisible: no error, just a slightly
- * understated figure.
+ * Trade Republic's cash account, under either shape. Never compare against the
+ * literal "tr:cash": it stops matching for a per-user account with no error,
+ * just a quietly understated passive-income figure.
  */
 export function isTrCashAccount(syncId: string | null | undefined): boolean {
   return parseTrSuffix(syncId) === "cash";
 }
 
 /**
- * True for an account created by one of the env-configured, owner-only syncs
- * (LCL or the legacy two-segment Trade Republic path).
- *
- * This is the set `migrateDedicatedSyncToWoob` deletes and the Settings page
- * counts, and it must NOT include per-user Trade Republic accounts: those are
- * not legacy, and nothing should offer to migrate them away.
+ * An account from an env-configured, owner-only sync. This is the set
+ * `migrateDedicatedSyncToWoob` DELETES, so it must never include a per-user
+ * Trade Republic account.
  */
 export function isLegacyEnvSyncId(syncId: string | null | undefined): boolean {
   if (!syncId) return false;
@@ -76,13 +66,9 @@ export function isLegacyEnvSyncId(syncId: string | null | undefined): boolean {
 }
 
 /**
- * Every syncId the env-configured Trade Republic sync can ever write.
- *
- * An exact list, not the `tr:` prefix, and that distinction is the difference
- * between a migration and data loss: `tr:` also matches `tr:<institutionId>:`,
- * so deleting "everything starting with tr:" during an env-to-per-user
- * migration would take the accounts the migration just created along with the
- * ones it meant to remove.
+ * An exact list, never the `tr:` prefix - which also matches
+ * `tr:<institutionId>:`, so deleting by prefix during a migration takes the
+ * accounts that migration just created.
  */
 export function legacyTrSyncIds(): string[] {
   return TR_ACCOUNT_SUFFIXES.map((suffix) => `${TR_PREFIX}${suffix}`);

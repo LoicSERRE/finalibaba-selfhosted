@@ -54,21 +54,12 @@ export function balanceAtOrBefore(
  * "if nothing else changes" assumption - this cannot know about a deposit
  * or withdrawal that hasn't happened yet).
  *
- * A fortnight before the account's EARLIEST known snapshot uses that
- * earliest balance held flat backward - the same "assume it held" idealism
- * already applied forward from today, applied symmetrically. A first cut
- * of this function skipped those fortnights entirely on the reasoning that
- * the account "likely did not exist yet" - but for the far more common real
- * case (an account that existed all along, whose balance history in THIS
- * app only starts from whenever it was first synced), skipping produced the
- * same number as assuming a 0€ balance for every unsynced month, silently
- * understating a full year's worth of interest on an account that in fact
- * held its balance the whole time. Reported from a real instance: a Livret
- * showing ~250€ of known real interest for the year, and a LEP the user
- * said had not moved from 10k€ since January, summed with the rest of
- * their savings to well over the ~377€ this function was returning. Only
- * genuinely history-less accounts (an empty `balances` array) still
- * contribute nothing - there is no balance to extrapolate from at all.
+ * A fortnight before the EARLIEST known snapshot uses that earliest balance
+ * held flat backward, symmetric with the forward extrapolation. Skipping those
+ * fortnights instead reads an account's unsynced months as a 0 EUR balance,
+ * which understates a real year badly - the common case is an old account whose
+ * history in this app only starts when sync did. An account with no history at
+ * all still contributes nothing.
  */
 export function estimateYearEndInterestCents(
   balances: readonly { recordedAt: Date; balanceCents: bigint }[],
@@ -128,26 +119,12 @@ function earliestKnownBalance(balances: readonly { recordedAt: Date; balanceCent
 }
 
 /**
- * What estimateYearEndInterestCents' own answer would have been on each of
- * `evaluationDates`, re-running the projection as if evaluated that day
- * (using only the balance known as of that day as its "current balance") -
- * lets a chart show how the estimate has actually moved through the year as
- * a livret's balance changed, rather than only ever showing today's single
- * number. Requested directly: the estimate can move a lot if money is
- * added to or taken out of a savings account, and there was no way to see
- * that it had.
+ * The same projection re-run as of each of `evaluationDates`, so a chart can
+ * show how the estimate moved through the year rather than only today's figure.
  *
- * A date earlier than the account's first snapshot uses that earliest known
- * balance, exactly as estimateYearEndInterestCents does - the two MUST agree
- * on this or the chart contradicts the headline figure sitting above it.
- * The first cut of this function kept the older `continue`-on-null rule
- * after that function had moved on, which is precisely what went wrong:
- * a Livret A synced since January plus a LEP synced only since June showed
- * a headline of 400 EUR against a curve reading 150 EUR until June and then
- * stepping to 400 EUR on 1 July - a +167% jump representing nothing real,
- * because the LEP's unsynced months were being read as a 0 EUR balance
- * again. An account with NO history at all still contributes nothing,
- * since there is no balance to extrapolate from.
+ * MUST agree with estimateYearEndInterestCents on the backward extrapolation
+ * above, or the curve contradicts the headline sitting on top of it - which is
+ * exactly what happened when this kept the older skip-on-null rule.
  */
 export function estimateYearEndInterestSeries(
   balances: readonly { recordedAt: Date; balanceCents: bigint }[],

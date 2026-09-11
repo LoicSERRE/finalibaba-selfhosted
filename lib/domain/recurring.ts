@@ -284,26 +284,16 @@ function amountClusters(group: TxLike[]): TxLike[][] {
 }
 
 /**
- * The regular series hiding inside a label whose amounts, taken together, are
- * too scattered to look like one.
+ * The regular series hiding inside a label whose amounts are too scattered as a
+ * whole - one merchant that is both a subscription and a shop, where the
+ * purchases drag the median around until the band fails.
  *
- * Asked for directly, and the example is the whole problem: "paiement amazon
- * aussi ça peut etre l'abonnnement qui lui est régulier ... ou alors un achat
- * sur amazon ça peut etre 20€ comme 500". One merchant is genuinely two
- * things - a subscription at a fixed price and one-off purchases at any price
- * - and analyseSeries judges the label as a whole, so the purchases drag the
- * median around, the 70% band fails, and the real subscription inside is
- * never suggested at all.
- *
- * Only ever consulted AFTER the whole group has failed, so a label that is
- * already consistent is judged exactly as before - this adds suggestions
- * where there were none rather than changing any that existed. A cluster is
- * then held to a STRICTER standard than a whole group: every amount in it has
- * to sit in the band, not 70% of them. A whole group earns its 30% slack from
- * being the complete history of a label (one bonus month, one price change);
- * a subset picked out for being similar has no such excuse, and the looser
- * rule would let any three vaguely-spaced purchases of a similar size become
- * a subscription.
+ * Only consulted AFTER the whole group fails, so a consistent label is judged
+ * exactly as before. A cluster is then held to a STRICTER standard: EVERY
+ * amount in the band, not 70%. A whole group earns its slack from being a
+ * label's complete history; a subset picked for being similar has no such
+ * excuse, and the looser rule turns any three similar purchases into a
+ * subscription.
  */
 function analyseAmountCluster(
   group: TxLike[],

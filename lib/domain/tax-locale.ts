@@ -1,39 +1,19 @@
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 
 /**
- * Country presets: which investment wrappers and savings products exist where,
- * and what to pre-fill when one is picked.
+ * Country presets: which wrappers and savings products exist where, and what to
+ * pre-fill when one is picked.
  *
- * **What this is not.** It is not a tax engine, and adding one would be a
- * mistake rather than an improvement. Real tax rules are per-country,
- * per-wrapper, per-holding-period, and they change every year - France alone
- * has PEA, PEA-PME, CTO, assurance-vie and PER, each with its own clock. An
- * app that computes a confidently *wrong* tax figure is strictly worse than
- * one that asks. So nothing here is ever used to compute: `getAccountTaxRate`
- * remains the only resolver, and it reads the rate stored on the account,
- * which the user can always see and change.
+ * **Never used to compute.** This is not a tax engine and must not become one -
+ * real rules are per-country, per-wrapper, per-holding-period and change
+ * yearly, and a confidently wrong figure is worse than one that asks.
+ * `getAccountTaxRate` stays the only resolver, reading the rate stored on the
+ * account. The country decides what is SUGGESTED and what things are CALLED.
  *
- * **What it is.** The country decides what the app *suggests* and what it
- * *calls things*. Picking "PEA" in France or "ISA" in the UK fills in a
- * treatment and a rate that the user then owns. Nothing more.
- *
- * **Why this shape.** `Account.taxTreatment` (EXEMPT / DEFERRED / TAXABLE) plus
- * `taxRatePct` was already country-agnostic and already correct: a UK ISA and a
- * US Roth IRA are both EXEMPT, a PER and a 401(k) are both DEFERRED, everything
- * else is TAXABLE at some rate. That model did not need replacing. What needed
- * replacing were the three places that bypassed it with French assumptions
- * baked into code - most damagingly a savings-interest estimator that matched
- * on account *names* ("livret a", "ldds", "lep") and therefore returned zero
- * passive income for every user outside France, silently and with no way to
- * notice. That is now `Account.interestRatePct`, a real field, in every country.
- *
- * **On the rates below.** They are starting points a user confirms, not advice,
- * and the UI says so. Several countries deliberately carry `null`: where the
- * rate depends on an income band (UK, US, Spain), on a deemed-return regime
- * (Netherlands) or on rules I will not encode second-hand (Belgium,
- * Luxembourg), suggesting a number would be inventing precision. `null` means
- * the field starts empty and the user fills it - which is the honest default
- * and, unlike a wrong suggestion, cannot quietly become a wrong net worth.
+ * Several countries carry `null` on purpose: where the rate depends on an
+ * income band (UK, US, Spain) or a deemed-return regime (Netherlands),
+ * suggesting a number invents precision. `null` starts the field empty, which
+ * cannot quietly become a wrong net worth.
  */
 
 export const COUNTRY_CODES = [
@@ -55,42 +35,21 @@ export type WrapperPreset = {
 };
 
 /**
- * A savings product whose rate is set by the state and therefore knowable -
- * but only as of a date, which is why that date is part of the type.
- *
- * A regulated rate is a fact with an expiry. France's Livret A alone moved
- * several times in the last few years and is expected to move again. A
- * suggestion carrying no date pretends to be current and is indistinguishable
- * on screen from a value the user checked themselves; a dated one announces
- * its own staleness and invites the correction. The UI shows this date next to
- * the suggested figure for exactly that reason.
+ * A state-set savings rate - knowable, but only as of a date, which is why the
+ * date is part of the type. An undated suggestion is indistinguishable on
+ * screen from a value the user checked themselves.
  */
 export type SavingsPreset = { key: string; ratePct: number; knownAt: string };
 
-/** Displayed with every suggested savings rate - see SavingsPreset.
- *
- *  Moved from 2026-02-01 when the Livret A and the LDDS went from 1.5% to
- *  1.7% on 1 August 2026 - which the presets kept suggesting as 1.5% for six
- *  weeks afterwards, i.e. the exact staleness the date exists to announce,
- *  reached from the other side. The date is not decoration: whoever bumps a
- *  rate here bumps this too, or the screen keeps vouching for a figure nobody
- *  re-checked. */
+/** Shown with every suggested savings rate. Bump it whenever a rate below
+ *  changes, or the screen keeps vouching for a figure nobody re-checked. */
 export const SAVINGS_RATES_KNOWN_AT = "2026-09-11";
 
 /**
- * The two components of the French PFU ("flat tax"), kept separate rather
- * than as one combined rate: several consumers need only the social-levies
- * half - a PEA (after 5 years) and an assurance-vie (after 8 years) are both
- * exempt from the income-tax half but still owe social levies alone, unlike
- * a plain CTO, which owes both.
- *
- * Before this existed, the social-levies rate was a scattered literal - 17.2%
- * (then 18.6%) - copied by hand into tax-locale.ts's own FR preset,
- * analytics.ts's dividendEffectiveTaxRate and its Trade Republic cash
- * fallback, add-account-dialog.tsx's suggested PEA rate, and
- * user-settings.ts's form-fallback default. A real rate change (confirmed
- * 2026-09: 17.2% -> 18.6%) is exactly the case that scattering makes easy to
- * half-fix - one source of truth now, so the next change only happens here.
+ * The two halves of the French PFU, kept separate: a PEA after 5 years and an
+ * assurance-vie after 8 owe the social levies alone, where a CTO owes both.
+ * One source of truth - this was five copied literals, and a rate change is
+ * exactly what scattering makes easy to half-fix.
  */
 export const FR_SOCIAL_LEVIES_RATE = 0.186;
 export const FR_INCOME_TAX_PFU_RATE = 0.128;

@@ -13,19 +13,12 @@
  *                     when a human is present
  *   unsupported       this integration cannot drive the bank at all
  *
- * `captcha_required` exists because the two questions below have different
- * answers for it, and no pre-existing status did. It is reconnectable, so the
- * Connect button must appear (`auth_required` gets that right). But the
- * scheduled sync can NEVER clear it on its own - a captcha token is single-use
- * and expires in about two minutes, so the 4h cron lands right back here
- * forever. Filing it as `auth_required` would therefore have the failure alert
- * remind the user every 24h, for good, about something they already know and
- * cannot automate away. Filing it as `unsupported` would be the opposite lie:
- * it would hide the very button that makes the bank work.
- *
- * Same "nothing will ever clear this on its own" dead end `isSourceRetired`
- * was written for, reached from a third direction: not a source that stopped
- * running, nor one that never could, but one that only ever runs by hand.
+ * `captcha_required` exists because it is the only status that answers the two
+ * questions below differently: reconnectable (so the Connect button must show,
+ * like `auth_required`) but never clearable by a scheduled run (a captcha token
+ * is single-use and expires in ~2 minutes, so the cron lands right back here).
+ * Filed as `auth_required` it would remind every 24h forever; filed as
+ * `unsupported` it would hide the button that makes the bank work.
  */
 
 export const SYNC_STATUS_SUCCESS = "success";
@@ -52,36 +45,18 @@ export function alertsOnlyOnce(status: string | null | undefined): boolean {
 }
 
 /**
- * Can an unattended run ever clear this state, or does it always need a person?
- *
- * True only for `captcha_required`: a captcha token is single-use and expires in
- * about two minutes, and a bank that has MFA on refuses to start a login outside
- * an interactive session at all, so "Synchronize" on such a bank cannot succeed
- * - now or ever. Offering it next to "Connect" put two buttons side by side of
- * which one always failed, and its failure overwrote the successful connection
- * with a warning triangle seconds later. Reported from a real instance right
- * after a connection that had in fact worked.
- *
- * Deliberately NOT true for `auth_required`: an expired session often comes back
- * on the next scheduled run, so hiding the button there would remove something
- * that does work.
+ * Hide "Synchronize"? True only for `captcha_required`, where it can never
+ * succeed and its failure overwrites the connection that just worked with a
+ * warning triangle. NOT for `auth_required`: an expired session often does come
+ * back on the next run.
  */
 export function reconnectOnlyRefreshes(status: string | null | undefined): boolean {
   return status === SYNC_STATUS_CAPTCHA_REQUIRED;
 }
 
 /**
- * The four visual states a sync status collapses to, and the i18n key that
- * explains each one.
- *
- * Extracted because `app/settings/page.tsx` carried the same four-way branch
- * three times over - once for the colour, once for the aria-label, once for the
- * icon - so adding `captcha_required` meant editing the same decision in three
- * places and hoping they stayed in step. One function, one decision.
- *
- * `unsupported` is deliberately muted rather than red: red invites retrying
- * something that can never work. `captcha_required` shares the warning tone
- * with `auth_required` because both are asking for the same thing - a person.
+ * The four visual states a status collapses to. `unsupported` is muted rather
+ * than red - red invites retrying something that can never work.
  */
 export type SyncStatusTone = "success" | "warning" | "muted" | "negative";
 
@@ -102,13 +77,8 @@ export function syncStatusLabelKey(status: string): string {
 }
 
 /**
- * What the failure-alert pass should do about one sync source.
- *
- * Extracted from the loop in `app/api/alerts/check/route.ts`, which had grown
- * five sequential guards in front of the alerting itself - each individually
- * obvious, together over the complexity gate and, more to the point, no longer
- * readable as a single decision. Callers compute the two facts this cannot know
- * (a retired source, a realtime channel) and pass them in, so it stays pure.
+ * What the failure-alert pass should do about one source. Callers pass in the
+ * two facts this cannot know (retired, realtime) so it stays pure.
  *
  *   clear   drop any state row: nothing is wrong, or nothing ever will be
  *   silent  something IS wrong and the user has already been told once
@@ -122,16 +92,14 @@ export function classifySyncSource(input: {
   isRealtime: boolean;
   hasState: boolean;
 }): SyncSourceVerdict {
-  // A listener shares one bank session with its batch sync, so a dead session
-  // fails both and only the batch sync's alert names something recognisable.
+  // A listener shares its session with the batch sync, which alerts with a name
+  // the user recognises.
   if (input.isRealtime) return "clear";
-  // Nothing will ever write a fresh success row for these two, so a kept state
-  // row would remind forever with no way to self-heal.
+  // Nothing will ever write a fresh success row, so a kept row reminds forever.
   if (input.isRetired) return "clear";
   if (input.status === SYNC_STATUS_SUCCESS) return "clear";
   if (input.status === SYNC_STATUS_UNSUPPORTED) return "clear";
-  // Worth one notification, never a reminder - the state row is what remembers
-  // that the one notification already went out.
+  // Worth one notification, never a reminder; the state row remembers it went.
   if (alertsOnlyOnce(input.status) && input.hasState) return "silent";
   return "alert";
 }

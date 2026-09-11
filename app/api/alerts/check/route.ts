@@ -31,13 +31,9 @@ import {
 } from "@/lib/domain/sync-sources";
 
 /**
- * Called by sync/main.py at the end of every automatic 4h sync run (not on
- * demand-triggered "Sync now" clicks - see CLAUDE.md's "Alerts & webhooks"
- * for why). No browser session exists on that call path, so this route is
- * excluded from proxy.ts's NextAuth matcher (same category as api/auth) and
- * gates itself instead: NEXTAUTH_SECRET, already mandatory and already
- * maximally sensitive (session forgery), doubles as the shared bearer token
- * between the sync and app containers rather than requiring a new secret.
+ * Called by sync/main.py at the end of every automatic 4h run, never on a
+ * "Sync now" click. No browser session on that path, so this route is out of
+ * proxy.ts's matcher and gates itself on a NEXTAUTH_SECRET bearer token.
  */
 
 async function checkNetWorthAlert(settings: UserSettingsModel, accountIds: string[]): Promise<boolean> {
@@ -116,20 +112,13 @@ async function checkLoanAlerts(settings: UserSettingsModel, accountIds: string[]
   return fired;
 }
 
-// SyncLog.source is a machine key ("trade_republic", "lcl", or
-// "woob:<institutionId>" - the last one a raw cuid, never a name), kept
-// that way because it's also SyncFailureState's unique dedup key and
-// changing its shape would be a real migration risk. Resolved to something
-// a human actually reads only here, at notification time - a real fix
-// after a user found the raw ids in a push notification unreadable
-// ("woob:cmqpvbok4000026lom282dpi4" told them nothing).
+// SyncLog.source stays a machine key - it is also SyncFailureState's dedup
+// key - and is resolved to something readable only here, at notification time.
+// A raw cuid in a push notification tells the user nothing.
 const FIXED_SOURCE_LABELS: Record<string, string> = {
   trade_republic: "Trade Republic",
   lcl: "LCL",
-  // Not a real bank sync - reuses this same SyncFailureState/dispatchAlert
-  // machinery for the Analytics sector-exposure chart's own health probe
-  // (checkSectorDataHealth below). See CLAUDE.md's "Full sector-exposure
-  // breakdown".
+  // Not a bank sync: the sector-data health probe reuses this machinery.
   yahoo_sector_data: "Données sectorielles Yahoo Finance",
 };
 
@@ -137,45 +126,25 @@ type InstitutionLite = { id: string; name: string; woobModule: string | null; tr
 
 function friendlySourceLabel(source: string, institutions: Map<string, InstitutionLite>): string {
   if (FIXED_SOURCE_LABELS[source]) return FIXED_SOURCE_LABELS[source];
-  // Every per-institution source resolves the same way, through the shared
-  // parser. It used to be a `woob:`-only branch, so v2.1's per-user Trade
-  // Republic connections fell straight through to the `return source` below
-  // and were announced by their raw cuid - reintroducing, for a second
-  // prefix, exactly the unreadable-notification bug this function was
-  // written to fix for the first one.
+  // Through the shared parser, never a per-prefix branch: a `woob:`-only one
+  // let per-user Trade Republic sources fall through and be announced by their
+  // raw cuid.
   const institutionId = sourceInstitutionId(source);
   if (institutionId) {
     const institution = institutions.get(institutionId);
     if (institution) return institution.name;
-    // Real production case: the institution this SyncLog/SyncFailureState
-    // row was created for has since been deleted (e.g. deleted and
-    // recreated while troubleshooting a reconnect) - the raw source string
-    // still carries its old id, and a user found that literal cuid ("woob:
-    // cmqpvbok...") completely unreadable in a push notification. Same
-    // "never surface raw internal identifiers to a human" rule this
-    // function already exists to enforce for the FIXED_SOURCE_LABELS case
-    // - the fallback below is generic instead of leaking the id, not a fix
-    // for the underlying orphaned-row situation (which needs manual
-    // cleanup in Settings, not a notification-formatting change).
+    // The institution was deleted and the source string still carries its id.
+    // Generic beats leaking the id; the orphaned row needs cleanup in Settings.
     return isPerUserTrSource(source) ? "Trade Republic" : "une banque configurée via Woob";
   }
   return source;
 }
 
-// Real production reports: sync-failure alerts kept firing forever for a
-// source that could never recover, either because (a) LCL_LOGIN/TR_PHONE
-// had been removed from .env (a deliberate, documented migration path off
-// the dedicated sync - see CLAUDE.md's "Migrating an existing dedicated
-// integration to Woob") so sync_lcl.py/sync_tr.py simply stop running and
-// never write a fresh "success" SyncLog row that would ever clear the
-// SyncFailureState, or (b) a woob:<id> source's Institution row was deleted
-// or had its Woob config cleared, same "nothing will ever write a success
-// row again" dead end. Neither case means the source is currently *broken*
-// - it means it's not running at all anymore, which this alert has no
-// business treating as an ongoing failure. Checked once per source per
-// run (env vars and a single Institution lookup are cheap) rather than
-// only at alert-creation time, so a source retired *after* it already had
-// an active SyncFailureState still gets cleaned up and stops reminding.
+// A retired source never writes another success row, so nothing would ever
+// clear its SyncFailureState and it reminds forever: .env credentials removed,
+// or an Institution deleted / its config cleared. Checked every run, not only
+// at alert-creation time, so one retired AFTER its state row exists is cleaned
+// up too.
 function isSourceRetired(source: string, institutions: Map<string, InstitutionLite>): boolean {
   if (source === SOURCE_LCL) return !process.env.LCL_LOGIN;
   if (source === SOURCE_TRADE_REPUBLIC) return !process.env.TR_PHONE;
@@ -219,22 +188,11 @@ function formatSyncFailureBody(label: string, status: string): string {
 const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Edge-triggered, not level-triggered: alerts once when a source transitions
- * into a broken streak (SyncFailureState row created), then at most one
- * reminder per REMINDER_INTERVAL_MS while it stays broken, and clears the
- * moment the source succeeds again so the next failure (if any) is treated
- * as a brand new streak. Replaces a version that alerted once per failed
- * SyncLog row regardless of whether it was already known-broken - confirmed
- * the hard way that sends hundreds of emails within minutes once a source
- * has been broken for a while (every automatic-cron and AutoSync-triggered
- * retry wrote its own row, all alerted on the first check after being
- * unblocked). See CLAUDE.md's "Alerts & webhooks" / SyncFailureState comment
- * in schema.prisma for the full incident writeup.
+ * Edge-triggered, never level-triggered: one alert when a source enters a
+ * broken streak, one reminder per REMINDER_INTERVAL_MS while it stays broken,
+ * cleared on the next success. Alerting per failed SyncLog row instead sends
+ * hundreds of emails in minutes once a source has been broken a while.
  */
-// Shared by both "this source isn't broken (anymore or ever again)" exits
-// below (retired, or a fresh success) - extracted for real duplication
-// removal, not just to shave a point off checkSyncFailures's own cognitive
-// complexity as a side effect.
 async function clearSyncFailureState(userId: string, source: string, hasState: boolean): Promise<void> {
   if (hasState) await prisma.syncFailureState.delete({ where: { userId_source: { userId, source } } });
 }
@@ -366,21 +324,13 @@ async function checkSyncFailures(settings: UserSettingsModel): Promise<string[]>
 const SECTOR_DATA_SOURCE = "yahoo_sector_data";
 
 /**
- * Degradation alert for the Analytics sector-exposure chart's Yahoo Finance
- * crumb-based ETF path (lib/services/yahoo-finance.ts's
- * probeYahooSectorHealth) - the fragile half of that feature (see CLAUDE.md's
- * "Full sector-exposure breakdown" for the full scoping writeup on why it's
- * fragile and what the two optional fallback providers are). Reuses
- * SyncFailureState/dispatchAlert exactly like checkSyncFailures above (same
- * edge-triggered + REMINDER_INTERVAL_MS shape), but manages its own row
- * directly under a reserved source key instead of going through that
- * function's SyncLog-scanning loop - nothing writes a SyncLog row for this
- * JS-only concern, so that loop would never discover it.
+ * Degradation alert for the sector-exposure chart's Yahoo crumb path. Same
+ * edge-triggered shape as checkSyncFailures, but manages its own
+ * SyncFailureState row under a reserved key - nothing writes a SyncLog row for
+ * this JS-only concern, so that loop would never find it.
  *
- * Alerts on `!anyPathHealthy`, not `!yahooHealthy` - a self-hoster with a
- * fallback provider configured and working shouldn't get paged just because
- * Yahoo alone hiccupped while the fallback quietly covered for it. The alert
- * exists for "the feature has actually stopped working."
+ * Alerts on `!anyPathHealthy`, not `!yahooHealthy`: a working fallback means
+ * the feature has not stopped working.
  */
 async function checkSectorDataHealth(settings: UserSettingsModel): Promise<string[]> {
   if (!settings.sectorDataAlertsEnabled) return [];
@@ -614,18 +564,10 @@ async function checkUnrealizedGainAmount(
   return shouldFire ? `unrealized_gain_rule:${rule.id}` : null;
 }
 
-// UNREALIZED_GAIN: accountId set = that account's own holdings; accountId
-// null = every investment/crypto account combined (a second query, since
-// findActiveAlertRules only preloads the rule's own account - see
-// CLAUDE.md's "Custom alert rules" for why null accountId is this kind's
-// only valid null-account case). gainUnit picks which of the two
-// dispatch-and-dedup checkers above applies - a rule stores exactly one
-// threshold field, never both, so only one branch is ever reachable per
-// rule. Split into the two functions above (rather than inlined here) to
-// stay under the sonarjs cognitive-complexity gate - both branches share
-// the same "compute gain, evaluate, dispatch, dedup" shape but over a
-// different unit, so folding them into one function double-counts that
-// shape's branching twice over.
+// UNREALIZED_GAIN: accountId set = that account's holdings; null = every
+// investment/crypto account combined, which needs a second query. gainUnit
+// picks the branch, and a rule stores exactly one threshold field, so only one
+// is ever reachable.
 async function checkUnrealizedGainRule(
   rule: CustomAlertRule,
   settings: UserSettingsModel,
@@ -702,12 +644,9 @@ async function checkBudgetOverrunRule(
   return null;
 }
 
-// NEW_TRANSACTION's own amount filter, kept out of checkNewTransactionRule
-// below since it's the one place a single Prisma key (amountCents) is built
-// from two independent rule fields (transactionDirection + the reused
-// balanceThresholdCents-as-minimum) - computing it in one place avoids the
-// two fields ever accidentally producing two separate amountCents objects
-// that would silently overwrite each other on spread.
+// One Prisma key (amountCents) built from two independent rule fields, in one
+// place - built separately they produce two amountCents objects and the spread
+// silently drops one.
 function buildNewTransactionAmountFilter(
   direction: "DEBIT" | "CREDIT" | null,
   minimumCents: bigint | null
@@ -742,18 +681,10 @@ async function checkNewTransactionRule(
   accountIds: string[],
 ): Promise<string | null> {
   const where = excludeInternalTransfers({
-    // A rule with no accountId watches every account the user has - their
-    // own base set, not the instance's.
-    //
-    // A rule that names one is still intersected with that set rather than
-    // trusted: H4's own note claims the guards "treat rules on non-writable
-    // accounts as inactive defensively", and until now they did not. No path
-    // currently produces such a rule - createAlertRule validates the target,
-    // and every way an account can leave the user's reach (deletion,
-    // co-owner removal) either cascades the rule away or deletes it
-    // explicitly - so this closes a documented gap rather than a live leak.
-    // Cheap insurance on the one kind that would otherwise describe another
-    // person's transactions in a notification.
+    // No accountId = every account the user has. A named one is still
+    // INTERSECTED with that set rather than trusted - this is the one rule kind
+    // that could otherwise quote another person's transactions in a
+    // notification.
     accountId: rule.accountId
       ? { in: accountIds.filter((id) => id === rule.accountId) }
       : { in: accountIds },

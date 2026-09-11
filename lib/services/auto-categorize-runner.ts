@@ -98,83 +98,33 @@ async function matchAgainstDefaults(
   return suggestions;
 }
 
-// Detects internal transfers (money moving between two of the user's own
-// accounts) purely by amount+date pairing, independent of the transaction
-// label - see lib/domain/internal-transfers.ts for why label text alone
-// can't do this reliably (a real production incident: a bank's generic
-// "VIREMENT SEPA" label gets reused for both).
+// Flags internal transfers - see CLAUDE.md's "Internal transfer detection"
+// for the design and the three defects that shaped it.
 //
-// Scoped to `accountIds` (the runner's own base set: accounts they own or
-// co-own), never the whole table. This pass used to run globally, which was
-// correct while every account in the database belonged to the same person -
-// the exact assumption lib/domain/internal-transfers.ts's own header states.
-// In multi-user that assumption is false and a global pass becomes a
-// cross-user false-positive generator: user A's €500 debit and user B's
-// unrelated €500 credit two days apart would be paired and both silently
-// excluded from their owners' budgets and income. In mono mode the base set
-// is every account anyway, so behavior there is unchanged.
+// Scoped to `accountIds` (own + co-owned), never the whole table: a global
+// pass pairs one user's debit with another's unrelated credit. Never narrowed
+// to a single account either - transfers are cross-account by nature.
 //
-// Running it per user means a transfer is flagged if ANY stakeholder can see
-// both sides, which is the intended semantics for a co-owned account.
-//
-// Deliberately NOT narrowed further to one accountId the way the rest of the
-// engine can be - transfers are inherently cross-account, so the pool has to
-// span the runner's whole base set.
-//
-// The pool is every row NOBODY HAS RULED ON, flagged or not - not, as it
-// used to be, every row that isn't flagged yet. Two consequences, and both
-// were real defects:
-//
-//   - A person's decision now survives. The old pool contained every
-//     un-flagged row, which is exactly where un-marking a transfer by hand
-//     put it, so the next sync flagged it straight back.
-//   - A pairing is no longer permanent. A debit paired with an unrelated
-//     same-amount credit stayed that way even once its true counterpart
-//     turned up, and both wrong halves stayed out of budgets and income for
-//     good. Re-deriving over the whole pool lets a better pairing win.
-//
-// Re-deriving means the pass can now *revoke* a flag, which the old
-// monotonic write made structurally impossible - and that write was what
-// kept two users' passes over a co-owned account from thrashing one row
-// between them. The replacement guarantee is internalTransferPairId: a flag
-// is only ever revoked when the partner that justified it is in this pass's
-// own pool, so a pairing whose other leg sits on an account this user cannot
-// see is left exactly as it is. A row flagged before that column existed and
-// left unpaired by the migration's backfill likewise keeps its flag until a
-// person says otherwise, rather than being dropped on no evidence.
+// The pool is every row NOBODY HAS RULED ON, flagged or not, so a person's
+// decision survives and a pairing can be revisited. That means the pass can
+// revoke a flag, which the old monotonic write made impossible - and that
+// write was also what stopped two users' passes over a co-owned account from
+// thrashing a row. internalTransferPairId replaces the guarantee: a flag is
+// only revoked when the partner that justified it is in this pass's own pool.
 async function flagInternalTransfers(accountIds: string[], userId: string): Promise<void> {
   if (accountIds.length === 0) return;
   const candidates = await prisma.transaction.findMany({
-    // Securities movements are not a leg of anything: buying shares moves
-    // money out of the cash account and into a position, and no second bank
-    // account ever records the other side. Leaving them in only ever gave
-    // the matcher fake competition, and on a real account it won - a 10 EUR
-    // "Bitcoin - Sparplan ausgeführt" sat exactly as close to a 10 EUR
-    // credit on a Livret as the genuine transfer out of the current account
-    // did, took the tie, and the real pair went unflagged.
+    // A share purchase and a card payment can never be one leg of a transfer -
+    // no second bank account records the other side - and on real data each
+    // won a tie against the genuine counterpart.
     where: {
       internalTransferManual: null,
       isSecuritiesMovement: false,
-      // A card payment cannot be one leg of a transfer between two of your own
-      // accounts, whatever its amount happens to match. Measured on a real
-      // account: a 105 EUR incoming transfer from a third party was paired
-      // with an unrelated 105 EUR card payment two days later on the broker's
-      // cash account, and both were excluded from budgets for it. The bank
-      // says which is which - Trade Republic tags every timeline item with an
-      // eventType - and the sync now keeps that rather than discarding it.
-      //
-      // Null passes, and has to: it is what every other source and every row
-      // synced before this column existed carries. This narrows the pool where
-      // there is evidence, it does not require evidence to enter it.
-      //
-      // Hence the explicit null branch rather than a bare NOT, which is the
-      // trap this exact filter fell into first: `NOT (NULL LIKE 'CARD_%')` is
-      // NULL in SQL, not TRUE, so a negated match silently excludes every row
-      // whose column is null. Measured against a real database before it
-      // shipped - the pool went from 628 rows to ZERO, disabling
-      // internal-transfer detection entirely, with no error anywhere. A filter
-      // that fails by matching nothing is invisible; only running it against
-      // real rows and counting them showed it.
+      // Null MUST pass - it is what every other source and every pre-existing
+      // row carries. Hence the explicit null branch and not a bare NOT:
+      // `NOT (NULL LIKE 'CARD_%')` is NULL in SQL, not TRUE, so a negated
+      // match excludes every null row. Written that way first, it took the
+      // pool from 628 rows to zero and switched detection off silently.
       OR: [{ sourceEventType: null }, { NOT: { sourceEventType: { startsWith: "CARD_" } } }],
       accountId: { in: accountIds },
     },

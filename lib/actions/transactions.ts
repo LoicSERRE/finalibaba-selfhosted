@@ -42,28 +42,14 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
 }
 
 /**
- * Manual override for Transaction.isInternalTransfer. The automatic
- * detection (lib/domain/internal-transfers.ts) needs an exact amount match
- * on both sides within a few days, with a real Transaction row recorded on
- * BOTH accounts - a transfer fee or currency spread (breaks the exact-
- * amount match), a slower settlement (breaks the day window), or a
- * receiving account whose own sync never records a deposit event at all
- * (nothing to pair with, ever) each defeat it silently, and until now
- * there was no way to correct any of them: a real report of a recurring
- * inter-account transfer counting as ordinary income/spend in "Reste à
- * vivre", the passive-income estimate, and every /budgets total.
+ * Manual override for Transaction.isInternalTransfer, for everything automatic
+ * detection cannot reach: a transfer fee breaks the exact-amount match, a slow
+ * settlement breaks the day window, and a receiving account whose sync records
+ * no deposit has nothing to pair with, ever.
  *
- * Deliberately does not touch categoryId - a flagged transaction is
- * already excluded from every category-scoped total regardless of what
- * category it still carries (same as the automatic path's own retroactive
- * cleanup, which only ever clears a specific "Revenus" mis-categorization,
- * not a blanket clear), and a manual correction is by definition already
- * reviewed by the person making it.
- *
- * It writes internalTransferManual as well as the flag, and that is what
- * makes it stick: the detector's candidate pool is every row with no human
- * decision, so before this column existed an un-marked transfer went
- * straight back into the pool and the next sync re-flagged it.
+ * Writes internalTransferManual as well as the flag, and that is what makes it
+ * stick - the detector's pool is every row with no human decision. Does not
+ * touch categoryId: a flagged row is already out of every category total.
  */
 export async function setInternalTransferFlag(transactionId: string, flagged: boolean) {
   const viewer = await getViewer();
@@ -138,26 +124,15 @@ export async function setTransactionCategory(
   // /budgets/[categoryId] drill-down reflects the move in either direction.
   revalidateTransactions(tx.accountId, [before?.categoryId, categoryId]);
 
-  // How many other transactions in this account share the same normalized
-  // label but currently sit in a different category (including
-  // uncategorized) - the UI offers to apply this correction to all of them
-  // in one click, since a bad automatic categorization (a dictionary/MCC
-  // false positive, or a self-learning miss) typically hits every
-  // occurrence of a label at once, not just the one the user happened to
-  // notice and fix. normalizeLabelForCategorization (not the plainer
-  // normalizeLabel recurring-detection uses) also strips an embedded
-  // calendar year, so e.g. "INTERETS 2025" and "INTERETS 2026" - a French
-  // Livret's once-a-year interest credit, labeled with the current year -
-  // still group as the same label. Same grouping as
-  // applyCategoryToSimilarTransactions below.
+  // Other transactions in this account sharing the same normalised label but
+  // sitting elsewhere - the UI offers to fix them all at once, since a bad
+  // automatic categorisation hits every occurrence of a label, not one.
+  // normalizeLabelForCategorization strips an embedded year, so a Livret's
+  // "INTERETS 2025" and "INTERETS 2026" group together.
   //
-  // Never offered for a generic transfer label ("VIREMENT SEPA" and
-  // friends - isGenericTransferLabel) - a real incident this exact
-  // propagation feature caused: one transaction correctly categorized as
-  // salary, propagated onto every other same-labeled transaction in the
-  // account including real inter-account transfers, since the bank reuses
-  // this boilerplate for both. See lib/domain/auto-categorize.ts's
-  // GENERIC_TRANSFER_LABELS comment for the full incident.
+  // Never for a generic transfer label: a bank reuses that boilerplate for
+  // transfers AND real payments, and propagating from one salary row once put
+  // every inter-account transfer in the account under "Revenus".
   const label = before?.label ?? "";
   let siblingCount = 0;
   if (!isGenericTransferLabel(label)) {

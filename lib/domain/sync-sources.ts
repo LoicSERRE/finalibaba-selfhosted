@@ -15,16 +15,9 @@
  *   yahoo_sector_data        not a sync at all - the sector-data health probe
  *                            reusing SyncFailureState, see the alerts route
  *
- * Written because the per-user sources arrived in v2.1 and nothing that reads
- * this column was taught about them: the alerts route still special-cased
- * `woob:` alone, so a Trade Republic institution's failure notification was
- * titled with a raw cuid - the exact "never surface a raw internal identifier
- * to a human" bug that had already been found and fixed once for Woob. A
- * shared parser is the structural version of that fix.
- *
  * `sync/db.py`'s `_sync_log_owner` is the Python mirror of `sourceInstitutionId`
- * below; the two must agree on which prefixes carry an institution id, because
- * that is what decides whose SyncLog row a sync writes.
+ * below. The two must agree on which prefixes carry an institution id: that is
+ * what decides whose SyncLog row a sync writes.
  */
 
 export const SOURCE_LCL = "lcl";
@@ -45,36 +38,26 @@ export function trRealtimeSource(institutionId: string): string {
  * (which belong to the instance owner and have no Institution row driving
  * them).
  *
- * The listener uses a sibling prefix (`tr-realtime:<id>`) rather than a nested
- * `tr:<id>:realtime`, and that is not cosmetic: the Python mirror splits on
- * ":" and reads a third segment as "not an institution id", so the nested
- * shape would have silently attributed every listener row to the instance
- * owner instead of the connection's real owner. `tr-realtime:` does not start
- * with `tr:`, so the two never overlap whatever order they are tested in.
+ * The listener prefix is a sibling (`tr-realtime:<id>`), never a nested
+ * `tr:<id>:realtime`: the Python mirror reads a third segment as "not an
+ * institution id", so the nested shape files every listener row under the
+ * instance owner instead of the connection's real owner.
  */
 export function sourceInstitutionId(source: string): string | null {
   for (const prefix of [TR_REALTIME_SOURCE_PREFIX, WOOB_SOURCE_PREFIX, TR_SOURCE_PREFIX]) {
     if (!source.startsWith(prefix)) continue;
     const id = source.slice(prefix.length);
-    // A remaining colon means this is not a plain institution id, so refuse
-    // rather than guess - the same conservative reading the Python side takes.
+    // A remaining colon is not a plain institution id: refuse rather than guess.
     return id && !id.includes(":") ? id : null;
   }
   return null;
 }
 
 /**
- * True for a source that reports on a real-time listener rather than a sync.
- *
- * These must never raise a sync-failure alert of their own. A listener and the
- * batch sync behind it share one Trade Republic session, so a dead session
- * makes both fail - and the batch sync is the one that alerts with a name the
- * user recognises and a reconnect prompt they can act on. Alerting twice for
- * one cause is noise, and the second copy was titled "trade_republic_realtime"
- * in the user's notifications, which names nothing.
- *
- * The rows are still written and still visible in Settings: this suppresses
- * the notification, not the diagnosis.
+ * A real-time listener rather than a sync. These must never raise a
+ * sync-failure alert: the listener and its batch sync share one session, so a
+ * dead one fails both, and only the batch sync's alert names something the
+ * user recognises. The rows are still written and visible in Settings.
  */
 export function isRealtimeSource(source: string): boolean {
   return source === SOURCE_TRADE_REPUBLIC_REALTIME || source.startsWith(TR_REALTIME_SOURCE_PREFIX);

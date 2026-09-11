@@ -1,28 +1,16 @@
 /**
- * Self-learns a normalizeLabelForCategorization(label) -> categoryId
- * mapping from the user's own already-categorized transaction history, then
- * suggests that category for uncategorized transactions whose label
- * matches confidently. Pure function, no DB calls - mirrors
- * lib/domain/recurring.ts's shape.
+ * Self-learns a normalizeLabelForCategorization(label) -> categoryId mapping
+ * from the user's own categorised history, then suggests that category for
+ * matching uncategorised rows. Pure, no DB calls.
  *
- * Deliberately not a hardcoded merchant/category dictionary - Category
- * names and countries are entirely user-defined in this app (see "Tax
- * treatment"'s country-agnostic precedent), so there's no fixed vocabulary
- * to match a merchant name against. The only reliable signal is "this exact
- * label pattern was already categorized this way before" - this also
- * covers salary, dividends, and interest for free: they're not detected as
- * a special case, they're just another label the user categorizes once
- * (into "Salaire"/"Dividendes"/whatever they call it) and this engine
- * recognizes on every future occurrence, same as any merchant.
+ * Deliberately not a hardcoded merchant dictionary: category names are
+ * user-defined, so there is no fixed vocabulary to match against. "This exact
+ * label was categorised this way before" also covers salary, dividends and
+ * interest for free - they are not special cases, just labels.
  *
- * Scoped per-account (accountId is part of the grouping key, same as
- * detectCandidates in recurring.ts) rather than across every account -
- * label is raw bank-feed text specific to one institution's formatting, so
- * matching similar-looking labels across two different accounts risks a
- * false merge, exactly the reasoning recurring-transaction detection
- * already applies to its own (accountId, normalizeLabel(label)) key shape.
- */
-import { normalizeLabel } from "@/lib/domain/recurring";
+ * Scoped per-account, because a label is raw bank-feed text specific to one
+ * institution's formatting.
+ */import { normalizeLabel } from "@/lib/domain/recurring";
 
 /**
  * A looser variant of normalizeLabel, used only for the grouping key below
@@ -43,43 +31,26 @@ import { normalizeLabel } from "@/lib/domain/recurring";
  * interest credit lands, a full year has passed and the label has already
  * changed).
  *
- * Only a trailing token (` 26`, ` 2026`) is stripped, not any 2-digit
- * number anywhere in the label - a bare `\d{2}` match with no anchoring
- * would also eat a real arrondissement/store-number suffix like
- * "MCDONALD'S PARIS 15", which is a real but low-consequence tradeoff (it
- * over-merges same-city branches for self-learning's grouping key, but
- * they'd almost always resolve to the same category anyway, unlike
- * silently misreading a genuinely different label as a duplicate).
+ * Only a TRAILING token is stripped, never a 2-digit number anywhere in the
+ * label, which would also eat "MCDONALD'S PARIS 15".
  */
 export function normalizeLabelForCategorization(label: string): string {
-  // Whitespace is collapsed to single spaces *before* the trailing-year
-  // strip below, specifically so that strip can anchor on a single literal
-  // space instead of `\s+` - `\s+` immediately before a `{2}(...)?$`
-  // quantified group is exactly the shape ESLint's sonarjs/super-linear-
-  // regex rule flags as having super-linear backtracking risk.
+  // Whitespace collapsed BEFORE the strip, so the strip anchors on a literal
+  // space: `\s+` before a quantified group is the super-linear-backtracking
+  // shape sonarjs flags.
   const collapsed = normalizeLabel(label).replace(/\s+/g, " ");
   return collapsed.replace(/ \d{2}(\d{2})?$/, "").trim();
 }
 
 /**
- * Generic bank transfer boilerplate that gets reused for both real
- * internal transfers *and* real external payments, with no reliable way
- * to tell them apart from the text alone - confirmed against a real LCL
- * account: "VIREMENT SEPA" appeared on both a same-day, same-amount
- * internal transfer between two of the user's own accounts *and* on
- * unrelated salary-sized credits with no counterparty name attached (the
- * bank doesn't always bother - it does for some transfers, "VIREMENT
- * SOPRA STERIA GROUP"/"VIREMENT M LOIC SERRE", and not others). The first
- * production incident this whole feature caused was exactly this pattern:
- * one transaction correctly categorized as salary, then "apply to
- * similar" propagated that same category onto every other "VIREMENT
- * SEPA" transaction in the account, including real inter-account
- * transfers. Self-learning and propagation must never treat a label in
- * this set as a trustworthy group. lib/domain/internal-transfers.ts is
- * the actual fix for the transfer half of this - detecting the pair by
- * amount and date, not by label text - this set only prevents the
- * self-learning engine from making the same mistake again for whichever
- * *other* real thing a generic label happens to also mean.
+ * Bank boilerplate reused for BOTH real transfers and real external payments,
+ * with nothing in the text to separate them - a bank attaches a counterparty
+ * name to some transfers and not others. Never a trustworthy group for
+ * self-learning or propagation: one salary row once put every "VIREMENT SEPA"
+ * in the account under the same category, transfers included.
+ *
+ * lib/domain/internal-transfers.ts is the real fix for the transfer half; this
+ * set only stops the same mistake for whatever ELSE a generic label means.
  */
 const GENERIC_TRANSFER_LABELS = new Set(["virement sepa", "virement instantane"]);
 

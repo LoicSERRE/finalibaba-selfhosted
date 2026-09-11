@@ -236,33 +236,17 @@ function perUserAccountFilter(institutionId: string) {
   };
 }
 
-// Completes the migration warned about by ConfigureWoobDialog's
-// dedicatedEnvWarning banner: once a Woob sync has actually run for this
-// institution (proven by at least one "woob:<institutionId>:"-prefixed
-// Account existing), this deletes the old dedicated-sync accounts -
-// Prisma cascades the delete to their Transaction/HistoricalBalance/Holding
-// rows, since every FK pointing at Account is onDelete: Cascade (see
-// schema.prisma). Requires proof that Woob has real data first so this can
-// never delete the only copy of an account's history.
+// DELETES the old dedicated-sync accounts, cascading to their transactions,
+// balances and holdings. Requires proof that Woob already produced real data,
+// so it can never remove the only copy of an account's history.
 //
-// This only removes the DB-side duplicate - it does NOT and cannot touch
-// .env (Server Actions run inside the same container but have no business
-// rewriting deploy config). The caller still has to remove LCL_LOGIN/
-// LCL_PASSWORD (or TR_PHONE/TR_PIN) from .env and restart, or the next
-// scheduled sync (within 4h) recreates the very accounts just deleted here -
-// see CLAUDE.md's "Migrating an existing dedicated integration to Woob".
-// Real production incident (2026-08): a user clicked "Migrer maintenant" on
-// an institution where the "lcl:"-prefixed accounts had years of real
-// Transaction/HistoricalBalance history but the "woob:"-prefixed
-// replacements had only just started accumulating their own - the dialog
-// only ever compared *account count* (5 vs 5, which matched), never
-// *history depth*, so nothing warned before the cascade delete permanently
-// erased that history. Recovered by hand from a database backup; this
-// function exists so the dialog can warn before it happens to anyone else.
-// The actual "is this gap big enough to warn about" threshold is a display
-// decision, not a data-fetching one - see HISTORY_DEPTH_WARNING_DAYS in
-// lib/domain/institutions.ts, which ConfigureWoobDialog applies to the raw
-// dates returned here.
+// Removes the DB-side duplicate only: the caller must still take LCL_LOGIN /
+// TR_PHONE out of .env and restart, or the next scheduled sync recreates
+// exactly what this just deleted.
+// Matching ACCOUNT COUNTS are not matching history depth: a real migration
+// showed 5 vs 5 and the cascade delete erased years of transactions the
+// replacements did not have yet, recovered by hand from a backup. The warning
+// threshold itself is a display decision - HISTORY_DEPTH_WARNING_DAYS.
 async function oldestHistoryDate(accountIds: string[]): Promise<Date | null> {
   if (accountIds.length === 0) return null;
   const [tx, hb] = await Promise.all([
@@ -302,28 +286,15 @@ export async function getMigrationHistoryDepth(
 }
 
 /**
- * Hand the .env Trade Republic sync's existing accounts over to this
- * institution's own credentials, keeping every one of them and their history.
+ * Hands the .env Trade Republic accounts over to this institution's own
+ * credentials, keeping every row. Nothing is deleted - only the string saying
+ * which sync owns them is wrong, so `tr:cash` becomes
+ * `tr:<institutionId>:cash` and everything hanging off the account stays put.
+ * Use this rather than migrateDedicatedSyncToWoob, which deletes.
  *
- * The alternative already here, migrateDedicatedSyncToWoob, DELETES the legacy
- * accounts once replacements exist - which for a move off TR_PHONE means
- * throwing away years of transactions and balances and starting the new
- * connection from whatever Trade Republic still serves. That is the shape that
- * cost a real user their LCL history in v1.11, and the history-depth warning
- * only tells you it is about to happen.
- *
- * Nothing has to be deleted. The rows are already correct; only the string
- * that says which sync owns them is wrong. `tr:cash` becomes
- * `tr:<institutionId>:cash`, the Account row is untouched otherwise, and every
- * Transaction, HistoricalBalance and Holding hanging off it stays exactly
- * where it is. The per-user sync then recognises them as its own and keeps
- * appending.
- *
- * Refuses while TR_PHONE is still set, and that guard is the point rather than
- * caution: the env sync resolves its accounts by those same legacy ids, so if
- * it ran between the rename and the .env edit it would simply create `tr:cash`
- * again - the duplicate set this whole operation exists to avoid. Removing the
- * credentials first makes the race impossible instead of unlikely.
+ * Refuses while TR_PHONE is still set, and that guard is the feature: the env
+ * sync resolves by those same legacy ids, so running between the rename and
+ * the .env edit simply recreates `tr:cash`.
  */
 export async function adoptDedicatedTrAccounts(
   institutionId: string,
