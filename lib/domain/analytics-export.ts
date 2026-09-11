@@ -5,7 +5,126 @@
  * free of.
  */
 import type { AnalyticsResult } from "@/lib/domain/analytics-types";
-import type { AnalyticsExportData } from "@/components/shared/export-analytics-button";
+
+// ── Serialized types (no BigInt) ──────────────────────────────────────────────
+
+export type AllocationSliceExport = {
+  name: string;
+  valueCents: number;
+  pct: number;
+};
+
+export type InvestPerfRowExport = {
+  name: string;
+  institution: string;
+  subtype: string | null;
+  valueCents: number;
+  costBasisCents: number;
+  gainCents: number;
+  taxCents: number;
+  returnPct: number;
+};
+
+export type DividendRowExport = {
+  name: string;
+  symbol: string;
+  country: string;
+  subtype: string | null;
+  valueCents: number;
+  annualEstCents: number;
+  annualNetCents: number;
+  taxRate: number;
+  divYield: number;
+  exDividendDate: string | null; // ISO string
+};
+
+export type PerfRowExport = {
+  date: string;
+  netWorth: number;
+  delta: number | null;
+  deltaPct: number | null;
+};
+
+export type BenchmarkExport = {
+  investCAGR: number;
+  msciWorld: number | null;
+  sp500: number | null;
+  cac40: number | null;
+};
+
+export type TopAssetRowExport = {
+  name: string;
+  institution: string;
+  typeLabel: string;
+  subtype: string | null;
+  valueCents: number;
+  gainCents: number | null;
+  taxCents: number | null;
+  pct: number;
+};
+
+export type DebtAccountRowExport = {
+  name: string;
+  institution: string;
+  typeLabel: string;
+  valueCents: number;
+  liabilityCents: number;
+  equityCents: number;
+  ltv: number;
+};
+
+export type AnalyticsExportData = {
+  netWorth: number;
+  netWorthBeforeTax: number;
+  grossAssets: number;
+  totalLiabilities: number;
+  totalLatentTax: number;
+  investedPct: number;
+  hasTaxData: boolean;
+  savingsRate: number | null;
+  salaryNetCents: number;
+  monthlySavedCents: number;
+  momDeltaCents: number | null;
+  runwayMonths: number | null;
+  savingsCents: number;
+  monthlyExpensesCents: number;
+  goals: { name: string; targetCents: number; pct: number; remainingCents: number }[];
+  allocationSlices: AllocationSliceExport[];
+  investPerfRows: InvestPerfRowExport[];
+  investTotalValueCents: number;
+  investTotalCostBasisCents: number;
+  investTotalGainCents: number;
+  investTotalTaxCents: number;
+  investReturnPct: number;
+  investCAGR: number | null;
+  dividendRows: DividendRowExport[];
+  annualDividendsCents: number;
+  annualDividendsNetCents: number;
+  annualInterestCents: number;
+  accountsMissingInterestRate: number;
+  weightedSavingsRatePct: number | null;
+  estimatedYearEndSavingsInterestCents: number;
+  annualPassiveCents: number;
+  monthlyPassiveCents: number;
+  performanceRows: PerfRowExport[];
+  // Real tracked income (IncomeEvent, year-to-date) - distinct from the
+  // Yahoo-yield-model estimate above, see lib/analytics.ts.
+  realYtdDividendsNetCents: number;
+  realYtdInterestNetCents: number;
+  realYtdPassiveNetCents: number;
+  // Benchmark comparison (null when investCAGR itself is null)
+  benchmark: BenchmarkExport | null;
+  // Allocation radar
+  garantisCents: number;
+  risquesCents: number;
+  garantisPct: number;
+  // Top assets (top 10 by value)
+  topAssets: TopAssetRowExport[];
+  // Financing / debt analysis
+  debtAccounts: DebtAccountRowExport[];
+  debtRatio: number;
+};
+
 
 /**
  * Builds the serialized (no BigInt) export payload for ExportAnalyticsButton.
