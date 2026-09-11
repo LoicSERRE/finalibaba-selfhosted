@@ -17,8 +17,13 @@ export async function importBalanceHistory(accountId: string, rows: BalanceRow[]
   // "the current balance" is simply the newest row, so a year typed as 2062
   // becomes the account's displayed balance permanently, on every screen, with
   // no way to take it back short of the database.
-  const today = new Date().toISOString().slice(0, 10);
-  const accepted = rows.filter((r) => parseCsvDate(r.date) === r.date && !isFutureDate(r.date) && r.date <= today);
+  // Normalised rather than compared: the dialog happens to send an ISO date
+  // today, and rejecting anything that is not already ISO would turn a caller
+  // sending the French form into a silent zero-row import rather than a
+  // refusal anyone could see.
+  const accepted = rows
+    .map((r) => ({ date: parseCsvDate(r.date), balanceCents: r.balanceCents }))
+    .filter((r): r is { date: string; balanceCents: number } => r.date !== null && !isFutureDate(r.date));
   if (accepted.length === 0) return { imported: 0 };
 
   // One row per date, last one wins - a file listing the same day twice is
