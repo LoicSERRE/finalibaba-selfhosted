@@ -305,7 +305,8 @@ export function buildMarkdown(
     for (const a of data.topAssets) {
       const label = a.subtype ? `${a.name} (${a.subtype})` : a.name;
       const gainStr = a.gainCents !== null ? `${sign(a.gainCents)}${fmt(a.gainCents)}` : "-";
-      const taxStr = a.taxCents !== null ? (a.taxCents > 0 ? `-${fmt(a.taxCents)}` : fmt(0)) : "-";
+      let taxStr = "-";
+      if (a.taxCents !== null) taxStr = a.taxCents > 0 ? `-${fmt(a.taxCents)}` : fmt(0);
       lines.push(`| ${label} | ${a.typeLabel} | ${fmt(a.valueCents)} | ${gainStr} | ${taxStr} | ${a.pct}% |`);
     }
     lines.push("");
