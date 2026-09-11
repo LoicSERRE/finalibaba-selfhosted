@@ -370,9 +370,16 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 
 ---
 
-## v2.10 - The audit's own findings, patched
+## v2.10 - The audit's own findings, patched - Released ✓
 
-*The end-of-version audit that produced v2.9.2 to v2.9.4 found twenty-four defects; those three releases fixed the ones losing data. This one starts on the rest, in the order they cost the most.*
+*The end-of-version audit that produced v2.9.2 to v2.9.4 found twenty-five defects; those three releases fixed the ones losing data. This one closes the rest, plus what looking for them turned up.*
+
+*Verified against a copy of a real database throughout, and that is not a formality here: three of the decisions below were made one way by reasoning and reversed by measurement, and one change shipped into a passing build while doing the exact opposite of what its own comment claimed.*
+
+### Tooling that came with the audit
+
+- [X] **`scripts/check-balance-reconciliation.sh`** - stored transactions against the balance the bank itself reports, which is the one arbiter that does not depend on the code being tested. It is what settled v2.9.4's duplicate question, and this release documents where it is meaningful and where it is not (see the Trade Republic cash account, which cannot reconcile by construction).
+- [X] **`scripts/fix-restated-label-duplicates.sh` corrected twice, both found by running it end to end** rather than reading it: its dry run listed the merge case under "skipped", under-reporting what `--apply` would do, and its safety guard refused rows carrying a category even when the survivor carried the same one.
 
 ### Money that was never spent
 
