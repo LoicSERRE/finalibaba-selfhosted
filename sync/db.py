@@ -457,6 +457,77 @@ def is_generic_transfer_label(label: str) -> bool:
     return _normalise_label(label) in _GENERIC_TRANSFER_LABELS
 
 
+def _stored_row(row, key, index):
+    """psycopg2 returns a dict or a tuple depending on the cursor factory."""
+    return row[key] if isinstance(row, dict) else row[index]
+
+
+def _already_stored(cur, sync_id: str, legacy_sync_id: str | None, label: str) -> bool:
+    """Exact-id dedup: the bank's own id, or the pre-label composite one.
+
+    The legacy lookup ALSO compares the label, which is the difference between
+    the recovery working and half working: the legacy id is label-blind by
+    construction, so both halves of a colliding same-day pair resolve to it and
+    the surviving row answered for its lost twin as well.
+    """
+    cur.execute('SELECT id FROM "Transaction" WHERE "syncId" = %s', (sync_id,))
+    if cur.fetchone():
+        return True
+    if not legacy_sync_id:
+        return False
+    cur.execute(
+        'SELECT id FROM "Transaction" WHERE "syncId" = %s AND lower(btrim(label)) = lower(btrim(%s))',
+        (legacy_sync_id, label),
+    )
+    return cur.fetchone() is not None
+
+
+def _absorbed_by_nearby(cur, *, account_id, amount_cents, date, label, near_duplicate) -> bool:
+    """Whether a movement already stored under a DIFFERENT id covers this one.
+
+    Needed because a synthesised id contains the transaction's DATE, and a bank
+    restates that date once an operation settles - yielding a new id for a row
+    already stored. See upsert_transaction for the three modes.
+    """
+    if near_duplicate == "off":
+        return False
+
+    cur.execute(
+        """
+        SELECT id, label FROM "Transaction"
+        WHERE "accountId" = %s
+          AND "amountCents" = %s
+          AND date BETWEEN (%s::timestamptz - INTERVAL '3 days') AND (%s::timestamptz + INTERVAL '3 days')
+        ORDER BY date
+        """,
+        (account_id, amount_cents, date, date),
+    )
+    nearby = cur.fetchall()
+    if not nearby:
+        return False
+
+    # A source that supplies real ids but describes one movement with several
+    # of them: the amount window alone is the answer, labels differ by design.
+    if near_duplicate == "amount":
+        return True
+
+    for row in nearby:
+        if _normalise_label(_stored_row(row, "label", 1)) == _normalise_label(label):
+            return True  # same movement, restated on an adjacent date
+
+    # Same movement, described better: adopt the real counterparty rather than
+    # storing it a second time.
+    for row in nearby:
+        stored_label = _stored_row(row, "label", 1)
+        if is_generic_transfer_label(stored_label) and not is_generic_transfer_label(label):
+            cur.execute(
+                'UPDATE "Transaction" SET label = %s WHERE id = %s',
+                (label, _stored_row(row, "id", 0)),
+            )
+            return True
+    return False
+
+
 def upsert_transaction(
     cur,
     *,
@@ -470,127 +541,50 @@ def upsert_transaction(
     is_securities_movement: bool = False,
     source_event_type: str | None = None,
 ):
-    """Insert transaction if not already stored.
+    """Insert a transaction unless it is already stored.
 
-    Dedup is exact whenever the bank gives us a transaction id: `sync_id`
-    carries it and nothing else is consulted. The rest of this function only
-    exists for sources that give us NO id (LCL through Woob is the one that
-    matters), where the id has to be synthesised from the transaction's own
-    fields - see composite_sync_id().
+    Dedup is exact whenever the bank supplies a transaction id. Everything else
+    exists for sources that supply NONE (LCL through Woob), where the id is
+    synthesised from the row's own fields - see composite_sync_id.
 
-    `legacy_sync_id` is the pre-label composite id. Rows stored before that
-    format changed still carry it, so it is looked up as well, or the first
-    sync after the change would re-insert an account's entire history.
+    `near_duplicate` picks how hard to look for a movement already stored under
+    a different id. Three modes, because two source families fail in opposite
+    directions:
 
-    That lookup ALSO matches on the label, which is not defensive detail - it
-    is the difference between the fix working and only half working. The
-    legacy id is label-blind by construction, so both halves of a colliding
-    same-day pair resolve to it: matching on the id alone meant the surviving
-    row answered for its lost twin too, and the twin stayed suppressed
-    forever. Verified against production after the first deployment - not one
-    of the ten known-missing movements had come back, because each one kept
-    matching the legacy id of the row that had displaced it. Comparing the
-    label lets the twin through while the row that genuinely IS the stored
-    one still matches.
-
-    `near_duplicate` picks how hard to look for a movement already stored
-    under a different id, and the three modes exist because two sources fail
-    in opposite directions:
-
-      "label"  - id-less sources (LCL through Woob). Same amount AND same
-                 label within three days, plus the restatement rule below.
-      "amount" - sources that DO supply ids but describe one cash movement
-                 with several of them. Same amount within three days, label
-                 ignored. The default, because it is the older, safer
-                 behaviour.
+      "label"  - id-less sources. Same amount AND label within three days.
+      "amount" - sources that supply ids but describe one movement with
+                 several of them. Same amount within three days, label ignored.
+                 The default.
       "off"    - nothing but the id.
 
-    Trade Republic needs "amount", which cost a release to learn. Reasoning
-    that a real transaction id makes the window pure downside there, it was
-    switched off - and a purchase inside a PEA turned out to emit both a
-    "Kauforder" and a "PEA" event, same amount, same day, different ids.
-    Measured against the bank's own balance for one day: the account moved
-    -325,41 EUR, the transactions summed to -334,14 EUR with the window on
-    and -3 470,52 EUR with it off.
+    Trade Republic needs "amount", which cost a release to learn: a purchase
+    inside a PEA emits both a "Kauforder" and a "PEA" event, same amount, same
+    day, different ids. Measured against the bank's own balance, the account
+    moved -325,41 EUR while the stored rows summed to -3 470,52 with the window
+    off.
 
-    What the window protects against is a real mechanism: a
-    synthesised id contains the transaction's DATE, and a bank can restate
-    that date by a day once the operation settles, which yields a different
-    id for a transaction already stored. It deliberately no longer fires on
-    amount alone.
+    The window must NOT fire on amount alone for an id-less source: that
+    version dropped ten real movements totalling ~3 850 EUR on one instance, a
+    300 EUR transfer to a livret suppressing a 300 EUR transfer to a broker
+    three days later. Requiring the labels to match without the restatement
+    rule was the opposite regression, three duplicates in one production day.
 
-    That amount-only version was a silent data-loss bug, measured against a
-    real production database: a 300 EUR transfer to a livret suppressed a
-    300 EUR transfer to a broker made three days later, because it never
-    looked at the label. Ten movements totalling ~3 850 EUR had been dropped
-    that way on one instance, and each one left its counterpart on the other
-    account permanently unmatchable, which is what made internal transfers
-    show up as income. It also contradicted this project's own stated rule
-    for CSV import, that two legitimately different transactions can share a
-    fingerprint and must not be auto-merged.
-
-    A restatement is absorbed rather than merged away: when that window finds
-    a row still carrying one of LCL's placeholder labels and the incoming row
-    names a real counterparty, the stored row's LABEL is updated in place. It
-    is the same movement, described better.
-
-    Requiring the labels to match without that step was itself a regression,
-    caught one day after deploying it by comparing two production dumps: a
-    161,01 EUR benefit payment and two 600 EUR transfers had each gained a
-    twin, because "VIREMENT SEPA" and its restatement are the same movement
-    under two names. Three duplicates in a single day, accumulating every
-    half hour - which is why the amount-only window, wrong as it was about
-    genuinely distinct movements, was not simply removable.
-
-    Accepted, documented residue: two transactions with the SAME amount AND
-    the same label within three days, on a source with no bank id, still
-    merge - as does a genuine second movement arriving while the first is
-    still shown under a placeholder label. Distinguishing those needs an
-    identity the bank does not give us.
+    **Accepted residue**: two transactions with the same amount AND label
+    within three days on an id-less source still merge, as does a genuine
+    second movement arriving while the first still shows a placeholder label.
+    Telling those apart needs an identity the bank does not give us.
     """
-    cur.execute('SELECT id FROM "Transaction" WHERE "syncId" = %s', (sync_id,))
-    if cur.fetchone():
+    if _already_stored(cur, sync_id, legacy_sync_id, label):
         return
-
-    if legacy_sync_id:
-        cur.execute(
-            'SELECT id FROM "Transaction" WHERE "syncId" = %s AND lower(btrim(label)) = lower(btrim(%s))',
-            (legacy_sync_id, label),
-        )
-        if cur.fetchone():
-            return
-
-    if near_duplicate != "off":
-        cur.execute(
-            """
-            SELECT id, label FROM "Transaction"
-            WHERE "accountId" = %s
-              AND "amountCents" = %s
-              AND date BETWEEN (%s::timestamptz - INTERVAL '3 days') AND (%s::timestamptz + INTERVAL '3 days')
-            ORDER BY date
-            """,
-            (account_id, amount_cents, date, date),
-        )
-        nearby = cur.fetchall()
-
-        if near_duplicate == "amount":
-            if nearby:
-                return  # one movement the source describes more than once
-            nearby = []
-
-        for row in nearby:
-            stored_label = row["label"] if isinstance(row, dict) else row[1]
-            if _normalise_label(stored_label) == _normalise_label(label):
-                return  # same movement, restated on an adjacent date
-
-        # Same movement, described better: adopt the real counterparty rather
-        # than storing it a second time.
-        for row in nearby:
-            stored_id = row["id"] if isinstance(row, dict) else row[0]
-            stored_label = row["label"] if isinstance(row, dict) else row[1]
-            if is_generic_transfer_label(stored_label) and not is_generic_transfer_label(label):
-                cur.execute('UPDATE "Transaction" SET label = %s WHERE id = %s', (label, stored_id))
-                return
+    if _absorbed_by_nearby(
+        cur,
+        account_id=account_id,
+        amount_cents=amount_cents,
+        date=date,
+        label=label,
+        near_duplicate=near_duplicate,
+    ):
+        return
 
     cur.execute(
         """

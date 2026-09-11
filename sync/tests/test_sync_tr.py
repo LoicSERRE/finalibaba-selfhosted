@@ -149,7 +149,8 @@ def test_decode_jwt_payload_decodes_a_well_formed_token():
 def test_decode_jwt_payload_returns_empty_dict_for_malformed_token():
     assert _decode_jwt_payload("not-a-jwt") == {}
     assert _decode_jwt_payload("") == {}
-    assert _decode_jwt_payload("a.b.c.d.e") != {} or True  # doesn't raise either way
+    # The point is that it does not raise; the value itself is unconstrained.
+    _decode_jwt_payload("a.b.c.d.e")
 
 
 # ── _is_auth_error - the actual OTP-nagging bug fix ───────────────────────────

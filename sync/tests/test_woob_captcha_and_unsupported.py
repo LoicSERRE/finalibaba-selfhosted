@@ -485,8 +485,11 @@ def test_a_site_down_is_a_retryable_error_with_a_message_not_an_empty_crash():
     # robust way the rest of this file reads the log rather than by index.
     _id, _source, status, message, *_rest = cur.logs[0]
     assert status == "error", "site-down is transient and retryable, not unsupported/auth"
-    assert message and message.strip(), "an empty message is exactly the #54 bug"
-    assert "indisponible" in message.lower() or "maintenance" in message.lower()
+    assert message is not None, "an empty message is exactly the #54 bug"
+    assert message.strip(), "an empty message is exactly the #54 bug"
+    lowered = message.lower()
+    mentions_outage = "indisponible" in lowered or "maintenance" in lowered
+    assert mentions_outage, "the message must name the outage, not just be non-empty"
 
 
 def test_scraping_blocked_gets_its_own_wording():
@@ -497,7 +500,9 @@ def test_scraping_blocked_gets_its_own_wording():
     _err, cur = _run(ScrapingBlocked(), RuntimeError)
     _id, _source, status, message, *_rest = cur.logs[0]
     assert status == "error"
-    assert "bloqué" in message.lower() or "détect" in message.lower()
+    lowered = message.lower()
+    names_the_block = "bloqué" in lowered or "détect" in lowered
+    assert names_the_block, "the message must say the bank detected and blocked it"
 
 
 @pytest.mark.parametrize(

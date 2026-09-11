@@ -62,7 +62,7 @@ def test_a_persistently_unavailable_backend_still_gives_up_eventually(monkeypatc
     )
 
 
-def test_scraping_blocked_is_not_retried():
+def test_scraping_blocked_is_not_retried(monkeypatch):
     """A detected-and-blocked automation attempt must not be retried seconds
     later - that looks more like a bot, not less."""
     from woob.exceptions import ScrapingBlocked
@@ -73,13 +73,9 @@ def test_scraping_blocked_is_not_retried():
         calls["n"] += 1
         raise ScrapingBlocked()
 
-    original = sync_woob._iter_accounts
-    sync_woob._iter_accounts = always_blocked
-    try:
-        with pytest.raises(ScrapingBlocked):
-            sync_woob._iter_accounts_with_retry(None, "backend", "Some Bank")
-    finally:
-        sync_woob._iter_accounts = original
+    monkeypatch.setattr(sync_woob, "_iter_accounts", always_blocked)
+    with pytest.raises(ScrapingBlocked):
+        sync_woob._iter_accounts_with_retry(None, "backend", "Some Bank")
 
     assert calls["n"] == 1, "must not retry a detected block"
 

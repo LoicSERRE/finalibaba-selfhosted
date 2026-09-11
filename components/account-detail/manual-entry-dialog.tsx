@@ -94,7 +94,7 @@ export function ManualEntryDialog({
 
     startTransition(async () => {
       if (mode === "correct") {
-        const result = await setManualBalance(accountId, Number(parseCents(String(fd.get("balance") ?? ""))));
+        const result = await setManualBalance(accountId, Number(parseCents(field(fd, "balance"))));
         if (!result.ok) {
           setError(t(ERROR_KEY[result.error]));
           return;
@@ -105,12 +105,12 @@ export function ManualEntryDialog({
 
       // The sign is decided here, from the mode, never typed. Math.abs so a
       // minus sign typed anyway cannot flip a spend back into a credit.
-      const magnitude = Math.abs(Number(parseCents(String(fd.get("amount") ?? ""))));
+      const magnitude = Math.abs(Number(parseCents(field(fd, "amount"))));
       const result = await recordManualMovement(accountId, {
         amountCents: mode === "spend" ? -magnitude : magnitude,
-        label: String(fd.get("label") ?? ""),
-        date: String(fd.get("date") ?? ""),
-        categoryId: (fd.get("categoryId") as string) || null,
+        label: field(fd, "label"),
+        date: field(fd, "date"),
+        categoryId: field(fd, "categoryId") || null,
       });
       if (!result.ok) {
         setError(t(ERROR_KEY[result.error]));
@@ -201,6 +201,13 @@ export function ManualEntryDialog({
       </form>
     </Dialog>
   );
+}
+
+/** FormData.get can return a File, which String() would render as
+ *  "[object Object]" - read a text field as text or not at all. */
+function field(fd: FormData, name: string): string {
+  const value = fd.get(name);
+  return typeof value === "string" ? value : "";
 }
 
 /** Stable keys from the Server Action mapped to the strings both locales

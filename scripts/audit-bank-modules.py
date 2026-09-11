@@ -62,8 +62,15 @@ def collect() -> dict[str, dict[str, bool]]:
     from woob.core.repositories import IProgress
 
     class Quiet(IProgress):
-        def progress(self, percent, message): pass
-        def error(self, message): pass
+        # Woob prints repository progress and errors to stdout by default,
+        # which would interleave with this script's own JSON output.
+        def progress(self, percent, message):
+            """Silently discard progress output."""
+
+        def error(self, message):
+            """Silently discard error output - a module that fails to load is
+            simply absent from the catalogue this script reports on."""
+
         def prompt(self, message): return True
 
     woob = Woob()
