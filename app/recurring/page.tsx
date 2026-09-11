@@ -21,7 +21,7 @@ import {
   normalizeLabel,
   projectDailyCumulative,
 } from "@/lib/domain/recurring";
-import { excludeInternalTransfers } from "@/lib/domain/transaction-filters";
+import { excludeFromBudgetTotals } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
 
 const FIAT_TYPES = ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] as const;
@@ -68,12 +68,17 @@ export default async function RecurringPage() {
       // looks for is a commitment to somebody else; moving your own money
       // between your own accounts is not one.
       //
-      // Securities movements are deliberately NOT excluded, unlike the
-      // budget totals: a monthly savings-plan execution really does leave
-      // the cash account on a schedule, which is exactly what a cash-flow
-      // projection is for. The question here is "is this a regular
-      // outgoing", not "is this household spending".
-      where: excludeInternalTransfers({ accountId: { in: accountIds }, date: { gte: detectionCutoff } }),
+      // Securities movements are excluded too, and that was a reversal:
+      // the first cut kept them, reasoning that a savings-plan execution
+      // really does leave the cash account on a schedule and a cash-flow
+      // projection is exactly what that is for. Measuring the suggestion
+      // list on a real account settled it the other way - 11 of 26 were
+      // Sparplan and Saveback lines, and they are the same shape as the
+      // transfers excluded above: money moving into your own portfolio, not
+      // a commitment to somebody else. The ask was "détecter qu'un élément
+      // que je paye à la même personne revient régulièrement", and a share
+      // purchase is not one.
+      where: excludeFromBudgetTotals({ accountId: { in: accountIds }, date: { gte: detectionCutoff } }),
       select: { accountId: true, label: true, amountCents: true, date: true, categoryId: true },
     }),
   ]);

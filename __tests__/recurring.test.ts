@@ -388,3 +388,71 @@ describe("intervalDays", () => {
     expect(intervalDays("WEEKLY", 2)).toBe(14);
   });
 });
+
+describe("a regular series hiding inside a label with scattered amounts", () => {
+  const tx = (date: string, amountCents: number, label = "AMAZON PAYMENTS") => ({
+    accountId: "acc-1",
+    label,
+    amountCents: BigInt(amountCents),
+    date: new Date(`${date}T12:00:00.000Z`),
+    categoryId: null,
+  });
+
+  it("finds the subscription among one-off purchases of the same merchant", () => {
+    // Asked for directly: "paiement amazon aussi ça peut etre l'abonnnement
+    // qui lui est régulier ... ou alors un achat sur amazon ça peut etre 20€
+    // comme 500". Judged as one label the amounts are hopeless, and the real
+    // 6,99 EUR monthly charge inside was never suggested at all.
+    const candidates = detectCandidates(
+      [
+        tx("2026-01-03", -699),
+        tx("2026-02-03", -699),
+        tx("2026-03-03", -699),
+        tx("2026-04-03", -699),
+        tx("2026-01-17", -4_250),
+        tx("2026-02-24", -12_900),
+        tx("2026-03-11", -3_180),
+      ],
+      new Set()
+    );
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].amountCents).toBe(-699);
+    expect(candidates[0].frequency).toBe("MONTHLY");
+    // The anchor is the subscription's own last charge, not the last purchase
+    // under that label - otherwise the projection would expect the next one a
+    // month after an unrelated 31,80 EUR order.
+    expect(candidates[0].anchorDate).toEqual(new Date("2026-04-03T12:00:00.000Z"));
+  });
+
+  it("does not invent one from a few similar purchases", () => {
+    // Three roughly-monthly orders of a similar size are not a subscription.
+    // A whole label earns its 30% slack from being a complete history; a
+    // subset picked out for being similar has no such excuse, so every amount
+    // in it has to sit in the band.
+    const candidates = detectCandidates(
+      [
+        tx("2026-01-05", -2_000),
+        tx("2026-02-06", -2_450),
+        tx("2026-03-04", -1_700),
+        tx("2026-01-20", -40_000),
+        tx("2026-02-20", -51_000),
+      ],
+      new Set()
+    );
+
+    expect(candidates).toHaveLength(0);
+  });
+
+  it("leaves a label that was already consistent judged exactly as before", () => {
+    // The cluster pass only ever runs after the whole group has failed, so a
+    // clean subscription still produces one candidate with its own median.
+    const candidates = detectCandidates(
+      [tx("2026-01-03", -1_099, "NETFLIX"), tx("2026-02-03", -1_099, "NETFLIX"), tx("2026-03-03", -1_099, "NETFLIX")],
+      new Set()
+    );
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].amountCents).toBe(-1_099);
+  });
+});

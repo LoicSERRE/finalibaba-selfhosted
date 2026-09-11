@@ -415,6 +415,11 @@ Shipped anyway, with the failure explained rather than hidden: the restriction i
 - [X] **The suggested regulated rates were six weeks stale**, still proposing 1.5% for the Livret A and the LDDS. The generic "any other livret" fallback was a second copy of the same literal and had to be updated separately, which is the drift the dated-suggestion design was introduced to prevent, reached from the inside.
 - [X] **The rate field never said it wanted a net figure**, so entering the gross rate a bank advertises inflated the estimate on a taxable account.
 
+### The regular charge hiding behind a merchant who is also a shop
+
+- [X] **A merchant can be a subscription and a shop at once, and detection saw only the average.** Asked for directly - "paiement amazon aussi ça peut etre l'abonnnement qui lui est régulier ... ou alors un achat sur amazon ça peut etre 20€ comme 500" - and judging the label as a whole let the purchases drag the median around until the 70% amount test failed, so the real charge inside was never suggested. A label that fails as a whole is now re-examined for an amount-consistent series within it, held to a stricter standard than a whole group. Measured on a real account: it found the 6,99 EUR monthly Amazon charge, and a **salary** whose bonuses had always defeated the amount test.
+- [X] **Savings-plan executions left the suggestion list**, reversing a call made earlier in the same release. Keeping them was defensible in the abstract - a Sparplan really does leave the cash account on a schedule - and measuring settled it: 11 of 26 suggestions were Sparplan and Saveback lines, which are the same shape as the internal transfers already excluded.
+
 ### Elsewhere
 
 - [X] **The passive-income card linked out of someone else's portfolio into your own pages.** `/income`, `/tax-report` and `/budgets` are deliberately outside the portfolio switcher's scope, so a figure read from a grantor's portfolio led to a page showing zero. The links are not offered while viewing someone else's data rather than leading to a contradiction.

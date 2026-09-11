@@ -257,6 +257,74 @@ function analyseSeries(
 }
 
 /**
+ * Splits a group into runs of similar amounts, each measured against the
+ * FIRST member rather than the previous one - comparing neighbours lets a
+ * cluster drift arbitrarily far from where it started, one tolerance at a
+ * time.
+ */
+function amountClusters(group: TxLike[]): TxLike[][] {
+  const byAmount = [...group].sort((a, b) => Number(a.amountCents) - Number(b.amountCents));
+  const clusters: TxLike[][] = [];
+  let current: TxLike[] = [];
+  for (const tx of byAmount) {
+    if (current.length === 0) {
+      current = [tx];
+      continue;
+    }
+    const reference = Number(current[0].amountCents);
+    if (Math.abs(Number(tx.amountCents) - reference) <= amountTolerance(Math.abs(reference))) {
+      current.push(tx);
+    } else {
+      clusters.push(current);
+      current = [tx];
+    }
+  }
+  if (current.length > 0) clusters.push(current);
+  return clusters;
+}
+
+/**
+ * The regular series hiding inside a label whose amounts, taken together, are
+ * too scattered to look like one.
+ *
+ * Asked for directly, and the example is the whole problem: "paiement amazon
+ * aussi ça peut etre l'abonnnement qui lui est régulier ... ou alors un achat
+ * sur amazon ça peut etre 20€ comme 500". One merchant is genuinely two
+ * things - a subscription at a fixed price and one-off purchases at any price
+ * - and analyseSeries judges the label as a whole, so the purchases drag the
+ * median around, the 70% band fails, and the real subscription inside is
+ * never suggested at all.
+ *
+ * Only ever consulted AFTER the whole group has failed, so a label that is
+ * already consistent is judged exactly as before - this adds suggestions
+ * where there were none rather than changing any that existed. A cluster is
+ * then held to a STRICTER standard than a whole group: every amount in it has
+ * to sit in the band, not 70% of them. A whole group earns its 30% slack from
+ * being the complete history of a label (one bonus month, one price change);
+ * a subset picked out for being similar has no such excuse, and the looser
+ * rule would let any three vaguely-spaced purchases of a similar size become
+ * a subscription.
+ */
+function analyseAmountCluster(
+  group: TxLike[],
+): { sorted: TxLike[]; medianAmount: number; band: (typeof GAP_BANDS)[number] } | null {
+  if (group.length < MIN_OCCURRENCES) return null;
+
+  const clusters = amountClusters(group)
+    .filter((c) => c.length >= MIN_OCCURRENCES && c.length < group.length)
+    .sort((a, b) => b.length - a.length);
+
+  for (const cluster of clusters) {
+    const series = analyseSeries(cluster);
+    if (!series) continue;
+    const tolerance = amountTolerance(Math.abs(series.medianAmount));
+    const unanimous = cluster.every((tx) => Math.abs(Number(tx.amountCents) - series.medianAmount) <= tolerance);
+    if (unanimous) return series;
+  }
+  return null;
+}
+
+/**
  * Groups transactions by (accountId, normalized label) and flags groups whose
  * amounts and date spacing look regular enough to be a subscription or
  * regular income. Proposes intervalCount 2 or 3 for a MONTHLY pattern whose
@@ -290,7 +358,9 @@ export function detectCandidates(
   const candidates: Candidate[] = [];
 
   for (const [key, group] of groups) {
-    const series = analyseSeries(group);
+    // The whole label first; only if that fails, the regular series that may
+    // be hiding inside it - see analyseAmountCluster.
+    const series = analyseSeries(group) ?? analyseAmountCluster(group);
     if (!series) continue;
 
     const { sorted, medianAmount, band } = series;
