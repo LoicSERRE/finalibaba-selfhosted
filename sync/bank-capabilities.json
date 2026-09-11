@@ -385,13 +385,24 @@
   "two_factor": false
  },
  "cragr": {
-  "action_needed": false,
+  "action_needed": true,
   "app_validation": false,
   "browser_redirect": false,
   "captcha": false,
   "needs_captcha_response": false,
   "needs_request_information": false,
   "needs_resume": false,
+  "otp": false,
+  "two_factor": false
+ },
+ "creditcooperatif": {
+  "action_needed": false,
+  "app_validation": false,
+  "browser_redirect": false,
+  "captcha": false,
+  "needs_captcha_response": false,
+  "needs_request_information": true,
+  "needs_resume": true,
   "otp": false,
   "two_factor": false
  },
