@@ -10,7 +10,7 @@ import type {
   RealEstateAccountExport,
   AutomobileAccountExport,
   LoanAccountExport,
-} from "@/components/shared/export-accounts-button";
+} from "@/lib/domain/accounts-export";
 
 export function holdingValue(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
   return BigInt(new Decimal(h.quantity.toString()).mul(h.lastPriceCents.toString()).round().toNumber());

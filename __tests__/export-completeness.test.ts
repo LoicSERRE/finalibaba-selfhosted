@@ -10,7 +10,7 @@ import type {
   RealEstateAccountExport,
   AutomobileAccountExport,
   LoanAccountExport,
-} from "@/components/shared/export-accounts-button";
+} from "@/lib/domain/accounts-export";
 
 /**
  * These tests don't check *values* - lib/analytics.test.ts and the manual
@@ -171,7 +171,7 @@ describe("analytics export completeness", () => {
 });
 
 describe("accounts export completeness", () => {
-  const source = readFileSync(resolve(__dirname, "../components/shared/export-accounts-button.tsx"), "utf-8");
+  const source = readFileSync(resolve(__dirname, "../lib/utils/accounts-markdown.ts"), "utf-8");
   const buildMarkdownSource = extractFunctionSource(source, "function buildMarkdown(");
 
   const idAllowlist: Record<string, string> = {
