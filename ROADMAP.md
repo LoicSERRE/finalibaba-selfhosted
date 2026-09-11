@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.0**
+Current release: **v2.10.1**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -22,6 +22,16 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 
 ---
 
+## v2.10.1 - Housekeeping
+
+- `scripts/flag-internal-transfers.sh` - bulk-marks the transfers no matcher can find, because one leg predates the account's own history. 54 rows, ~24 285 EUR on a real instance.
+- **This file and the code comments, cut back.** The roadmap was 592 lines in no consistent order; it is 127, newest first, with the *why* left in `CLAUDE.md` where it belongs. Comments went through the same rule - one earns its place if removing it lets someone reintroduce a bug - taking 3 626 lines of 8+ line blocks down to 2 900 across 109 files.
+- **SonarQube at 0 issues and 0 hotspots**, A/A/A. Nine small real ones (a `FormData.get` that can return a File and stringify as `[object Object]`, two undocumented empty methods, a test mutating a module global, two composite assertions) plus one worth the refactor: `upsert_transaction` at cognitive complexity 30 against a limit of 15, now three functions for the three questions its dedup actually asks.
+- **next 16.3.4, next-intl 4.14.3, lucide-react 1.44, tsx 4.23.13, and @simplewebauthn/server + /browser to 14.0** - the pair applied together, since each major alone fails type-check against the other still on 13.
+- **No Dependabot PR could be merged at all**, and it was not the type error: the branch ruleset required a status check named `npm audit` while the job has been `pnpm audit` since the pnpm migration, so that context never reported. Fixed in the repo settings.
+
+---
+
 ## v2.10.0 - The audit's own findings, patched
 
 The end-of-version audit found twenty-five defects. v2.9.2-v2.9.4 fixed the ones losing data; this closes the rest. Verified against a copy of a real database throughout - three decisions below were made one way by reasoning and reversed by measurement.
@@ -34,7 +44,6 @@ The end-of-version audit found twenty-five defects. v2.9.2-v2.9.4 fixed the ones
 - The matcher lost legs: rewritten as an augmenting-path matching. On real data, 32 legs newly flagged, 35 re-paired, 1 revoked.
 - A card payment no longer competes to be one leg of a transfer (`Transaction.sourceEventType`, the bank's own word for the movement). Not backfillable - applies to transactions synced from here on.
 - Internal transfers stopped being offered as recurring subscriptions, and the bulk "mark as income" stopped recording them as dividends.
-- `scripts/flag-internal-transfers.sh` - bulk-marks the transfers no matcher can find, because one leg predates the account's history. 54 rows, ~24 285 EUR on a real instance.
 
 **The same figure on every screen**
 
