@@ -3,7 +3,7 @@
  * sync-failure alerts, and the sector-data health probe that reuses the same
  * machinery under a reserved source key.
  *
- * Split out of app/api/alerts/check/route.ts at v2.10.2, where 846 lines had
+ * Split out of app/api/alerts/check/route.ts at v2.10.3, where 846 lines had
  * been flagged by five audits running - and where, by this repo's own layering
  * rule, none of it belonged: a route handler is meant to be the thin edge over
  * logic that lives in lib/. Text moved, nothing else.

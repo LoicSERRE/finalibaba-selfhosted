@@ -1,6 +1,6 @@
 """Reading a Trade Republic position payload. Pure: a dict in, a value out.
 
-Split out of sync_tr.py at v2.10.2. These are the functions that know where a
+Split out of sync_tr.py at v2.10.3. These are the functions that know where a
 field hides across TR's API versions - "instrumentId" in newer responses,
 "isin" in older ones, a valuation under three different keys - and they make no
 network call at all, which is what makes them the part worth testing on their

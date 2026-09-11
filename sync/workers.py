@@ -1,6 +1,6 @@
 """The shared worker pool every blocking job runs on.
 
-Its own module since v2.10.2: main.py and realtime_supervisor.py both submit
+Its own module since v2.10.3: main.py and realtime_supervisor.py both submit
 to it, and leaving the entrypoint to own it meant the supervisor could only
 reach it through an import cycle.
 """

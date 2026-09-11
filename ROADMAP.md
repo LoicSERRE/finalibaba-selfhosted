@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.2**
+Current release: **v2.10.3**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -17,8 +17,15 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
 - **Plaid** - US/Canada coverage, where this app has no users yet.
-- **Split `app/api/alerts/check/route.ts`** (915 lines) - flagged by five audits running, and now the largest file in the repo.
 - **Variable-amount recurring detection, second pass** - v2.10 finds a consistent series inside a noisy label; a merchant with *two* subscriptions still only yields one.
+
+---
+
+## v2.10.3 - The rest of the oversized files
+
+- **Five oversized files split, by concern rather than to hit a number.** `app/api/alerts/check/route.ts` 846 -> 143, flagged by five audits, and none of it belonged in a route handler. `components/shared/export-analytics-button.tsx` 639 -> 186, which also fixed a layering inversion nothing had flagged: `lib/` was importing a payload type back out of `components/`. And the two nobody had ever measured, `sync/sync_tr.py` 1172 -> 896 and `sync/main.py` 919 -> 766.
+- **The audit had a blind spot, and it cost five rounds.** Its file-size check only ever ran `wc -l` over `app/`, `components/` and `lib/`, so the largest file in the repository was never once measured. It now covers `sync/` too.
+- Left alone deliberately: `components/settings/alert-rules-section.tsx` (810) and `app/settings/page.tsx` (786) are composition rather than complexity, and this repo has no component-rendering tests to catch a prop-wiring slip.
 
 ---
 

@@ -1,6 +1,6 @@
 """Trade Republic's activity feed, and the Transaction rows it becomes.
 
-Split out of sync_tr.py at v2.10.2, where 1172 lines made it the largest file
+Split out of sync_tr.py at v2.10.3, where 1172 lines made it the largest file
 in the repository - and the largest nobody had measured, since the release
 audit only ever ran `wc -l` over app/, components/ and lib/.
 

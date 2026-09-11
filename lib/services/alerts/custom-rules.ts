@@ -1,6 +1,6 @@
 /**
  * The eight user-defined `AlertRule` kinds and their per-kind checkers, split
- * out of app/api/alerts/check/route.ts at v2.10.2. See that route for the four
+ * out of app/api/alerts/check/route.ts at v2.10.3. See that route for the four
  * built-in triggers these run alongside. Text moved, nothing else.
  */
 import { prisma } from "@/lib/db/prisma";

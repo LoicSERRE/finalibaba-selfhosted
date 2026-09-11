@@ -1,6 +1,6 @@
 """Supervision of the per-connection Trade Republic websocket listeners.
 
-Split out of main.py at v2.10.2, where it sat among the scheduler jobs and the
+Split out of main.py at v2.10.3, where it sat among the scheduler jobs and the
 FastAPI routes in a 919-line entrypoint. It belongs beside sync_tr_realtime.py,
 which owns a single listener, rather than inside the HTTP surface: this module
 decides which listeners should exist and reconciles them, nothing else.

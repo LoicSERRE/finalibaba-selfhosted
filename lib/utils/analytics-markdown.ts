@@ -1,7 +1,7 @@
 /**
  * The analytics markdown document. Pure: data in, one string out.
  *
- * Split out of components/shared/export-analytics-button.tsx at v2.10.2, where
+ * Split out of components/shared/export-analytics-button.tsx at v2.10.3, where
  * 639 lines were 230 of string building, 120 of type declarations and a button.
  * Those types moved to lib/domain/analytics-export.ts, which returns them -
  * lib/ was importing them back out of a component, the wrong way round.
