@@ -17,6 +17,8 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
 - **Plaid** - US/Canada coverage, where this app has no users yet.
+- **Tests for the code the refactor just made visible** - moving the markdown builders out of `components/` and the alert checkers out of `app/api/` took them into the coverage-measured half of the repo, where they report **0%**. `buildMarkdown` is 52 cyclomatic complexity and has never had a test; neither have the eight `AlertRule` checkers. Being testable was the point of moving them.
+- **The complexity hotspots, for real** - `computeAnalytics` is CCN 68 and `computeDashboard` CCN 60. v2.10.2 split the file around the first one without touching the function. 24 lizard warnings in total.
 - **Variable-amount recurring detection, second pass** - v2.10 finds a consistent series inside a noisy label; a merchant with *two* subscriptions still only yields one.
 
 ---
