@@ -18,7 +18,6 @@ import pathlib
 import re
 import sys
 import time
-from datetime import datetime
 from decimal import Decimal
 
 import psycopg2.extras
@@ -29,7 +28,6 @@ from db import (
     record_balance,
     upsert_account,
     upsert_holding,
-    upsert_transaction,
     write_sync_log,
 )
 
@@ -95,69 +93,18 @@ def _get_api(phone_no: str, pin: str, interactive: bool, scope_institution_id: s
     return api
 
 
-# ── JWT / account discovery ───────────────────────────────────────────────────
-
-def _position_isin(pos: dict) -> str:
-    """A TR position's ISIN - the field is called "instrumentId" in newer API
-    responses, "isin" in older ones. Every call site needs both checked."""
-    return pos.get("instrumentId") or pos.get("isin") or ""
-
-
-def split_crypto_positions(positions: list) -> tuple[list, list]:
-    """TR crypto assets (XF000* ISINs) show up in the CTO portfolio but belong
-    to a separate crypto wallet - split them out. Returns (non_crypto, crypto)."""
-    non_crypto = [p for p in positions if not _position_isin(p).startswith("XF0")]
-    crypto = [p for p in positions if _position_isin(p).startswith("XF0")]
-    return non_crypto, crypto
-
-
-def resolve_position(pos: dict, prices: dict, neon_quantities: dict) -> dict | None:
-    """Resolve one TR position dict into the fields the DB layer needs
-    (price/quantity/cost-basis/value). Returns None if the position has no
-    ISIN (skip it).
-
-    Pure - given the same pos/prices/neon_quantities it always returns the
-    same result, no I/O. Extracted from _sync_positions so the price/quantity
-    resolution rules (which price source wins, which quantity source wins)
-    can be unit tested without a DB.
-    """
-    isin = _position_isin(pos)
-    if not isin:
-        return None
-
-    ticker_price, ticker_name = prices.get(isin, (0, None))
-    # Prefer neonPortfolio price (already resolved by the caller: neon >
-    # exchange ticker) over compactPortfolioByType's own currentPrice, which
-    # for illiquid PE/ELTIF funds returns averageBuyIn instead of current NAV.
-    raw_price = pos.get("currentPrice") or pos.get("lastPrice") or 0
-    compact_price_cents = int(Decimal(str(raw_price)) * 100)
-    price_cents = ticker_price or compact_price_cents
-    name = ticker_name or pos.get("name") or isin
-    # Quantity: prefer neon_quantities[isin] when available - it's the
-    # virtualSize neonPortfolio used as price divisor (netValue/virtualSize),
-    # so using the same value here ensures quantity × price = netValue
-    # exactly. Fixes PE/ELTIF where compactPortfolioByType may omit
-    # virtualSize and fall back to netSize, causing a ~20% undercount.
-    quantity = str(neon_quantities.get(isin) or pos.get("virtualSize") or pos.get("netSize") or pos.get("quantity", "0"))
-    avg_price = str(pos.get("averageBuyIn") or pos.get("avgCost") or 0)
-    cost_basis_cents = int((Decimal(quantity) * Decimal(avg_price) * 100).to_integral_value()) if float(avg_price) else None
-    # .to_integral_value() (rounds, ROUND_HALF_EVEN) not int() (truncates) -
-    # matches cost_basis_cents above and the TS display layer's
-    # Decimal(...).round() in lib/domain/account-detail.ts's
-    # holdingMarketValue(). A plain int() here silently dropped sub-cent
-    # fractions instead of rounding them, nudging the account's recorded
-    # balance snapshot (sum of every position's value_cents) away from what
-    # the UI displays (sum of each individually-rounded holding).
-    value_cents = int((Decimal(quantity) * Decimal(str(price_cents))).to_integral_value())
-
-    return {
-        "isin": isin,
-        "name": name,
-        "price_cents": price_cents,
-        "quantity": quantity,
-        "cost_basis_cents": cost_basis_cents,
-        "value_cents": value_cents,
-    }
+# Reading a position payload is pure and lives in tr_positions.py.
+# Re-exported because the tests reach for them through this module.
+from tr_positions import (  # noqa: F401
+    _position_isin,
+    _resolve_direct_price_val,
+    _resolve_isin,
+    _resolve_neon_price,
+    _resolve_net_value,
+    _resolve_virtual_size,
+    resolve_position,
+    split_crypto_positions,
+)
 
 
 def _is_auth_error(exc: Exception) -> bool:
@@ -324,75 +271,14 @@ async def _fetch_ticker_price(api, isin: str) -> tuple[int, str | None]:
         return 0, None
 
 
-def _resolve_isin(pos: dict) -> str:
-    return (
-        pos.get("instrumentId")
-        or pos.get("isin")
-        or (pos.get("instrument") or {}).get("isin")
-        or ""
-    )
 
 
-def _resolve_direct_price_val(pos: dict):
-    """Direct per-unit price field, checked in fallback order (still raw -
-    the caller converts to cents). None if no direct price field exists at
-    all, meaning only netValue/virtualSize (if available) can price this
-    position."""
-    price_val = (
-        pos.get("currentPrice")
-        or pos.get("lastPrice")
-        or (pos.get("instrument") or {}).get("currentPrice")
-    )
-    if price_val is not None:
-        return price_val
-    cpeur = pos.get("currentPriceEur")
-    return cpeur.get("value") if isinstance(cpeur, dict) else cpeur
 
 
-def _resolve_virtual_size(pos: dict) -> Decimal:
-    net_size_raw = pos.get("netSize") or pos.get("quantity") or 0
-    virtual_size_raw = pos.get("virtualSize") or net_size_raw
-    return Decimal(str(virtual_size_raw))
 
 
-def _resolve_net_value(pos: dict) -> Decimal:
-    net_value_raw = pos.get("netValue") or pos.get("netValueEur")
-    if isinstance(net_value_raw, dict):
-        net_value_raw = net_value_raw.get("value", 0)
-    return Decimal(str(net_value_raw or 0))
 
 
-def _resolve_neon_price(pos: dict) -> tuple[str, int | None, str | None] | None:
-    """Resolve one neonPortfolio position into (isin, price_cents, quantity).
-    `quantity` is only set when virtualSize/netSize is positive (used as
-    price divisor for PE/ELTIF - see _fetch_neon_portfolio_prices), `price_cents`
-    is None when neither netValue/virtualSize nor a direct price field is
-    available. Returns None if the position has no ISIN at all.
-
-    Pure - extracted from _fetch_neon_portfolio_prices's loop body so the
-    price-resolution rules (netValue/virtualSize wins over a direct price
-    field) live in one place, same pattern as resolve_position() above."""
-    isin = _resolve_isin(pos)
-    if not isin:
-        return None
-
-    virtual_size = _resolve_virtual_size(pos)
-    quantity = str(virtual_size) if virtual_size > 0 else None
-
-    # netValue is TR's authoritative total position value (what the app displays).
-    # For PE/ELTIF funds the exchange ticker currentPrice is stale while netValue
-    # reflects the current NAV - always prefer netValue/virtualSize over currentPrice.
-    net_value = _resolve_net_value(pos)
-    if net_value and virtual_size > 0:
-        price_cents = int((net_value / virtual_size * 100).to_integral_value())
-        log.info("TR neonPortfolio %s : netValue=%s virtualSize=%s → %d cts/unit",
-                 isin, net_value, virtual_size, price_cents)
-        return isin, price_cents, quantity
-
-    # Fallback: use direct per-unit price field (liquid instruments without netValue)
-    price_val = _resolve_direct_price_val(pos)
-    price_cents = int(Decimal(str(price_val)) * 100) if price_val else None
-    return isin, price_cents, quantity
 
 
 async def _fetch_neon_portfolio_prices(api) -> tuple[dict[str, int], dict[str, str]]:
@@ -472,188 +358,18 @@ async def _fetch_cash(api) -> list:
     return data if isinstance(data, list) else []
 
 
-# ── Transaction history (timeline) ────────────────────────────────────────────
-
-# TR's own app activity feed is split across two subscription types that
-# together cover everything money-related: timelineTransactions (trades,
-# dividends, interest, transfers) and timelineActivityLog (card payments,
-# deposits, and a few event types timelineTransactions omits) - pytr's own
-# Timeline class fetches and merges both for the exact same reason. Both are
-# cursor-paginated and return newest-first.
-TIMELINE_FEEDS = ("timelineTransactions", "timelineActivityLog")
-
-
-def _parse_tr_timestamp(ts: str) -> datetime:
-    """TR's timeline timestamps look like '...+0200' (no colon in the UTC
-    offset), which Python's datetime.fromisoformat rejects on older
-    versions - same fix pytr's own Event.from_dict applies before parsing."""
-    if len(ts) >= 5 and ts[-5] in "+-" and ts[-3] != ":":
-        ts = ts[:-2] + ":" + ts[-2:]
-    return datetime.fromisoformat(ts)
-
-
-async def _fetch_timeline_feed(api, feed_type: str, known_ids: set[str], max_pages: int = 200) -> list[dict]:
-    """Paginate one timeline feed (newest-first) until either the API runs
-    out of pages, or an entire page is already-known (syncId already in DB)
-    - since the feed is strictly newest-first, that means everything further
-    back is guaranteed already synced too, so it's safe to stop there. This
-    is what keeps every sync after the first one fast: the very first run
-    (empty known_ids) paginates the full available history, every run after
-    that stops within a page or two of the most recent already-synced item.
-    max_pages is a hard safety cap so a bug in the stop condition, or an API
-    response shape TR changes later, can't paginate forever.
-    """
-    items = []
-    after = None
-    for _ in range(max_pages):
-        try:
-            sub = await api.subscribe({"type": feed_type, "after": after})
-            page = await asyncio.wait_for(api._recv_subscription(sub), timeout=15)
-        except Exception as e:
-            log.warning("TR %s page fetch error (stopping this feed here): %s", feed_type, e)
-            break
-        if not isinstance(page, dict):
-            break
-        page_items = page.get("items") or []
-        if not page_items:
-            break
-        items.extend(page_items)
-        if all(item.get("id") in known_ids for item in page_items):
-            break
-        after = (page.get("cursors") or {}).get("after")
-        if not after:
-            break
-    return items
-
-
-# Trade Republic's own event vocabulary for "this moved securities, not
-# household money". Read from the raw timeline item, which carries an
-# eventType this project never looked at before.
-#
-# The label fallback below exists because that is the ONLY signal rows
-# already in the database carry - eventType was never stored for them, and
-# a re-sync will not revisit them since upsert_transaction skips a syncId it
-# already knows. It is also the safety net if TR renames an event: the
-# German words below come from real captured data on a live account, the
-# eventType strings from pytr's vocabulary, and neither is guaranteed
-# forever.
-_SECURITIES_EVENT_TYPES = frozenset({
-    "TRADE_INVOICE",
-    "ORDER_EXECUTED",
-    "SAVINGS_PLAN_EXECUTED",
-    "SAVINGS_PLAN_INVOICE_CREATED",
-    "BENEFITS_SAVEBACK_EXECUTION",
-    "BENEFITS_SPARE_CHANGE_EXECUTION",
-    "SHAREBOOKING",
-    "SHAREBOOKING_TRANSACTION",
-    "TRADE_CORRECTED",
-})
-
-_SECURITIES_LABEL_MARKERS = ("kauforder", "verkaufsorder", "sparplan", "saveback")
-
-
-def is_securities_movement(item: dict, label: str) -> bool:
-    """Whether this timeline entry is a portfolio movement rather than
-    spending. Pure, so the classification can be tested without a live
-    session - see _timeline_item_to_transaction's own note.
-
-    Dividends and interest are deliberately NOT here: they are real income
-    the user may well want in their budget, and they are separately
-    recordable as an IncomeEvent.
-    """
-    event_type = (item.get("eventType") or "").strip().upper()
-    if event_type in _SECURITIES_EVENT_TYPES:
-        return True
-
-    lowered = label.lower()
-    if any(marker in lowered for marker in _SECURITIES_LABEL_MARKERS):
-        return True
-    # "<instrument> - PEA": cash entering the PEA envelope, which the
-    # account's own balance already reflects.
-    return lowered.endswith("- pea")
-
-
-def _timeline_item_to_transaction(item: dict) -> dict | None:
-    """Resolve one raw timeline item into the fields upsert_transaction()
-    needs. Returns None for items that don't represent a real money movement
-    (no amount, cancelled) - informational-only timeline entries (address
-    changes, document notifications, etc.) have no "amount" field at all.
-
-    Pure - no I/O, so the mapping logic can be unit tested without a live
-    TR session, same reasoning as resolve_position() above.
-    """
-    if item.get("status", "").lower() == "canceled":
-        return None
-    amount = item.get("amount")
-    value = amount.get("value") if isinstance(amount, dict) else None
-    if not value:
-        return None
-
-    title = (item.get("title") or "").strip()
-    subtitle = (item.get("subtitle") or "").strip()
-    label = f"{title} - {subtitle}" if subtitle and subtitle != title else (title or subtitle or "-")
-
-    return {
-        "id": item["id"],
-        "date": _parse_tr_timestamp(item["timestamp"]),
-        "label": label,
-        "amount_cents": int(Decimal(str(value)) * 100),
-        "is_securities_movement": is_securities_movement(item, label),
-        # The bank's own name for what this is. Stored raw and used as
-        # evidence the label cannot give: a card payment is never one leg of a
-        # transfer between two of your own accounts, however well its amount
-        # happens to match something elsewhere.
-        "source_event_type": (item.get("eventType") or None),
-    }
-
-
-async def _fetch_all_timeline_items(api, known_ids: set[str]) -> list[dict]:
-    merged: dict[str, dict] = {}
-    for feed_type in TIMELINE_FEEDS:
-        for item in await _fetch_timeline_feed(api, feed_type, known_ids):
-            merged[item["id"]] = item  # both feeds can report the same event id
-    return list(merged.values())
-
-
-def _sync_transactions(cur, account_id: str, items: list[dict]) -> int:
-    """Upsert TR's cash-relevant activity history (card payments, transfers,
-    trades, dividends, interest) into the same account transaction history
-    LCL/Woob already populate for their accounts, so budget categorization
-    and recurring-transaction detection work the same way for Trade
-    Republic's cash account as for a regular bank account.
-
-    `items` is already fetched (see _fetch_all's docstring for why that
-    fetch has to happen inside the same asyncio.run() call as the
-    positions/cash fetch, not a separate one here) - this function is pure
-    DB writing, no I/O to TR at all.
-
-    Errors here are non-fatal - the position/cash sync above already
-    committed, so a failure here just leaves the transaction history stale
-    until the next run instead of failing the whole TR sync, same pattern
-    as _sync_account_transactions in sync_lcl.py/sync_woob.py.
-    """
-    try:
-        count = 0
-        for item in items:
-            resolved = _timeline_item_to_transaction(item)
-            if resolved is None:
-                continue
-            upsert_transaction(
-                cur,
-                account_id=account_id,
-                sync_id=f"tr:{resolved['id']}",
-                date=resolved["date"],
-                label=resolved["label"],
-                amount_cents=resolved["amount_cents"],
-                is_securities_movement=resolved["is_securities_movement"],
-                source_event_type=resolved["source_event_type"],
-            )
-            count += 1
-        log.info("TR transactions - %d nouvelle(s) sur %d élément(s) reçus", count, len(items))
-        return count
-    except Exception as e:
-        log.warning("TR transactions ignorées : %s", e)
-        return 0
+# The activity feed and the Transaction rows it becomes live in
+# sync_tr_timeline.py. Re-exported because run() and the real-time listener
+# both drive them, and the tests reach for them through this module.
+from sync_tr_timeline import (  # noqa: F401
+    TIMELINE_FEEDS,
+    _fetch_all_timeline_items,
+    _fetch_timeline_feed,
+    _parse_tr_timestamp,
+    _sync_transactions,
+    _timeline_item_to_transaction,
+    is_securities_movement,
+)
 
 
 async def _fetch_positions_for_type(api, acc_type: str, sec_numbers: list[str]) -> list:

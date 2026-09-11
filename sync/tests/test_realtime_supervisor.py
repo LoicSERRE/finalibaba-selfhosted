@@ -15,20 +15,20 @@ import asyncio
 
 import pytest
 
-import main
+import realtime_supervisor as rt
 
 
 @pytest.fixture(autouse=True)
 def clean_supervisor_state():
-    main._realtime_tasks.clear()
-    main._realtime_stopped.clear()
-    main._realtime_wanted.clear()
+    rt._realtime_tasks.clear()
+    rt._realtime_stopped.clear()
+    rt._realtime_wanted.clear()
     yield
-    for task in main._realtime_tasks.values():
+    for task in rt._realtime_tasks.values():
         task.cancel()
-    main._realtime_tasks.clear()
-    main._realtime_stopped.clear()
-    main._realtime_wanted.clear()
+    rt._realtime_tasks.clear()
+    rt._realtime_stopped.clear()
+    rt._realtime_wanted.clear()
 
 
 def _park_forever(monkeypatch):
@@ -45,14 +45,14 @@ def _park_forever(monkeypatch):
 
 
 def _wanted(monkeypatch, connections):
-    monkeypatch.setattr(main, "_wanted_realtime_connections", lambda: set(connections))
+    monkeypatch.setattr(rt, "_wanted_realtime_connections", lambda: set(connections))
 
 
 def test_starts_one_listener_per_configured_connection(monkeypatch):
     started = _park_forever(monkeypatch)
     _wanted(monkeypatch, {None, "inst-a", "inst-b"})
 
-    asyncio.run(main._reconcile_realtime_listeners())
+    asyncio.run(rt._reconcile_realtime_listeners())
 
     assert sorted(x or ".env" for x in started) == [".env", "inst-a", "inst-b"]
 
@@ -64,7 +64,7 @@ def test_a_per_user_connection_gets_a_listener_without_any_env_credentials(monke
     started = _park_forever(monkeypatch)
     _wanted(monkeypatch, {"inst-a"})
 
-    asyncio.run(main._reconcile_realtime_listeners())
+    asyncio.run(rt._reconcile_realtime_listeners())
 
     assert started == ["inst-a"]
 
@@ -74,8 +74,8 @@ def test_does_not_start_a_second_listener_for_a_connection_already_running(monke
     _wanted(monkeypatch, {"inst-a"})
 
     async def twice():
-        await main._reconcile_realtime_listeners()
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
 
     asyncio.run(twice())
 
@@ -90,15 +90,15 @@ def test_stops_the_listener_of_a_connection_that_disappeared(monkeypatch):
     # passes whether or not the reconcile did anything at all.
     async def scenario():
         _wanted(monkeypatch, {"inst-a"})
-        await main._reconcile_realtime_listeners()
-        task = main._realtime_tasks["inst-a"]
+        await rt._reconcile_realtime_listeners()
+        task = rt._realtime_tasks["inst-a"]
         assert not task.done()
 
         _wanted(monkeypatch, set())
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
         await asyncio.sleep(0)  # let the cancellation land
 
-        assert "inst-a" not in main._realtime_tasks
+        assert "inst-a" not in rt._realtime_tasks
         assert task.cancelled()
 
     asyncio.run(scenario())
@@ -119,15 +119,15 @@ def test_a_listener_that_stopped_is_not_restarted_on_the_next_pass(monkeypatch):
     _wanted(monkeypatch, {"inst-a"})
 
     async def scenario():
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
         await asyncio.sleep(0)  # let the task finish
-        await main._reconcile_realtime_listeners()
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
 
     asyncio.run(scenario())
 
     assert starts == ["inst-a"]
-    assert "inst-a" in main._realtime_stopped
+    assert "inst-a" in rt._realtime_stopped
 
 
 def test_resume_lets_a_stopped_listener_start_again(monkeypatch):
@@ -148,14 +148,14 @@ def test_resume_lets_a_stopped_listener_start_again(monkeypatch):
 
     async def scenario():
         nonlocal finish
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
         await asyncio.sleep(0)
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
         assert starts == ["inst-a"]
 
         finish = True
-        main.resume_realtime("inst-a")
-        await main._reconcile_realtime_listeners()
+        rt.resume_realtime("inst-a")
+        await rt._reconcile_realtime_listeners()
 
     asyncio.run(scenario())
 
@@ -179,18 +179,18 @@ def test_a_connection_that_comes_back_forgets_it_was_stopped(monkeypatch):
     async def scenario():
         nonlocal park
         _wanted(monkeypatch, {"inst-a"})
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
         await asyncio.sleep(0)
-        await main._reconcile_realtime_listeners()
-        assert main._realtime_stopped == {"inst-a"}
+        await rt._reconcile_realtime_listeners()
+        assert rt._realtime_stopped == {"inst-a"}
 
         _wanted(monkeypatch, set())
-        await main._reconcile_realtime_listeners()
-        assert main._realtime_stopped == set()
+        await rt._reconcile_realtime_listeners()
+        assert rt._realtime_stopped == set()
 
         park = True
         _wanted(monkeypatch, {"inst-a"})
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
 
     asyncio.run(scenario())
 
@@ -207,12 +207,12 @@ def test_a_database_error_leaves_running_listeners_alone(monkeypatch):
 
     async def scenario():
         _wanted(monkeypatch, {"inst-a"})
-        await main._reconcile_realtime_listeners()
-        monkeypatch.setattr(main, "_wanted_realtime_connections", explode)
-        await main._reconcile_realtime_listeners()
+        await rt._reconcile_realtime_listeners()
+        monkeypatch.setattr(rt, "_wanted_realtime_connections", explode)
+        await rt._reconcile_realtime_listeners()
 
-        assert "inst-a" in main._realtime_tasks
-        assert not main._realtime_tasks["inst-a"].done()
+        assert "inst-a" in rt._realtime_tasks
+        assert not rt._realtime_tasks["inst-a"].done()
 
     asyncio.run(scenario())
 
@@ -222,12 +222,12 @@ def test_shutdown_cancels_every_listener(monkeypatch):
     _wanted(monkeypatch, {None, "inst-a"})
 
     async def scenario():
-        await main._reconcile_realtime_listeners()
-        tasks = list(main._realtime_tasks.values())
+        await rt._reconcile_realtime_listeners()
+        tasks = list(rt._realtime_tasks.values())
         assert len(tasks) == 2
-        await main._shutdown_realtime_listeners()
+        await rt._shutdown_realtime_listeners()
 
-        assert main._realtime_tasks == {}
+        assert rt._realtime_tasks == {}
         assert all(task.cancelled() for task in tasks)
 
     asyncio.run(scenario())
