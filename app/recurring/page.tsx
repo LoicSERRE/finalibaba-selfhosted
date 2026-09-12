@@ -117,7 +117,7 @@ export default async function RecurringPage() {
     active.map((r) => [
       r.id,
       isMissed(
-        { accountId: r.accountId, label: r.label, amountCents: r.amountCents, frequency: r.frequency, intervalCount: r.intervalCount, anchorDate: r.anchorDate },
+        { accountId: r.accountId, label: r.label, amountCents: r.amountCents, amountVaries: r.amountVaries, frequency: r.frequency, intervalCount: r.intervalCount, anchorDate: r.anchorDate },
         recentTransactions,
         now
       ),
@@ -130,6 +130,7 @@ export default async function RecurringPage() {
         date,
         label: r.label,
         amountCents: r.amountCents,
+        amountVaries: r.amountVaries,
         color: r.category?.color ?? null,
       }))
     )
@@ -228,7 +229,7 @@ export default async function RecurringPage() {
                   </div>
                   <p className="text-sm tabular-nums font-medium">
                     <span className={Number(r.amountCents) >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
-                      {formatCurrency(r.amountCents)}
+                      {r.amountVaries ? t("approxAmount", { amount: formatCurrency(r.amountCents) }) : formatCurrency(r.amountCents)}
                     </span>
                     <span className="text-[var(--muted)] font-normal">
                       {" "}

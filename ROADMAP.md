@@ -18,11 +18,12 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
 - **Plaid** - US/Canada coverage, where this app has no users yet.
 - **Study what the four deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, splitting `settings/page.tsx` (CCN 41) and `alert-rules-section.tsx` (CCN 26), driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code, and two of them need a component-rendering harness this repo does not have. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were all done.
-- **Variable-amount recurring detection, second pass** - v2.10 finds a consistent series inside a noisy label; a merchant with *two* subscriptions still only yields one.
 
 ---
 
 ## v2.10.4 - Auditing the audit, and the complexity behind the line counts
+
+- **A salary is a recurring transaction even though it is never the same amount.** The amount test rejected every varying series: a salary at 67% of a 70% threshold, a family benefit at 57%. Relaxed for credits only - measured first, because relaxing it for everything added four series and all four were shopping habits, not commitments. On a real account: 3 added, all genuine income, 0 noise. The monthly cadence band also widened to 26-35 days, recovering a 100,00 EUR standing order rejected on a 34-day median gap.
 
 - **Five blind spots in the release audit**, found by asking each of its seven points the question that exposed the `sync/` one. It greps one direction of the layering rule, counts lines rather than complexity, measures JS coverage only, audits npm dependencies only, and triages two scanners out of eight - most of the rest running `continue-on-error`, so a green job proves nothing was blocked rather than nothing found.
 - **`computeAnalytics` 68 -> 44 and `computeDashboard` 60 -> 34**, the two most complex functions in the repo, both deciding what net worth says. Guarded by a characterization test that pins their entire output to the cent; it never moved.

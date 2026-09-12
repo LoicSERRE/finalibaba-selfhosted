@@ -415,7 +415,8 @@
     "restore": "Rétablir",
     "restoring": "Rétablissement…",
     "deleteConfirm": "La récurrence est retirée de ta liste et ne sera plus suggérée. Tu pourras la rétablir depuis « Masquées ».",
-    "forgetConfirm": "Supprimer définitivement. Si le motif existe encore dans tes transactions, il pourra être suggéré à nouveau."
+    "forgetConfirm": "Supprimer définitivement. Si le motif existe encore dans tes transactions, il pourra être suggéré à nouveau.",
+    "approxAmount": "~{amount} en moyenne"
   },
   "income": {
     "title": "Revenus",

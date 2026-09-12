@@ -57,13 +57,14 @@ export async function createRecurringTransaction(formData: FormData) {
   const anchorDate = parseAnchorDate(formData);
   const categoryId = (formData.get("categoryId") as string | null)?.trim() || null;
   const autoDetected = formData.get("autoDetected") === "true";
+  const amountVaries = formData.get("amountVaries") === "true";
 
   const viewer = await getViewer();
   await assertAccountWritable(viewer.id, accountId);
   if (categoryId) await assertOwned("category", categoryId, viewer.id);
 
   await prisma.recurringTransaction.create({
-    data: { accountId, label, amountCents, categoryId, frequency, intervalCount, anchorDate, autoDetected },
+    data: { accountId, label, amountCents, categoryId, frequency, intervalCount, anchorDate, autoDetected, amountVaries },
   });
   revalidateAll();
 }

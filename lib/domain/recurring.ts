@@ -25,7 +25,13 @@ export const DEFAULT_GRACE_DAYS = 5;
 // WEEKLY/YEARLY stay x1-only.
 const GAP_BANDS: { frequency: RecurringFrequency; intervalCount: number; min: number; max: number }[] = [
   { frequency: "WEEKLY", intervalCount: 1, min: 6, max: 8 },
-  { frequency: "MONTHLY", intervalCount: 1, min: 27, max: 33 },
+  // 26-35 rather than 27-33: a monthly payment lands on a fixed day of the
+  // month, and February to March is 28 days while a weekend or a bank holiday
+  // pushes another one to 34 or 35. Measured on a real account, the narrow band
+  // was rejecting a 100,00 EUR standing order that had never varied by a cent,
+  // purely on a median gap of 34 days. Widening it added exactly that one
+  // series and no noise.
+  { frequency: "MONTHLY", intervalCount: 1, min: 26, max: 35 },
   { frequency: "MONTHLY", intervalCount: 2, min: 54, max: 66 },
   { frequency: "MONTHLY", intervalCount: 3, min: 81, max: 99 },
   { frequency: "YEARLY", intervalCount: 1, min: 350, max: 380 },
@@ -119,7 +125,7 @@ function mode(values: (string | null | undefined)[]): string | null {
  * within ± graceDays and the same amount tolerance used for detection.
  */
 export function isMissed(
-  series: RecurringSeries & { accountId: string; label: string; amountCents: bigint },
+  series: RecurringSeries & { accountId: string; label: string; amountCents: bigint; amountVaries?: boolean },
   transactions: TxLike[],
   asOf: Date,
   graceDays: number = DEFAULT_GRACE_DAYS
@@ -134,7 +140,10 @@ export function isMissed(
   const matched = transactions.some((tx) => {
     if (tx.accountId !== series.accountId) return false;
     if (normalizeLabel(tx.label) !== normalized) return false;
-    if (Math.abs(Number(tx.amountCents) - Number(series.amountCents)) > tolerance) return false;
+    // Skipped for a varying series: the stored figure is a median, not a
+    // promise, and a salary paid at 1 715 EUR against a median of 900 would
+    // otherwise read as MISSED on the month it actually arrived.
+    if (!series.amountVaries && Math.abs(Number(tx.amountCents) - Number(series.amountCents)) > tolerance) return false;
     return Math.abs(tx.date.getTime() - expected.getTime()) <= graceMs;
   });
 
@@ -153,6 +162,12 @@ export type Candidate = {
   // quarterly bill would be miscreated as a monthly one on confirm.
   intervalCount: number;
   anchorDate: Date;
+  // True when the cadence is regular but the amount is not - a salary, a
+  // benefit, a dividend. Carried through to the stored row because isMissed
+  // must then stop checking the amount: a salary of 1 715 EUR arriving against
+  // a stored median of 900 would otherwise be reported as MISSED on the very
+  // month it was paid.
+  amountVaries: boolean;
   // Most common category already assigned among the matched transactions, if
   // any - lets the confirm dialog start pre-filled instead of forcing the
   // user to re-pick a category they've already chosen for this label before.
@@ -222,7 +237,8 @@ export function hasResumedAfterDismissal(dismissal: DismissedPattern, occurrence
  */
 function analyseSeries(
   group: TxLike[],
-): { sorted: TxLike[]; medianAmount: number; band: (typeof GAP_BANDS)[number] } | null {
+  allowVaryingAmount = false,
+): { sorted: TxLike[]; medianAmount: number; band: (typeof GAP_BANDS)[number]; amountVaries: boolean } | null {
   if (group.length < MIN_OCCURRENCES) return null;
 
   const sorted = [...group].sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -230,7 +246,18 @@ function analyseSeries(
   const medianAmount = median(amounts);
   const tolerance = amountTolerance(Math.abs(medianAmount));
   const matchCount = amounts.filter((a) => Math.abs(a - medianAmount) <= tolerance).length;
-  if (matchCount / amounts.length < MIN_MATCH_RATIO) return null;
+  // A regular cadence whose amount is never the same is a real thing on the
+  // income side - a salary with bonuses, a benefit recalculated each quarter,
+  // a dividend - and the amount test was rejecting all of it. Measured on a
+  // real account: relaxing it for CREDITS ONLY added three series, every one
+  // of them genuine (a salary, a family benefit, a reimbursement), and nothing
+  // else. Relaxing it for debits too added four more, every one of them a
+  // shopping habit rather than a commitment: a supermarket, a petrol station,
+  // a restaurant, a computer shop. So the asymmetry is the finding, not a
+  // hedge: money arriving on a rhythm is a pattern, money leaving on a rhythm
+  // in wildly different amounts is just how someone shops.
+  const amountVaries = matchCount / amounts.length < MIN_MATCH_RATIO;
+  if (amountVaries && !(allowVaryingAmount && amounts.every((a) => a > 0))) return null;
 
   const gapsDays: number[] = [];
   for (let i = 1; i < sorted.length; i++) {
@@ -240,7 +267,7 @@ function analyseSeries(
   const band = GAP_BANDS.find((b) => medianGap >= b.min && medianGap <= b.max);
   if (!band) return null;
 
-  return { sorted, medianAmount, band };
+  return { sorted, medianAmount, band, amountVaries };
 }
 
 /**
@@ -284,7 +311,7 @@ function amountClusters(group: TxLike[]): TxLike[][] {
  */
 function analyseAmountCluster(
   group: TxLike[],
-): { sorted: TxLike[]; medianAmount: number; band: (typeof GAP_BANDS)[number] } | null {
+): { sorted: TxLike[]; medianAmount: number; band: (typeof GAP_BANDS)[number]; amountVaries: boolean } | null {
   if (group.length < MIN_OCCURRENCES) return null;
 
   const clusters = amountClusters(group)
@@ -330,7 +357,7 @@ export function detectCandidates(
   for (const [key, group] of groups) {
     // The whole label first; only if that fails, the regular series that may
     // be hiding inside it - see analyseAmountCluster.
-    const series = analyseSeries(group) ?? analyseAmountCluster(group);
+    const series = analyseSeries(group, true) ?? analyseAmountCluster(group);
     if (!series) continue;
 
     const { sorted, medianAmount, band } = series;
@@ -349,6 +376,7 @@ export function detectCandidates(
       frequency: band.frequency,
       intervalCount: band.intervalCount,
       anchorDate: latest.date,
+      amountVaries: series.amountVaries,
       categoryId: mode(sorted.map((tx) => tx.categoryId)),
     });
   }

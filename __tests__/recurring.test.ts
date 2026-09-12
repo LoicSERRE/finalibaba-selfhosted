@@ -456,3 +456,75 @@ describe("a regular series hiding inside a label with scattered amounts", () => 
     expect(candidates[0].amountCents).toBe(-1_099);
   });
 });
+
+describe("a regular cadence whose amount is never the same", () => {
+  /** n occurrences every `gapDays`, each a different amount. */
+  function varying(amounts: number[], gapDays = 30, label = "VIREMENT EMPLOYEUR") {
+    const start = Date.UTC(2026, 0, 5);
+    return amounts.map((amount, i) => ({
+      accountId: "acc1",
+      label,
+      amountCents: BigInt(amount),
+      date: new Date(start + i * gapDays * 86_400_000),
+      categoryId: null,
+    }));
+  }
+
+  it("detects a salary whose amount swings, and says the amount varies", () => {
+    // Measured on a real account: a salary between 512 and 1 715 EUR matched
+    // 67% of a 70% threshold, so it was rejected outright despite arriving
+    // every single month.
+    const [candidate] = detectCandidates(varying([51247, 171558, 90000, 62000, 110000, 84000]), new Set());
+
+    expect(candidate).toBeDefined();
+    expect(candidate.amountVaries).toBe(true);
+    expect(candidate.frequency).toBe("MONTHLY");
+    // The stored figure is the median of what actually arrived, not a promise.
+    expect(candidate.amountCents).toBeGreaterThan(0);
+  });
+
+  it("refuses the same shape on the spending side", () => {
+    // The asymmetry is the whole finding. Relaxing this for debits too added
+    // four series on a real account and every one was a shopping habit: a
+    // supermarket, a petrol station, a restaurant, a computer shop.
+    const groceries = varying([-2150, -8790, -1240, -6600, -3010, -9500], 30, "INTERMARCHE");
+
+    expect(detectCandidates(groceries, new Set())).toEqual([]);
+  });
+
+  it("still marks a steady series as steady", () => {
+    const [candidate] = detectCandidates(varying([100000, 100000, 100000, 100000]), new Set());
+
+    expect(candidate.amountVaries).toBe(false);
+  });
+
+  it("accepts a monthly gap that drifts past 33 days", () => {
+    // A monthly payment lands on a fixed day of the month, so a weekend or a
+    // bank holiday pushes a gap to 34 or 35. The old 27-33 band rejected a
+    // 100,00 EUR standing order that had never varied by a cent.
+    const [candidate] = detectCandidates(varying([10000, 10000, 10000, 10000], 34, "ACTION LOGEMENT"), new Set());
+
+    expect(candidate).toBeDefined();
+    expect(candidate.frequency).toBe("MONTHLY");
+    expect(candidate.intervalCount).toBe(1);
+  });
+
+  it("does not report a varying series as missed when it actually arrived", () => {
+    // isMissed compares against the stored amount within a tolerance. For a
+    // median of 900 EUR, a real 1 715 EUR salary is far outside it, and the
+    // page would have shown a missed-payment warning on the month it was paid.
+    const series = {
+      accountId: "acc1",
+      label: "VIREMENT EMPLOYEUR",
+      amountCents: BigInt(90000),
+      frequency: "MONTHLY" as const,
+      intervalCount: 1,
+      anchorDate: new Date(Date.UTC(2026, 0, 5)),
+    };
+    const paid = [{ accountId: "acc1", label: "VIREMENT EMPLOYEUR", amountCents: BigInt(171558), date: new Date(Date.UTC(2026, 1, 5)), categoryId: null }];
+    const asOf = new Date(Date.UTC(2026, 1, 20));
+
+    expect(isMissed({ ...series, amountVaries: false }, paid, asOf)).toBe(true);
+    expect(isMissed({ ...series, amountVaries: true }, paid, asOf)).toBe(false);
+  });
+});

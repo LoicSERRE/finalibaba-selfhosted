@@ -752,6 +752,12 @@ model RecurringTransaction {
   anchorDate    DateTime // a real known occurrence - day/weekday/month is derived from this
   active        Boolean            @default(true)
   autoDetected  Boolean            @default(false) // created by confirming a detected suggestion vs manually
+  // The cadence is regular but the amount is not - a salary with bonuses, a
+  // benefit recalculated each quarter, a dividend. amountCents is then a
+  // median, and isMissed must stop comparing against it: a salary of 1 715 EUR
+  // landing against a stored 900 would otherwise read as MISSED on the month
+  // it was actually paid. Detected for CREDITS only, see lib/domain/recurring.ts.
+  amountVaries  Boolean            @default(false)
   // When the user said "stop suggesting this". Distinct from `active`, which
   // means paused-but-still-mine: before this, dismissing a suggestion and
   // pausing a real template produced identical rows, so a dismissal appeared

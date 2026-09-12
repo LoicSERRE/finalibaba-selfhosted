@@ -20,6 +20,7 @@ type Candidate = {
   intervalCount: number;
   anchorDate: string; // YYYY-MM-DD
   categoryId: string | null;
+  amountVaries: boolean;
 };
 
 export function SuggestionCard({
@@ -44,6 +45,7 @@ export function SuggestionCard({
     categoryId: candidate.categoryId,
     accountId: candidate.accountId,
     autoDetected: true,
+    amountVaries: candidate.amountVaries,
   };
 
   function handleDismiss() {
@@ -64,7 +66,9 @@ export function SuggestionCard({
         <p className="text-sm font-medium text-[var(--foreground)] break-words">{candidate.label}</p>
         <p className="text-xs text-[var(--muted)]">
           {candidate.accountName} · {formatFrequencyLabel(candidate.frequency, candidate.intervalCount, t)} ·{" "}
-          {formatCurrency(candidate.amountCents)}
+          {/* A varying series stores a MEDIAN. Printing it bare would present
+              an estimate as a figure the user could hold the app to. */}
+          {candidate.amountVaries ? t("approxAmount", { amount: formatCurrency(candidate.amountCents) }) : formatCurrency(candidate.amountCents)}
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">

@@ -415,7 +415,8 @@
     "restore": "Restore",
     "restoring": "Restoring…",
     "deleteConfirm": "Removed from your list and no longer suggested. You can restore it from \"Hidden\".",
-    "forgetConfirm": "Delete permanently. If the pattern is still in your transactions it may be suggested again."
+    "forgetConfirm": "Delete permanently. If the pattern is still in your transactions it may be suggested again.",
+    "approxAmount": "~{amount} on average"
   },
   "income": {
     "title": "Income",

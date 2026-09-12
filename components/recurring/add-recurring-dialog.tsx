@@ -24,6 +24,8 @@ export type RecurringInitial = {
   categoryId: string | null;
   accountId: string;
   autoDetected?: boolean;
+  /** Regular cadence, varying amount - a salary, a benefit, a dividend. */
+  amountVaries?: boolean;
 };
 
 export function AddRecurringDialog({
@@ -81,6 +83,9 @@ export function AddRecurringDialog({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {initial?.autoDetected && <input type="hidden" name="autoDetected" value="true" />}
+        {/* Carried through the form or confirming the suggestion would lose it,
+            and isMissed would then compare a varying salary against a median. */}
+        {initial?.amountVaries && <input type="hidden" name="amountVaries" value="true" />}
 
         <Input id="rec-label" label={t("label")} type="text" name="label" defaultValue={initial?.label} required maxLength={200} />
 
