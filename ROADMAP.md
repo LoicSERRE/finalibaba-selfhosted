@@ -30,6 +30,9 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **The second layering inversion**, in `lib/domain/accounts-page.ts`. `export-accounts-button.tsx` 488 -> 250.
 - **From 0% to covered**: the two markdown builders (97% and 80%) and the pure half of the alert machinery, 55 new tests on code that had never had one. Two of those functions had each been fixed twice in production.
 - **A path-scoped Sonar suppression does not follow the code it excuses** - 0 issues became 56 without a line changing, because two exemptions are keyed by file path. Back to 0, A/A/A, 0 hotspots.
+- **The six scanners nobody had ever opened**, triaged for the first time. Five clean; semgrep held one finding sitting in a green job, and the fix it invited would have duplicated transactions on every install.
+- **The alert checkers, from 0% to 72%**, aimed at wiring rather than arithmetic - the only real bug this file has ever had was a missing filter, and a missing filter does not fail, it includes too much in silence.
+- **Measured why the 56 migrations must not be squashed**: keeping them costs about five seconds per container start, squashing them leaves every existing database in a failed-migration state needing manual recovery.
 
 ---
 
