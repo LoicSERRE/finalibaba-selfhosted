@@ -17,7 +17,7 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
 - **Plaid** - US/Canada coverage, where this app has no users yet.
-- **Finish covering the alert checkers** - `custom-rules.ts` is at 28.9%. The six kinds beyond ACCOUNT_BALANCE/OVERDRAFT need their own prisma fixtures.
+- **Study what the four deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, splitting `settings/page.tsx` (CCN 41) and `alert-rules-section.tsx` (CCN 26), driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code, and two of them need a component-rendering harness this repo does not have. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were all done.
 - **Variable-amount recurring detection, second pass** - v2.10 finds a consistent series inside a noisy label; a merchant with *two* subscriptions still only yields one.
 
 ---

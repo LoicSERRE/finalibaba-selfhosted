@@ -1444,6 +1444,38 @@ A "Trade-Republic-style" smooth value-over-time line for a single `INVESTMENT`/`
 
 The duplication/complexity ratchet job compares each run against a baseline artifact from a prior run via `gh api`; a transient GitHub API error on that lookup used to hard-fail the whole job instead of just skipping the comparison. Both the "list artifacts" and "download artifact zip" calls now fail open (treated as "no baseline yet") - don't re-tighten this to fail closed, a flaky `gh api` call isn't a real quality regression.
 
+### Do not squash the migrations
+
+Asked directly, measured rather than argued, and the answer is no for this
+project specifically. There are 56 of them, 116 KB, 1006 lines of SQL, 11 of
+which carry data backfills rather than schema alone.
+
+**What keeping them costs: about five seconds per container start.** Measured
+against a real PostgreSQL 16: `migrate deploy` on an up-to-date database takes
+57s with all 56 in the folder and 51s with one. `prisma --version` alone takes
+81s in the same environment, so almost all of it is Prisma CLI startup over a
+slow filesystem, not the migrations. On a real VPS the gap is smaller still.
+
+**What squashing costs: every existing install breaks at container start.**
+Also measured, not assumed. A database with all 56 applied, given a folder
+holding one new squashed file, fails with `P3018`:
+
+    ERROR: type "AccountType" already exists
+    A migration failed to apply. New migrations cannot be applied before
+    the error is recovered from.
+
+That is not a warning it recovers from on the next boot - it leaves the
+database in a failed-migration state needing `prisma migrate resolve` by hand.
+For an app whose whole promise is `docker compose up`, that is a manual
+database operation demanded of every self-hoster to save five seconds.
+
+Worth knowing the shape of the near miss: `migrate deploy` does **not** mind
+applied migrations that have vanished from the folder - it reports "no pending
+migrations" and exits 0. So deleting old ones looks harmless right up until a
+fresh install needs them, or until the squashed replacement carries a name the
+database has never seen. The safe route is Prisma's own baselining, and it
+still needs that manual step from everyone.
+
 ### Prisma client
 
 This project uses **Prisma 7** with the `@prisma/adapter-pg` driver adapter (not the legacy built-in engine). `lib/db/prisma.ts` creates the client via a `pg.Pool` → `PrismaPg` adapter. Always import `prisma` from `@/lib/db/prisma` - never instantiate `PrismaClient` directly. The client is a module-level singleton (cached on `globalThis` in dev to survive HMR).
