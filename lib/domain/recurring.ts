@@ -6,6 +6,8 @@
  * date-dependent).
  */
 
+import { isGenericTransferLabelNormalized } from "@/lib/domain/transfer-labels";
+
 export type RecurringFrequency = "WEEKLY" | "MONTHLY" | "YEARLY";
 
 export type RecurringSeries = {
@@ -257,7 +259,15 @@ function analyseSeries(
   // hedge: money arriving on a rhythm is a pattern, money leaving on a rhythm
   // in wildly different amounts is just how someone shops.
   const amountVaries = matchCount / amounts.length < MIN_MATCH_RATIO;
-  if (amountVaries && !(allowVaryingAmount && amounts.every((a) => a > 0))) return null;
+  // A generic transfer label is never relaxed, and the amount test was the
+  // only thing protecting it. A bank reuses "VIREMENT SEPA" for unrelated
+  // real payments - it is why isGenericTransferLabel exists at all, and why
+  // it already gates self-learning, apply-to-similar and mark-as-income - so
+  // relaxing the amount check there would lump several different credits into
+  // one invented series, at a median of nothing in particular. Everything
+  // outside that short denylist keeps the relaxation.
+  const genericLabel = isGenericTransferLabelNormalized(normalizeLabel(sorted[0].label));
+  if (amountVaries && !(allowVaryingAmount && !genericLabel && amounts.every((a) => a > 0))) return null;
 
   const gapsDays: number[] = [];
   for (let i = 1; i < sorted.length; i++) {

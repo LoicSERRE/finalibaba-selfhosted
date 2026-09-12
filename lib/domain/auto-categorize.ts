@@ -11,6 +11,7 @@
  * Scoped per-account, because a label is raw bank-feed text specific to one
  * institution's formatting.
  */import { normalizeLabel } from "@/lib/domain/recurring";
+import { isGenericTransferLabelNormalized } from "@/lib/domain/transfer-labels";
 
 /**
  * A looser variant of normalizeLabel, used only for the grouping key below
@@ -52,10 +53,9 @@ export function normalizeLabelForCategorization(label: string): string {
  * lib/domain/internal-transfers.ts is the real fix for the transfer half; this
  * set only stops the same mistake for whatever ELSE a generic label means.
  */
-const GENERIC_TRANSFER_LABELS = new Set(["virement sepa", "virement instantane"]);
 
 export function isGenericTransferLabel(label: string): boolean {
-  return GENERIC_TRANSFER_LABELS.has(normalizeLabelForCategorization(label));
+  return isGenericTransferLabelNormalized(normalizeLabelForCategorization(label));
 }
 
 // A label needs at least this many prior categorized occurrences before

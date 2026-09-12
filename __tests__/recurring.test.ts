@@ -527,4 +527,18 @@ describe("a regular cadence whose amount is never the same", () => {
     expect(isMissed({ ...series, amountVaries: false }, paid, asOf)).toBe(true);
     expect(isMissed({ ...series, amountVaries: true }, paid, asOf)).toBe(false);
   });
+
+  it("never relaxes a generic transfer label, whatever the cadence", () => {
+    // A bank reuses "VIREMENT SEPA" for a transfer between your own accounts
+    // AND for an unrelated credit, so a relaxed amount test there would lump
+    // several different payments into one invented series at a median of
+    // nothing in particular. The amount test was the only thing protecting
+    // this label, and relaxing it for credits removed that protection.
+    const generic = varying([51247, 171558, 90000, 62000, 110000], 30, "VIREMENT SEPA");
+    expect(detectCandidates(generic, new Set())).toEqual([]);
+
+    // The same shape under a label that identifies somebody is still found.
+    const named = varying([51247, 171558, 90000, 62000, 110000], 30, "VIREMENT DUPONT SA");
+    expect(detectCandidates(named, new Set())).toHaveLength(1);
+  });
 });
