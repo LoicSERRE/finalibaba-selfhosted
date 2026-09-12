@@ -12,16 +12,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * about nothing having happened, and then silence when it actually does.
  */
 
-const { findManyMock, updateMock, dispatchMock } = vi.hoisted(() => ({
+const { findManyMock, updateMock, dispatchMock, txFindManyMock, txFindFirstMock, txAggregateMock } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
   updateMock: vi.fn(),
   dispatchMock: vi.fn(),
+  txFindManyMock: vi.fn(),
+  txFindFirstMock: vi.fn(),
+  txAggregateMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     alertRule: { findMany: findManyMock, update: updateMock },
-    transaction: { findMany: vi.fn().mockResolvedValue([]), groupBy: vi.fn().mockResolvedValue([]) },
+    transaction: {
+      findMany: txFindManyMock,
+      findFirst: txFindFirstMock,
+      aggregate: txAggregateMock,
+      groupBy: vi.fn().mockResolvedValue([]),
+    },
     transactionSplit: { groupBy: vi.fn().mockResolvedValue([]) },
     holding: { findMany: vi.fn().mockResolvedValue([]) },
   },
@@ -58,6 +66,9 @@ beforeEach(() => {
   findManyMock.mockReset().mockResolvedValue([]);
   updateMock.mockReset().mockResolvedValue({});
   dispatchMock.mockReset().mockResolvedValue(undefined);
+  txFindManyMock.mockReset().mockResolvedValue([]);
+  txFindFirstMock.mockReset().mockResolvedValue(null);
+  txAggregateMock.mockReset().mockResolvedValue({ _count: 0, _max: { createdAt: null } });
 });
 
 describe("the first check only establishes a baseline", () => {
@@ -172,5 +183,98 @@ describe("no rules at all", () => {
     await expect(checkCustomAlertRules(SETTINGS, ["acc-1"])).resolves.toEqual([]);
     expect(dispatchMock).not.toHaveBeenCalled();
     expect(updateMock).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("a NEW_TRANSACTION rule, where one sync batch shares one timestamp", () => {
+  const BATCH_AT = new Date("2026-09-12T08:00:00.000Z");
+
+  function newTxRule(over: Record<string, unknown> = {}) {
+    return rule({
+      kind: "NEW_TRANSACTION",
+      accountId: null,
+      transactionDirection: null,
+      balanceThresholdCents: null,
+      lastNotifiedTransactionAt: new Date("2026-09-11T00:00:00.000Z"),
+      ...over,
+    });
+  }
+
+  it("establishes a baseline on the first check without notifying", async () => {
+    findManyMock.mockResolvedValue([newTxRule({ lastNotifiedTransactionAt: null })]);
+    txFindFirstMock.mockResolvedValue({ createdAt: BATCH_AT });
+
+    const fired = await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    // Creating the rule must not dump an account's whole history into one
+    // notification - the first pass only records where it starts.
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(fired).toEqual([]);
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { lastNotifiedTransactionAt: BATCH_AT } })
+    );
+  });
+
+  it("counts every new row, not just the ones it lists", async () => {
+    // The incident. A digest is capped, but a sync batch shares one createdAt,
+    // so counting only the page made the message claim 20 when 57 had arrived.
+    const page = Array.from({ length: 20 }, (_, i) => ({
+      id: `t${i}`, label: `Achat ${i}`, amountCents: BigInt(-1_00), createdAt: BATCH_AT,
+    }));
+    findManyMock.mockResolvedValue([newTxRule()]);
+    txAggregateMock.mockResolvedValue({ _count: 57, _max: { createdAt: BATCH_AT } });
+    txFindManyMock.mockResolvedValue(page);
+
+    const fired = await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    expect(fired).toEqual(["new_transaction_rule:rule-1"]);
+    const [, title, body] = dispatchMock.mock.calls[0];
+    expect(title).toContain("57");
+    // The digest lists 5 (MAX_TRANSACTIONS_IN_DIGEST) and counts against the
+    // aggregate, not against the 20 rows the query fetched: 57 - 5.
+    expect(body).toContain("52 autre");
+  });
+
+  it("advances the cursor to the batch maximum, never to the last row shown", async () => {
+    // This is what stopped rows past the cap being skipped FOREVER: the whole
+    // batch shares a timestamp, so a cursor set from the page would still be
+    // the batch's timestamp and `gt` would drop the other 37 for good.
+    // The page and the aggregate must differ or this asserts nothing: the rows
+    // past the cap are the later ones, so the last one SHOWN is older than the
+    // real maximum.
+    const LAST_SHOWN = new Date("2026-09-12T07:00:00.000Z");
+    findManyMock.mockResolvedValue([newTxRule()]);
+    txAggregateMock.mockResolvedValue({ _count: 57, _max: { createdAt: BATCH_AT } });
+    txFindManyMock.mockResolvedValue([
+      { id: "t0", label: "Achat", amountCents: BigInt(-1_00), createdAt: LAST_SHOWN },
+    ]);
+
+    await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    const cursorWrite = updateMock.mock.calls.find(([a]) => a.data?.lastNotifiedTransactionAt);
+    expect(cursorWrite?.[0].data.lastNotifiedTransactionAt).toEqual(BATCH_AT);
+    expect(cursorWrite?.[0].data.lastNotifiedTransactionAt).not.toEqual(LAST_SHOWN);
+  });
+
+  it("says nothing and moves nothing when no transaction has arrived", async () => {
+    findManyMock.mockResolvedValue([newTxRule()]);
+    txAggregateMock.mockResolvedValue({ _count: 0, _max: { createdAt: null } });
+
+    const fired = await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(fired).toEqual([]);
+  });
+
+  it("reads the cursor strictly, so a row at the cursor instant is not re-sent", async () => {
+    findManyMock.mockResolvedValue([newTxRule({ lastNotifiedTransactionAt: BATCH_AT })]);
+    txAggregateMock.mockResolvedValue({ _count: 0, _max: { createdAt: null } });
+
+    await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    const where = txAggregateMock.mock.calls[0][0].where;
+    expect(where.createdAt).toEqual({ gt: BATCH_AT });
   });
 });
