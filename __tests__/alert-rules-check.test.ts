@@ -12,13 +12,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * about nothing having happened, and then silence when it actually does.
  */
 
-const { findManyMock, updateMock, dispatchMock, txFindManyMock, txFindFirstMock, txAggregateMock } = vi.hoisted(() => ({
+const { findManyMock, updateMock, dispatchMock, txFindManyMock, txFindFirstMock, txAggregateMock, splitAggregateMock, holdingFindManyMock } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
   updateMock: vi.fn(),
   dispatchMock: vi.fn(),
   txFindManyMock: vi.fn(),
   txFindFirstMock: vi.fn(),
   txAggregateMock: vi.fn(),
+  splitAggregateMock: vi.fn(),
+  holdingFindManyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -30,8 +32,8 @@ vi.mock("@/lib/db/prisma", () => ({
       aggregate: txAggregateMock,
       groupBy: vi.fn().mockResolvedValue([]),
     },
-    transactionSplit: { groupBy: vi.fn().mockResolvedValue([]) },
-    holding: { findMany: vi.fn().mockResolvedValue([]) },
+    transactionSplit: { groupBy: vi.fn().mockResolvedValue([]), aggregate: splitAggregateMock },
+    holding: { findMany: holdingFindManyMock },
   },
 }));
 vi.mock("@/lib/services/notifications", () => ({ dispatchAlert: dispatchMock }));
@@ -68,7 +70,9 @@ beforeEach(() => {
   dispatchMock.mockReset().mockResolvedValue(undefined);
   txFindManyMock.mockReset().mockResolvedValue([]);
   txFindFirstMock.mockReset().mockResolvedValue(null);
-  txAggregateMock.mockReset().mockResolvedValue({ _count: 0, _max: { createdAt: null } });
+  txAggregateMock.mockReset().mockResolvedValue({ _count: 0, _max: { createdAt: null }, _sum: { amountCents: BigInt(0) } });
+  splitAggregateMock.mockReset().mockResolvedValue({ _sum: { amountCents: BigInt(0) } });
+  holdingFindManyMock.mockReset().mockResolvedValue([]);
 });
 
 describe("the first check only establishes a baseline", () => {
@@ -276,5 +280,186 @@ describe("a NEW_TRANSACTION rule, where one sync batch shares one timestamp", ()
 
     const where = txAggregateMock.mock.calls[0][0].where;
     expect(where.createdAt).toEqual({ gt: BATCH_AT });
+  });
+});
+
+
+describe("a BUDGET_OVERRUN rule, where the bug is always a missing filter", () => {
+  const MONTH = "2026-09";
+
+  function budgetRule(over: Record<string, unknown> = {}) {
+    return rule({
+      kind: "BUDGET_OVERRUN",
+      account: null,
+      category: { id: "cat-1", name: "Alimentation", budgetCents: BigInt(400_00) },
+      budgetOverrunLastFiredPeriod: null,
+      ...over,
+    });
+  }
+
+  /** Spend is stored negative; the checker flips the sign. */
+  function spent(plain: number, split = 0) {
+    txAggregateMock.mockResolvedValue({ _sum: { amountCents: BigInt(-plain) } });
+    splitAggregateMock.mockResolvedValue({ _sum: { amountCents: BigInt(-split) } });
+  }
+
+  it("excludes internal transfers and securities from BOTH queries", async () => {
+    // The one documented bug in this file: checkBudgetOverrunRule never
+    // filtered isInternalTransfer at all, unlike every other category-spend
+    // query in the app, so a manually-categorised transfer counted toward the
+    // alert but never toward the /budgets card the alert points the user at.
+    // A missing filter does not fail - it includes too much, silently.
+    findManyMock.mockResolvedValue([budgetRule()]);
+    spent(100_00);
+
+    await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    const txWhere = txAggregateMock.mock.calls[0][0].where;
+    expect(txWhere.isInternalTransfer).toBe(false);
+    expect(txWhere.isSecuritiesMovement).toBe(false);
+
+    // The split side filters through the PARENT transaction, since a split
+    // row carries no date or account of its own.
+    const splitWhere = splitAggregateMock.mock.calls[0][0].where;
+    expect(splitWhere.transaction.isInternalTransfer).toBe(false);
+    expect(splitWhere.transaction.isSecuritiesMovement).toBe(false);
+  });
+
+  it("counts split rows alongside plain ones", async () => {
+    // A split transaction's own categoryId is null, so it is invisible to the
+    // plain query. Missing the second one understates spend and the alert
+    // never fires.
+    findManyMock.mockResolvedValue([budgetRule()]);
+    spent(250_00, 200_00);   // 450 EUR against a 400 EUR budget, only together
+
+    const fired = await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    expect(fired).toEqual(["budget_overrun_rule:rule-1"]);
+    expect(dispatchMock.mock.calls[0][2]).toContain("450");
+  });
+
+  it("stays quiet while the envelope holds", async () => {
+    findManyMock.mockResolvedValue([budgetRule()]);
+    spent(399_99);
+
+    await expect(checkCustomAlertRules(SETTINGS, ["acc-1"])).resolves.toEqual([]);
+    expect(dispatchMock).not.toHaveBeenCalled();
+  });
+
+  it("counts debits only, scoped to this month and these accounts", async () => {
+    findManyMock.mockResolvedValue([budgetRule()]);
+    spent(100_00);
+
+    await checkCustomAlertRules(SETTINGS, ["acc-1", "acc-2"]);
+
+    const w = txAggregateMock.mock.calls[0][0].where;
+    expect(w.amountCents).toEqual({ lt: BigInt(0) });
+    expect(w.accountId).toEqual({ in: ["acc-1", "acc-2"] });
+    expect(w.categoryId).toBe("cat-1");
+    expect(w.date.gte).toBeInstanceOf(Date);
+    expect(w.date.lt.getTime()).toBeGreaterThan(w.date.gte.getTime());
+  });
+
+  it("re-arms every month instead of edge-triggering", async () => {
+    // A category that overran in July should be able to alert again in
+    // August, though spend never "un-overran" in between.
+    findManyMock.mockResolvedValue([budgetRule({ budgetOverrunLastFiredPeriod: MONTH })]);
+    spent(500_00);
+    await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+    const firedSamePeriod = dispatchMock.mock.calls.length;
+
+    dispatchMock.mockClear();
+    findManyMock.mockResolvedValue([budgetRule({ budgetOverrunLastFiredPeriod: "2026-08" })]);
+    spent(500_00);
+    await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    expect(firedSamePeriod).toBe(0);
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a category with no budget set rather than treating it as zero", async () => {
+    findManyMock.mockResolvedValue([budgetRule({ category: { id: "cat-1", name: "X", budgetCents: null } })]);
+    spent(999_00);
+
+    await expect(checkCustomAlertRules(SETTINGS, ["acc-1"])).resolves.toEqual([]);
+    expect(txAggregateMock).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("the three kinds whose maths is already covered elsewhere", () => {
+  // __tests__/alerts.test.ts pins computeHoldingDriftPts, computeUnrealizedGain
+  // and evaluatePercentAlert. What is left untested is the wiring around them,
+  // which is where this file's only real bug has ever been.
+  const HOLDING = {
+    id: "h1", ticker: "IE00B4L5Y983", name: "MSCI World",
+    lastPriceCents: BigInt(100_00), costBasisCents: BigInt(80_00),
+    quantity: { toString: () => "10" },
+    targetPct: 0.5,
+    account: { name: "PEA", holdings: [] as unknown[] },
+  };
+
+  it("HOLDING_PRICE reads the position's own price, and names the account", async () => {
+    const holding = { ...HOLDING, account: { name: "PEA", holdings: [] } };
+    findManyMock.mockResolvedValue([
+      rule({ kind: "HOLDING_PRICE", account: null, holding, balanceThresholdCents: BigInt(90_00), balanceLastAbove: false }),
+    ]);
+
+    const fired = await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    expect(fired).toEqual(["holding_price_rule:rule-1"]);
+    const [, title, body] = dispatchMock.mock.calls[0];
+    expect(title).toContain("prix");
+    expect(body).toContain("MSCI World");
+    expect(body).toContain("PEA");
+  });
+
+  it("REBALANCING_DRIFT goes quiet when the target was cleared after the rule was made", async () => {
+    // Not a malformed row: a person removed the target, and a rule outliving
+    // it must do nothing rather than compare against zero.
+    findManyMock.mockResolvedValue([
+      rule({ kind: "REBALANCING_DRIFT", account: null, gainThresholdPct: 5,
+             holding: { ...HOLDING, targetPct: null, account: { name: "PEA", holdings: [HOLDING] } } }),
+    ]);
+
+    await expect(checkCustomAlertRules(SETTINGS, ["acc-1"])).resolves.toEqual([]);
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("UNREALIZED_GAIN with no account aggregates across the portfolio", async () => {
+    // accountId null is VALID INPUT here - "every investment and crypto
+    // account" - and not the malformed-row guard it means for every other
+    // kind. It is the one place a second, broader query runs.
+    findManyMock.mockResolvedValue([
+      rule({ kind: "UNREALIZED_GAIN", account: null, gainUnit: "AMOUNT",
+             balanceThresholdCents: BigInt(1_000_00), balanceLastAbove: false }),
+    ]);
+    holdingFindManyMock.mockResolvedValue([
+      { quantity: { toString: () => "10" }, lastPriceCents: BigInt(200_00), costBasisCents: BigInt(50_00) },
+    ]);
+
+    const fired = await checkCustomAlertRules(SETTINGS, ["acc-1", "acc-2"]);
+
+    expect(holdingFindManyMock).toHaveBeenCalledTimes(1);
+    const where = holdingFindManyMock.mock.calls[0][0].where;
+    expect(where.accountId).toEqual({ in: ["acc-1", "acc-2"] });
+    // Scoped to the account types that can hold a position at all.
+    expect(where.account.type).toEqual({ in: ["INVESTMENT", "CRYPTO"] });
+    expect(fired).toEqual(["unrealized_gain_rule:rule-1"]);
+  });
+
+  it("UNREALIZED_GAIN with an account reads that account and queries nothing", async () => {
+    findManyMock.mockResolvedValue([
+      rule({ kind: "UNREALIZED_GAIN", gainUnit: "AMOUNT", balanceThresholdCents: BigInt(1_000_00),
+             balanceLastAbove: false,
+             account: { ...ACCOUNT, holdings: [
+               { quantity: { toString: () => "10" }, lastPriceCents: BigInt(200_00), costBasisCents: BigInt(50_00) },
+             ] } }),
+    ]);
+
+    await checkCustomAlertRules(SETTINGS, ["acc-1"]);
+
+    expect(holdingFindManyMock).not.toHaveBeenCalled();
   });
 });
