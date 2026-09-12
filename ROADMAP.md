@@ -14,9 +14,11 @@ Before tagging a `vX.Y`, run the release-boundary health audit in `CLAUDE.md`.
 
 Demand-driven, not scheduled. Each needs a real user asking, or a materially bigger integration than anything shipped so far.
 
-- **Interactive Brokers** - no Woob module exists; would need a direct integration.
-- **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
-- **Plaid** - US/Canada coverage, where this app has no users yet.
+*Blocking reasons re-verified 2026-09-12 against live sources rather than carried forward: all three still hold.*
+
+- **Interactive Brokers** - no Woob module exists; would need a direct integration. Re-checked against the live catalogue: 294 modules, 96 of them `CapBank`, no match for interactive/ibkr. Degiro and N26 do have one and are already reachable through the existing picker.
+- **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data. Re-checked against the current endpoint reference: five families (auth, institutions, agreements, requisitions, accounts), every one a synchronous REST call, no webhook or subscription anywhere.
+- **Plaid** - US/Canada coverage, where this app has no users yet. The condition here is demand rather than feasibility, so it was checked as such: zero issues in the repository's entire history mention Plaid, Interactive Brokers or Revolut. Three issues exist in total, all about sync failures.
 - **Split `settings/page.tsx` (CCN 41) and `alert-rules-section.tsx` (CCN 26)** - the harness that was missing now exists, and a prop-wiring sabotage fails its tests, so the stated reason for deferring them is gone.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
