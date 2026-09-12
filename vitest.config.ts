@@ -5,8 +5,11 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    // Node by default - almost every test here is a pure function, and a DOM
+    // per file costs time for nothing. A rendering test opts in with
+    // `// @vitest-environment happy-dom` at the top of its own file.
     environment: "node",
-    include: ["__tests__/**/*.test.ts"],
+    include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],
     coverage: {
       provider: "v8",
       // lcov is for SonarQube (sonar.javascript.lcov.reportPaths in

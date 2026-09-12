@@ -17,7 +17,8 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data.
 - **Plaid** - US/Canada coverage, where this app has no users yet.
-- **Study what the four deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, splitting `settings/page.tsx` (CCN 41) and `alert-rules-section.tsx` (CCN 26), driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code, and two of them need a component-rendering harness this repo does not have. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were all done.
+- **Split `settings/page.tsx` (CCN 41) and `alert-rules-section.tsx` (CCN 26)** - the harness that was missing now exists, and a prop-wiring sabotage fails its tests, so the stated reason for deferring them is gone.
+- **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
 ---
 
