@@ -66,3 +66,4 @@ __pycache__/
 # Python coverage report for the local SonarQube scan (sync/requirements-dev.txt)
 sync/coverage.xml
 sync/.coverage
+lizard-blind-spots.json

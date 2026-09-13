@@ -250,6 +250,16 @@ jobs:
       - name: Analyze complexity
         continue-on-error: true
         run: lizard -w . | tee lizard-warnings.txt
+      # The count above is only meaningful for code lizard can actually parse,
+      # and its JS/TS reader drops functions silently - no warning, exit 0. A
+      # dropped function contributes nothing to the count however complex it
+      # gets, so the ratchet reads green exactly where it stopped looking.
+      # Measured at v2.10.5: 53 declared functions across 34 files, including
+      # lib/domain/loan.ts's calcCurrentCapital. Ratcheted below so the hole
+      # can shrink but never quietly grow.
+      - name: Find what lizard cannot see
+        continue-on-error: true
+        run: python3 scripts/lizard-blind-spots.py | tee lizard-blind.txt
       - name: Publish results
         if: always()
         run: |
@@ -261,8 +271,21 @@ jobs:
             echo '```'
             cat lizard-warnings.txt
             echo '```'
+            echo ""
+            echo "### Functions lizard cannot measure at all"
+            echo '```'
+            cat lizard-blind.txt
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "{\"over_threshold_count\": $(grep -c . lizard-warnings.txt || echo 0)}" > lizard-metrics.json
+          python3 - <<'PY'
+          import json, pathlib
+          blind = json.loads(pathlib.Path("lizard-blind-spots.json").read_text())
+          warnings = sum(1 for l in pathlib.Path("lizard-warnings.txt").read_text().splitlines() if l.strip())
+          pathlib.Path("lizard-metrics.json").write_text(json.dumps({
+              "over_threshold_count": warnings,
+              "unmeasured_count": blind["unmeasured_count"],
+          }) + "\n")
+          PY
       - name: Upload baseline
         if: github.event_name == 'push'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -298,7 +321,7 @@ jobs:
         env:
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
-          python3 -c $'import json\nimport os\nimport sys\n\nbase_branch = os.environ["BASE_BRANCH"]\nbaseline_path = "baseline/lizard-metrics.json"\ncurrent_path = "lizard-metrics.json"\n\nif not os.path.exists(baseline_path):\n    print(f"No baseline found for {base_branch} yet (first run), nothing to compare against.")\n    sys.exit(0)\n\nbaseline_count = json.load(open(baseline_path))["over_threshold_count"]\ncurrent_count = json.load(open(current_path))["over_threshold_count"]\n\nregressed = current_count > baseline_count\nverdict = "REGRESSION" if regressed else "no regression"\nsummary = f"Functions over the complexity/length threshold: {current_count} (baseline on `{base_branch}`: {baseline_count}) - {verdict}\\n"\n\nwith open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:\n    f.write("\\n" + summary)\n\nif regressed:\n    print(f"::error::{current_count} functions over threshold, up from {baseline_count} on {base_branch}, this PR made it worse.")\n    sys.exit(1)\n\nprint(f"No regression ({current_count} vs baseline {baseline_count}).")\n'
+          python3 -c $'import json\nimport os\nimport sys\n\nbase_branch = os.environ["BASE_BRANCH"]\nbaseline_path = "baseline/lizard-metrics.json"\ncurrent_path = "lizard-metrics.json"\n\nif not os.path.exists(baseline_path):\n    print(f"No baseline found for {base_branch} yet (first run), nothing to compare against.")\n    sys.exit(0)\n\nbase = json.load(open(baseline_path))\ncur = json.load(open(current_path))\nbaseline_count = base["over_threshold_count"]\ncurrent_count = cur["over_threshold_count"]\n# A function lizard stops being able to parse leaves the count above, which\n# looks identical to one that was simplified. Ratchet both or the first\n# silently launders the second.\nbaseline_blind = base.get("unmeasured_count", cur["unmeasured_count"])\ncurrent_blind = cur["unmeasured_count"]\n\nregressed = current_count > baseline_count\nblind_regressed = current_blind > baseline_blind\nverdict = "REGRESSION" if regressed else "no regression"\nblind_verdict = "REGRESSION" if blind_regressed else "no regression"\nsummary = (f"Functions over the complexity/length threshold: {current_count} (baseline on `{base_branch}`: {baseline_count}) - {verdict}\\n"\n           f"Functions lizard cannot measure at all: {current_blind} (baseline: {baseline_blind}) - {blind_verdict}\\n")\n\nwith open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:\n    f.write("\\n" + summary)\n\nif regressed:\n    print(f"::error::{current_count} functions over threshold, up from {baseline_count} on {base_branch}, this PR made it worse.")\nif blind_regressed:\n    print(f"::error::{current_blind} functions are now invisible to lizard, up from {baseline_blind} on {base_branch} - the complexity gate cannot see them.")\nif regressed or blind_regressed:\n    sys.exit(1)\n\nprint(f"No regression ({current_count} vs {baseline_count} over threshold, {current_blind} vs {baseline_blind} unmeasured).")\n'
 
   sbom:
     name: Generate SBOM (syft)
