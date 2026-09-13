@@ -730,7 +730,12 @@
       "restoreConfirm": "Restaurer et écraser",
       "restoring": "Restauration…",
       "restoreError": "La restauration a échoué. Vérifiez les logs du serveur.",
-      "restarting": "Restauration terminée : redémarrage de l'application en cours…"
+      "restarting": "Restauration terminée : redémarrage de l'application en cours…",
+      "passphraseLabel": "Phrase secrète",
+      "passphrasePlaceholder": "Chiffrer le fichier (facultatif)",
+      "passphraseOptional": "Seulement si le fichier est chiffré",
+      "passphraseHint": "Laisse vide pour une sauvegarde en clair. Avec une phrase secrète, le fichier est illisible sans elle : soldes et transactions compris. Note-la ailleurs, personne ne peut la retrouver à ta place.",
+      "passphraseRestoreHint": "Nécessaire uniquement si la sauvegarde a été chiffrée (fichier .enc)."
     },
     "twoFactor": {
       "title": "Authentification à deux facteurs",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
+import { createBackupCipher, decryptBackup, isEncryptedBackup } from "@/lib/domain/backup-encryption";
 import { requireAdmin } from "@/lib/auth-context";
 import { spawn } from "node:child_process";
 import { createGzip, gunzipSync } from "node:zlib";
@@ -34,7 +35,7 @@ async function assertBackupAllowed(): Promise<NextResponse | null> {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const denied = await assertBackupAllowed();
   if (denied) return denied;
 
@@ -59,8 +60,17 @@ export async function GET() {
   let stderr = "";
   dump.stderr.on("data", (chunk) => (stderr += chunk));
 
+  // Optional passphrase encryption of the FILE. Opt-in because a backup only
+  // the dead server could read is not a backup - see
+  // lib/domain/backup-encryption.ts for why it is not the instance key.
+  const passphrase = req.nextUrl.searchParams.get("passphrase") ?? "";
   const gzip = createGzip();
   dump.stdout.pipe(gzip);
+  const encryption = passphrase ? createBackupCipher(passphrase) : null;
+  // gzip FIRST, then encrypt: compressing ciphertext achieves nothing, and
+  // this way the compression ratio leaks no more than the file size already
+  // does.
+  const outbound = encryption ? gzip.pipe(encryption.cipher) : gzip;
 
   // Two independent completion signals race here: gzip's "end" (all bytes
   // flushed) and pg_dump's "close" (exit code known). If we settled the
@@ -86,11 +96,19 @@ export async function GET() {
         }
       }
 
-      gzip.on("data", (chunk) => {
+      // The header goes out first, so a partial download is still
+      // recognisable as one of ours rather than as corrupt gzip.
+      if (encryption) controller.enqueue(encryption.header);
+
+      outbound.on("data", (chunk) => {
         if (settled) return;
         controller.enqueue(chunk);
       });
-      gzip.on("end", () => {
+      outbound.on("end", () => {
+        // The GCM tag exists only once the cipher has finished, and it goes
+        // at the end: without it the file cannot be authenticated, and
+        // decryptBackup refuses anything it cannot authenticate.
+        if (encryption && !settled) controller.enqueue(encryption.cipher.getAuthTag());
         gzipEnded = true;
         finish();
       });
@@ -112,10 +130,13 @@ export async function GET() {
   });
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  // The extension is how somebody finds it again months later and knows
+  // they will be asked for a passphrase.
+  const extension = encryption ? "sql.gz.enc" : "sql.gz";
   return new NextResponse(stream, {
     headers: {
       "Content-Type": "application/gzip",
-      "Content-Disposition": `attachment; filename="finalibaba-backup-${timestamp}.sql.gz"`,
+      "Content-Disposition": `attachment; filename="finalibaba-backup-${timestamp}.${extension}"`,
     },
   });
 }
@@ -145,6 +166,30 @@ export async function POST(req: NextRequest) {
 
   let buffer = Buffer.from(await file.arrayBuffer());
   // Accept both gzip-compressed (backup.sh, the download button) and plain .sql uploads.
+  // Decrypt before anything looks for gzip: an encrypted backup is opaque,
+  // and the gzip check below would otherwise reject it as "not a valid
+  // backup" with no hint that a passphrase was the missing piece.
+  if (isEncryptedBackup(buffer)) {
+    const passphrase = (formData.get("passphrase") as string) || "";
+    if (!passphrase) {
+      return NextResponse.json(
+        { error: "This backup is encrypted. Enter the passphrase it was created with." },
+        { status: 400 }
+      );
+    }
+    const decrypted = decryptBackup(buffer, passphrase);
+    // One message for a wrong passphrase and for a damaged file, deliberately:
+    // telling them apart tells whoever is holding a stolen backup which of the
+    // two they are up against.
+    if (!decrypted) {
+      return NextResponse.json(
+        { error: "Could not decrypt this backup. Check the passphrase, or the file may be damaged." },
+        { status: 400 }
+      );
+    }
+    buffer = decrypted;
+  }
+
   if (buffer.subarray(0, 2).equals(GZIP_MAGIC)) {
     try {
       buffer = gunzipSync(buffer);

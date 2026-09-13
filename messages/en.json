@@ -730,7 +730,12 @@
       "restoreConfirm": "Restore and overwrite",
       "restoring": "Restoring…",
       "restoreError": "Restore failed. Check the server logs for details.",
-      "restarting": "Restore complete: restarting the app…"
+      "restarting": "Restore complete: restarting the app…",
+      "passphraseLabel": "Passphrase",
+      "passphrasePlaceholder": "Encrypt the file (optional)",
+      "passphraseOptional": "Only if the file is encrypted",
+      "passphraseHint": "Leave empty for a plain backup. With a passphrase the file is unreadable without it, balances and transactions included. Write it down somewhere else: nobody can recover it for you.",
+      "passphraseRestoreHint": "Only needed if the backup was encrypted (a .enc file)."
     },
     "twoFactor": {
       "title": "Two-factor authentication",
