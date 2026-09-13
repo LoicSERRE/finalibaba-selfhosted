@@ -1,29 +1,18 @@
 export const dynamic = "force-dynamic";
 
-import { syncStatusTone, syncStatusLabelKey, reconnectOnlyRefreshes, SYNC_STATUS_SUCCESS, type SyncStatusTone } from "@/lib/domain/sync-status";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, baseAccountIds, isAuthEnabled, OWNER_USER_ID } from "@/lib/auth-context";
+import { getViewer, baseAccountIds, isAuthEnabled, isDemoMode, OWNER_USER_ID } from "@/lib/auth-context";
 import { cookies } from "next/headers";
-import Link from "next/link";
-import { Settings, CheckCircle, AlertTriangle, Ban, Clock } from "lucide-react";
+import { Settings } from "lucide-react";
 import { AddInstitutionDialog } from "@/components/settings/add-institution-dialog";
-import { DeleteButton } from "@/components/shared/delete-button";
+import { InstitutionRow } from "@/components/settings/institution-row";
 import { EmptyState } from "@/components/shared/empty-state";
-import { deleteInstitution, migrateDedicatedSyncToWoob, getMigrationHistoryDepth, adoptDedicatedTrAccounts } from "@/lib/actions/institutions";
-import { InstitutionLogo } from "@/components/shared/institution-logo";
-import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
-import { isLegacyEnvSyncId, isPerUserSyncId } from "@/lib/domain/sync-ids";
-import { ConnectOpenBankingButton, SyncOpenBankingButton, DisconnectOpenBankingButton } from "@/components/settings/open-banking-buttons";
-import { ConnectOpenBankingDialog } from "@/components/settings/connect-open-banking-dialog";
-import { ConfigureWoobDialog } from "@/components/settings/configure-woob-dialog";
-import { InstitutionSyncButton } from "@/components/settings/institution-sync-button";
-import { WoobSetupPrompt } from "@/components/settings/woob-setup-prompt";
-import { TradeRepublicSetupPrompt } from "@/components/settings/tr-setup-prompt";
+import { getMigrationHistoryDepth } from "@/lib/actions/institutions";
+import { isLegacyEnvSyncId } from "@/lib/domain/sync-ids";
+import { institutionSyncSource } from "@/lib/domain/sync-sources";
 import { SyncStatus } from "@/components/settings/sync-status";
 import { getRealtimeStatus, getSyncStatus, getWoobBankModules } from "@/lib/actions/sync";
-import { COUNTRY_CODES, FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
-import { RealtimeIndicator } from "@/components/settings/realtime-indicator";
-import { getUserSettings, updateFinancialProfile, updateTaxSettings } from "@/lib/actions/user-settings";
+import { getUserSettings, updateFinancialProfile } from "@/lib/actions/user-settings";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/settings/language-switcher";
@@ -49,6 +38,7 @@ import { AlertTriggersSection } from "@/components/settings/alert-triggers-secti
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
 import { getAlertRules } from "@/lib/actions/alert-rules";
 import { GoalsSection } from "@/components/settings/goals-section";
+import { TaxSettingsSection } from "@/components/settings/tax-settings-section";
 import { getGoals } from "@/lib/actions/goals";
 
 // Names of the dedicated .env-configured sync integrations that currently
@@ -78,30 +68,16 @@ const GC_STATUS_KEYS = {
   "already-connected": { key: "gcAlreadyConnected", tone: "warning" },
 } as const;
 
-// Paired with lib/domain/sync-status.ts's syncStatusTone: one row per tone, so
-// a new status picks up a colour and an icon by classifying itself rather than
-// by being added to three separate ternary chains (which is what this replaced).
-const SYNC_TONE_CLASS: Record<SyncStatusTone, string> = {
-  success: "text-[var(--positive)]",
-  warning: "text-[var(--warning)]",
-  // Muted, not red: red invites retrying something that can never work.
-  muted: "text-[var(--muted)]",
-  negative: "text-[var(--negative)]",
-};
-
-const SYNC_TONE_ICON: Record<SyncStatusTone, React.ReactElement> = {
-  success: <CheckCircle size={12} aria-hidden="true" />,
-  warning: <AlertTriangle size={12} aria-hidden="true" />,
-  muted: <Ban size={12} aria-hidden="true" />,
-  negative: <AlertTriangle size={12} aria-hidden="true" />,
-};
-
 export default async function SettingsPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<{ gc?: string }> }>) {
   const gcStatus = GC_STATUS_KEYS[(await searchParams).gc as keyof typeof GC_STATUS_KEYS];
   const gcConfigured = !!process.env.GOCARDLESS_SECRET_ID;
   const dedicatedSyncNames = dedicatedEnvNames();
+  // The dedicated auto-sync section renders only when at least one .env
+  // credential is actually set - a fresh install showed both cards stuck on
+  // "Jamais synchronisé" forever otherwise.
+  const hasDedicatedEnvSync = dedicatedSyncNames.size > 0;
   const theme = resolveThemePreference((await cookies()).get("THEME")?.value);
 
   // Settings only ever configures the viewer's OWN portfolio (pickers here
@@ -119,15 +95,45 @@ export default async function SettingsPage({
     .findUnique({ where: { id: viewer.id }, select: { totpEnabled: true } })
     .then((u) => u?.totpEnabled ?? false);
 
+  // Every section below is gated on some combination of three questions, and
+  // each used to re-derive its own answer inline: thirteen hand-written
+  // `process.env.DEMO_MODE !== "true"` comparisons in this one file, in both
+  // directions. The server-side guards are elsewhere and unchanged (proxy.ts
+  // refuses every non-GET in demo mode, app/api/backup/route.ts enforces admin
+  // itself); these only decide what is worth rendering, so nobody is offered a
+  // control whose only possible outcome is an error.
+  //
+  // One object rather than four loose consts, and the second reason is worth
+  // stating because it is not obvious: lizard - which quality.yml's complexity
+  // ratchet runs - stops reporting this function entirely once a dozen-odd
+  // `{someIdentifier && <JSX/>}` gates appear in it, silently and at exit 0,
+  // so the page would drop off the report and read as having nothing complex
+  // in it. A member access (`show.sensitive`) parses, which is also why the
+  // inline `process.env.DEMO_MODE !== "true"` this replaced happened to
+  // survive. scripts/lizard-blind-spots.py measures that and the ratchet
+  // gates on it; do not flatten these back into bare identifiers.
+  const isMulti = isAuthEnabled();
+  const isAdmin = viewer.role === "ADMIN";
+  const sensitive = !isDemoMode();
+  const show = {
+    /** Mutates, reveals a stored credential, or mints a token. */
+    sensitive,
+    /** ...and is the instance admin's alone to touch. */
+    adminOnly: sensitive && isAdmin,
+    /** ...and means nothing without a real login to attach it to. */
+    withAuth: sensitive && isMulti,
+    /** ...and is how an admin manages everyone else's access. */
+    userManagement: sensitive && isMulti && isAdmin,
+  };
+
   // Multi-user surfaces, only meaningful with auth on: in mono mode there is
   // no login, so there is nobody to invite and nobody to share with. Fetched
   // conditionally rather than rendered-and-hidden so a mono instance doesn't
   // pay for three queries it can never use.
-  const isMulti = isAuthEnabled();
   const [users, invitations, grants, ownAccount] = isMulti
     ? await Promise.all([
-        viewer.role === "ADMIN" ? listUsers() : Promise.resolve([]),
-        viewer.role === "ADMIN" ? listInvitations() : Promise.resolve([]),
+        isAdmin ? listUsers() : Promise.resolve([]),
+        isAdmin ? listInvitations() : Promise.resolve([]),
         listPortfolioGrants(),
         getOwnAccount(),
       ])
@@ -206,6 +212,13 @@ export default async function SettingsPage({
   // offered (legacy .env accounts AND Woob-synced replacements both exist),
   // not for every institution on the page, since it's an extra couple of
   // queries per institution and only matters in this one specific case.
+  // Deliberately narrower than the row's own isPerUserSyncId, which also
+  // accepts `tr:<id>:`: the warning this feeds only ever renders behind
+  // ConfigureWoobDialog's `canMigrate = legacyAccountCount > 0 &&
+  // !isTradeRepublic`, because a Trade Republic institution is offered the
+  // lossless adopt instead of the delete-and-resync migrate. Matching the two
+  // up would fetch two queries per institution for a confirmation that cannot
+  // appear.
   const migrationCandidates = institutions.filter((inst) => {
     const legacyCount = inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length;
     const woobCount = inst.accounts.filter((a) => a.syncId?.startsWith(`woob:${inst.id}:`)).length;
@@ -256,170 +269,18 @@ export default async function SettingsPage({
           />
         ) : (
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
-            {institutions.map((inst) => {
-              // Resolved once for the whole row: the action cluster needs it,
-              // and so does the explanation printed underneath.
-              const rowSyncLog = syncStatus[inst.trPhone ? `tr:${inst.id}` : `woob:${inst.id}`] ?? null;
-              return (
-              <div key={inst.id} className="px-5 py-3.5">
-              <div
-                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <InstitutionLogo
-                    name={inst.name}
-                    logoUrl={inst.logoUrl ?? getInstitutionLogoUrl(inst.name)}
-                    size={32}
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-[var(--foreground)]">
-                      {inst.name}
-                    </p>
-                    <p className="text-xs text-[var(--muted)] mt-0.5">
-                      {inst._count.accounts === 1
-                        ? t("settings.institutions.accounts", { count: inst._count.accounts })
-                        : t("settings.institutions.accountsPlural", { count: inst._count.accounts })}
-                      {inst.gocardlessInstitutionId && (
-                        <span className="ml-2 text-[var(--accent-text)]">· {t("settings.institutions.openBanking")}</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* GoCardless Open Banking */}
-                  {gcConfigured && (
-                    inst.gocardlessInstitutionId
-                      ? inst.accounts.some((a) => a.gocardlessAccountId)
-                        ? <SyncOpenBankingButton institutionId={inst.id} />
-                        : <ConnectOpenBankingButton institutionId={inst.id} />
-                      : <ConnectOpenBankingDialog institutionId={inst.id} institutionName={inst.name} />
-                  )}
-                  {/* Dangling GoCardless link cleanup - deliberately NOT
-                      gated on gcConfigured, unlike the block above. Real gap
-                      found in production: an institution with
-                      gocardlessInstitutionId set but no actual
-                      gocardlessAccountId-linked account (an abandoned
-                      connection attempt) kept showing the "· Open Banking"
-                      badge forever with zero way to act on it once
-                      GOCARDLESS_SECRET_ID was removed from this instance's
-                      env - every GoCardless button above disappears in that
-                      state, but the badge doesn't. Refuses server-side if
-                      any account for this institution already has a real
-                      gocardlessAccountId, so it can never be used to hide an
-                      actually-working sync. */}
-                  {inst.gocardlessInstitutionId && !inst.accounts.some((a) => a.gocardlessAccountId) && (
-                    <DisconnectOpenBankingButton institutionId={inst.id} />
-                  )}
-                  {/* Woob sync - not gated by institution name (no more
-                      DEDICATED_SYNC_INSTITUTIONS name-based guard). Institution.name
-                      is globally unique, and picking a bank from the catalog
-                      auto-fills this exact name (e.g. "LCL"), so a user-created
-                      Woob-configured institution routinely collides with the
-                      seeded reference row's name - name-matching silently hid
-                      every one of these controls (including ConfigureWoobDialog
-                      itself) for any institution literally named "LCL"/"Trade
-                      Republic", real Woob credentials or not. The env-configured
-                      dedicated LCL/TR path above is entirely independent of any
-                      Institution row (keyed by env vars + fixed syncStatus
-                      source strings), so nothing here needs to special-case it -
-                      inst.woobModule being set is already the correct, unambiguous
-                      signal for "this institution has real Woob sync to manage".
-
-                      v2.1 added a second per-user provider alongside Woob:
-                      Trade Republic, signalled by inst.trPhone the same way.
-                      An institution carries at most one of the two (each
-                      config action clears the other's fields, see
-                      setWoobConfig/setTradeRepublicConfig), so the status
-                      icon, sync button and setup prompt below are shared
-                      between them and only the sync-log key and the setup
-                      prompt's own component differ. */}
-                  {(() => {
-                    const isTr = !!inst.trPhone;
-                    const isWoob = !isTr && !!inst.woobModule;
-                    const configured = isTr || isWoob;
-                    const syncLog = rowSyncLog;
-                    return (
-                      <>
-                        {/* "unsupported" is a fourth state, not a flavour of
-                            error: the bank cannot be driven by this
-                            integration at all (a captcha, a browser redirect,
-                            an action to perform on the bank's own site). Red
-                            would invite retrying something that can never
-                            work, so it is muted, and the message carries the
-                            explanation - reported in #51 as a raw traceback
-                            with no indication of what to do. */}
-                        {configured && syncLog && (
-                          <output
-                            className={`flex items-center gap-1 text-xs ${SYNC_TONE_CLASS[syncStatusTone(syncLog.status)]}`}
-                            title={syncLog.message ?? undefined}
-                            aria-label={t(`syncStatus.${syncStatusLabelKey(syncLog.status)}`)}
-                          >
-                            {SYNC_TONE_ICON[syncStatusTone(syncLog.status)]}
-                          </output>
-                        )}
-                        {configured && !syncLog && (
-                          <Clock size={12} className="text-[var(--muted)]" role="status" aria-label={t("syncStatus.neverSynced")} />
-                        )}
-                        {isTr && (
-                          <RealtimeIndicator state={realtimeStatus?.institutions?.[inst.id]} />
-                        )}
-                        {/* Hidden on a bank only a person can refresh: the
-                            button could not succeed, and its failure would
-                            overwrite the connection that just worked. */}
-                        {configured && !reconnectOnlyRefreshes(syncLog?.status) && (
-                          <InstitutionSyncButton institutionId={inst.id} />
-                        )}
-                        {isWoob && <WoobSetupPrompt institutionId={inst.id} log={syncLog} />}
-                        {isTr && <TradeRepublicSetupPrompt institutionId={inst.id} log={syncLog} />}
-                        {/* One dialog for every backend. Trade Republic is an
-                            entry in its bank list rather than a button of its
-                            own: which backend reaches a given bank is this
-                            app's problem, not something to ask the user. */}
-                        <ConfigureWoobDialog
-                          institutionId={inst.id}
-                          institutionName={inst.name}
-                          currentModule={inst.woobModule}
-                          isTradeRepublicConfigured={isTr}
-                          modules={woobModules}
-                          hasDedicatedEnvSync={dedicatedSyncNames.has(inst.name.toLowerCase())}
-                          legacyAccountCount={inst.accounts.filter((a) => isLegacyEnvSyncId(a.syncId)).length}
-                          woobAccountCount={inst.accounts.filter((a) => isPerUserSyncId(a.syncId, inst.id)).length}
-                          legacyOldestDate={historyDepthByInstitution.get(inst.id)?.legacyOldest ?? null}
-                          woobOldestDate={historyDepthByInstitution.get(inst.id)?.woobOldest ?? null}
-                          onMigrate={migrateDedicatedSyncToWoob.bind(null, inst.id)}
-                          onAdopt={adoptDedicatedTrAccounts.bind(null, inst.id)}
-                        />
-                      </>
-                    );
-                  })()}
-                  <DeleteButton
-                    iconOnly
-                    label={t("common.delete")}
-                    description={t("deleteInstitution.description", { name: inst.name })}
-                    onDelete={deleteInstitution.bind(null, inst.id)}
-                  />
-                </div>
-              </div>
-              {/* The sync message, in plain sight rather than in a title
-                  attribute nobody hovers and no phone can reach. Reported as
-                  "no error but sync is not ok" (issue #54): the status was a
-                  bare icon, so a bank that had failed said nothing about why.
-                  It also carries the instruction a captcha bank depends on -
-                  that refreshing it means clicking Connect, not Synchronize. */}
-              {rowSyncLog?.message && rowSyncLog.status !== SYNC_STATUS_SUCCESS && (
-                <p
-                  className={`mt-2 text-xs ${
-                    syncStatusTone(rowSyncLog.status) === "negative"
-                      ? "text-[var(--negative)]"
-                      : "text-[var(--muted)]"
-                  }`}
-                >
-                  {rowSyncLog.message}
-                </p>
-              )}
-              </div>
-              );
-            })}
+            {institutions.map((inst) => (
+              <InstitutionRow
+                key={inst.id}
+                institution={inst}
+                syncLog={syncStatus[institutionSyncSource(inst.id, !!inst.trPhone)] ?? null}
+                realtimeState={realtimeStatus?.institutions?.[inst.id]}
+                woobModules={woobModules}
+                dedicatedEnvNames={dedicatedSyncNames}
+                gcConfigured={gcConfigured}
+                historyDepth={historyDepthByInstitution.get(inst.id) ?? null}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -437,7 +298,7 @@ export default async function SettingsPage({
           differently-behaving "LCL" surface on the same page. The whole
           section disappears when neither is configured, rather than showing
           an empty header. */}
-      {process.env.DEMO_MODE !== "true" && (!!process.env.LCL_LOGIN || !!process.env.TR_PHONE) && (
+      {show.sensitive && hasDedicatedEnvSync && (
         <section className="space-y-4">
           <div>
             <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.sync.title")}</h2>
@@ -549,122 +410,14 @@ export default async function SettingsPage({
           about it. */}
       <GoalsSection goals={goals} accounts={goalEligibleAccounts} />
 
-      {/* Tax rates */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("settings.tax.title")}</h2>
-          <p className="text-xs text-[var(--muted)] mt-0.5">{t("settings.tax.subtitle")}</p>
-        </div>
-        <form action={updateTaxSettings} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
-          {/* Governs which wrappers and rates the rest of the app SUGGESTS -
-              never what it computes. See lib/domain/tax-locale.ts: the app
-              does not model anyone's tax law, it just stops proposing French
-              products to someone who does not live in France. */}
-          <div className="space-y-1.5 max-w-xs">
-            <label htmlFor="country" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-              {t("settings.tax.country")}
-            </label>
-            <select
-              id="country"
-              name="country"
-              defaultValue={userSettings.country ?? ""}
-              className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
-            >
-              <option value="">{t("settings.tax.countryUnset")}</option>
-              {COUNTRY_CODES.map((code) => (
-                <option key={code} value={code}>
-                  {t(`settings.tax.countries.${code}`)}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.countryHint")}</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="taxRatePea" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                {t("settings.tax.pea")}
-              </label>
-              <div className="relative">
-                <input
-                  id="taxRatePea"
-                  name="taxRatePea"
-                  type="number"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  defaultValue={+(userSettings.taxRatePea * 100).toFixed(1)}
-                  placeholder={(FR_SOCIAL_LEVIES_RATE * 100).toFixed(1)}
-                  className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
-              </div>
-              <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.peaHint")}</p>
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="taxRateCto" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                {t("settings.tax.cto")}
-              </label>
-              <div className="relative">
-                <input
-                  id="taxRateCto"
-                  name="taxRateCto"
-                  type="number"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  defaultValue={+(userSettings.taxRateCto * 100).toFixed(1)}
-                  placeholder={(FR_PFU_TOTAL_RATE * 100).toFixed(1)}
-                  className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
-              </div>
-              <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.ctoHint")}</p>
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="taxRateCrypto" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-                {t("settings.tax.crypto")}
-              </label>
-              <div className="relative">
-                <input
-                  id="taxRateCrypto"
-                  name="taxRateCrypto"
-                  type="number"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  defaultValue={+(userSettings.taxRateCrypto * 100).toFixed(1)}
-                  placeholder={(FR_PFU_TOTAL_RATE * 100).toFixed(1)}
-                  className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
-              </div>
-              <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.cryptoHint")}</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <Link
-              href="/tax-report"
-              className="text-xs text-[var(--accent-text)] hover:underline underline-offset-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
-            >
-              {t("settings.tax.taxReportLink")}
-            </Link>
-            <SaveSettingsButton />
-          </div>
-        </form>
-      </section>
+      <TaxSettingsSection settings={userSettings} />
 
       {/* Your own identity and password. Grouped with 2FA and app-lock below
           rather than left among the sharing sections, where it used to sit ~3000px
           down the page between share links and portfolio grants: a password, a
           second factor and a device lock are one subject, and a user looking
           for any of them is looking for all three. */}
-      {isMulti && ownAccount && process.env.DEMO_MODE !== "true" && (
+      {show.withAuth && ownAccount && (
         <AccountSection
           username={ownAccount.username}
           displayName={ownAccount.displayName}
@@ -675,7 +428,7 @@ export default async function SettingsPage({
 
       {/* 2FA - meaningless without built-in auth active, and hidden in demo
           mode (setup/disable mutations are blocked anyway) */}
-      {process.env.AUTH_ENABLED === "true" && process.env.DEMO_MODE !== "true" && (
+      {show.withAuth && (
         <TwoFactorSection totpEnabled={viewerTotpEnabled} />
       )}
 
@@ -686,7 +439,7 @@ export default async function SettingsPage({
           login at all. Hidden in demo mode only (registration/toggle
           mutations would be blocked anyway, and a public demo has no real
           device-pairing story). */}
-      {process.env.DEMO_MODE !== "true" && (
+      {show.sensitive && (
         <AppLockSection userId={viewer.id} enabled={appLockStatus.enabled} credentials={appLockStatus.credentials} />
       )}
 
@@ -695,20 +448,20 @@ export default async function SettingsPage({
           database, so a restore replaces every user's data (and the user table
           itself). app/api/backup/route.ts enforces it - this just doesn't
           offer a member a section whose every button returns 403. */}
-      {process.env.DEMO_MODE !== "true" && viewer.role === "ADMIN" && <BackupRestoreSection />}
+      {show.adminOnly && <BackupRestoreSection />}
 
       {/* Read-only share links - deliberately NOT gated by AUTH_ENABLED like
           2FA above: this is meant to work independently of it (the primary
           use case is sharing one view externally while AUTH_ENABLED stays
           off for the trusted private network). Hidden in demo mode only
           (create/revoke mutations are blocked anyway). */}
-      {process.env.DEMO_MODE !== "true" && <ShareLinksSection links={shareLinks} />}
+      {show.sensitive && <ShareLinksSection links={shareLinks} />}
 
-      {isMulti && process.env.DEMO_MODE !== "true" && (
+      {show.withAuth && (
         <PortfolioSharingSection given={grants.given} received={grants.received} />
       )}
 
-      {isMulti && viewer.role === "ADMIN" && process.env.DEMO_MODE !== "true" && (
+      {show.userManagement && (
         <UsersSection
           users={users}
           invitations={invitations}
@@ -722,7 +475,7 @@ export default async function SettingsPage({
           "independent of AUTH_ENABLED" reasoning: proxy.ts excludes
           /api/v1 from the NextAuth matcher entirely, each route gates
           itself via the key instead. See CLAUDE.md's "Public REST API". */}
-      {process.env.DEMO_MODE !== "true" && <ApiKeysSection keys={apiKeys} />}
+      {show.sensitive && <ApiKeysSection keys={apiKeys} />}
 
       {/* Alerts - split into "how" (channels) and "what" (triggers) so each
           concern gets its own card and Save button, instead of one long
@@ -736,7 +489,7 @@ export default async function SettingsPage({
           unkeyed instance would otherwise keep showing whatever it had at
           first mount and, if saved from here, silently overwrite a newer
           value with a stale one. */}
-      {process.env.DEMO_MODE !== "true" && (
+      {show.sensitive && (
         <AlertChannelsSection
           key={`${userSettings.ntfyTopicUrl}-${userSettings.ntfyEnabled}-${userSettings.emailAlertsEnabled}-${userSettings.smtpHost}-${userSettings.smtpPort}`}
           settings={userSettings}
@@ -746,13 +499,13 @@ export default async function SettingsPage({
           folded into AlertChannelsSection's form) since "configuring" it is
           a subscribe action on this browser, not a text field to type into
           and Save. */}
-      {process.env.DEMO_MODE !== "true" && (
+      {show.sensitive && (
         <WebPushSection enabled={pushStatus.enabled} publicKey={pushStatus.publicKey} subscriptions={pushStatus.subscriptions} />
       )}
-      {process.env.DEMO_MODE !== "true" && <AlertTriggersSection settings={userSettings} />}
+      {show.sensitive && <AlertTriggersSection settings={userSettings} />}
 
       {/* Custom alert rules - same demo-mode gating as the two sections above. */}
-      {process.env.DEMO_MODE !== "true" && (
+      {show.sensitive && (
         <AlertRulesSection
           rules={alertRules}
           fiatAccounts={fiatAccounts}
