@@ -32,6 +32,10 @@ woob[lcl,swile]==3.7.*
 # waf_token="playwright", i.e. byte-for-byte how setup_tr.py already calls
 # TradeRepublicApi(...) with no extra kwargs).
 pytr @ git+https://github.com/pytr-org/pytr.git@1cff3d701e0db82e3425dae2194f2eb702914484
+# Declared explicitly rather than leaned on as woob's transitive dependency:
+# sync/crypto_at_rest.py decrypts real bank credentials with it, and a
+# dependency that arrives by accident can leave by accident too.
+cryptography>=42.0.0
 psycopg2-binary>=2.9.12
 fastapi>=0.141.1
 uvicorn>=0.52.4
