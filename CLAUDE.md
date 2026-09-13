@@ -304,6 +304,39 @@ The selection lives in a `viewing_portfolio` cookie, re-validated against a real
 
 **Accepted, documented constraints**: `.env` sync credentials (`LCL_LOGIN`/`TR_PHONE`) stay the owner's, so a second user cannot env-sync LCL or Trade Republic. **Corrected in v2.1 for Trade Republic specifically** - the "and since Woob has no Trade Republic module, a second user cannot sync Trade Republic at all" that used to follow here is no longer true: any user can now add their own from Settings, see "Per-user Trade Republic" below. LCL still has no per-user path of its own, but is reachable per-user through the generic Woob picker, so the remaining constraint is a redundant special case rather than a block on anyone. The *data* is unaffected either way: an env-synced account is co-ownable and grant-viewable exactly like a manual one. `sync/` needed **zero code changes for v2.0** - `Account.userId` and `SyncLog.userId` carry a permanent DB-level default of the owner precisely because `sync/db.py` INSERTs those two tables via raw SQL with explicit column lists that know nothing about the column. That default is scaffolding for the sidecar only: every app-side `create` passes `userId` explicitly, and `__tests__/institutions-actions.test.ts` asserts it does. **v2.1 made that "zero changes" claim false and it was not noticed until a user reported it** - once anyone could sync their own bank, relying on an owner-shaped default put a member's accounts on the admin. See "Per-user Trade Republic" below.
 
+#### The friends-and-family path, exercised end to end (v2.10.5)
+
+Before inviting real people onto a real instance, the whole member journey was
+driven against a throwaway database rather than read: migrations replayed from
+zero (no drift), an owner seeded with a deliberately distinctive account, then
+a friend invited, redeemed, logged in and browsed. **10/10 in a real browser.**
+
+What it establishes, and each half matters:
+
+- **Isolation holds** - none of the owner's account name, transaction label or
+  balance appears on `/`, `/accounts`, `/transactions`, `/analytics`,
+  `/settings` or any `api/v1` route, checked against the hydrated DOM *and*
+  against the raw HTML including the RSC payload, since data handed to a client
+  component travels inside a `<script>` that a naive strip would hide.
+- **And the app is not merely broken for them** - the control that makes the
+  first half mean anything. The member's own account and transaction do appear,
+  2 to 8 times per page. A leak test that only asserts absence passes equally
+  well on an app that renders nothing.
+- `GET` and `POST /api/backup` both answer `403` to a MEMBER, and Settings
+  offers them neither that section nor user management.
+
+**Two methodological traps were hit and are worth not repeating.** Searching
+rendered HTML for UI strings said every invite token was valid, expired ones
+included: `NextIntlClientProvider` ships the whole messages JSON inline, so
+every label appears on every page - this file already warns about it and the
+warning still had to be re-learned. Assert on a structural fact (a
+`input[type=password]` count) or on a marker that exists in no translation.
+And the settings `<h2>`s come out of the raw HTML in the wrong order, which
+looks exactly like a broken page order: `app/settings/loading.tsx` creates a
+Suspense boundary, so async sections stream late and React repositions them.
+The rendered order is correct (tax 4th, appearance 16th). **Read the hydrated
+DOM, never the wire format, for anything about what a person sees.**
+
 #### Security audit (post-v2.0)
 
 Ran as its own phase after the multi-user build, per `ROADMAP.md`'s sequencing. Findings below are split into what it **fixed** and what remains **open with a stated reason**. Everything was verified against a running instance, not read-only reasoning.
