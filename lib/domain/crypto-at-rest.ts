@@ -104,7 +104,7 @@ export function encryptSecret(plain: string | null | undefined): string | null {
   if (isEncrypted(plain)) return plain;
 
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv(ALGORITHM, resolveKey(), iv);
+  const cipher = createCipheriv(ALGORITHM, resolveKey(), iv, { authTagLength: TAG_BYTES });
   const ciphertext = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${ENCRYPTED_PREFIX}${iv.toString("base64")}:${Buffer.concat([ciphertext, tag]).toString("base64")}`;
@@ -139,7 +139,12 @@ export function decryptSecret(stored: string | null | undefined): string | null 
 
   const ciphertext = payload.subarray(0, payload.length - TAG_BYTES);
   const tag = payload.subarray(payload.length - TAG_BYTES);
-  const decipher = createDecipheriv(ALGORITHM, resolveKey(), iv);
+  // authTagLength is pinned rather than left to Node's default: without it a
+  // TRUNCATED tag is accepted, and a shorter tag is a weaker forgery barrier.
+  // semgrep's gcm-no-tag-length flagged the first version of this file, and
+  // correctly - the payload length check below bounds the slice but never
+  // tells the cipher what to require.
+  const decipher = createDecipheriv(ALGORITHM, resolveKey(), iv, { authTagLength: TAG_BYTES });
   decipher.setAuthTag(tag);
   try {
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
