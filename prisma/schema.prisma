@@ -108,6 +108,14 @@ model User {
 model Invitation {
   id              String    @id @default(cuid())
   token           String    @unique
+  /// SHA-256 of the token, which is how it is looked up now that `token`
+  /// itself is encrypted: AES-GCM uses a random IV, so the same token
+  /// encrypts differently every time and cannot be matched on. A plain
+  /// digest is enough here and would not be for a password - these are 256
+  /// random bits, so there is no dictionary to run against them.
+  /// Nullable only so the backfill can run on an existing instance; every
+  /// row written after v2.10.6 has one.
+  tokenHash       String?   @unique
   createdBy       User      @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
   createdByUserId String
   expiresAt       DateTime
@@ -944,6 +952,14 @@ model UserSettings {
 model ShareLink {
   id                  String    @id @default(cuid())
   token               String    @unique
+  /// SHA-256 of the token, which is how it is looked up now that `token`
+  /// itself is encrypted: AES-GCM uses a random IV, so the same token
+  /// encrypts differently every time and cannot be matched on. A plain
+  /// digest is enough here and would not be for a password - these are 256
+  /// random bits, so there is no dictionary to run against them.
+  /// Nullable only so the backfill can run on an existing instance; every
+  /// row written after v2.10.6 has one.
+  tokenHash       String?   @unique
   label               String?
   createdAt           DateTime  @default(now())
   expiresAt           DateTime?
@@ -981,6 +997,14 @@ model ShareLink {
 model ApiKey {
   id         String    @id @default(cuid())
   token      String    @unique
+  /// SHA-256 of the token, which is how it is looked up now that `token`
+  /// itself is encrypted: AES-GCM uses a random IV, so the same token
+  /// encrypts differently every time and cannot be matched on. A plain
+  /// digest is enough here and would not be for a password - these are 256
+  /// random bits, so there is no dictionary to run against them.
+  /// Nullable only so the backfill can run on an existing instance; every
+  /// row written after v2.10.6 has one.
+  tokenHash       String?   @unique
   label      String?
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { tokenLookupHash } from "@/lib/domain/crypto-at-rest";
 import { prisma } from "@/lib/db/prisma";
 
 // Shared gate for every app/api/v1/* route - see CLAUDE.md's "Public REST
@@ -26,7 +27,10 @@ export async function authenticateApiKey(
   const token = auth.slice("Bearer ".length);
   if (!token) return null;
 
-  const key = await prisma.apiKey.findUnique({ where: { token }, select: { id: true, userId: true } });
+  const key = await prisma.apiKey.findUnique({
+    where: { tokenHash: tokenLookupHash(token) },
+    select: { id: true, userId: true },
+  });
   if (!key) return null;
 
   // Fire-and-forget: a failed lastUsedAt write shouldn't fail the actual

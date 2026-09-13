@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { tokenLookupHash } from "@/lib/domain/crypto-at-rest";
 import type { NextRequest } from "next/server";
 
 // The gate on every app/api/v1/* route. What matters here beyond accept/reject
@@ -37,9 +38,17 @@ describe("authenticateApiKey", () => {
       id: "key-1",
       userId: "user-b",
     });
+    // Looked up by digest, never by the token itself: `ApiKey.token` is
+    // encrypted with a random IV, so the stored bytes differ every time and
+    // no WHERE clause could match them.
     expect(findUniqueMock).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { token: "fnlb_abc" } })
+      expect.objectContaining({ where: { tokenHash: tokenLookupHash("fnlb_abc") } })
     );
+    // And the bearer token itself never reaches the query. This is the
+    // assertion worth keeping: a query built from the raw value would still
+    // work today and would silently undo the encryption the moment someone
+    // "simplified" the lookup back.
+    expect(JSON.stringify(findUniqueMock.mock.calls[0][0])).not.toContain("fnlb_abc");
   });
 
   it("records lastUsedAt without making the caller wait on it", async () => {

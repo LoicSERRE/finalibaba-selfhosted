@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
 
 /**
  * Encryption at rest for the columns that hold somebody else's credentials.
@@ -154,4 +154,22 @@ export function decryptSecret(stored: string | null | undefined): string | null 
         "NEXTAUTH_SECRET it is derived from) changed since the value was written."
     );
   }
+}
+
+/**
+ * The lookup digest for a token that is stored encrypted.
+ *
+ * Share links, API keys and invitations are all found BY their token, and a
+ * random IV means the same token never encrypts to the same bytes twice - so
+ * the ciphertext cannot be matched in a WHERE clause. This digest can.
+ *
+ * A plain SHA-256, and the reasoning matters because the instinct is bcrypt:
+ * these are 256 random bits from `randomBytes(32)`, not a human-chosen
+ * password. There is no dictionary to slow anyone down against, and a
+ * per-row salt would defeat the single-query lookup this exists for. Keyed
+ * with nothing for the same reason a salt is absent - the digest's job is
+ * equality, and the secrecy comes from the token's own entropy.
+ */
+export function tokenLookupHash(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
 }

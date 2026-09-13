@@ -1,6 +1,7 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import { decryptSecret, encryptSecret, tokenLookupHash } from "@/lib/domain/crypto-at-rest";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
@@ -90,11 +91,13 @@ export async function listUsers() {
 
 export async function listInvitations() {
   await requireAdmin();
-  return prisma.invitation.findMany({
+  const rows = await prisma.invitation.findMany({
     where: { usedAt: null, expiresAt: { gt: new Date() } },
     select: { id: true, token: true, expiresAt: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
+  // Decrypted for display: an admin has to be able to copy the link again.
+  return rows.map((r) => ({ ...r, token: decryptSecret(r.token)! }));
 }
 
 /**
@@ -107,7 +110,10 @@ export async function createInvitation(): Promise<{ token: string }> {
   const token = randomBytes(32).toString("base64url");
   await prisma.invitation.create({
     data: {
-      token,
+      // Stored encrypted; tokenHash is what every lookup below matches on,
+      // since a random IV means the ciphertext is different every time.
+      token: encryptSecret(token)!,
+      tokenHash: tokenLookupHash(token),
       createdByUserId: admin.id,
       expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
     },
@@ -125,7 +131,7 @@ export async function revokeInvitation(id: string): Promise<void> {
 /** Unauthenticated: called by the /invite/[token] page before any account exists. */
 export async function isInvitationValid(token: string): Promise<boolean> {
   const invitation = await prisma.invitation.findUnique({
-    where: { token },
+    where: { tokenHash: tokenLookupHash(token) },
     select: { usedAt: true, expiresAt: true },
   });
   return !!invitation && invitation.usedAt === null && invitation.expiresAt > new Date();
@@ -147,7 +153,7 @@ export async function acceptInvitation(token: string, formData: FormData): Promi
 
   await prisma.$transaction(async (tx) => {
     const invitation = await tx.invitation.findUnique({
-      where: { token },
+      where: { tokenHash: tokenLookupHash(token) },
       select: { id: true, usedAt: true, expiresAt: true },
     });
     const spent = invitation?.usedAt !== null;

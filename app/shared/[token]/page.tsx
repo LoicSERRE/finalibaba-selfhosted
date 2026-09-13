@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
+import { tokenLookupHash } from "@/lib/domain/crypto-at-rest";
 import { notFound } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
@@ -33,7 +34,7 @@ export default async function SharedDashboardPage({
 }>) {
   const { token } = await params;
 
-  const link = await prisma.shareLink.findUnique({ where: { token } });
+  const link = await prisma.shareLink.findUnique({ where: { tokenHash: tokenLookupHash(token) } });
 
   // Same notFound() for "doesn't exist" and "expired" - no signal to an
   // anonymous visitor about which one it is.
