@@ -169,6 +169,17 @@ export function decryptSecret(stored: string | null | undefined): string | null 
  * per-row salt would defeat the single-query lookup this exists for. Keyed
  * with nothing for the same reason a salt is absent - the digest's job is
  * equality, and the secrecy comes from the token's own entropy.
+ *
+ * **CodeQL flags this as `js/insufficient-password-hash` (high), and it is a
+ * false positive** - triaged rather than waved past. The rule traces
+ * `generateApiKeyToken` into this function and reads "token" as "password".
+ * All three inputs are `randomBytes(32)`: `generateApiKeyToken`,
+ * `generateShareToken` and `createInvitation`. A work factor buys nothing
+ * against 2^256, while costing a per-row salt - which makes the lookup
+ * impossible - and ~100ms on every authenticated API request. Hashing a
+ * high-entropy bearer token with a fast digest is the standard design, not a
+ * shortcut. If this ever stops being true it will be because somebody made a
+ * token guessable; check the generators above before changing the digest.
  */
 export function tokenLookupHash(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
