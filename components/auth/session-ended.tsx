@@ -4,8 +4,13 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 /**
- * Shown when the signed-in account no longer exists, and signs the browser out
- * on sight.
+ * Shown when the signed-in session must stop being honoured, and signs the
+ * browser out on sight.
+ *
+ * Two causes, and telling them apart matters: a deleted account and a revoked
+ * session both end here, but "this account no longer exists" shown to someone
+ * who just clicked "sign out everywhere" is alarming and false. The `reason`
+ * picks the sentence.
  *
  * The session cookie stays cryptographically valid for its full 30 days after
  * an admin deletes an account, so the browser keeps presenting it and the
@@ -17,7 +22,7 @@ import { useTranslations } from "next-intl";
  * Rendered instead of the page, never alongside it: whatever the user was
  * looking at belonged to an account that is gone.
  */
-export function SessionEnded() {
+export function SessionEnded({ reason = "deleted" }: Readonly<{ reason?: "deleted" | "revoked" }>) {
   const t = useTranslations("auth");
   const [failed, setFailed] = useState(false);
 
@@ -41,8 +46,12 @@ export function SessionEnded() {
   return (
     <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center px-4 text-center">
       <div className="w-full max-w-sm space-y-3">
-        <h1 className="text-lg font-semibold text-[var(--foreground)]">{t("sessionEndedTitle")}</h1>
-        <p className="text-sm text-[var(--muted)]">{t("sessionEndedBody")}</p>
+        <h1 className="text-lg font-semibold text-[var(--foreground)]">
+          {reason === "revoked" ? t("sessionRevokedTitle") : t("sessionEndedTitle")}
+        </h1>
+        <p className="text-sm text-[var(--muted)]">
+          {reason === "revoked" ? t("sessionRevokedBody") : t("sessionEndedBody")}
+        </p>
         {failed && (
           <a
             href="/login"

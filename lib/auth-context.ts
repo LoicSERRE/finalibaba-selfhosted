@@ -101,6 +101,11 @@ export function isDeletedSessionUser(e: unknown): boolean {
   return e instanceof DeletedSessionUserError;
 }
 
+/** True only for a session its own user ended, never for a deleted account. */
+export function isRevokedSession(e: unknown): boolean {
+  return e instanceof RevokedSessionError;
+}
+
 /** Either reason a live session must stop being honoured. */
 export function isEndedSession(e: unknown): boolean {
   return e instanceof DeletedSessionUserError || e instanceof RevokedSessionError;

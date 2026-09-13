@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -9,9 +9,11 @@ import { ServiceWorkerRegistration } from "@/components/layout/service-worker-re
 import { MainContent } from "@/components/layout/main-content";
 import { SessionEnded } from "@/components/auth/session-ended";
 import { AppLockGate } from "@/components/layout/app-lock-gate";
+import { TwoFactorRequired } from "@/components/auth/two-factor-required";
+import { requiresTwoFactor } from "@/lib/services/two-factor-policy";
 import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, isEndedSession, isDemoMode } from "@/lib/auth-context";
+import { getViewer, isEndedSession, isRevokedSession, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import "./globals.css";
 
@@ -96,19 +98,41 @@ export default async function RootLayout({
   // page is replaced by SessionEnded, which signs the browser out - rendering
   // children here would run a page for an account that no longer exists.
   let viewer: Awaited<ReturnType<typeof getViewer>> | null = null;
+  let endedReason: "deleted" | "revoked" = "deleted";
   try {
     viewer = await getViewer();
   } catch (e) {
-    // Deleted OR revoked: both mean this browser must be signed out.
+    // Deleted OR revoked: both mean this browser must be signed out, but the
+    // two say very different things to the person reading the screen.
     if (!isEndedSession(e)) throw e;
+    endedReason = isRevokedSession(e) ? "revoked" : "deleted";
   }
 
-  const appLockEnabled =
+  const account =
     isDemoMode() || !viewer
-      ? false
-      : await prisma.user
-          .findUnique({ where: { id: viewer.id }, select: { appLockEnabled: true } })
-          .then((user) => user?.appLockEnabled ?? false);
+      ? null
+      : await prisma.user.findUnique({
+          where: { id: viewer.id },
+          select: { appLockEnabled: true, totpEnabled: true },
+        });
+  const appLockEnabled = account?.appLockEnabled ?? false;
+
+  // The instance policy, checked here rather than in a page: this gate has to
+  // hold on every route, and /settings has to stay reachable through it - it
+  // is where the setup lives. Never applies in mono mode, where there is no
+  // login for a second factor to sit behind.
+  // /settings is exempt, and that is not a hole: it is the only page that can
+  // clear the condition. Gating it too made the policy a dead end - the user
+  // was told to go somewhere the gate would not let them go. Everything that
+  // actually shows money stays blocked, so nothing financial is rendered or
+  // even sent.
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const mustSetUpTotp =
+    !!viewer &&
+    !viewer.isMonoMode &&
+    !account?.totpEnabled &&
+    !pathname.startsWith("/settings") &&
+    (await requiresTwoFactor());
 
   return (
     <html
@@ -149,7 +173,9 @@ export default async function RootLayout({
           >
             Skip to content
           </a>
-          {viewer ? (
+          {viewer && mustSetUpTotp ? (
+            <TwoFactorRequired />
+          ) : viewer ? (
             <>
               <AppLockGate enabled={appLockEnabled} userId={viewer.id}>
                 <SidebarWrapper />
@@ -160,7 +186,7 @@ export default async function RootLayout({
               <RealtimeRefresh />
             </>
           ) : (
-            <SessionEnded />
+            <SessionEnded reason={endedReason} />
           )}
         </NextIntlClientProvider>
       </body>

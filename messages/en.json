@@ -75,7 +75,14 @@
     "sessionEndedLink": "Go to login",
     "continue": "Continue",
     "signingInAs": "Signing in as {name} · Change",
-    "back": "Back to password"
+    "back": "Back to password",
+    "twoFactorRequired": {
+      "title": "Two-factor authentication required",
+      "body": "This instance's administrator requires a second factor. Set up an authenticator app from Settings to reach your data.",
+      "action": "Go to Settings"
+    },
+    "sessionRevokedTitle": "Session ended",
+    "sessionRevokedBody": "All your sessions were signed out. Sign in again with your usual password."
   },
   "accountTypes": {
     "CHECKING": "Checking",
@@ -1042,6 +1049,23 @@
       "errorWrongPassword": "Current password is incorrect.",
       "errorUsernameRequired": "Choose a username.",
       "errorAuthDisabled": "Authentication is disabled on this instance."
+    },
+    "security": {
+      "title": "Security",
+      "subtitle": "Sessions, authentication policy and a log of sensitive actions",
+      "revokeTitle": "Sign out everywhere",
+      "revokeHint": "Ends every one of your sessions, this one included. Use it if a device is lost or stolen: without it a session stays valid for 30 days.",
+      "revokeAction": "Sign out everywhere",
+      "requireTotpTitle": "Require two-factor authentication",
+      "requireTotpHint": "Every user must set up a TOTP code before reaching their data. Anyone without one sees the setup screen on their next visit.",
+      "auditTitle": "Activity log",
+      "auditHintAdmin": "The 50 most recent sensitive actions on this instance, across every user.",
+      "auditHintMember": "Your 50 most recent sensitive actions. If you do not recognise a sign-in, sign out everywhere and change your password.",
+      "auditEmpty": "Nothing recorded yet.",
+      "colWhen": "When",
+      "colWhat": "Action",
+      "colWho": "Who",
+      "colWhere": "From"
     }
   },
   "shared": {

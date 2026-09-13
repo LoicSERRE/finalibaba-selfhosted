@@ -19,8 +19,11 @@ import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { ThemeSwitcher } from "@/components/settings/theme-switcher";
 import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
+import { SecuritySection } from "@/components/settings/security-section";
 import { AppLockSection } from "@/components/settings/app-lock-section";
 import { getAppLockStatus } from "@/lib/actions/app-lock";
+import { getAuditLog } from "@/lib/actions/security";
+import { requiresTwoFactor } from "@/lib/services/two-factor-policy";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { UsersSection } from "@/components/settings/users-section";
@@ -139,7 +142,7 @@ export default async function SettingsPage({
       ])
     : [[], [], { given: [], received: [] }, null];
 
-  const [institutions, syncStatus, realtimeStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, t] =
+  const [institutions, syncStatus, realtimeStatus, woobModules, userSettings, shareLinks, apiKeys, alertRules, fiatAccounts, investmentAccounts, budgetCategories, goals, goalEligibleAccounts, appLockStatus, pushStatus, auditEvents, requireTwoFactor, t] =
     await Promise.all([
       prisma.institution.findMany({
         where: { userId: viewer.id },
@@ -204,6 +207,8 @@ export default async function SettingsPage({
       }),
       getAppLockStatus(),
       getPushStatus(),
+      getAuditLog(),
+      requiresTwoFactor(),
       getTranslations(),
     ]);
 
@@ -448,6 +453,14 @@ export default async function SettingsPage({
           database, so a restore replaces every user's data (and the user table
           itself). app/api/backup/route.ts enforces it - this just doesn't
           offer a member a section whose every button returns 403. */}
+      {/* Sessions, the 2FA policy and the activity log. Grouped with the
+          account, 2FA and app-lock sections above rather than near the sharing
+          ones: they answer the same question, "who can get in, and what did
+          they do". */}
+      {show.withAuth && (
+        <SecuritySection events={auditEvents} isAdmin={isAdmin} requireTwoFactor={requireTwoFactor} />
+      )}
+
       {show.adminOnly && <BackupRestoreSection />}
 
       {/* Read-only share links - deliberately NOT gated by AUTH_ENABLED like

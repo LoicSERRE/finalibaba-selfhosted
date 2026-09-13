@@ -75,7 +75,14 @@
     "sessionEndedLink": "Aller à la connexion",
     "continue": "Continuer",
     "signingInAs": "Connexion en tant que {name} · Modifier",
-    "back": "Revenir au mot de passe"
+    "back": "Revenir au mot de passe",
+    "twoFactorRequired": {
+      "title": "Double authentification requise",
+      "body": "L'administrateur de cette instance impose un second facteur. Configure une application d'authentification depuis les paramètres pour accéder à tes données.",
+      "action": "Aller aux paramètres"
+    },
+    "sessionRevokedTitle": "Session terminée",
+    "sessionRevokedBody": "Toutes tes sessions ont été déconnectées. Reconnecte-toi avec ton mot de passe habituel."
   },
   "accountTypes": {
     "CHECKING": "Courant",
@@ -1042,6 +1049,23 @@
       "errorWrongPassword": "Mot de passe actuel incorrect.",
       "errorUsernameRequired": "Choisis un identifiant.",
       "errorAuthDisabled": "L'authentification est désactivée sur cette instance."
+    },
+    "security": {
+      "title": "Sécurité",
+      "subtitle": "Sessions, politique d'authentification et journal des actions sensibles",
+      "revokeTitle": "Déconnecter tous mes appareils",
+      "revokeHint": "Met fin à toutes tes sessions, y compris celle-ci. À utiliser si un appareil est perdu ou volé : sans ça, une session reste valable 30 jours.",
+      "revokeAction": "Tout déconnecter",
+      "requireTotpTitle": "Imposer la double authentification",
+      "requireTotpHint": "Chaque utilisateur devra configurer un code TOTP avant d'accéder à ses données. Ceux qui n'en ont pas verront l'écran de configuration à leur prochaine connexion.",
+      "auditTitle": "Journal des actions",
+      "auditHintAdmin": "Les 50 dernières actions sensibles sur cette instance, tous utilisateurs confondus.",
+      "auditHintMember": "Tes 50 dernières actions sensibles. Si tu ne reconnais pas une connexion, déconnecte tous tes appareils et change ton mot de passe.",
+      "auditEmpty": "Rien à afficher pour l'instant.",
+      "colWhen": "Quand",
+      "colWhat": "Action",
+      "colWho": "Qui",
+      "colWhere": "Depuis"
     }
   },
   "shared": {

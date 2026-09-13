@@ -104,6 +104,10 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
   // that renders a blank page rather than a less secure one.
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-nonce", nonce);
+  // The layout renders on every route and has no other way to know which
+  // one: the two-factor gate has to let /settings through, since that is
+  // where the setup it demands actually lives.
+  requestHeaders.set("x-pathname", req.nextUrl.pathname);
   requestHeaders.set("Content-Security-Policy", csp);
   const pass = () => NextResponse.next({ request: { headers: requestHeaders } });
 
