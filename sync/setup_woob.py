@@ -39,6 +39,7 @@ import logging
 import psycopg2.extras
 
 import setup_locks
+from crypto_at_rest import decrypt_institution_row
 from db import get_conn
 from sync_woob import _configure_woob, make_woob, persist_accounts
 
@@ -77,7 +78,7 @@ def _fetch_institution(institution_id: str) -> dict | None:
         'SELECT id, name, "woobModule", "woobLogin", "woobPassword" FROM "Institution" WHERE id = %s',
         (institution_id,),
     )
-    row = cur.fetchone()
+    row = decrypt_institution_row(cur.fetchone())
     cur.close()
     conn.close()
     return row

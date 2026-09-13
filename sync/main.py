@@ -27,6 +27,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+from crypto_at_rest import decrypt_institution_row
 from workers import executor
 
 scheduler = AsyncIOScheduler()
@@ -543,7 +544,7 @@ def _institution_provider(institution_id: str) -> str | None:
         'SELECT "woobModule", "trPhone" FROM "Institution" WHERE id = %s',
         (institution_id,),
     )
-    row = cur.fetchone()
+    row = decrypt_institution_row(cur.fetchone())
     cur.close()
     conn.close()
     if not row:
@@ -685,7 +686,7 @@ async def trigger_institution_sync(institution_id: str):
             'SELECT id, name, "woobModule", "woobLogin", "woobPassword", "trPhone" FROM "Institution" WHERE id = %s',
             (institution_id,),
         )
-        inst = cur.fetchone()
+        inst = decrypt_institution_row(cur.fetchone())
         cur.close()
         conn.close()
     except psycopg2.Error:

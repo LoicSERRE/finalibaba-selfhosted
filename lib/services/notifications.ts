@@ -1,4 +1,5 @@
 import { fetchExternal } from "@/lib/services/external-fetch";
+import { decryptSecret } from "@/lib/domain/crypto-at-rest";
 import nodemailer from "nodemailer";
 import * as webPush from "web-push";
 import { renderAlertEmailHtml } from "@/lib/services/email-template";
@@ -168,7 +169,7 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
   const jobs: Promise<boolean>[] = [];
 
   if (settings.ntfyTopicUrl && settings.ntfyEnabled) {
-    jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, title, body, settings.ntfyAuthToken));
+    jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, title, body, decryptSecret(settings.ntfyAuthToken)));
   }
 
   if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom && settings.emailAlertsEnabled) {
@@ -178,7 +179,7 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
           host: settings.smtpHost,
           port: settings.smtpPort,
           user: settings.smtpUser,
-          password: settings.smtpPassword,
+          password: decryptSecret(settings.smtpPassword),
           from: settings.smtpFrom,
           to: settings.alertEmailTo,
         },

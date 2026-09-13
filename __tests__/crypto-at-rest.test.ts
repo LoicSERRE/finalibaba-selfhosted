@@ -120,3 +120,28 @@ describe("key resolution", () => {
     expect(() => encryptSecret("x")).toThrow(/ENCRYPTION_KEY/);
   });
 });
+
+describe("the flows that would lock someone out if this were wrong", () => {
+  it("a TOTP secret still verifies a live code after a round trip", async () => {
+    // The one failure nobody could work around from the login screen: if the
+    // stored secret stops matching what the authenticator app holds, 2FA
+    // rejects every correct code and the account is unreachable.
+    const { generateTotpSecret, verifyTotpCode } = await import("@/lib/domain/totp");
+    const { generate } = await import("otplib");
+
+    const secret = generateTotpSecret();
+    const stored = encryptSecret(secret)!;
+    const code = await generate({ secret });
+
+    expect(await verifyTotpCode(decryptSecret(stored)!, code)).toBe(true);
+    // And the stored form is genuinely opaque rather than merely wrapped.
+    expect(stored).not.toContain(secret);
+    expect(await verifyTotpCode(stored, code)).toBe(false);
+  });
+
+  it("a bank password survives characters a real one actually contains", async () => {
+    for (const password of ["p@ssw0rd!", "aé€ü#/\\:", "  leading and trailing  ", "1234"]) {
+      expect(decryptSecret(encryptSecret(password))).toBe(password);
+    }
+  });
+});

@@ -17,6 +17,7 @@ import psycopg2.extras
 
 import setup_locks
 import woob_errors
+from crypto_at_rest import decrypt_institution_row
 from db import (
     composite_sync_id,
     get_conn,
@@ -525,7 +526,7 @@ if __name__ == "__main__":
         'SELECT id, name, "woobModule", "woobLogin", "woobPassword" FROM "Institution" WHERE id = %s',
         (inst_id,),
     )
-    row = cur.fetchone()
+    row = decrypt_institution_row(cur.fetchone())
     cur.close()
     conn.close()
 

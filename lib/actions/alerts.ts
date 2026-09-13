@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { encryptSecret } from "@/lib/domain/crypto-at-rest";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
@@ -40,13 +41,28 @@ export async function updateAlertChannels(formData: FormData) {
   // didn't touch this field", not "remove my password".
   const smtpPasswordInput = (formData.get("smtpPassword") as string) || "";
 
-  const data = { ntfyTopicUrl, ntfyAuthToken, ntfyEnabled, alertEmailTo, smtpHost, smtpPort, smtpUser, smtpFrom, emailAlertsEnabled };
+  // Both credentials are encrypted at rest. They are the two the post-v2.0
+  // audit already flagged as raised in stakes by multi-user, since one user
+  // reading another's row means reading somebody else's mail credentials -
+  // it closed the app-level path and left the database one open.
+  const data = {
+    ntfyTopicUrl,
+    ntfyAuthToken: encryptSecret(ntfyAuthToken),
+    ntfyEnabled,
+    alertEmailTo,
+    smtpHost,
+    smtpPort,
+    smtpUser,
+    smtpFrom,
+    emailAlertsEnabled,
+  };
+  const smtpPassword = encryptSecret(smtpPasswordInput);
 
   const viewer = await getViewer();
   await prisma.userSettings.upsert({
     where: { userId: viewer.id },
-    create: { userId: viewer.id, ...data, smtpPassword: smtpPasswordInput || null },
-    update: smtpPasswordInput ? { ...data, smtpPassword: smtpPasswordInput } : data,
+    create: { userId: viewer.id, ...data, smtpPassword },
+    update: smtpPassword ? { ...data, smtpPassword } : data,
   });
 
   revalidatePath("/settings");

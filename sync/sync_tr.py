@@ -22,6 +22,7 @@ from decimal import Decimal
 
 import psycopg2.extras
 
+from crypto_at_rest import decrypt_institution_row
 from db import (
     get_conn,
     get_institution_id,
@@ -716,7 +717,7 @@ def fetch_tr_institution(institution_id: str) -> dict | None:
         'SELECT id, name, "trPhone", "trPin" FROM "Institution" WHERE id = %s',
         (institution_id,),
     )
-    row = cur.fetchone()
+    row = decrypt_institution_row(cur.fetchone())
     cur.close()
     conn.close()
     return row

@@ -124,3 +124,33 @@ def decrypt_secret(stored: str | None) -> str | None:
             "Could not decrypt a stored credential. This usually means ENCRYPTION_KEY "
             "(or the NEXTAUTH_SECRET it is derived from) changed since it was written."
         ) from exc
+
+
+# The Institution columns that hold credentials. `woobModule` is deliberately
+# absent: it is a module name, identifies nobody, and sync/db.py matches on it.
+CREDENTIAL_FIELDS = ("woobLogin", "woobPassword", "trPhone", "trPin")
+
+
+def decrypt_institution_row(row):
+    """Decrypts an Institution row's credential columns, in place.
+
+    Applied at each of the handful of places a row is READ, rather than at the
+    dozen or so places a credential is used. The read sites are enumerable and
+    the use sites keep multiplying: `sync_tr_realtime.py` and
+    `setup_tr_institution.py` both consume `fetch_tr_institution`'s result
+    without knowing where it came from, and a decrypt-at-use rule would have to
+    be remembered in each of them forever.
+
+    Tolerates a plain dict or a psycopg2 DictRow, and a row that selected only
+    some of the columns. Returns the row so it can wrap a fetch expression.
+    """
+    if row is None:
+        return None
+    for field in CREDENTIAL_FIELDS:
+        try:
+            value = row[field]
+        except (KeyError, IndexError, TypeError):
+            continue
+        if value is not None:
+            row[field] = decrypt_secret(value)
+    return row

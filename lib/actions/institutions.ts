@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned } from "@/lib/auth-context";
+import { encryptSecret } from "@/lib/domain/crypto-at-rest";
 import { legacyTrSyncIds, parseTrSuffix, buildTrSyncId } from "@/lib/domain/sync-ids";
 
 export async function createInstitution(formData: FormData) {
@@ -20,11 +21,20 @@ export async function createInstitution(formData: FormData) {
   // a Server Action and a form payload is whatever the caller sends.
   // Trade Republic wins a payload carrying both rather than silently writing
   // an institution that two backends would each claim.
-  let provider: Record<string, string> = {};
+  // Credentials go through encryptSecret here as well as in
+  // setWoobConfig/setTradeRepublicConfig: this is a second, independent write
+  // path, and it is the one a brand-new user takes first. `woobModule` is a
+  // module name rather than a credential and stays readable, since
+  // sync/db.py matches on it and it identifies no person.
+  let provider: Record<string, string | null> = {};
   if (trPhone && trPin) {
-    provider = { trPhone, trPin };
+    provider = { trPhone: encryptSecret(trPhone), trPin: encryptSecret(trPin) };
   } else if (woobModule && woobLogin && woobPassword) {
-    provider = { woobModule, woobLogin, woobPassword };
+    provider = {
+      woobModule,
+      woobLogin: encryptSecret(woobLogin),
+      woobPassword: encryptSecret(woobPassword),
+    };
   }
 
   const viewer = await getViewer();
@@ -94,8 +104,10 @@ export async function setWoobConfig(id: string, module: string, login: string, p
     where: { id },
     data: {
       woobModule: module,
-      woobLogin: login,
-      woobPassword: password,
+      // Encrypted at rest: these are somebody else's bank credentials, and
+      // before v2.10.5 one SELECT returned every invited user's in clear.
+      woobLogin: encryptSecret(login),
+      woobPassword: encryptSecret(password),
       trPhone: null,
       trPin: null,
     },
@@ -107,8 +119,8 @@ export async function setWoobConfig(id: string, module: string, login: string, p
  * Trade Republic credentials for one institution, the per-user counterpart to
  * setWoobConfig. An institution carries one provider or the other, never both:
  * the sync dispatches on whichever set is populated, so leaving the Woob config
- * would make the backend depend on the order of two `if`s. trPin is plaintext,
- * same trust model as woobPassword.
+ * would make the backend depend on the order of two `if`s. trPin is encrypted
+ * at rest, same as woobPassword - see lib/domain/crypto-at-rest.ts.
  */
 export async function setTradeRepublicConfig(id: string, phone: string, pin: string) {
   const viewer = await getViewer();
@@ -121,8 +133,8 @@ export async function setTradeRepublicConfig(id: string, phone: string, pin: str
   await prisma.institution.update({
     where: { id },
     data: {
-      trPhone: trimmedPhone,
-      trPin: trimmedPin,
+      trPhone: encryptSecret(trimmedPhone),
+      trPin: encryptSecret(trimmedPin),
       woobModule: null,
       woobLogin: null,
       woobPassword: null,

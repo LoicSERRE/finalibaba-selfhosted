@@ -10,6 +10,8 @@ export default defineConfig({
     // `// @vitest-environment happy-dom` at the top of its own file.
     environment: "node",
     include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],
+    // Gives every file an ENCRYPTION_KEY, see the file's own comment.
+    setupFiles: ["./__tests__/setup-env.ts"],
     coverage: {
       provider: "v8",
       // lcov is for SonarQube (sonar.javascript.lcov.reportPaths in

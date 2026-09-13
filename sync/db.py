@@ -7,6 +7,8 @@ from decimal import Decimal
 import psycopg2
 import psycopg2.extras
 
+from crypto_at_rest import decrypt_institution_row
+
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -136,7 +138,9 @@ def get_woob_institutions(cur) -> list[dict]:
         'SELECT id, name, "woobModule", "woobLogin", "woobPassword" FROM "Institution" '
         'WHERE "woobModule" IS NOT NULL AND "woobLogin" IS NOT NULL'
     )
-    return cur.fetchall()
+    # Decrypted at the boundary: every consumer below receives usable
+    # credentials and none of them has to remember this exists.
+    return [decrypt_institution_row(r) for r in cur.fetchall()]
 
 
 def get_tr_institutions(cur) -> list[dict]:

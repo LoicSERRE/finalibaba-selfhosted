@@ -1,4 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
+import { decryptSecret } from "@/lib/domain/crypto-at-rest";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
@@ -127,7 +128,7 @@ async function resolveUser(username: string | undefined, password: string): Prom
 async function verifySecondFactor(user: AuthUser, code: string): Promise<boolean> {
   if (!user.totpEnabled || !user.totpSecret) return true;
 
-  if (await verifyTotpCode(user.totpSecret, code)) return true;
+  if (await verifyTotpCode(decryptSecret(user.totpSecret)!, code)) return true;
 
   const backupIndex = await matchBackupCode(code, user.totpBackupCodes);
   if (backupIndex === -1) return false;

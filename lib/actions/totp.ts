@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { decryptSecret, encryptSecret } from "@/lib/domain/crypto-at-rest";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer } from "@/lib/auth-context";
@@ -33,7 +34,7 @@ export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: str
   const viewer = await getViewer();
   await prisma.user.update({
     where: { id: viewer.id },
-    data: { totpSecret: secret, totpEnabled: false },
+    data: { totpSecret: encryptSecret(secret), totpEnabled: false },
   });
   const label = await prisma.user
     .findUnique({ where: { id: viewer.id }, select: { username: true, displayName: true } })
@@ -52,7 +53,7 @@ export async function confirmTotpSetup(
     select: { totpSecret: true },
   });
   if (!settings?.totpSecret) return { ok: false, error: "no_pending_setup" };
-  if (!(await verifyTotpCode(settings.totpSecret, code))) return { ok: false, error: "invalid_code" };
+  if (!(await verifyTotpCode(decryptSecret(settings.totpSecret)!, code))) return { ok: false, error: "invalid_code" };
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);
@@ -73,7 +74,7 @@ export async function disableTotp(code: string): Promise<{ ok: true } | TotpFail
   if (!settings?.totpEnabled || !settings.totpSecret) return { ok: false, error: "not_enabled" };
 
   const ok =
-    (await verifyTotpCode(settings.totpSecret, code)) ||
+    (await verifyTotpCode(decryptSecret(settings.totpSecret)!, code)) ||
     (await matchBackupCode(code, settings.totpBackupCodes)) !== -1;
   if (!ok) return { ok: false, error: "invalid_code" };
 
@@ -97,7 +98,7 @@ export async function regenerateBackupCodes(
   // A live TOTP code only, never a backup code here - otherwise a single
   // backup code could mint itself an endless supply of replacements
   // without ever proving possession of the authenticator app.
-  if (!(await verifyTotpCode(settings.totpSecret, code))) return { ok: false, error: "invalid_code" };
+  if (!(await verifyTotpCode(decryptSecret(settings.totpSecret)!, code))) return { ok: false, error: "invalid_code" };
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { decryptSecret, isEncrypted } from "@/lib/domain/crypto-at-rest";
 
 // Light coverage only, per this project's stated lib/actions/* boundary (see
 // sonar-project.properties' sonar.coverage.exclusions comment) - error paths
@@ -130,7 +131,16 @@ describe("createInstitution", () => {
       formData({ name: "LCL", woobModule: "lcl", woobLogin: "user", woobPassword: "pw" }),
     );
     expect(institutionCreateMock).toHaveBeenCalledWith({
-      data: { userId: "user-owner", name: "LCL", woobModule: "lcl", woobLogin: "user", woobPassword: "pw" },
+      data: {
+        userId: "user-owner",
+        name: "LCL",
+        woobModule: "lcl",
+        // Stored encrypted, and asserted by decrypting rather than by
+        // matching a literal: a test that pinned the ciphertext would pass
+        // just as happily if encryption were removed and the literal updated.
+        woobLogin: expect.stringMatching(/^enc:v1:/),
+        woobPassword: expect.stringMatching(/^enc:v1:/),
+      },
     });
   });
 });
@@ -288,8 +298,8 @@ describe("provider config is mutually exclusive", () => {
       where: { id: "inst-1" },
       data: {
         woobModule: "lcl",
-        woobLogin: "user",
-        woobPassword: "secret",
+        woobLogin: expect.stringMatching(/^enc:v1:/),
+        woobPassword: expect.stringMatching(/^enc:v1:/),
         trPhone: null,
         trPin: null,
       },
@@ -302,8 +312,8 @@ describe("provider config is mutually exclusive", () => {
     expect(institutionUpdateMock).toHaveBeenCalledWith({
       where: { id: "inst-1" },
       data: {
-        trPhone: "+33612345678",
-        trPin: "1234",
+        trPhone: expect.stringMatching(/^enc:v1:/),
+        trPin: expect.stringMatching(/^enc:v1:/),
         woobModule: null,
         woobLogin: null,
         woobPassword: null,
@@ -331,7 +341,12 @@ describe("setTradeRepublicConfig", () => {
     await setTradeRepublicConfig("inst-1", "  +33612345678 ", " 1234 ");
 
     expect(institutionUpdateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ trPhone: "+33612345678", trPin: "1234" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          trPhone: expect.stringMatching(/^enc:v1:/),
+          trPin: expect.stringMatching(/^enc:v1:/),
+        }),
+      }),
     );
   });
 });
@@ -372,7 +387,10 @@ describe("createInstitution against an existing name", () => {
     expect(institutionCreateMock).not.toHaveBeenCalled();
     expect(institutionUpdateMock).toHaveBeenCalledWith({
       where: { id: "inst-seeded" },
-      data: { trPhone: "+33612345678", trPin: "1234" },
+      data: {
+        trPhone: expect.stringMatching(/^enc:v1:/),
+        trPin: expect.stringMatching(/^enc:v1:/),
+      },
     });
   });
 
@@ -399,7 +417,12 @@ describe("createInstitution provider selection", () => {
       formData({ name: "Trade Republic", trPhone: "+33612345678", trPin: "1234" }),
     );
     expect(institutionCreateMock).toHaveBeenCalledWith({
-      data: { userId: "user-owner", name: "Trade Republic", trPhone: "+33612345678", trPin: "1234" },
+      data: {
+        userId: "user-owner",
+        name: "Trade Republic",
+        trPhone: expect.stringMatching(/^enc:v1:/),
+        trPin: expect.stringMatching(/^enc:v1:/),
+      },
     });
   });
 
@@ -418,12 +441,13 @@ describe("createInstitution provider selection", () => {
       }),
     );
     const { data } = institutionCreateMock.mock.calls[0][0];
-    expect(data).toEqual({
-      userId: "user-owner",
-      name: "Confused",
-      trPhone: "+33612345678",
-      trPin: "1234",
-    });
+    // Decrypted rather than matched against ciphertext: asserting the literal
+    // would pass just as well with encryption removed and the literal updated,
+    // which is the failure this whole change exists to make impossible.
+    expect(Object.keys(data).sort()).toEqual(["name", "trPhone", "trPin", "userId"]);
+    expect(decryptSecret(data.trPhone)).toBe("+33612345678");
+    expect(decryptSecret(data.trPin)).toBe("1234");
+    expect(isEncrypted(data.trPhone)).toBe(true);
   });
 
   it("ignores a half-filled Trade Republic payload rather than storing it", async () => {

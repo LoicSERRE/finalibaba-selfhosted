@@ -32,6 +32,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finalibaba}
       NODE_ENV: production
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required - run: openssl rand -base64 32}"
+      # Optional. Blank means "derive it from NEXTAUTH_SECRET" (see .env.example).
+      # BOTH services need the same value: the app writes these columns and the
+      # sync service reads them, so a key reaching only one breaks every sync.
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
@@ -90,6 +94,10 @@ services:
       # Reused as the shared bearer token for the alerts-check call below,
       # not a new secret - see app/api/alerts/check/route.ts.
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required - run: openssl rand -base64 32}"
+      # Optional. Blank means "derive it from NEXTAUTH_SECRET" (see .env.example).
+      # BOTH services need the same value: the app writes these columns and the
+      # sync service reads them, so a key reaching only one breaks every sync.
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
       APP_SERVICE_URL: http://app:3000
     volumes:
       - woob_session:/root/.config/woob
