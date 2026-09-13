@@ -34,6 +34,20 @@ export function trRealtimeSource(institutionId: string): string {
 }
 
 /**
+ * The batch-sync source for one institution, whichever backend reaches it.
+ *
+ * Built here rather than inlined at the call site because the two vocabularies
+ * look almost identical and mean different things: `woob:<id>` is a SyncLog
+ * source, `woob:<id>:<nativeId>` is an Account.syncId (lib/domain/sync-ids.ts).
+ * A hand-written literal that picks up or drops the trailing colon reads as
+ * correct and silently looks up nothing - which, for a status icon, is
+ * indistinguishable from a connection that has simply never run.
+ */
+export function institutionSyncSource(institutionId: string, isTradeRepublic: boolean): string {
+  return `${isTradeRepublic ? TR_SOURCE_PREFIX : WOOB_SOURCE_PREFIX}${institutionId}`;
+}
+
+/**
  * The institution a source belongs to, or null for the env-configured ones
  * (which belong to the instance owner and have no Institution row driving
  * them).

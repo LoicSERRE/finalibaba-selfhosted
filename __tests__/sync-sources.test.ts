@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  institutionSyncSource,
   isPerUserTrSource,
   isRealtimeSource,
   sourceInstitutionId,
@@ -83,5 +84,38 @@ describe("isRealtimeSource", () => {
     expect(isRealtimeSource(SOURCE_LCL)).toBe(false);
     expect(isRealtimeSource(SOURCE_TRADE_REPUBLIC)).toBe(false);
     expect(isRealtimeSource(`woob:${INST}`)).toBe(false);
+  });
+});
+
+describe("institutionSyncSource", () => {
+  it("builds the source its own parser reads back", () => {
+    // The round trip is the whole point: sync/db.py derives the owning userId
+    // from this string, so a source nobody can parse files the row under the
+    // instance owner instead of the person whose connection it is.
+    for (const isTr of [true, false]) {
+      expect(sourceInstitutionId(institutionSyncSource(INST, isTr))).toBe(INST);
+    }
+  });
+
+  it("picks the backend's own prefix", () => {
+    expect(institutionSyncSource(INST, true)).toBe(`tr:${INST}`);
+    expect(institutionSyncSource(INST, false)).toBe(`woob:${INST}`);
+    expect(isPerUserTrSource(institutionSyncSource(INST, true))).toBe(true);
+    expect(isPerUserTrSource(institutionSyncSource(INST, false))).toBe(false);
+  });
+
+  it("carries no trailing colon, which would make it an Account.syncId instead", () => {
+    // `woob:<id>` names a connection; `woob:<id>:<nativeId>` names one account
+    // (lib/domain/sync-ids.ts). The two look alike and mean different things,
+    // and a lookup built with the wrong one silently finds nothing - which on
+    // a status icon is indistinguishable from a sync that has never run.
+    for (const isTr of [true, false]) {
+      expect(institutionSyncSource(INST, isTr).endsWith(":")).toBe(false);
+      expect(institutionSyncSource(INST, isTr).split(":")).toHaveLength(2);
+    }
+  });
+
+  it("is never a realtime source", () => {
+    expect(isRealtimeSource(institutionSyncSource(INST, true))).toBe(false);
   });
 });
