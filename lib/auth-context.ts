@@ -28,6 +28,28 @@ export function isAuthEnabled(): boolean {
 }
 
 /**
+ * A public, read-only demo instance (`DEMO_MODE=true`).
+ *
+ * A function beside isAuthEnabled rather than a raw env read at each call
+ * site, because this string used to be compared by hand sixteen times across
+ * the app - thirteen of them in app/settings/page.tsx alone, and in both
+ * directions (`=== "true"` and `!== "true"`). Every one of those decides
+ * whether to render a section that mutates, reveals a stored credential
+ * (SMTP password, ntfy token) or mints a token, so a single drift - a
+ * capitalised value, an inverted comparison - offers a public instance
+ * something it must never show.
+ *
+ * It is not the enforcement: proxy.ts returns 403 for every non-GET request
+ * in demo mode, and that stays the boundary. This only decides what is worth
+ * rendering, so a demo visitor is never shown a control whose only possible
+ * outcome is an error. proxy.ts deliberately does NOT call this - middleware
+ * runs on the edge runtime and this module pulls in Prisma.
+ */
+export function isDemoMode(): boolean {
+  return process.env.DEMO_MODE === "true";
+}
+
+/**
  * Which granted portfolio the sidebar switcher is currently pointed at (H6).
  * Set by lib/actions/sharing.ts's setViewingPortfolio; validated against a real
  * PortfolioGrant on every read below, never trusted on its own.

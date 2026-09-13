@@ -11,7 +11,7 @@ import { SessionEnded } from "@/components/auth/session-ended";
 import { AppLockGate } from "@/components/layout/app-lock-gate";
 import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, isDeletedSessionUser } from "@/lib/auth-context";
+import { getViewer, isDeletedSessionUser, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import "./globals.css";
 
@@ -103,7 +103,7 @@ export default async function RootLayout({
   }
 
   const appLockEnabled =
-    process.env.DEMO_MODE === "true" || !viewer
+    isDemoMode() || !viewer
       ? false
       : await prisma.user
           .findUnique({ where: { id: viewer.id }, select: { appLockEnabled: true } })
@@ -154,7 +154,7 @@ export default async function RootLayout({
                 <SidebarWrapper />
                 <MainContent>{children}</MainContent>
               </AppLockGate>
-              {process.env.DEMO_MODE !== "true" && <AutoSync />}
+              {!isDemoMode() && <AutoSync />}
               <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} userId={viewer.id} />
               <RealtimeRefresh />
             </>
