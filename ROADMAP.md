@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.4**
+Current release: **v2.10.5**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -19,8 +19,17 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration. Re-checked against the live catalogue: 294 modules, 96 of them `CapBank`, no match for interactive/ibkr. Degiro and N26 do have one and are already reachable through the existing picker.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data. Re-checked against the current endpoint reference: five families (auth, institutions, agreements, requisitions, accounts), every one a synchronous REST call, no webhook or subscription anywhere.
 - **Plaid** - US/Canada coverage, where this app has no users yet. The condition here is demand rather than feasibility, so it was checked as such: zero issues in the repository's entire history mention Plaid, Interactive Brokers or Revolut. Three issues exist in total, all about sync failures.
-- **Split `settings/page.tsx` (CCN 41) and `alert-rules-section.tsx` (CCN 26)** - the harness that was missing now exists, and a prop-wiring sabotage fails its tests, so the stated reason for deferring them is gone.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.10.5 - The tests that were missing, and the gate that was not looking
+
+- **A generic transfer label is never relaxed for a varying amount.** v2.10.4 relaxed the amount test for credits; the amount test was the only thing protecting "VIREMENT SEPA", which a bank reuses for a transfer between your own accounts and for unrelated credits alike. `lib/domain/transfer-labels.ts` holds the denylist, dependency-free because it now has consumers on both sides of what would otherwise be an import cycle.
+- **Component-rendering tests, measured rather than argued about.** Three devDependencies, opt-in per file via `// @vitest-environment happy-dom`, so the 66 pure-function files pay nothing. The spike's only real question was whether it catches the class of bug the deferrals were written about: a deliberate prop-wiring mistake in `alert-rules-section.tsx` fails 2 of its 3 tests, so it does.
+- **The two components those deferrals protected are now split.** `alert-rules-section.tsx` 810 -> 248, and `settings/page.tsx` 786 -> 539 with its institution row and tax form extracted. The row took every sync-status concern with it; neither had another consumer.
+- **`isDemoMode()` replaces sixteen hand-written comparisons** of `process.env.DEMO_MODE`, thirteen in one file and in both directions. Each decides whether to render a section that mutates, reveals a stored credential or mints a token.
+- **The complexity ratchet now also ratchets what lizard cannot see.** Its JS/TS reader drops functions silently, at exit code 0, and a dropped function leaves the count it gates on. 54 declared functions across 35 files, including `calcCurrentCapital` and `calcLoanStats`. Found by adding one accidentally: the warning count went down because a 41-CCN function had become invisible.
 
 ---
 
