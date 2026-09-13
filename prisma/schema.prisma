@@ -76,6 +76,14 @@ model User {
   totpSecret       String?
   totpEnabled      Boolean  @default(false)
   totpBackupCodes  String[] @default([])
+
+  /// Every session issued before this instant is refused, without deleting
+  /// the account. The only previous way to end somebody's session was to
+  /// delete them, which cascades their whole portfolio - so a stolen phone
+  /// meant choosing between a live session and destroying real data.
+  /// getViewer compares it against the JWT's own issue time on every request,
+  /// reusing the query it already makes rather than adding one.
+  sessionsRevokedAt DateTime?
   // Per-user app-lock (WebAuthn) - moved from the UserSettings singleton
   // (vestigial there too). The WebAuthn userHandle becomes this row's id,
   // replacing the old hardcoded single-instance constant.
@@ -132,6 +140,50 @@ model InstanceSettings {
   id              String  @id @default("singleton")
   vapidPublicKey  String?
   vapidPrivateKey String?
+
+  /// When true, a user who has not set up TOTP is shown the setup screen and
+  /// nothing else. Instance-level rather than per-user for the obvious
+  /// reason: a policy each person opts into individually is not a policy.
+  /// Default false so no existing instance locks its own users out on upgrade.
+  requireTwoFactor Boolean @default(false)
+}
+
+/// Security-relevant actions, so an instance operator can SEE what happened
+/// rather than only prevent it. Nothing else in this app records who did
+/// what, which means a compromise leaves no trace to find.
+///
+/// `actorId` is deliberately a plain string and NOT a foreign key: deleting a
+/// user must not erase the record of what they did, which is exactly when the
+/// log matters most. `actorLabel` keeps the username as it read at the time,
+/// for the same reason.
+model AuditLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  /// Dotted and stable, e.g. "login.failed", "backup.downloaded" - grepped
+  /// and filtered on, so it must not become a translated sentence.
+  action     String
+  actorId    String?
+  actorLabel String?
+  targetType String?
+  targetId   String?
+  ip         String?
+  detail     String?
+
+  @@index([createdAt])
+  @@index([action])
+}
+
+/// Attempt counters that survive a restart.
+///
+/// The in-memory limiter this replaces reset every time the container
+/// restarted, so anything that could crash-loop the app also cleared the
+/// brake on guessing a password.
+model RateLimit {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
 }
 
 // Account-level co-ownership (joint Livret A, an account managed for a

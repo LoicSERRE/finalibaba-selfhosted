@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
 import Decimal from "decimal.js";
-import { refreshAccountBalance } from "@/lib/actions/holdings";
+import { refreshAccountBalance } from "@/lib/services/account-balance";
 
 function revalidateAll(accountId: string) {
   revalidateSale(accountId);

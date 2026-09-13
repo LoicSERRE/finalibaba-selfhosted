@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { config } from "@/proxy";
+import { config, isAuthGated } from "@/proxy";
 
 // The middleware matcher is one long negative-lookahead regex listing every
 // path that must NOT go through the NextAuth session gate. Getting it wrong is
@@ -14,11 +14,12 @@ import { config } from "@/proxy";
 //
 // These assertions are about the regex itself, so they hold without a server.
 
-const MATCHER = config.matcher[0];
-const re = new RegExp(`^${MATCHER}$`);
-
-/** True when the middleware (and therefore the auth gate) runs for this path. */
-const isGated = (path: string) => re.test(path);
+// The exemption list moved out of `config.matcher` and into `isAuthGated` in
+// v2.10.6: the matcher now runs on MORE paths than the gate does, because
+// every HTML response needs a per-request CSP nonce and /shared and /invite
+// are real pages. The assertions below are unchanged - they were always about
+// which paths are exempt, and that is exactly what the function answers.
+const isGated = isAuthGated;
 
 describe("proxy matcher - paths that must stay public", () => {
   it.each([
@@ -70,5 +71,35 @@ describe("proxy matcher - exemptions must not become prefix holes", () => {
     ["/sw.js.map"],
   ])("%s is still gated", (path) => {
     expect(isGated(path)).toBe(true);
+  });
+});
+
+describe("the matcher is wider than the gate, on purpose", () => {
+  const matcher = new RegExp(`^${config.matcher[0]}$`);
+
+  it.each([
+    ["/shared/sometoken", "an anonymous visitor renders a real page here"],
+    ["/invite/sometoken", "so does an invitee"],
+    ["/login", "and anyone at all"],
+    ["/", "and every authenticated page"],
+  ])("%s still runs the middleware, so it gets a CSP nonce (%s)", (path) => {
+    expect(matcher.test(path)).toBe(true);
+  });
+
+  it("/shared and /invite reach the middleware WITHOUT being auth-gated", () => {
+    // The whole point of splitting the two: before v2.10.6 these skipped the
+    // middleware entirely to skip the gate, and skipped the security headers
+    // with it. Both properties have to hold at once now.
+    for (const path of ["/shared/tok", "/invite/tok"]) {
+      expect(matcher.test(path)).toBe(true);
+      expect(isAuthGated(path)).toBe(false);
+    }
+  });
+
+  it.each([
+    ["/_next/static/chunk.js", "build assets execute no inline script"],
+    ["/icon.svg", "nor does an image"],
+  ])("%s is skipped entirely (%s)", (path) => {
+    expect(matcher.test(path)).toBe(false);
   });
 });

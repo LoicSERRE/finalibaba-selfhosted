@@ -16,16 +16,41 @@ const { findUniqueMock, updateMock } = vi.hoisted(() => ({
 
 // As of v2.0 authorize() resolves a real User row (TOTP moved there from the
 // old UserSettings singleton), so the mock stands in for prisma.user.
+const { rateRows } = vi.hoisted(() => ({
+  rateRows: new Map<string, { count: number; resetAt: Date }>(),
+}));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: {
       findUnique: findUniqueMock,
       update: updateMock,
     },
+    // The rate limiter counts in a table since v2.10.6 so its counters survive
+    // a restart. Backed by a plain Map here: these tests are about authorize()
+    // deferring to the limiter, not about the limiter, which has its own file.
+    rateLimit: {
+      findUnique: async ({ where }: { where: { key: string } }) =>
+        rateRows.get(where.key) ?? null,
+      upsert: async ({ where, create }: { where: { key: string }; create: unknown }) => {
+        rateRows.set(where.key, { ...(create as { count: number; resetAt: Date }) });
+        return create;
+      },
+      update: async ({ where }: { where: { key: string } }) => {
+        const row = rateRows.get(where.key)!;
+        row.count += 1;
+        return row;
+      },
+      deleteMany: async ({ where }: { where: { key?: string } }) => {
+        if (where.key) rateRows.delete(where.key);
+        return { count: 1 };
+      },
+    },
+    auditLog: { create: async () => ({}) },
   },
 }));
 
-import { authOptions, createRateLimiter, getClientIp } from "@/lib/auth";
+import { authOptions, getClientIp } from "@/lib/auth";
 
 // authOptions.providers[0] is the single CredentialsProvider() config - see
 // lib/auth.ts. Its top-level `.authorize` is next-auth v4's own hardcoded
@@ -97,41 +122,9 @@ describe("getClientIp", () => {
   });
 });
 
-describe("createRateLimiter", () => {
-  it("allows up to maxAttempts requests for the same key", () => {
-    const checkRateLimit = createRateLimiter(5, 15 * 60 * 1000);
-    for (let i = 0; i < 5; i++) {
-      expect(checkRateLimit("1.2.3.4")).toBe(true);
-    }
-  });
-
-  it("blocks the request once maxAttempts is exceeded", () => {
-    const checkRateLimit = createRateLimiter(5, 15 * 60 * 1000);
-    for (let i = 0; i < 5; i++) checkRateLimit("1.2.3.4");
-    expect(checkRateLimit("1.2.3.4")).toBe(false);
-  });
-
-  it("tracks each key independently - this is the exact bug that was fixed: a constant key would let one attacker's lockout affect every other visitor", () => {
-    const checkRateLimit = createRateLimiter(5, 15 * 60 * 1000);
-    for (let i = 0; i < 5; i++) checkRateLimit("attacker-ip");
-    expect(checkRateLimit("attacker-ip")).toBe(false);
-    // a different key must be unaffected by the first key's lockout
-    expect(checkRateLimit("real-owner-ip")).toBe(true);
-  });
-
-  it("resets the count after the window elapses", () => {
-    const checkRateLimit = createRateLimiter(2, 10);
-    expect(checkRateLimit("1.2.3.4")).toBe(true);
-    expect(checkRateLimit("1.2.3.4")).toBe(true);
-    expect(checkRateLimit("1.2.3.4")).toBe(false);
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        expect(checkRateLimit("1.2.3.4")).toBe(true);
-        resolve();
-      }, 20);
-    });
-  });
-});
+// The rate limiter moved to lib/services/rate-limit.ts in v2.10.6 so its
+// counters survive a restart; every property this block asserted moved with
+// it, to __tests__/rate-limit.test.ts.
 
 describe("authOptions credentials provider - authorize()", () => {
   afterEach(() => {
@@ -199,8 +192,8 @@ describe("authOptions credentials provider - authorize()", () => {
   it("returns null once the per-IP rate limit is exhausted, even with the correct password", async () => {
     vi.stubEnv("AUTH_PASSWORD", "correct-horse");
     const ip = nextIp();
-    // authOptions' real CredentialsProvider is built with the module-level
-    // rate limiter (5 attempts/15min, see checkRateLimit in lib/auth.ts) -
+    // authOptions' real CredentialsProvider defers to lib/services/rate-limit
+    // (5 attempts/15min per ip+username) -
     // exhaust it with wrong passwords first, matching a real brute-force
     // attempt, then prove the 6th call is blocked even with valid creds.
     for (let i = 0; i < 5; i++) {

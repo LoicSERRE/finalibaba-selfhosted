@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isInternalRequest } from "@/lib/services/internal-auth";
 import { prisma } from "@/lib/db/prisma";
-import { refreshAccountBalance } from "@/lib/actions/holdings";
+import { refreshAccountBalance } from "@/lib/services/account-balance";
 
 /**
  * Called by sync/main.py at the end of every automatic 4h sync run, same

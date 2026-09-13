@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned } from "@/lib/auth-context";
 import { encryptSecret } from "@/lib/domain/crypto-at-rest";
@@ -112,6 +113,10 @@ export async function setWoobConfig(id: string, module: string, login: string, p
       trPin: null,
     },
   });
+  await recordAuditEvent({
+    action: AUDIT.bankConfigured, actorId: viewer.id, targetType: "Institution",
+    targetId: id, detail: `woob:${module}`,
+  });
   revalidatePath("/settings");
 }
 
@@ -139,6 +144,10 @@ export async function setTradeRepublicConfig(id: string, phone: string, pin: str
       woobLogin: null,
       woobPassword: null,
     },
+  });
+  await recordAuditEvent({
+    action: AUDIT.bankConfigured, actorId: viewer.id, targetType: "Institution",
+    targetId: id, detail: "trade republic",
   });
   revalidatePath("/settings");
 }

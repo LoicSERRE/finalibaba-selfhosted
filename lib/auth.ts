@@ -1,4 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
+import { consumeAttempt, clearAttempts, LOGIN_MAX_ATTEMPTS } from "@/lib/services/rate-limit";
+import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
 import { decryptSecret } from "@/lib/domain/crypto-at-rest";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
@@ -8,25 +10,6 @@ import { verifyTotpCode, matchBackupCode } from "@/lib/domain/totp";
 import { OWNER_USER_ID } from "@/lib/domain/users";
 import { TOTP_REQUIRED } from "@/lib/domain/auth-constants";
 
-// Simple in-memory rate limiter - max 5 attempts per 15 min per IP.
-// Wrapped in a factory (rather than one module-level Map) so tests can each
-// get a fresh, isolated limiter instead of sharing mutable state.
-export function createRateLimiter(maxAttempts = 5, windowMs = 15 * 60 * 1000) {
-  const attempts = new Map<string, { count: number; resetAt: number }>();
-  return function checkRateLimit(key: string): boolean {
-    const now = Date.now();
-    const entry = attempts.get(key);
-    if (!entry || now > entry.resetAt) {
-      attempts.set(key, { count: 1, resetAt: now + windowMs });
-      return true;
-    }
-    if (entry.count >= maxAttempts) return false;
-    entry.count++;
-    return true;
-  };
-}
-
-const checkRateLimit = createRateLimiter();
 
 // Compared against when no account matched, so an unknown username costs the
 // same bcrypt work as a real one. Without it, resolveUser returned
@@ -155,21 +138,43 @@ export const authOptions: NextAuthOptions = {
         if (!password) return null;
 
         const username = ((credentials?.username as string) || "").trim() || undefined;
+        const ip = getClientIp(req?.headers);
         // Keyed per (ip, username), not ip alone: with several accounts on
         // one instance, an ip-only bucket lets one attacker's failures lock
         // out every other user behind the same NAT/reverse proxy.
-        if (!checkRateLimit(`${getClientIp(req?.headers)}|${username ?? OWNER_USER_ID}`)) return null;
+        const bucket = `login|${ip}|${username ?? OWNER_USER_ID}`;
+        if (!(await consumeAttempt(bucket, LOGIN_MAX_ATTEMPTS))) {
+          await recordAuditEvent({
+            action: AUDIT.loginRateLimited, actorLabel: username ?? null, ip,
+          });
+          return null;
+        }
 
         const user = await resolveUser(username, password);
-        if (!user) return null;
+        if (!user) {
+          await recordAuditEvent({ action: AUDIT.loginFailed, actorLabel: username ?? null, ip });
+          return null;
+        }
 
         const code = (credentials?.totpCode as string) || "";
         // Password accepted, code needed and not supplied: say so, so the form
         // can move to its second step. See TOTP_REQUIRED.
         if (user.totpEnabled && user.totpSecret && !code) throw new Error(TOTP_REQUIRED);
 
-        if (!(await verifySecondFactor(user, code))) return null;
+        if (!(await verifySecondFactor(user, code))) {
+          await recordAuditEvent({
+            action: AUDIT.loginFailed, actorId: user.id, actorLabel: username ?? null, ip,
+            detail: "second factor rejected",
+          });
+          return null;
+        }
 
+        // Cleared on success, so someone who mistyped twice is not still one
+        // attempt from a lockout an hour later.
+        await clearAttempts(bucket);
+        await recordAuditEvent({
+          action: AUDIT.loginSucceeded, actorId: user.id, actorLabel: username ?? null, ip,
+        });
         return { id: user.id, name: process.env.AUTH_USER_NAME ?? "owner", role: user.role };
       },
     }),
@@ -185,12 +190,18 @@ export const authOptions: NextAuthOptions = {
       // than invalidating it, so upgrading doesn't log everyone out.
       token.userId ??= OWNER_USER_ID;
       token.role ??= "ADMIN";
+      // Stamped once, at issue: getViewer compares it against the user's own
+      // sessionsRevokedAt so a session can be ended without deleting the
+      // account. NextAuth sets `iat` itself but re-stamps it on refresh,
+      // which would let a revoked session renew its way back in.
+      (token as { issuedAt?: number }).issuedAt ??= Math.floor(Date.now() / 1000);
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         (session.user as { id?: string }).id = token.userId as string;
         (session.user as { role?: string }).role = token.role as string;
+        (session.user as { issuedAt?: number }).issuedAt = (token as { issuedAt?: number }).issuedAt;
       }
       return session;
     },

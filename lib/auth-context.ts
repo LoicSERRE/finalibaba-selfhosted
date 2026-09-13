@@ -81,8 +81,29 @@ export class DeletedSessionUserError extends Error {
   }
 }
 
+/**
+ * Thrown when a validly-signed session was issued before its user revoked
+ * every session - a stolen laptop, a shared device, a password change.
+ *
+ * Its own type alongside DeletedSessionUserError because the correct response
+ * is identical (stop, sign the browser out) while the cause is not, and a
+ * log line saying which one happened is the difference between "somebody
+ * revoked this" and "this account is gone".
+ */
+export class RevokedSessionError extends Error {
+  constructor(userId: string) {
+    super(`Session for ${userId} was issued before that user revoked their sessions`);
+    this.name = "RevokedSessionError";
+  }
+}
+
 export function isDeletedSessionUser(e: unknown): boolean {
   return e instanceof DeletedSessionUserError;
+}
+
+/** Either reason a live session must stop being honoured. */
+export function isEndedSession(e: unknown): boolean {
+  return e instanceof DeletedSessionUserError || e instanceof RevokedSessionError;
 }
 
 /**
@@ -103,11 +124,31 @@ export async function getViewer(): Promise<Viewer> {
     if (sessionUserId) {
       const user = await prisma.user.findUnique({
         where: { id: sessionUserId },
-        select: { id: true, role: true },
+        // sessionsRevokedAt rides along on the query this already makes, so
+        // checking revocation on every request costs nothing extra.
+        select: { id: true, role: true, sessionsRevokedAt: true },
       });
       // No fallback here, ever. Anything other than the real row for the id
       // this session names is somebody else's identity.
       if (!user) throw new DeletedSessionUserError(sessionUserId);
+
+      // Revocation compares against when the token was ISSUED, not when it
+      // expires: a 30-day JWT cannot be recalled, so the only way to end one
+      // is to refuse it. Until this existed the sole way to stop somebody's
+      // session was to delete their account, which cascades their whole
+      // portfolio - a stolen phone meant choosing between a live session and
+      // destroying real data.
+      const issuedAt = (session?.user as { issuedAt?: number } | undefined)?.issuedAt;
+      if (user.sessionsRevokedAt) {
+        // A token with no issue stamp predates this feature. Treated as
+        // revoked rather than trusted: the revocation is an explicit act by
+        // the account's owner, and honouring an unstampable token would make
+        // it a no-op for exactly the sessions it was aimed at.
+        const issuedMs = issuedAt ? issuedAt * 1000 : 0;
+        if (issuedMs < user.sessionsRevokedAt.getTime()) {
+          throw new RevokedSessionError(user.id);
+        }
+      }
       return { id: user.id, role: user.role, isMonoMode: false };
     }
 

@@ -11,7 +11,7 @@ import { SessionEnded } from "@/components/auth/session-ended";
 import { AppLockGate } from "@/components/layout/app-lock-gate";
 import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, isDeletedSessionUser, isDemoMode } from "@/lib/auth-context";
+import { getViewer, isEndedSession, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import "./globals.css";
 
@@ -99,7 +99,8 @@ export default async function RootLayout({
   try {
     viewer = await getViewer();
   } catch (e) {
-    if (!isDeletedSessionUser(e)) throw e;
+    // Deleted OR revoked: both mean this browser must be signed out.
+    if (!isEndedSession(e)) throw e;
   }
 
   const appLockEnabled =

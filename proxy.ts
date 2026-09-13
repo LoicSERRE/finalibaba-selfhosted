@@ -1,5 +1,6 @@
 import { withAuth, type NextRequestWithAuth } from "next-auth/middleware";
 import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
+import { buildContentSecurityPolicy, generateCspNonce } from "@/lib/domain/content-security-policy";
 
 const authMiddleware = withAuth(
   function middleware(req) {
@@ -22,41 +23,119 @@ const authMiddleware = withAuth(
   }
 );
 
-// withAuth never redirects AWAY from /login, so a stale bookmark from a time
-// AUTH_ENABLED was on shows the password form forever. Handled here rather
-// than in the page: redirect() from /login itself trips a Next client-router
-// bug (React #310) when it fires mid-stream.
-export default function middleware(req: NextRequest, event: NextFetchEvent) {
+/**
+ * Paths that must NOT go through the NextAuth session gate.
+ *
+ * **This list used to BE `config.matcher`, as one negative-lookahead regex,
+ * and moving it here is the whole delicate part of the change.** The matcher
+ * now has to run on more paths than
+ * the auth gate does, because every page needs a per-request CSP nonce and the
+ * excluded ones (`/shared/<token>`, `/invite/<token>`, the icon routes) are
+ * real pages a browser renders. Leaving them on the old matcher would have
+ * given them no CSP at all - a silent downgrade on exactly the two routes an
+ * anonymous visitor can reach.
+ *
+ * The alternatives are the same ones the matcher carried, split one per line
+ * so each anchor is visible instead of buried in a 300-character lookahead -
+ * `__tests__/proxy-matcher.test.ts` still pins every case, because the
+ * failure modes have bitten this project twice: too narrow and a legitimately
+ * public page becomes unreachable (the whole invitation flow was, on an
+ * AUTH_ENABLED instance), too broad and a private one stops being gated.
+ *
+ * Every alternative added since is `$`-anchored, and that is load-bearing: an
+ * unanchored `icon-512` matches as a PREFIX, so `/icon-512999` bypassed auth.
+ * `api\/v1(?:\/.*)?$` is the shape for "exact path or a real subpath". The
+ * pre-existing `api/*`, `shared` and `_next/*` alternatives are left unanchored
+ * on purpose - they are meant to match subpaths.
+ */
+const AUTH_EXEMPT: RegExp[] = [
+  // NextAuth's own endpoints, and the compose healthcheck.
+  /^\/api\/auth/,
+  /^\/api\/health/,
+  // Container-to-container callers with no cookie, each gated by a
+  // NEXTAUTH_SECRET bearer token of its own. api/realtime/STREAM is
+  // deliberately absent: the browser opens that one and it needs the session.
+  /^\/api\/alerts/,
+  /^\/api\/transactions/,
+  /^\/api\/investments/,
+  /^\/api\/realtime\/notify/,
+  // "Exact path or a real subpath", never a bare prefix: an unanchored
+  // alternative let `/api/v1999` through.
+  /^\/api\/v1(?:\/.*)?$/,
+  // Token-gated pages that must work with auth on or off. Without `invite`
+  // an AUTH_ENABLED instance sent every invitee to a login page they cannot
+  // get past, which made the whole flow unreachable.
+  /^\/invite(?:\/.*)?$/,
+  /^\/shared/,
+  // Build assets.
+  /^\/_next\/static/,
+  /^\/_next\/image/,
+  // Generated assets with no file extension for the image branch to catch.
+  // Every one `$`-anchored: unanchored, `/icon-512999` bypassed auth.
+  /^\/icon\.svg$/,
+  /^\/icon-512$/,
+  /^\/icon-512-maskable$/,
+  /^\/icon$/,
+  /^\/apple-icon$/,
+  /^\/site\.webmanifest$/,
+  /^\/sw\.js$/,
+  // Real image files, anywhere in the tree.
+  /\.(?:png|jpg|ico|webp)/,
+];
+
+/** True when the session gate applies to this path. */
+export function isAuthGated(pathname: string): boolean {
+  return !AUTH_EXEMPT.some((exempt) => exempt.test(pathname));
+}
+
+/** Copies the security headers onto whatever response we end up returning. */
+function withCsp(res: NextResponse, csp: string): NextResponse {
+  res.headers.set("Content-Security-Policy", csp);
+  return res;
+}
+
+export default async function middleware(req: NextRequest, event: NextFetchEvent) {
+  const nonce = generateCspNonce();
+  const csp = buildContentSecurityPolicy(nonce);
+
+  // Next reads the nonce off the REQUEST headers to stamp its own framework
+  // scripts and inline snippets. Setting it only on the response would leave
+  // every one of them unnonced, and - since a nonce disables 'unsafe-inline' -
+  // that renders a blank page rather than a less secure one.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+  const pass = () => NextResponse.next({ request: { headers: requestHeaders } });
+
+  // withAuth never redirects AWAY from /login, so a stale bookmark from a time
+  // AUTH_ENABLED was on shows the password form forever. Handled here rather
+  // than in the page: redirect() from /login itself trips a Next client-router
+  // bug (React #310) when it fires mid-stream.
   if (req.nextUrl.pathname === "/login" && process.env.AUTH_ENABLED !== "true") {
-    return NextResponse.redirect(new URL("/", req.url));
+    return withCsp(NextResponse.redirect(new URL("/", req.url)), csp);
   }
-  return authMiddleware(req as NextRequestWithAuth, event);
+
+  if (!isAuthGated(req.nextUrl.pathname)) return withCsp(pass(), csp);
+
+  const authResult = await authMiddleware(req as NextRequestWithAuth, event);
+  // withAuth answers a permitted request with a bare `next()` that knows
+  // nothing about the request headers above, so the nonce would never reach
+  // the renderer. Anything else it returns is a redirect or a 403 that must be
+  // honoured exactly as it is.
+  const res = authResult instanceof NextResponse ? authResult : NextResponse.next();
+  const passthrough = res.status === 200 && !res.headers.get("location");
+  return withCsp(passthrough ? pass() : res, csp);
 }
 
 export const config = {
   matcher: [
-    // Everything excluded here is either a route with its own gate or a route
-    // no browser session ever reaches. Three groups:
-    //
-    //   - token-gated pages that must work with auth on or off: `shared`,
-    //     `invite` (without it an AUTH_ENABLED instance sends every invitee to
-    //     a login page they cannot get past, so the flow is unreachable)
-    //   - container-to-container callers with no cookie, each gated by a
-    //     NEXTAUTH_SECRET bearer token: api/alerts, api/transactions,
-    //     api/investments, api/realtime/notify, plus api/health for the
-    //     compose healthcheck. api/realtime/STREAM is deliberately absent -
-    //     the browser opens it and it needs the session
-    //   - generated assets with no file extension for the `.png|jpg|...`
-    //     branch to catch: the icon routes, site.webmanifest, sw.js
-    //
-    // Every alternative added since is `$`-anchored, and that is load-bearing:
-    // an unanchored `icon-512` matches as a PREFIX, so `/icon-512999` bypassed
-    // auth. `api/v1(?:\/.*)?$` is the shape for "exact path or a real
-    // subpath". The pre-existing api/*, shared and _next/* alternatives are
-    // left unanchored on purpose - they are meant to match subpaths.
+    // Deliberately wider than the auth gate: every HTML response needs its own
+    // CSP nonce, so the middleware has to run on the public token pages too.
+    // Only genuinely static assets are skipped, since none of them execute
+    // script and a nonce would mean nothing to them.
     //
     // NOSONAR (typescript:S7780) - Next statically parses this export and
     // needs a plain literal, so String.raw is not an option here.
-    "/((?!api/auth|api/health|api/alerts|api/transactions|api/investments|api/realtime/notify|api\\/v1(?:\\/.*)?$|invite(?:\\/.*)?$|shared|_next/static|_next/image|icon\\.svg$|icon-512$|icon-512-maskable$|icon$|apple-icon$|site\\.webmanifest$|sw\\.js$|.*\\.(?:png|jpg|ico|webp)).*)", // NOSONAR
+    "/((?!_next/static|_next/image|.*\\.(?:png|jpg|jpeg|ico|webp|svg)$).*)", // NOSONAR
   ],
 };

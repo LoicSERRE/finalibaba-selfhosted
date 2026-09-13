@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidateHolding } from "@/lib/actions/revalidate";
+import { refreshAccountBalance } from "@/lib/services/account-balance";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
@@ -174,29 +175,4 @@ export async function refreshHoldingExchangeRate(holdingId: string) {
   await refreshAccountBalance(holding.accountId);
 
   revalidateHolding(holding.accountId);
-}
-
-// Internal helper, deliberately NOT ownership-guarded: it's also called
-// server-to-server by app/api/investments/snapshot-balances (the 4h cron),
-// which has no session to resolve a viewer from. Safe to leave open - every
-// caller that acts on user input guards first (upsertHolding, deleteHolding,
-// recordSale), and this function is a pure recompute: it derives an
-// account's balance from that account's own holdings and writes nothing the
-// caller controls, so invoking it against another account can neither
-// disclose nor corrupt anything. Flagged for the security-audit phase all
-// the same, since being exported from a "use server" module makes it
-// directly invocable.
-export async function refreshAccountBalance(accountId: string) {
-  const holdings = await prisma.holding.findMany({ where: { accountId } });
-  const totalCents = holdings.reduce((sum, h) => {
-    const value = new Decimal(h.quantity.toString())
-      .mul(new Decimal(h.lastPriceCents.toString()))
-      .round()
-      .toNumber();
-    return sum + BigInt(value);
-  }, BigInt(0));
-
-  await prisma.historicalBalance.create({
-    data: { accountId, balanceCents: totalCents },
-  });
 }

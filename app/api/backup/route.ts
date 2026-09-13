@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
 import { requireAdmin } from "@/lib/auth-context";
 import { spawn } from "node:child_process";
 import { createGzip, gunzipSync } from "node:zlib";
@@ -36,6 +37,11 @@ async function assertBackupAllowed(): Promise<NextResponse | null> {
 export async function GET() {
   const denied = await assertBackupAllowed();
   if (denied) return denied;
+
+  // Recorded before the dump starts, not after: this streams the whole
+  // database, every user included, and a download that fails halfway still
+  // happened. The single most sensitive action the app offers.
+  await recordAuditEvent({ action: AUDIT.backupDownloaded });
 
   const { connStr, password } = buildConnectionString(process.env.DATABASE_URL!);
 
@@ -117,6 +123,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const denied = await assertBackupAllowed();
   if (denied) return denied;
+
+  // A restore replaces the entire instance, the User table included, so it
+  // can install arbitrary credentials. Recorded first - the row is written to
+  // the database this is about to overwrite, so it survives only if the
+  // restore fails, which is the case worth being able to see.
+  await recordAuditEvent({ action: AUDIT.backupRestored });
 
   let formData: FormData;
   try {

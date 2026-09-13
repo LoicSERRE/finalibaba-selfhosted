@@ -1,6 +1,8 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
+import { consumeAttempt, INVITATION_MAX_ATTEMPTS } from "@/lib/services/rate-limit";
 import { decryptSecret, encryptSecret, tokenLookupHash } from "@/lib/domain/crypto-at-rest";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
@@ -118,6 +120,9 @@ export async function createInvitation(): Promise<{ token: string }> {
       expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
     },
   });
+  await recordAuditEvent({
+    action: AUDIT.invitationCreated, actorId: admin.id, targetType: "Invitation",
+  });
   revalidatePath("/settings");
   return { token };
 }
@@ -130,6 +135,11 @@ export async function revokeInvitation(id: string): Promise<void> {
 
 /** Unauthenticated: called by the /invite/[token] page before any account exists. */
 export async function isInvitationValid(token: string): Promise<boolean> {
+  // Unauthenticated and reachable from the public internet, so it gets its
+  // own bucket. The token is 256 random bits and not realistically guessable;
+  // this bounds the hammering rather than the guessing.
+  if (!(await consumeAttempt(`invite|${token.slice(0, 12)}`, INVITATION_MAX_ATTEMPTS))) return false;
+
   const invitation = await prisma.invitation.findUnique({
     where: { tokenHash: tokenLookupHash(token) },
     select: { usedAt: true, expiresAt: true },
@@ -164,6 +174,10 @@ export async function acceptInvitation(token: string, formData: FormData): Promi
     await tx.user.create({
       data: { username, displayName: rawUsername.trim(), passwordHash, role: "MEMBER" },
     });
+    await recordAuditEvent({
+      action: AUDIT.invitationRedeemed, actorLabel: username,
+      targetType: "Invitation", targetId: invitation!.id,
+    });
     await tx.invitation.update({ where: { id: invitation.id }, data: { usedAt: new Date() } });
   });
 }
@@ -179,7 +193,14 @@ export async function deleteUser(id: string): Promise<void> {
   const admin = await requireAdmin();
   if (id === OWNER_USER_ID) throw new Error("The instance owner cannot be deleted.");
   if (id === admin.id) throw new Error("You cannot delete your own account.");
+  const victim = await prisma.user.findUnique({ where: { id }, select: { username: true } });
   await prisma.user.delete({ where: { id } });
+  // Recorded AFTER the delete and with no foreign key, so the trace outlives
+  // the row - which is exactly the case where it is worth having.
+  await recordAuditEvent({
+    action: AUDIT.userDeleted, actorId: admin.id,
+    targetType: "User", targetId: id, detail: victim?.username ?? null,
+  });
   revalidatePath("/settings");
 }
 
@@ -258,9 +279,58 @@ export async function changeOwnPassword(formData: FormData): Promise<ChangePassw
     where: { id: viewer.id },
     data: {
       passwordHash: await bcrypt.hash(next, BCRYPT_ROUNDS),
+      // Changing a password that somebody else may know has to end the
+      // sessions that password opened, or the change protects nothing: a
+      // 30-day JWT issued before it keeps working for a month.
+      sessionsRevokedAt: new Date(),
       ...(claiming ? { username: normalizeUsername(rawUsername), displayName: rawUsername } : {}),
     },
   });
   revalidatePath("/settings");
   return { ok: true };
+}
+
+/**
+ * Ends every session this user has, on every device, without touching their
+ * account or their data.
+ *
+ * The gap this closes: a 30-day JWT cannot be recalled, so before this the
+ * only way to stop one was `deleteUser`, which cascades the whole portfolio.
+ * "My phone was stolen" had no answer that did not also destroy years of
+ * transactions.
+ *
+ * The revoking browser is signed out too, deliberately - "log out everywhere"
+ * that quietly spares the device you typed it on is the version people
+ * misread, and re-authenticating costs one password entry.
+ */
+export async function revokeOwnSessions(): Promise<void> {
+  const viewer = await getViewer();
+  if (viewer.isMonoMode) throw new Error("auth_disabled");
+  await prisma.user.update({
+    where: { id: viewer.id },
+    data: { sessionsRevokedAt: new Date() },
+  });
+  await recordAuditEvent({
+    action: AUDIT.sessionsRevoked, actorId: viewer.id, targetType: "User", targetId: viewer.id,
+  });
+  revalidatePath("/settings");
+}
+
+/**
+ * The admin equivalent, for a member who cannot reach their own Settings -
+ * the exact situation a lost device creates.
+ *
+ * Never applicable to the caller: an admin ending their own sessions goes
+ * through revokeOwnSessions, which is honest about signing them out.
+ */
+export async function revokeUserSessions(id: string): Promise<void> {
+  const admin = await requireAdmin();
+  if (id === admin.id) throw new Error("Use the account section to end your own sessions.");
+  const target = await prisma.user.findUnique({ where: { id }, select: { username: true } });
+  await prisma.user.update({ where: { id }, data: { sessionsRevokedAt: new Date() } });
+  await recordAuditEvent({
+    action: AUDIT.sessionsRevoked, actorId: admin.id,
+    targetType: "User", targetId: id, detail: target?.username ?? null,
+  });
+  revalidatePath("/settings");
 }
