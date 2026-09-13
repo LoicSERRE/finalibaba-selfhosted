@@ -251,6 +251,23 @@ Pages you've already visited stay viewable without a connection - but only when 
 
 By default the app is open - intended for local networks, VPNs, or a reverse proxy that handles authentication.
 
+### What is encrypted, and what is not
+
+Stored credentials - bank logins and passwords, Trade Republic PINs, 2FA secrets, the SMTP password, the ntfy token, and share-link / API-key / invitation tokens - are encrypted at rest (AES-256-GCM). A database dump, a leaked backup or a stolen disk yields none of them. Account passwords are bcrypt-hashed and are not recoverable by anyone.
+
+**Account names, balances and transactions are not encrypted.** The app sums and groups them in SQL, and the alert checks compute your net worth on a schedule with nobody logged in; encrypting them would end both. Anyone with database access to your server can read them - which on a self-hosted instance means you.
+
+**That matters if you invite other people.** You can technically read your users' balances and transactions. You cannot read their bank passwords or their 2FA secrets, but you run the machine that can. Tell them; it is a normal trust relationship between people who know each other, and a surprising one otherwise. Running an instance for strangers is a different proposition again - see `SECURITY.md`.
+
+No configuration is needed: the key comes from `NEXTAUTH_SECRET` unless you set a dedicated `ENCRYPTION_KEY`. Existing data is encrypted automatically the first time the new version starts. **If you rely on the derived key, never rotate `NEXTAUTH_SECRET`** - the stored credentials become unreadable. Set `ENCRYPTION_KEY` to keep the two independent.
+
+### Sessions, limits and the activity log
+
+- **Sign out everywhere** (Settings → Security) ends every session on every device without touching your data. Use it if a device is lost; a session otherwise stays valid for 30 days. An admin can do the same for another user.
+- **Failed logins are rate-limited** per IP and username, and the counter survives a restart.
+- **An activity log** records logins, invitations, backup downloads, bank configuration and user deletions. You see your own; an admin sees the instance.
+- **An admin can require 2FA** for everyone on the instance.
+
 ### Built-in password
 
 ```env
@@ -367,6 +384,10 @@ Migrations are applied automatically on startup.
 Two equivalent ways to back up your data - a full `pg_dump` of the database, so schema and data always stay consistent.
 
 **From the UI:** Settings → Backup & restore → *Download a backup* / *Restore*. Restoring is destructive and requires confirmation.
+
+**Encrypt the file** (recommended if it leaves the server at all): type a passphrase next to the download button. The backup is then unreadable without it - balances and transactions included, not just credentials - and comes down as `.sql.gz.enc`. You are asked for the same passphrase when restoring.
+
+> Write the passphrase down somewhere other than the server. There is no recovery: forget it and the backup is gone. Leave the field empty for a plain backup, which is what earlier versions produced and still restores fine.
 
 **From the command line** (scriptable, good for cron):
 

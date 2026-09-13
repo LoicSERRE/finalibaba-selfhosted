@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.5**
+Current release: **v2.10.6**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -19,9 +19,24 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Interactive Brokers** - no Woob module exists; would need a direct integration. Re-checked against the live catalogue: 294 modules, 96 of them `CapBank`, no match for interactive/ibkr. Degiro and N26 do have one and are already reachable through the existing picker.
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data. Re-checked against the current endpoint reference: five families (auth, institutions, agreements, requisitions, accounts), every one a synchronous REST call, no webhook or subscription anywhere.
 - **Plaid** - US/Canada coverage, where this app has no users yet. The condition here is demand rather than feasibility, so it was checked as such: zero issues in the repository's entire history mention Plaid, Interactive Brokers or Revolut. Three issues exist in total, all about sync failures.
+- **End-to-end encryption of bank credentials, per user.** The only design under which the instance operator genuinely cannot read them: a key derived from the user's own password, held in their session. The cost is that their bank only syncs while they are logged in - no 4h cron, no overnight alerts for them - so it is a per-user choice rather than a setting, and a real piece of work. Worth revisiting only if somebody actually asks for it.
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.10.6 - Credentials stop being readable, and actions start being recorded
+
+- **Credentials are encrypted at rest.** `SELECT "woobLogin", "woobPassword" FROM "Institution"` used to return every invited user's bank credentials in clear text. Now AES-256-GCM, mirrored between the app and the Python sidecar and tested from both directions - a format mismatch fails at 4am against a real bank, not at build time. Also the 2FA secret, the SMTP password, the ntfy token and the three bearer tokens. **The post-v2.0 audit had listed this and accepted it**, on a threat model written when the app was single-user; multi-user changed what that sentence meant and nobody re-derived it.
+- **Not the financial data, and that is a decision rather than an omission.** The app sums and groups balances in SQL and computes net worth at 4am with nobody logged in. Encrypting them ends both. The key also lives on the server, because unattended sync needs it to - so this protects a leaked dump, not the person running the instance.
+- **The backup file can be passphrase-encrypted**, which is where the financial data CAN be protected: it is the one artefact that leaves the machine.
+- **Sessions can be ended without deleting the account.** Before, a stolen phone meant choosing between a live 30-day session and cascading someone's whole portfolio.
+- **Attempt limits survive a restart**, cover invitation redemption, and fail open rather than locking everyone out.
+- **An activity log**, because everything else prevented actions and nothing recorded them.
+- **`script-src` uses a per-request nonce** rather than `'unsafe-inline'`, and `/shared` and `/invite` get a CSP for the first time - the auth matcher had been skipping them entirely.
+- **An admin can require 2FA** for every user on the instance.
+- The whole migration runs itself at startup: deploy, and it is done.
 
 ---
 

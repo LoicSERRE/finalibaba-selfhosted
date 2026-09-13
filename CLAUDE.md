@@ -374,6 +374,152 @@ Ran as its own phase after the multi-user build, per `ROADMAP.md`'s sequencing. 
 
 7. **Not verified under concurrency.** All isolation testing was sequential. Two simultaneous requests racing on co-ownership removal vs. an alert-rule write, or on invitation redemption, were not exercised. `acceptInvitation` consumes its token inside the same transaction as the user creation specifically to survive a double-open, which is the one race that was reasoned about.
 
+### Encryption at rest, and what it does not cover (v2.10.6)
+
+Prompted by a direct question before inviting real people onto a real instance:
+*"j'ai pas envie de pouvoir récupérer le compte de mes utilisateurs simplement
+en faisant une requête à la bdd"*. The answer at the time was that you could:
+`SELECT "woobLogin", "woobPassword" FROM "Institution"` returned every invited
+user's bank credentials in clear text.
+
+**The audit had found it and accepted it, which is the part worth studying.**
+It is finding 3 under "Still open, with reasons" below - listed, named, and
+waved through on a threat model written when the app was single-user, where
+"the host owner can read everything" meant "you can read your own data".
+Multi-user changed what that sentence means and nobody re-derived it, so the
+same words came to say "you can read your invited users' bank passwords". The
+audit even noticed the stakes had risen, named `smtpPassword`/`ntfyAuthToken`
+specifically, and concluded the fix was un-exporting `getUserSettingsFor` -
+closing the app-level path and leaving the database-level one wide open.
+`Institution.trPin` was not in the inventory at all: v2.1 added it afterwards
+and nothing re-ran the list. **An accepted finding needs its acceptance
+re-derived whenever the architecture moves, not carried forward as prose.**
+
+**What is encrypted** (`lib/domain/crypto-at-rest.ts`, mirrored in
+`sync/crypto_at_rest.py`): `Institution.woobLogin`/`woobPassword`/`trPhone`/
+`trPin`, `User.totpSecret`, `UserSettings.smtpPassword`/`ntfyAuthToken`, and
+the three bearer tokens (`ShareLink`, `ApiKey`, `Invitation`). AES-256-GCM,
+random 12-byte IV, `enc:v1:<iv>:<ciphertext+tag>`.
+
+**What is NOT, and why it is not a gap to close.** Account names, balances and
+transaction labels stay readable. The app sums and groups them in SQL - 15
+aggregations across 4 files, plus filters and ordering in 5 more - and
+`/api/alerts/check` computes each user's net worth at 4am with nobody logged
+in. Encrypting them means loading every transaction into Node per render and
+ending unattended alerting outright. Worth stating plainly when someone asks
+for "everything encrypted": the request is reasonable and the answer is that it
+would be a different application.
+
+**And the honest ceiling.** The key lives in the environment, on the same
+machine, because the sync sidecar logs into a real bank at 4am with nobody
+present. Anything the server can do, whoever holds the server can do. This
+protects a leaked backup, a stolen disk, a dump shared by mistake, and anyone
+reaching the database without the environment. It does not protect a user from
+the person running their instance, and no amount of further encryption would
+while unattended sync exists.
+
+**The prefix is load-bearing.** A read that finds no `enc:v1:` returns the
+value untouched, which is what lets an instance keep working mid-migration and
+makes re-running the backfill a no-op. A wrong key RAISES rather than returning
+null - null would reach `sync_woob.py` as "this institution has no password
+configured" and the bank would silently stop syncing, which is the failure
+shape this file keeps recording.
+
+**The key is `ENCRYPTION_KEY`, or derived from `NEXTAUTH_SECRET` by HKDF when
+that is unset.** The fallback is what keeps this from being a new mandatory
+variable that breaks every existing instance on upgrade. HKDF rather than the
+raw secret, so a leak of the session-signing key is not also a leak of every
+credential. **The cost, which `.env.example` states**: rotating
+`NEXTAUTH_SECRET` then makes every stored credential unreadable.
+
+**Two languages must agree byte for byte**, and that is the real risk here: a
+format mismatch fails at 3am against a real bank, not at build time. Both
+directions are tested against values produced by the OTHER runtime rather than
+against a copied literal, and the tests were confirmed to watch it - diverging
+the HKDF info, the IV size or the prefix fails 1, 2 and 3 of them.
+
+**The backfill runs at startup** (`instrumentation.ts`), not from a script.
+"Deploy, then remember to run this" is a migration that eventually does not get
+run, and until it does the credentials are still in clear in every backup. It
+is also what caught a real mistake: the manual command first documented used
+`tsx`, a devDependency the production image installs with `--prod` and
+therefore does not have - it could never have run on a real deployment.
+Non-fatal on error, deliberately: an unencrypted value reads back fine, so
+refusing to boot would turn "no better protected than yesterday" into "your
+instance is down".
+
+**The three tokens needed a second column.** They are looked up BY value and a
+random IV means the ciphertext differs every time, so `tokenHash` (SHA-256)
+carries the lookup while the ciphertext stays reversible for a UI that shows
+both again rather than once. A plain digest rather than bcrypt: 256 random bits
+have no dictionary to slow anyone down against, and a per-row salt would defeat
+the single-query lookup the column exists for.
+
+**The backup FILE has its own, optional, passphrase encryption**
+(`lib/domain/backup-encryption.ts`) - see "Backup & restore" below. It is the
+one artefact that leaves the machine, so it is the one place the financial data
+CAN be protected without touching a query.
+
+### Security hardening (v2.10.6)
+
+Four things, three of which the post-v2.0 audit left open.
+
+**Sessions can be ended without deleting the account.** A 30-day JWT cannot be
+recalled, so until now the only way to stop one was `deleteUser`, which
+cascades the whole portfolio: "my phone was stolen" had no answer that did not
+also destroy years of transactions. `User.sessionsRevokedAt` is compared
+against the token's ISSUE time in `getViewer`, on the query it already makes.
+Changing a password revokes too, or the change protects nothing for a month. A
+token predating the feature counts as revoked rather than trusted - honouring
+an unstampable token would make revocation a no-op for exactly the sessions it
+aims at.
+
+**The rate limiter counts in a table** (`lib/services/rate-limit.ts`). The
+in-memory map reset on every restart, which the audit noted and accepted; on an
+internet-exposed instance that is a hole rather than a footnote, since
+`restart: unless-stopped` makes a crash loop cheap to cause. Extended to
+invitation redemption, which had none. **Fails OPEN on a database error**,
+deliberately: failing closed turns a blip into a total lockout including the
+admin who would fix it, and the path it guards still needs a correct password.
+
+**An audit log** (`lib/services/audit-log.ts`), because everything else in this
+app prevents actions and nothing recorded them - a compromise left no trace.
+`actorId` is NOT a foreign key on purpose: deleting a user must not erase what
+they did, which is when the log matters most. Writes never break the action they
+describe, which does mean an attacker who can make writes fail can make them
+silent; stated rather than discovered. The UI shows the raw dotted action key,
+never a translated sentence - these are compared across versions and searched
+for, and a localised label makes a log unreadable to anyone helping from
+outside.
+
+**`script-src` carries a per-request nonce** instead of `'unsafe-inline'`. Once
+a nonce is present browsers IGNORE `'unsafe-inline'` in that directive, so this
+removes the blanket permission rather than adding an allowance. `style-src`
+keeps it as a stated gap: a missed style nonce renders the app unstyled rather
+than inert, and injected CSS is a far smaller prize. No `'strict-dynamic'` - it
+would make supporting browsers ignore the Google host entries a bank's
+reCAPTCHA needs.
+
+**The delicate part was the matcher, not the nonce.** The CSP has to reach
+`/shared` and `/invite`, which the auth matcher deliberately skips - so those
+two had no CSP at all. The exemption list moved out of `config.matcher` into a
+tested `isAuthGated`, same alternatives, now one per line so each anchor is
+visible rather than buried in a 300-character lookahead. All 27 existing
+assertions still pass unchanged.
+
+**`refreshAccountBalance` moved to a plain module** (`lib/services/account-
+balance.ts`). It was exported from a `"use server"` file and therefore remotely
+invocable - finding 6, left open because it cannot be ownership-guarded (the
+cron calls it with no session). Taking it off the remote surface is the fix
+that needed no guard, the same move `autoCategorizeTransactions` made.
+
+**Two defects found by driving it rather than reading it.** The revoked-session
+screen said "this account no longer exists", which is false and alarming for
+somebody who just clicked "sign out everywhere". And the two-factor gate
+blocked `/settings` too, so a user told to go and set up TOTP was sent
+somewhere the gate would not let them go - a dead end whose own code comment
+claimed the opposite of what the code did.
+
 ### Authentication
 
 **Disabled by default** (`AUTH_ENABLED` unset or anything other than `"true"`). Self-hosted = private network, network-level trust is sufficient.
@@ -1034,10 +1180,13 @@ Two paths, both wrap `pg_dump`/`psql` (full DB dump - schema + data, never a han
 - **CLI**: `scripts/backup.sh` / `scripts/restore.sh` - call `docker compose exec db pg_dump|psql`. `restore.sh` pauses `app`/`sync` if present and requires typed confirmation.
 - **UI**: Settings → Backup & restore (`components/settings/backup-restore-section.tsx`), backed by `app/api/backup/route.ts` (`GET` streams a gzip dump, `POST` restores from an uploaded file, auto-detecting gzip vs plain `.sql`). This runs `pg_dump`/`psql` from inside the `app` container itself - that's why the `runner` stage in `Dockerfile` installs `postgresql16-client` (must track the `postgres:16-alpine` server version; a client older than the server can't dump it). Hidden entirely in `DEMO_MODE` (matches the auto-sync section's pattern).
 
+**Optionally passphrase-encrypted since v2.10.6** (`lib/domain/backup-encryption.ts`). The backup is the one artefact that LEAVES the machine - a Downloads folder, a cloud sync, a mail to yourself - which for a home instance is far and away the most likely way data ever escapes. Encrypting the file covers what the columns cannot, balances and transaction labels included, and costs no query anything. Opt-in, with a passphrase the user chooses rather than the instance key: a backup exists to survive a disaster, disasters take `.env` with them, and a backup only the dead server could read is not a backup. scrypt, because unlike every other secret here this one is human-chosen. gzip first then encrypt, so the compression ratio leaks no more than the file size. The download streams; the restore buffers, because GCM only authenticates at the tag and feeding `psql` unverified bytes is not an option when a restore drops the database first. A wrong passphrase and a damaged file give the SAME message - telling them apart tells whoever holds a stolen backup which of the two they are up against. The file is named `.sql.gz.enc` so somebody finds it months later and knows they will be asked for something.
+
 Both directions use `pg_dump --clean --if-exists` (so restore drops/recreates objects first) and `psql --single-transaction` (restore is all-or-nothing, no partial state on error). Never echo raw `pg_dump`/`psql` stderr to the client - log it server-side and return a generic error message, per the exception-exposure fix in commit `1ae43c0`.
 
 Implementation notes (post-v1.2.0 audit fixes):
 
+- **A local `pg_dump` older than the server produces an EMPTY file and exit code 1**, and a test that then greps it for secrets reports "no secrets found" - which is how the first verification of backup encryption passed while measuring nothing. `wc -c` the dump before believing anything about its contents. The app image pins `postgresql16-client` precisely so this cannot happen in production; a dev machine on Ubuntu 22.04 has 14.
 - `buildConnectionString()` passes the *whole* `DATABASE_URL` (password stripped, everything else - including query params like `?sslmode=require` - intact) as a single positional arg to `pg_dump`/`psql`, with the password supplied separately via `PGPASSWORD`. Don't go back to manually extracting `host`/`port`/`user`/`database` into separate `-h`/`-p`/`-U`/`-d` flags - that approach silently drops any connection query params.
 - The `GET` handler's `ReadableStream` only closes successfully once **both** `gzip`'s `"end"` (all bytes flushed) and `pg_dump`'s `"close"` (exit code known) have fired, and only if the exit code was `0`. A pg_dump that dies mid-dump after already writing valid-looking output must **error**, not silently succeed - a truncated "successful" backup is far worse than a visibly failed download, since the corruption would otherwise only surface during an actual restore. The `settled` flag guards every controller call this can race with (`enqueue`, `close`, `error`) - including `cancel()`, which must also set it (a client aborting mid-download must not let a still-queued `gzip.on("data")` callback call `enqueue()` on an already-cancelled stream and crash the process).
 - After a successful restore, the process calls `process.exit(0)` (gated to `NODE_ENV === "production"`, so local `pnpm dev` isn't killed) so the container's `restart: unless-stopped` policy hands the app a fresh Prisma connection pool - the restore just dropped and recreated the whole schema out from under any pooled connections' cached query plans, the same reason `scripts/restore.sh` stops the `app` container before restoring. `components/settings/backup-restore-section.tsx` polls the current page with a `HEAD` request (never `/api/backup` - that would trigger another full `pg_dump`) until the app responds again before reloading.
