@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.11.2**
+Current release: **v2.11.3**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -23,6 +23,13 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.11.3 - The sync image v2.11.2 never built
+
+- **v2.11.2 published no sync image**, which is the one artefact its fix lived in. `docker.yml` runs its own `pip-audit`, separate from `ci.yml`'s, and only the latter had been given the documented `ecdsa` exemption - so the release workflow failed on the audit, the sync image was never pushed, and `notify-deploy` was skipped. Nothing deployed half-way; the instance simply never heard about it.
+- The ignore is now stated in both workflows, with a note in each saying the other exists. Two copies of a check need two copies of its exemption, and finding that out from a failed release is the expensive way.
 
 ---
 

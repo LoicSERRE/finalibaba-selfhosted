@@ -81,7 +81,14 @@ jobs:
       - run: pip install ruff==0.16.0
       - run: ruff check sync/
       - run: pip install pip-audit
-      - run: pip-audit -r sync/requirements.txt
+      # Same ignore as ci.yml's python-security job, and it has to be stated
+      # twice because the two workflows each run their own audit. Missing this
+      # copy is what stopped the sync image being published for v2.11.2.
+      # The full reasoning for PYSEC-2026-1325 lives in ci.yml, next to the
+      # identical line: no fix exists, ecdsa is unavoidable under python-jose,
+      # the flaw is in signing rather than verification, and sync/'s API is
+      # Docker-network-only.
+      - run: pip-audit -r sync/requirements.txt --ignore-vuln PYSEC-2026-1325
       - run: pip install -r sync/requirements.txt -r sync/requirements-dev.txt
       - run: cd sync && python -m pytest
 
