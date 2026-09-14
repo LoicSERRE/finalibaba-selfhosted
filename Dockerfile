@@ -93,7 +93,10 @@ FROM node:26-alpine AS runner
 # unlike that one, there's no version to bump here since the tag is already
 # unpinned, so the durable fix is pulling current packages at every build
 # instead of trusting whatever the base image happened to bundle.
-RUN apk upgrade --no-cache && npm install -g corepack@latest && corepack enable && apk add --no-cache libc6-compat postgresql16-client
+RUN apk upgrade --no-cache \
+    && npm install -g corepack@latest \
+    && corepack enable \
+    && apk add --no-cache libc6-compat postgresql16-client
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

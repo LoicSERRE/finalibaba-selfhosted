@@ -36,6 +36,17 @@ type AlertRuleRow = {
 
 export type { AlertRuleKind, AlertRuleRow };
 
+/**
+ * A NEW_TRANSACTION rule's direction, where null means both. A lookup rather
+ * than a chained ternary so the null case is written down beside the other
+ * two instead of being whatever is left over.
+ */
+const DIRECTION_KEYS = {
+  DEBIT: "directionDebit",
+  CREDIT: "directionCredit",
+  BOTH: "directionBoth",
+} as const;
+
 
 // The same three fallbacks were spelled out inline at every case below, which
 // is most of what made this function's measured complexity outweigh its length:
@@ -80,12 +91,7 @@ export function ruleLabel(rule: AlertRuleRow, t: (key: string, vars?: Record<str
       });
     case "NEW_TRANSACTION": {
       const scope = rule.account?.name ?? t("newTransactionAllAccounts");
-      const direction =
-        rule.transactionDirection === "DEBIT"
-          ? t("directionDebit")
-          : rule.transactionDirection === "CREDIT"
-            ? t("directionCredit")
-            : t("directionBoth");
+      const direction = t(DIRECTION_KEYS[rule.transactionDirection ?? "BOTH"]);
       const minimum = rule.balanceThresholdCents !== null ? formatCurrency(rule.balanceThresholdCents) : null;
       return minimum
         ? t("ruleNewTransactionWithMinimum", { scope, direction, minimum })

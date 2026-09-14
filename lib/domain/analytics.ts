@@ -20,8 +20,6 @@ import {
   analyseHoldings,
   analyseFiatAccount,
 } from "@/lib/domain/analytics-sections";
-import {
-} from "@/lib/domain/analytics-market";
 import type {
   AnalyticsInput,
   AnalyticsResult,

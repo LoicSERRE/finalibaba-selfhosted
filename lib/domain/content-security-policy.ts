@@ -68,5 +68,7 @@ export function buildContentSecurityPolicy(nonce?: string): string {
 export function generateCspNonce(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode(...bytes));
+  // fromCodePoint rather than fromCharCode: identical for the 0-255 these are,
+  // and the one that stays correct if this ever stops being bytes.
+  return btoa(String.fromCodePoint(...bytes));
 }

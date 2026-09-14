@@ -52,21 +52,34 @@ export async function SecuritySection({
 
         {isAdmin && (
           <form action={setTwoFactorPolicy} className="border-t border-[var(--border)] pt-5 space-y-3">
-            <label className="flex items-start gap-3 cursor-pointer">
+            {/* The hint is a DESCRIPTION, not part of the name. Wrapping both
+                in one <label> buried the title three elements deep, which is
+                past what an accessible-name computation reliably walks - and
+                it made the control announce as its title AND its explanatory
+                sentence run together. Named by the label, described by the
+                hint, which is what these two attributes are for. */}
+            <div className="flex items-start gap-3">
               <input
+                id="requireTwoFactor"
                 type="checkbox"
                 name="requireTwoFactor"
                 defaultChecked={requireTwoFactor}
+                aria-describedby="requireTwoFactorHint"
                 className="mt-0.5 accent-[var(--accent)]"
               />
-              <span>
-                <span className="flex items-center gap-2 text-sm font-medium text-[var(--foreground)]">
+              <div>
+                <label
+                  htmlFor="requireTwoFactor"
+                  className="flex items-center gap-2 text-sm font-medium text-[var(--foreground)] cursor-pointer"
+                >
                   <ShieldCheck size={14} aria-hidden="true" />
                   {t("requireTotpTitle")}
+                </label>
+                <span id="requireTwoFactorHint" className="block text-xs text-[var(--muted)] mt-0.5">
+                  {t("requireTotpHint")}
                 </span>
-                <span className="block text-xs text-[var(--muted)] mt-0.5">{t("requireTotpHint")}</span>
-              </span>
-            </label>
+              </div>
+            </div>
             <SaveSettingsButton />
           </form>
         )}

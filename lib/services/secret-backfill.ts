@@ -114,9 +114,16 @@ export async function backfillEncryptedSecrets(): Promise<BackfillResult> {
   for (const { label, fields } of CREDENTIAL_TABLES) {
     results.push(await backfillTable(tables[label], fields));
   }
-  results.push(await backfillTokens(prisma.shareLink as unknown as Table, "ShareLink"));
-  results.push(await backfillTokens(prisma.apiKey as unknown as Table, "ApiKey"));
-  results.push(await backfillTokens(prisma.invitation as unknown as Table, "Invitation"));
+  // The three token tables take the same treatment, so they are a list like
+  // CREDENTIAL_TABLES above rather than three near-identical statements.
+  const TOKEN_TABLES: [Table, string][] = [
+    [prisma.shareLink as unknown as Table, "ShareLink"],
+    [prisma.apiKey as unknown as Table, "ApiKey"],
+    [prisma.invitation as unknown as Table, "Invitation"],
+  ];
+  for (const [table, label] of TOKEN_TABLES) {
+    results.push(await backfillTokens(table, label));
+  }
 
   return results.reduce(
     (acc, r) => ({

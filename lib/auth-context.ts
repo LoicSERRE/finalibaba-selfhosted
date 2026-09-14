@@ -112,6 +112,34 @@ export function isEndedSession(e: unknown): boolean {
 }
 
 /**
+ * Whether a session must be refused because its user ended it.
+ *
+ * Compares against when the token was ISSUED, not when it expires: a 30-day
+ * JWT cannot be recalled, so the only way to end one is to refuse it. Until
+ * this existed the sole way to stop somebody's session was to delete their
+ * account, which cascades their whole portfolio - a stolen phone meant
+ * choosing between a live session and destroying real data.
+ *
+ * **A token with no issue stamp counts as revoked, not as trusted.** Those
+ * predate the feature, and honouring one would make revocation a no-op for
+ * precisely the sessions it is aimed at. `issuedAt` is JWT seconds, hence the
+ * conversion - reading it as milliseconds would put every real token in 1970
+ * and revoke everybody.
+ *
+ * Extracted from getViewer so this comparison can be tested on its own: it is
+ * the whole security property, and it was previously reachable only by
+ * standing up a session.
+ */
+export function isSessionRevoked(
+  revokedAt: Date | null | undefined,
+  issuedAtSeconds: number | null | undefined
+): boolean {
+  if (!revokedAt) return false;
+  const issuedMs = issuedAtSeconds ? issuedAtSeconds * 1000 : 0;
+  return issuedMs < revokedAt.getTime();
+}
+
+/**
  * The current user.
  *
  * **The owner fallback is only ever reachable with NO live session** - that is
@@ -144,15 +172,8 @@ export async function getViewer(): Promise<Viewer> {
       // portfolio - a stolen phone meant choosing between a live session and
       // destroying real data.
       const issuedAt = (session?.user as { issuedAt?: number } | undefined)?.issuedAt;
-      if (user.sessionsRevokedAt) {
-        // A token with no issue stamp predates this feature. Treated as
-        // revoked rather than trusted: the revocation is an explicit act by
-        // the account's owner, and honouring an unstampable token would make
-        // it a no-op for exactly the sessions it was aimed at.
-        const issuedMs = issuedAt ? issuedAt * 1000 : 0;
-        if (issuedMs < user.sessionsRevokedAt.getTime()) {
-          throw new RevokedSessionError(user.id);
-        }
+      if (isSessionRevoked(user.sessionsRevokedAt, issuedAt)) {
+        throw new RevokedSessionError(user.id);
       }
       return { id: user.id, role: user.role, isMonoMode: false };
     }
