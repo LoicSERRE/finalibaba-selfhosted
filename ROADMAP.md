@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.7**
+Current release: **v2.11.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -23,6 +23,18 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.11 - Each person's own data, each person's own file
+
+- **Every user can export their own data**, which an invited one previously could not do at all: the whole Backup area was admin-gated, so a member had no button and no route. Settings -> "Mes données" gives anybody a JSON file of their accounts, balances, transactions, holdings, categories, budgets and goals. Scoped by `Account.userId` rather than by what the caller may read, so a co-owned account stays with whoever created it instead of landing in both people's files.
+- **The admin no longer has to take everyone's data to get their own.** Asked directly: "je veux pas pouvoir exporter et voir le compte de mes potes, chacun sa sauvegarde non ?". Both halves were true, and the per-user export is the answer to the second.
+- **No credential ever reaches the file.** v2.10.6 encrypted the bank logins, the TOTP secret, the SMTP password and the three bearer tokens; writing them back out in clear, into a file destined for a Downloads folder, would undo that in one feature. An institution exports its name and module, never its login. `Account.syncId` stays behind too - it is globally unique and names a connection on one instance.
+- **The whole-database dump now requires a passphrase.** It was optional while an instance had one user, where the only record in the file was the downloader's own. It is still the way to restore an instance, and still admin-only.
+- **`scripts/backup.sh` is safe to put on a cron**: `--keep N` retires old dumps, `--quiet` keeps a nightly job silent until it has something to say, and an empty dump is reported as a failure rather than a success.
+- **The export's completeness is pinned against `schema.prisma` itself**, so a column added to `Account` and forgotten fails a test rather than surfacing on the day somebody restores. It earned that immediately, catching a column this file documented and the database did not have.
+- **Not yet: reading an export back.** The file is complete and faithful, nothing restores from it. Restoring an instance still goes through the full dump.
 
 ---
 
