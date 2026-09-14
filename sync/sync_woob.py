@@ -62,6 +62,56 @@ def make_woob():
     return Woob(storage=StandardStorage(str(_STORAGE_PATH)))
 
 
+class ModuleUnavailableError(Exception):
+    """A Woob module that cannot be loaded at all, with the reason attached."""
+
+
+def load_backend_or_explain(w, module: str, backend_name: str) -> None:
+    """Load one backend, or say why it could not be loaded.
+
+    **`load_backends` does not raise when a module fails to load**, which both
+    callers assumed it did. Woob logs `Unable to load module "x": ...` and
+    `continue`s, so the try/except wrapped around it was guarding something
+    that never happens - and the very next line, `w.get_backend(...)`, died on
+    a `KeyError` the user received as a bare 500 with no explanation.
+
+    Seen on a real instance with Caisse d'Epargne: the module needs the
+    `python-jose` package, the image did not have it, and the person
+    connecting their bank got a 500 four times in a row. The sync path was
+    worse than useless - it reported "No accounts returned, check credentials
+    or run interactive setup", pointing at credentials that were perfectly
+    fine.
+
+    So the module is loaded explicitly first, because that is the call that
+    raises `ModuleLoadError` carrying the real cause. `load_backends`'s own
+    `errors` parameter is no use here: it collects `ConfigError` only, and a
+    missing Python package is not one.
+
+    Then the registration is CHECKED rather than assumed. A guard that trusts
+    a function to raise is not a guard.
+    """
+    from woob.exceptions import ModuleLoadError
+
+    try:
+        w.modules_loader.get_or_load_module(module)
+    except ModuleLoadError as e:
+        raise ModuleUnavailableError(
+            f"Le module Woob '{module}' n'a pas pu etre charge : {e}"
+        ) from e
+    except Exception as e:
+        raise ModuleUnavailableError(
+            f"Le module Woob '{module}' est introuvable ou illisible : {e}"
+        ) from e
+
+    w.load_backends(modules=[module], names=[backend_name])
+
+    if backend_name not in w.backend_instances:
+        raise ModuleUnavailableError(
+            f"Le module Woob '{module}' s'est charge mais n'a produit aucune connexion "
+            "utilisable - la configuration de cette institution est peut-etre incomplete"
+        )
+
+
 def _configure_woob(backend_name: str, module: str, login: str, password: str):
     """Write a Woob backends config file for the given institution."""
     config_dir = Path.home() / ".config" / "woob"
@@ -418,9 +468,22 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
 
     w = make_woob()
     try:
-        w.load_backends(modules=[module], names=[backend_name])
-    except Exception as e:
-        raise RuntimeError(f"Failed to load Woob backend '{module}': {e}") from e
+        load_backend_or_explain(w, module, backend_name)
+    except ModuleUnavailableError as e:
+        # `unsupported`, not `auth_required`: nothing the user types will fix a
+        # package the image does not ship, and auth_required sends them round a
+        # reconnect loop that cannot succeed. It also alerts once instead of
+        # every 24h, which is right for something only a new image can change.
+        log.error("%s: %s", institution_name, e)
+        fail_conn = get_conn()
+        _fail(
+            fail_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor),
+            fail_conn,
+            sync_source,
+            "unsupported",
+            str(e),
+        )
+        return {"accounts": 0, "error": "module_unavailable"}
 
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)

@@ -175,7 +175,26 @@ jobs:
       # audited - a known pip-audit limitation for that one package, not
       # worth extra tooling to work around.
       - run: pip install pip-audit
-      - run: pip-audit -r sync/requirements.txt
+      # PYSEC-2026-1325 (ecdsa): the Minerva timing attack on P-256. Ignored
+      # deliberately, with the reasoning written down rather than the finding
+      # silenced:
+      #
+      #   - There is no fix and none is planned. python-ecdsa's maintainers
+      #     consider side-channel attacks out of scope, and 0.19.2 is the
+      #     latest release. Waiting it out is not a strategy.
+      #   - It cannot be avoided while supporting Caisse d'Epargne and Banque
+      #     Populaire: their Woob modules need python-jose, which requires
+      #     ecdsa as a BASE dependency (not an extra, so the [cryptography]
+      #     backend does not replace it).
+      #   - The flaw is in SIGNING. Verification is explicitly unaffected, and
+      #     these modules consume tokens the bank issues rather than signing
+      #     with a long-lived key of their own.
+      #   - The attack needs an attacker timing many signing operations.
+      #     sync/'s HTTP API is Docker-network-only and never published (see
+      #     SECURITY.md), so there is nobody positioned to do that.
+      #
+      # Re-check on any pip-audit bump: if ecdsa ever ships a fix, drop this.
+      - run: pip-audit -r sync/requirements.txt --ignore-vuln PYSEC-2026-1325
 
   dependency-review:
     name: Dependency review

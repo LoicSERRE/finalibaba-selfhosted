@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.11.1**
+Current release: **v2.11.2**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -23,6 +23,17 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.11.2 - A bank that cannot load says so, instead of answering 500
+
+- **Caisse d'Epargne and Banque Populaire can be connected.** Their Woob modules need two Python packages the image did not ship (`python-jose`, `chompjs`), so the module never loaded. Measured across the 18 largest French banks in the catalogue rather than added one report at a time: exactly those two packages were missing, and only those two banks needed them. Adding only `python-jose` - the one the log happened to name first - would have moved the same failure along to `chompjs`.
+- **A guard that was never a guard.** Both the setup and the sync paths wrapped `w.load_backends(...)` in `try/except`, and `load_backends` does not raise: Woob logs a module it cannot load and carries on. So the except never fired, and the next line died on a `KeyError` the user received as a bare 500, four times in a row, with nothing on screen saying why.
+- The module is now loaded explicitly first, because that is the call carrying the real cause, and the registration is checked rather than assumed. The message names the missing package, so the next bank to hit this is self-diagnosing.
+- **The sync path stopped blaming the credentials.** It reported "No accounts returned - check credentials or run interactive setup" for a failure that had nothing to do with credentials. It now writes `unsupported`, which alerts once instead of nagging every 24h about something only a new image can change.
+- `woob[lcl,swile]` in `requirements.txt` installs nothing: woob 3.7 publishes no extras at all. Left in place as a statement of intent, documented as not being a mechanism.
+- **One accepted vulnerability, with its reasoning written down**: `python-jose` requires `ecdsa`, which has an unfixed Minerva timing attack on P-256 signing and no planned fix. Verification is unaffected, these modules consume tokens the bank issues rather than signing with their own key, and `sync/`'s API is Docker-network-only. Ignored explicitly in CI with that argument beside it, not silenced.
 
 ---
 

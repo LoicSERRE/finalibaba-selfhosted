@@ -1,4 +1,28 @@
 woob[lcl,swile]==3.7.*
+# Dependencies of individual BANK MODULES, which woob downloads at runtime and
+# does not install anything for.
+#
+# Each module ships its own requirements.txt next to its code, and woob checks
+# it at load time: a missing package makes `get_or_load_module` raise
+# ModuleLoadError, the module never registers, and before v2.11.2 the caller
+# died on a KeyError the user received as a bare 500. Caisse d'Epargne was
+# reported exactly that way.
+#
+# Measured rather than added one report at a time: across the 18 largest French
+# banks in the catalogue, exactly these two packages were missing, and they are
+# needed by `caissedepargne` and `banquepopulaire`. Adding only python-jose -
+# the one the log happened to name first - would have moved the same failure
+# one step along to chompjs.
+#
+# Note that the `[lcl,swile]` extras above install NOTHING: woob 3.7 publishes
+# no extras at all (`Provides-Extra` is empty), so pip resolves them to the
+# bare package. They are left in place as a statement of which banks this image
+# is expected to serve, not as a mechanism.
+#
+# When a new bank reports a missing package, the error message now names it:
+# add it here and rebuild.
+python-jose>=3.3.0
+chompjs>=1.2.2
 # Pinned to a commit, not just the bare repo URL: pytr has no PyPI release
 # (pip-audit can't check it either, see ci.yml), and an unpinned git
 # dependency means every fresh install silently resolves to whatever's on

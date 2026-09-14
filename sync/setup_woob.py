@@ -41,7 +41,13 @@ import psycopg2.extras
 import setup_locks
 from crypto_at_rest import decrypt_institution_row
 from db import get_conn
-from sync_woob import _configure_woob, make_woob, persist_accounts
+from sync_woob import (
+    ModuleUnavailableError,
+    _configure_woob,
+    load_backend_or_explain,
+    make_woob,
+    persist_accounts,
+)
 
 log = logging.getLogger(__name__)
 
@@ -264,12 +270,18 @@ def start_setup(institution_id: str) -> dict:
     # authenticates is exactly what the next sync must reuse.
     w = make_woob()
     try:
-        w.load_backends(modules=[inst["woobModule"]], names=[backend_name])
-    except Exception as e:
-        log.exception("Failed to load Woob module '%s' for institution %s", inst["woobModule"], institution_id)
-        raise SetupError(
-            f"Échec du chargement du module Woob '{inst['woobModule']}' - vérifie que le nom du module est correct"
-        ) from e
+        # Was `try: load_backends() except Exception:` - a guard for something
+        # that never happens. Woob logs a module it cannot load and carries on,
+        # so the except never fired and `get_backend` below raised a KeyError
+        # the user received as a bare 500. Seen four times in a row on a real
+        # Caisse d'Epargne connection, with nothing on screen saying why.
+        load_backend_or_explain(w, inst["woobModule"], backend_name)
+    except ModuleUnavailableError as e:
+        # The lock has to come off, or a module this image cannot load would
+        # freeze every scheduled sync on that bank until the entry expires.
+        _cleanup(institution_id)
+        log.error("Module unavailable for institution %s: %s", institution_id, e)
+        raise SetupError(str(e)) from e
 
     _mark_interactive(w.get_backend(backend_name))
     result = _persist_connected(_try_connect(w, backend_name), w, backend_name, institution_id)
