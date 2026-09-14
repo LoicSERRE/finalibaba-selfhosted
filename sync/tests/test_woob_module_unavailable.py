@@ -6,7 +6,7 @@ times in a row, and the container log said
     Unable to load module "caissedepargne": Module requires python package
     "python-jose" but not installed.
     ...
-    KeyError: 'inst_cmu18a95g000k2bmn9nh'
+    KeyError: 'inst_<the institution id>'
 
 The code already looked like it handled this:
 
