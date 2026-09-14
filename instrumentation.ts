@@ -21,9 +21,21 @@ export async function register() {
   try {
     const { encrypted, alreadyDone } = await backfillEncryptedSecrets();
     if (encrypted > 0) {
+      // Deliberately does NOT tell the operator to restart the sync sidecar.
+      // It was written that way and the instruction was wrong twice over:
+      // `sync/db.py`'s `get_woob_institutions` opens a connection and decrypts
+      // per scheduled run rather than caching anything at boot, and it already
+      // receives NEXTAUTH_SECRET (it always did, for the alerts bearer token)
+      // so the derived key resolves with no new variable. `docker compose
+      // restart` would not re-read the environment from the compose file even
+      // if one were needed. Telling people to run a pointless command in the
+      // one release whose promise is that a deploy is the whole procedure is
+      // how that promise stops being believed.
       console.log(
         `[encryption] Encrypted ${encrypted} stored credential(s) at rest. ` +
-          `Restart the sync service so it reads them with the same key: docker compose restart sync`
+          `No further action: the sync service derives the same key and decrypts per run. ` +
+          `Do not rotate NEXTAUTH_SECRET (or set ENCRYPTION_KEY) from here on - either ` +
+          `changes the key and the stored credentials stop being readable.`
       );
     } else if (alreadyDone > 0) {
       console.log(`[encryption] ${alreadyDone} stored credential(s) already encrypted.`);
