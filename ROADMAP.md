@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.10.6**
+Current release: **v2.10.7**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -23,6 +23,15 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.10.7 - The first bug a test user found
+
+- **A member signing in inherited the owner's lock screen.** Reported from a real instance within a day of v2.10.6: create a test user, sign in from a private window, get asked for the app lock, refresh and it is gone. `AppLockGate` lives in the root layout so it survives the navigation a login performs, and its state came from `useState(!enabled)` - evaluated at mount, on `/login`, where there is no session and `getViewer()` resolves to the instance owner by design. The owner's setting locked a member who has none, and only a reload cleared it. The flag is read on every render now, and the layout no longer produces it at all on a route where nobody is signed in.
+- **The SonarQube gate is green**, 0 violations from 8. One was a genuinely dead `import {}` with no specifiers, left by the v2.10.2 split. One was the 2FA checkbox having no accessible name, its title buried three elements inside the label.
+- **Most of the coverage failure was a report that was never generated.** New-code coverage read 72.5% against a threshold of 80, and `sync/workers.py` - at 100% locally - was recorded as 0.0%, because `sync/coverage.xml` did not exist when the scan ran. Generating it takes the figure to 81.0% with no test written for it. The trap is documented in `.coveragerc` and had already cost the v2.1 gate.
+- **Session revocation is tested on its own**, extracted from `getViewer` while reducing its complexity. It is the whole security property of "sign out everywhere" and was previously reachable only by standing up a real session.
 
 ---
 
