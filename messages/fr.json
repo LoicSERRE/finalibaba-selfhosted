@@ -732,9 +732,9 @@
       "restoreError": "La restauration a échoué. Vérifiez les logs du serveur.",
       "restarting": "Restauration terminée : redémarrage de l'application en cours…",
       "passphraseLabel": "Phrase secrète",
-      "passphrasePlaceholder": "Chiffrer le fichier (facultatif)",
+      "passphrasePlaceholder": "Phrase secrète (obligatoire)",
       "passphraseOptional": "Seulement si le fichier est chiffré",
-      "passphraseHint": "Laisse vide pour une sauvegarde en clair. Avec une phrase secrète, le fichier est illisible sans elle : soldes et transactions compris. Note-la ailleurs, personne ne peut la retrouver à ta place.",
+      "passphraseHint": "Obligatoire : ce fichier contient les données de TOUS les utilisateurs de l'instance. Sans cette phrase secrète il est irrécupérable, personne ne pourra t'aider. Pour ne récupérer que tes propres données, utilise « Mes données » ci-dessus.",
       "passphraseRestoreHint": "Nécessaire uniquement si la sauvegarde a été chiffrée (fichier .enc)."
     },
     "twoFactor": {
@@ -1071,6 +1071,12 @@
       "colWhat": "Action",
       "colWho": "Qui",
       "colWhere": "Depuis"
+    },
+    "myData": {
+      "title": "Mes données",
+      "description": "Télécharge tout ce que contient ton compte : comptes, soldes, transactions, positions, catégories, budgets et objectifs. Un seul fichier JSON, uniquement tes données.",
+      "noCredentials": "Aucun mot de passe bancaire, secret 2FA ni jeton n'est inclus : ils restent chiffrés côté serveur et ne sortent jamais dans un fichier.",
+      "action": "Exporter mes données"
     }
   },
   "shared": {

@@ -83,11 +83,15 @@ export function BackupRestoreSection() {
             {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
             <Button
               variant="outline"
+              // The route refuses an unencrypted whole-database dump, so the
+              // button has to refuse too: navigating anyway would answer a
+              // click with a 400 the browser renders as a blank page, with
+              // nothing saying the passphrase was the missing piece.
+              disabled={!downloadPass}
               onClick={() => {
                 // A real navigation, not the client router: Content-Disposition
                 // only takes effect on one.
-                const query = downloadPass ? `?passphrase=${encodeURIComponent(downloadPass)}` : "";
-                window.location.href = `/api/backup${query}`;
+                window.location.href = `/api/backup?passphrase=${encodeURIComponent(downloadPass)}`;
               }}
             >
               <Download size={14} aria-hidden="true" />

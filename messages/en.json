@@ -732,9 +732,9 @@
       "restoreError": "Restore failed. Check the server logs for details.",
       "restarting": "Restore complete: restarting the app…",
       "passphraseLabel": "Passphrase",
-      "passphrasePlaceholder": "Encrypt the file (optional)",
+      "passphrasePlaceholder": "Passphrase (required)",
       "passphraseOptional": "Only if the file is encrypted",
-      "passphraseHint": "Leave empty for a plain backup. With a passphrase the file is unreadable without it, balances and transactions included. Write it down somewhere else: nobody can recover it for you.",
+      "passphraseHint": "Required: this file holds EVERY user's data on the instance. Without this passphrase it is unrecoverable and nobody can help you. To get only your own data, use My data above.",
       "passphraseRestoreHint": "Only needed if the backup was encrypted (a .enc file)."
     },
     "twoFactor": {
@@ -1071,6 +1071,12 @@
       "colWhat": "Action",
       "colWho": "Who",
       "colWhere": "From"
+    },
+    "myData": {
+      "title": "My data",
+      "description": "Download everything your account holds: accounts, balances, transactions, holdings, categories, budgets and goals. One JSON file, your data only.",
+      "noCredentials": "No bank password, 2FA secret or token is included: those stay encrypted on the server and never leave in a file.",
+      "action": "Export my data"
     }
   },
   "shared": {

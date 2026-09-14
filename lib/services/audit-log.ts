@@ -37,6 +37,7 @@ export const AUDIT = {
   totpEnabled: "totp.enabled",
   totpDisabled: "totp.disabled",
   backupDownloaded: "backup.downloaded",
+  dataExported: "data.exported",
   backupRestored: "backup.restored",
   bankConfigured: "bank.configured",
   shareLinkCreated: "sharelink.created",

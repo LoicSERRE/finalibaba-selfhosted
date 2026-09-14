@@ -60,10 +60,25 @@ export async function GET(req: NextRequest) {
   let stderr = "";
   dump.stderr.on("data", (chunk) => (stderr += chunk));
 
-  // Optional passphrase encryption of the FILE. Opt-in because a backup only
-  // the dead server could read is not a backup - see
-  // lib/domain/backup-encryption.ts for why it is not the instance key.
+  // Passphrase encryption of the FILE, now REQUIRED rather than opt-in.
+  //
+  // This dump is the whole database: every user's accounts, balances and
+  // transaction labels, in clear. It was optional while the instance had one
+  // user, where the only record in the file was the downloader's own. On a
+  // multi-user instance the admin is carrying other people's finances into a
+  // Downloads folder, and "I forgot to tick the box" is not a decision anybody
+  // makes deliberately. Per-user exports (/api/my-data) need no passphrase,
+  // because there the file holds only its owner's data.
+  //
+  // Still the user's own passphrase and not the instance key: a backup exists
+  // to survive a disaster, and disasters take .env with them.
   const passphrase = req.nextUrl.searchParams.get("passphrase") ?? "";
+  if (!passphrase) {
+    return NextResponse.json(
+      { error: "A passphrase is required: this file contains every user's data." },
+      { status: 400 }
+    );
+  }
   const gzip = createGzip();
   dump.stdout.pipe(gzip);
   const encryption = passphrase ? createBackupCipher(passphrase) : null;

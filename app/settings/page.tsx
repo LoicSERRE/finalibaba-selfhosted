@@ -18,6 +18,7 @@ import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { ThemeSwitcher } from "@/components/settings/theme-switcher";
 import { BackupRestoreSection } from "@/components/settings/backup-restore-section";
+import { MyDataSection } from "@/components/settings/my-data-section";
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { SecuritySection } from "@/components/settings/security-section";
 import { AppLockSection } from "@/components/settings/app-lock-section";
@@ -460,6 +461,13 @@ export default async function SettingsPage({
       {show.withAuth && (
         <SecuritySection events={auditEvents} isAdmin={isAdmin} requireTwoFactor={requireTwoFactor} />
       )}
+
+      {/* Everybody's own data, above the admin-only whole-database section
+          deliberately: the one that concerns the person reading comes first,
+          and for a member it is now the only one they see. Before this the
+          whole area was hidden for them, so an invited user had no way to get
+          their own record out at all. */}
+      {show.sensitive && <MyDataSection />}
 
       {show.adminOnly && <BackupRestoreSection />}
 
