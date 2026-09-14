@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.11.0**
+Current release: **v2.11.1**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -23,6 +23,15 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.11.1 - Every authenticated page was public
+
+- **Update immediately if `AUTH_ENABLED=true`.** From v2.10.6 to v2.11.0, a request carrying no session at all rendered `/`, `/settings`, `/accounts`, `/transactions`, `/analytics`, `/budgets`, `/income` and `/recurring` with the instance owner's data, admin-only Settings included. No login, no cookie, no link to guess.
+- **`instanceof` across a module boundary.** v2.10.6 routed the auth decision through a wrapper so the CSP nonce could be attached to permitted requests, and asked `authResult instanceof NextResponse` to tell a refusal from a permission. next-auth bundles its own copy of `next/server`, so the `NextResponse` it builds is a different class object: the check answered false for a real `307` to `/login`, the code fell through to `NextResponse.next()`, and the refusal became an authorisation.
+- **`getViewer()`'s owner fallback is what turned that into a data leak.** It is reachable exactly when there is no session, which is the case it was written for - `/login` and `/invite` still have to render something. With the gate open, "no session" stopped meaning "anonymous visitor" and started meaning "the owner".
+- The decision is duck-typed now (`isAuthDenial`), so a second copy of a module cannot defeat it, and the test builds its refusal from a deliberately foreign class - one using the real `NextResponse` would have passed against the broken code.
 
 ---
 

@@ -88,6 +88,36 @@ export function isAuthGated(pathname: string): boolean {
   return !AUTH_EXEMPT.some((exempt) => exempt.test(pathname));
 }
 
+/**
+ * Whether what `withAuth` handed back is a refusal rather than a permission.
+ *
+ * **Never `instanceof NextResponse`, and this function exists because that is
+ * exactly what it used to be.** next-auth bundles its own copy of
+ * `next/server`, so the `NextResponse` it constructs is a DIFFERENT class
+ * object from the one imported here - `instanceof` answered **false** for a
+ * genuine `307` to `/login`, the code fell through to `NextResponse.next()`,
+ * and the refusal became an authorisation. Every authenticated page served the
+ * instance owner's data to requests carrying no session at all, because
+ * `getViewer()`'s owner fallback is reachable precisely when there is none.
+ *
+ * Measured rather than reasoned about: a probe in this function logged
+ * `ctor=NextResponse isNextResponse=false status=307 location=/login`. The
+ * constructor name was right and the identity check was still wrong.
+ *
+ * So this asks what the response SAYS, not which class built it. A duck-typed
+ * check cannot be defeated by a second copy of a module, and this is a gate
+ * whose failure mode is silent: nothing logs, nothing throws, and the page
+ * renders perfectly - for anybody.
+ */
+export function isAuthDenial(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  const response = result as { status?: unknown; headers?: { get?: (k: string) => unknown } };
+  if (typeof response.status !== "number") return false;
+  // A redirect to the sign-in page, or any non-200 (withAuth answers an
+  // unauthorised API route with 401 rather than a redirect).
+  return response.status !== 200 || Boolean(response.headers?.get?.("location"));
+}
+
 /** Copies the security headers onto whatever response we end up returning. */
 function withCsp(res: NextResponse, csp: string): NextResponse {
   res.headers.set("Content-Security-Policy", csp);
@@ -122,13 +152,13 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
   if (!isAuthGated(req.nextUrl.pathname)) return withCsp(pass(), csp);
 
   const authResult = await authMiddleware(req as NextRequestWithAuth, event);
-  // withAuth answers a permitted request with a bare `next()` that knows
-  // nothing about the request headers above, so the nonce would never reach
-  // the renderer. Anything else it returns is a redirect or a 403 that must be
-  // honoured exactly as it is.
-  const res = authResult instanceof NextResponse ? authResult : NextResponse.next();
-  const passthrough = res.status === 200 && !res.headers.get("location");
-  return withCsp(passthrough ? pass() : res, csp);
+  // withAuth answers a permitted request with nothing, or with a bare `next()`
+  // that knows nothing about the request headers above - either way the
+  // request has to be re-issued by us or the nonce never reaches the renderer.
+  // Anything carrying a redirect or a non-200 status is a DECISION, and is
+  // returned exactly as it stands.
+  if (isAuthDenial(authResult)) return withCsp(authResult as NextResponse, csp);
+  return withCsp(pass(), csp);
 }
 
 export const config = {

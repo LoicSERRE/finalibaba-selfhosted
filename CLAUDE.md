@@ -544,6 +544,31 @@ than inert, and injected CSS is a far smaller prize. No `'strict-dynamic'` - it
 would make supporting browsers ignore the Google host entries a bank's
 reCAPTCHA needs.
 
+**And the delicate part had a cost nobody found until a user did (v2.11.1).**
+Routing the auth decision through a wrapper - so a permitted request could be
+re-issued carrying the nonce - asked `authResult instanceof NextResponse` to
+tell a refusal from a permission. **next-auth bundles its own copy of
+`next/server`**, so the `NextResponse` it constructs is a different class
+object, `instanceof` answered **false** for a genuine `307` to `/login`, the
+code fell through to `NextResponse.next()`, and the refusal became an
+authorisation. From v2.10.6 to v2.11.0 every authenticated page rendered for a
+request carrying no session at all.
+
+`getViewer()`'s owner fallback is what made that a data leak rather than an
+empty page: it is reachable exactly when there is no session, which is the case
+it exists for. With the gate open, "no session" stopped meaning "an anonymous
+visitor on /login" and started meaning "the instance owner, role ADMIN".
+
+**What found it was a probe, not a reading.** The logged line was
+`ctor=NextResponse isNextResponse=false status=307 location=/login` - the
+constructor name was right and the identity check was still wrong, which is not
+something reading the code suggests. `isAuthDenial` duck-types on what the
+response SAYS instead, and `__tests__/proxy-auth-denial.test.ts` builds its
+refusal from a deliberately FOREIGN class: a test using the real `NextResponse`
+passes against the broken code, which is why the obvious test would have been
+worthless. **An `instanceof` against a class that crosses a package boundary is
+a coin flip; ask the object what it is, not who made it.**
+
 **The delicate part was the matcher, not the nonce.** The CSP has to reach
 `/shared` and `/invite`, which the auth matcher deliberately skips - so those
 two had no CSP at all. The exemption list moved out of `config.matcher` into a
