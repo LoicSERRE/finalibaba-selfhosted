@@ -207,7 +207,25 @@ export function AppLockGate({
     }
   }
 
-  if (unlocked || bare) return <>{children}</>;
+  // `enabled` is read on every render, never latched into state, and that is
+  // the fix for a real report: "after signing in as a test user the lock
+  // screen appears, and a refresh clears it".
+  //
+  // This component lives in the root layout, so it stays MOUNTED across the
+  // client-side navigation that follows a login. `useState(!enabled)` runs
+  // only at mount, and at mount the browser was on /login - where there is no
+  // session, so getViewer() falls back to the instance owner and `enabled`
+  // was the OWNER's setting. Signing in as somebody without app-lock then
+  // re-rendered with enabled=false while `unlocked` stayed false from mount,
+  // and the effect below returns early precisely when !enabled, so nothing
+  // ever cleared it. Only a full reload, which remounts, did.
+  //
+  // Same shape as the bug this file's own /shared guard was written for, and
+  // as the login form asking a member for a 2FA code because `totpEnabled`
+  // had been fetched for the owner: owner state answering a question asked
+  // about somebody else. An account with no app-lock must never be locked,
+  // whatever this component believed when it mounted.
+  if (!enabled || unlocked || bare) return <>{children}</>;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[var(--background)] p-6">

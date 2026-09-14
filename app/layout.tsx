@@ -15,6 +15,7 @@ import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, isEndedSession, isRevokedSession, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
+import { isBareRoute } from "@/lib/domain/bare-routes";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -115,7 +116,15 @@ export default async function RootLayout({
           where: { id: viewer.id },
           select: { appLockEnabled: true, totpEnabled: true },
         });
-  const appLockEnabled = account?.appLockEnabled ?? false;
+  // Never the owner's setting on a route where nobody is signed in. /login,
+  // /invite and /shared reach getViewer() with no session, so it resolves to
+  // the instance owner by design - and handing an anonymous browser the
+  // OWNER's app-lock flag is what let a freshly signed-in member inherit a
+  // lock screen that belonged to somebody else (see AppLockGate). The gate
+  // carries its own bare-route guard too; this stops the value being produced
+  // in the first place rather than relying on the consumer to ignore it.
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const appLockEnabled = isBareRoute(pathname) ? false : (account?.appLockEnabled ?? false);
 
   // The instance policy, checked here rather than in a page: this gate has to
   // hold on every route, and /settings has to stay reachable through it - it
@@ -126,7 +135,6 @@ export default async function RootLayout({
   // was told to go somewhere the gate would not let them go. Everything that
   // actually shows money stays blocked, so nothing financial is rendered or
   // even sent.
-  const pathname = (await headers()).get("x-pathname") ?? "";
   const mustSetUpTotp =
     !!viewer &&
     !viewer.isMonoMode &&
