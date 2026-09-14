@@ -343,6 +343,32 @@ What it establishes, and each half matters:
 - `GET` and `POST /api/backup` both answer `403` to a MEMBER, and Settings
   offers them neither that section nor user management.
 
+**Re-run in full at the v2.10.6 tag, because the original predates everything
+it now has to survive.** The walkthrough landed as commit 11 of that version
+and the encryption, session revocation, persistent rate limiting, audit log and
+CSP nonce are commits 12-19 - so the version that made the strongest security
+claims had never had its isolation re-checked against the code making them.
+Against a fresh database, migrations replayed from zero, no schema drift:
+**0 owner markers across 8 pages** (hydrated DOM and RSC payload), positive
+control on 7, `/api/backup` 403 on both verbs, a per-request CSP nonce that
+changes between two requests with `'unsafe-inline'` genuinely gone from
+`script-src` and zero console violations, and **a share link and an API key
+minted before encryption still resolving on their original tokens** while the
+stored ciphertext presented as a bearer token is refused. The invitation half
+was re-run on its own (8/8): single-use enforced against a real second
+redemption attempt, MEMBER role, empty portfolio, expired and used both
+refused.
+
+**Two lessons from doing it, both this version's recurring shape.** The first
+attempt reported two invitation failures that were races in the *test* - it
+waited on a load state rather than on the row appearing, and re-read a URL
+Next could answer from its router cache; the fix is a fresh browser context per
+navigation and waiting on the real effect. And the production build this all
+ran against **failed** while reporting success, because `pnpm run build | tail -4`
+discarded the exit code and a stray script at the repo root broke the
+type-check. `set -o pipefail`, or read the code rather than the last four
+lines.
+
 **Two methodological traps were hit and are worth not repeating.** Searching
 rendered HTML for UI strings said every invite token was valid, expired ones
 included: `NextIntlClientProvider` ships the whole messages JSON inline, so
