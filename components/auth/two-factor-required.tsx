@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { settingsTabHref } from "@/lib/domain/settings-tabs";
 
 /**
  * Shown instead of the app when the instance requires TOTP and this user has
@@ -29,7 +30,7 @@ export async function TwoFactorRequired() {
           <p className="text-sm text-[var(--muted)]">{t("body")}</p>
         </div>
         <Link
-          href="/settings"
+          href={settingsTabHref("security")}
           className="inline-block w-full px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
         >
           {t("action")}

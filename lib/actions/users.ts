@@ -1,6 +1,7 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
 import { consumeAttempt, INVITATION_MAX_ATTEMPTS } from "@/lib/services/rate-limit";
 import { decryptSecret, encryptSecret, tokenLookupHash } from "@/lib/domain/crypto-at-rest";
@@ -242,13 +243,11 @@ export async function getOwnAccount() {
  * component already mapped these keys to translated sentences - it just never
  * received them. Same treatment as lib/actions/totp.ts and sync.ts.
  */
-export type ChangePasswordResult =
-  | { ok: true }
-  | { ok: false; error: "invalid_current_password" | "username_required" | "auth_disabled"; detail?: string };
+export type ChangePasswordResult = ActionResult<void, "invalid_current_password" | "username_required" | "auth_disabled">;
 
 export async function changeOwnPassword(formData: FormData): Promise<ChangePasswordResult> {
   const viewer = await getViewer();
-  if (viewer.isMonoMode) return { ok: false, error: "auth_disabled" };
+  if (viewer.isMonoMode) return actionError("auth_disabled");
 
   const current = (formData.get("currentPassword") as string) || "";
   const next = (formData.get("newPassword") as string) || "";
@@ -266,13 +265,13 @@ export async function changeOwnPassword(formData: FormData): Promise<ChangePassw
   const check = validateCredentials(claiming ? rawUsername : "placeholder", next);
   // The validator's own message is already written for a human, so it rides
   // along as `detail` rather than being flattened into one generic key.
-  if (!check.ok) return { ok: false, error: "invalid_current_password", detail: check.error };
-  if (!user.username && !claiming) return { ok: false, error: "username_required" };
+  if (!check.ok) return actionError("invalid_current_password", check.error);
+  if (!user.username && !claiming) return actionError("username_required");
   // A user still on the env password (owner, pre-bootstrap) has no DB hash to
   // check against - they set one here for the first time, after which the env
   // credential stops applying to them entirely (see resolveUser in lib/auth.ts).
   if (user.passwordHash && !(await bcrypt.compare(current, user.passwordHash))) {
-    return { ok: false, error: "invalid_current_password" };
+    return actionError("invalid_current_password");
   }
 
   await prisma.user.update({
@@ -287,7 +286,7 @@ export async function changeOwnPassword(formData: FormData): Promise<ChangePassw
     },
   });
   revalidatePath("/settings");
-  return { ok: true };
+  return actionOk();
 }
 
 /**
@@ -303,17 +302,30 @@ export async function changeOwnPassword(formData: FormData): Promise<ChangePassw
  * that quietly spares the device you typed it on is the version people
  * misread, and re-authenticating costs one password entry.
  */
-export async function revokeOwnSessions(): Promise<void> {
+/**
+ * Ends every session of the caller, this browser's included. The model for
+ * how a Settings action reports back (see lib/domain/action-result.ts): this
+ * one used to throw "auth_disabled" into a form nobody read, so in production
+ * a failed "sign out everywhere" looked exactly like a successful one - on the
+ * one control someone reaches for when a device has been stolen.
+ */
+export async function revokeOwnSessions(): Promise<ActionResult<void, "auth_disabled" | "revoke_failed">> {
   const viewer = await getViewer();
-  if (viewer.isMonoMode) throw new Error("auth_disabled");
-  await prisma.user.update({
-    where: { id: viewer.id },
-    data: { sessionsRevokedAt: new Date() },
-  });
+  if (viewer.isMonoMode) return actionError("auth_disabled");
+  try {
+    await prisma.user.update({
+      where: { id: viewer.id },
+      data: { sessionsRevokedAt: new Date() },
+    });
+  } catch (error) {
+    console.error("Could not revoke sessions:", error);
+    return actionError("revoke_failed");
+  }
   await recordAuditEvent({
     action: AUDIT.sessionsRevoked, actorId: viewer.id, targetType: "User", targetId: viewer.id,
   });
   revalidatePath("/settings");
+  return actionOk();
 }
 
 /**

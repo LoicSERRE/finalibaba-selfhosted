@@ -1,6 +1,7 @@
 "use server";
 
 import { getViewer, requireAdmin } from "@/lib/auth-context";
+import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { prisma } from "@/lib/db/prisma";
 import { updateInstanceTwoFactorPolicy } from "@/lib/services/two-factor-policy";
 
@@ -47,8 +48,20 @@ export async function getAuditLog(): Promise<AuditRow[]> {
   });
 }
 
-/** Whether this instance requires every user to set up TOTP. */
-export async function setTwoFactorPolicy(formData: FormData): Promise<void> {
+/**
+ * Whether this instance requires every user to set up TOTP. Reports back
+ * rather than throwing, so the form can say the policy was saved - it used to
+ * give no sign either way. Being refused admin still throws: that is not an
+ * expected outcome for anyone this control is rendered for.
+ */
+export async function setTwoFactorPolicy(formData: FormData): Promise<ActionResult<{ required: boolean }, "save_failed">> {
   await requireAdmin();
-  await updateInstanceTwoFactorPolicy(formData.get("requireTwoFactor") === "on");
+  const required = formData.get("requireTwoFactor") === "on";
+  try {
+    await updateInstanceTwoFactorPolicy(required);
+  } catch (error) {
+    console.error("Could not save the two-factor policy:", error);
+    return actionError("save_failed");
+  }
+  return actionOk({ required });
 }

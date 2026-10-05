@@ -1,16 +1,15 @@
 import { getTranslations, getLocale } from "next-intl/server";
-import { LogOut, ShieldCheck } from "lucide-react";
-import { revokeOwnSessions } from "@/lib/actions/users";
-import { setTwoFactorPolicy, type AuditRow } from "@/lib/actions/security";
-import { SaveSettingsButton } from "@/components/settings/save-settings-button";
+import type { AuditRow } from "@/lib/actions/security";
+import { SessionControls } from "@/components/settings/session-controls";
 import { formatDateShort, localeToIntl } from "@/lib/utils/format";
 
 /**
  * The two things an instance operator could not do before v2.10.6: end a
  * session, and see what has happened.
  *
- * A server component - every control is a native form posting to a Server
- * Action, and nothing here needs local state.
+ * A server component for the audit log; the two controls live in
+ * SessionControls, a client component, because they report their outcome
+ * (see lib/domain/action-result.ts).
  */
 export async function SecuritySection({
   events,
@@ -25,64 +24,14 @@ export async function SecuritySection({
   const intlLocale = localeToIntl(await getLocale());
 
   return (
-    <section className="space-y-4">
+    <section id="sessions" className="space-y-4">
       <div>
         <h2 className="text-base font-semibold text-[var(--foreground)]">{t("title")}</h2>
         <p className="text-xs text-[var(--muted)] mt-0.5">{t("subtitle")}</p>
       </div>
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-5">
-        {/* Ending every session, including this browser's. Deliberately
-            including it: "log out everywhere" that quietly spares the device
-            you typed it on is the version people misread, and signing back in
-            costs one password entry. */}
-        <form action={revokeOwnSessions} className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="max-w-md">
-            <p className="text-sm font-medium text-[var(--foreground)]">{t("revokeTitle")}</p>
-            <p className="text-xs text-[var(--muted)] mt-0.5">{t("revokeHint")}</p>
-          </div>
-          <button
-            type="submit"
-            className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-[var(--border)] text-[var(--negative)] hover:bg-[var(--surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          >
-            <LogOut size={14} aria-hidden="true" />
-            {t("revokeAction")}
-          </button>
-        </form>
-
-        {isAdmin && (
-          <form action={setTwoFactorPolicy} className="border-t border-[var(--border)] pt-5 space-y-3">
-            {/* The hint is a DESCRIPTION, not part of the name. Wrapping both
-                in one <label> buried the title three elements deep, which is
-                past what an accessible-name computation reliably walks - and
-                it made the control announce as its title AND its explanatory
-                sentence run together. Named by the label, described by the
-                hint, which is what these two attributes are for. */}
-            <div className="flex items-start gap-3">
-              <input
-                id="requireTwoFactor"
-                type="checkbox"
-                name="requireTwoFactor"
-                defaultChecked={requireTwoFactor}
-                aria-describedby="requireTwoFactorHint"
-                className="mt-0.5 accent-[var(--accent)]"
-              />
-              <div>
-                <label
-                  htmlFor="requireTwoFactor"
-                  className="flex items-center gap-2 text-sm font-medium text-[var(--foreground)] cursor-pointer"
-                >
-                  <ShieldCheck size={14} aria-hidden="true" />
-                  {t("requireTotpTitle")}
-                </label>
-                <span id="requireTwoFactorHint" className="block text-xs text-[var(--muted)] mt-0.5">
-                  {t("requireTotpHint")}
-                </span>
-              </div>
-            </div>
-            <SaveSettingsButton />
-          </form>
-        )}
+        <SessionControls isAdmin={isAdmin} requireTwoFactor={requireTwoFactor} />
       </div>
 
       <div>

@@ -90,6 +90,7 @@ import {
   deleteUser,
   changeOwnPassword,
   createInvitation,
+  revokeOwnSessions,
 } from "@/lib/actions/users";
 import { OWNER_USER_ID } from "@/lib/domain/users";
 
@@ -407,5 +408,36 @@ describe("changeOwnPassword", () => {
     expect(result.error).toBe("invalid_current_password");
     expect(result.detail).toBeTruthy();
     expect(userUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
+// Used to THROW "auth_disabled" into a form that rendered nothing, so in
+// production a failed "sign out everywhere" was indistinguishable from a
+// successful one. Every outcome is now a value the form can show.
+describe("revokeOwnSessions", () => {
+  it("returns auth_disabled in mono mode instead of throwing", async () => {
+    getViewerMock.mockResolvedValue({ ...ADMIN, isMonoMode: true });
+
+    await expect(revokeOwnSessions()).resolves.toEqual({ ok: false, error: "auth_disabled" });
+    expect(userUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("stamps sessionsRevokedAt and reports success", async () => {
+    getViewerMock.mockResolvedValue(ADMIN);
+    userUpdateMock.mockResolvedValue({});
+
+    await expect(revokeOwnSessions()).resolves.toEqual({ ok: true, data: undefined });
+    expect(userUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: ADMIN.id }, data: { sessionsRevokedAt: expect.any(Date) } })
+    );
+  });
+
+  it("reports a database failure as revoke_failed rather than an opaque digest", async () => {
+    getViewerMock.mockResolvedValue(ADMIN);
+    userUpdateMock.mockRejectedValue(new Error("connection lost"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(revokeOwnSessions()).resolves.toEqual({ ok: false, error: "revoke_failed" });
+    spy.mockRestore();
   });
 });

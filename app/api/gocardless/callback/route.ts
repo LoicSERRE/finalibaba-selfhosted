@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getRequisition, getAccountDetails, getAccountBalances, pickBalance, toAccountType } from "@/lib/services/gocardless";
+import { settingsTabHref } from "@/lib/domain/settings-tabs";
 
 export async function GET(req: NextRequest) {
   // GoCardless appends ?ref={reference} - we set reference = our institution DB id
   const institutionId = req.nextUrl.searchParams.get("ref");
   if (!institutionId) {
-    return NextResponse.redirect(new URL("/settings?gc=error", req.url));
+    return NextResponse.redirect(new URL(settingsTabHref("accounts", { gc: "error" }), req.url));
   }
 
   const institution = await prisma.institution.findUnique({ where: { id: institutionId } });
   if (!institution?.gocardlessRequisitionId) {
-    return NextResponse.redirect(new URL("/settings?gc=error", req.url));
+    return NextResponse.redirect(new URL(settingsTabHref("accounts", { gc: "error" }), req.url));
   }
 
   // Attribution comes from the institution row, never from whoever's session
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (conflicted > 0) {
-    return NextResponse.redirect(new URL("/settings?gc=already-connected", req.url));
+    return NextResponse.redirect(new URL(settingsTabHref("accounts", { gc: "already-connected" }), req.url));
   }
-  return NextResponse.redirect(new URL("/settings?gc=connected", req.url));
+  return NextResponse.redirect(new URL(settingsTabHref("accounts", { gc: "connected" }), req.url));
 }

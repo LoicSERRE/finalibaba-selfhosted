@@ -1053,7 +1053,8 @@
       "roleMember": "membre",
       "errorWrongPassword": "Mot de passe actuel incorrect.",
       "errorUsernameRequired": "Choisis un identifiant.",
-      "errorAuthDisabled": "L'authentification est désactivée sur cette instance."
+      "errorAuthDisabled": "L'authentification est désactivée sur cette instance.",
+      "errorUnexpected": "Une erreur inattendue s'est produite. Vérifie ta connexion puis réessaie."
     },
     "security": {
       "title": "Sécurité",
@@ -1070,13 +1071,30 @@
       "colWhen": "Quand",
       "colWhat": "Action",
       "colWho": "Qui",
-      "colWhere": "Depuis"
+      "colWhere": "Depuis",
+      "policySavedRequired": "Enregistré : la double authentification est désormais obligatoire pour tous les utilisateurs.",
+      "policySavedOptional": "Enregistré : la double authentification reste facultative.",
+      "errors": {
+        "authDisabled": "Impossible ici : la connexion par mot de passe n'est pas activée sur cette instance.",
+        "revokeFailed": "Les sessions n'ont pas pu être fermées. Rien n'a changé, réessaie dans un instant.",
+        "policySaveFailed": "La politique n'a pas pu être enregistrée. Rien n'a changé, réessaie dans un instant.",
+        "unexpected": "Une erreur inattendue s'est produite. Vérifie ta connexion puis réessaie."
+      }
     },
     "myData": {
       "title": "Mes données",
       "description": "Télécharge tout ce que contient ton compte : comptes, soldes, transactions, positions, catégories, budgets et objectifs. Un seul fichier JSON, uniquement tes données.",
       "noCredentials": "Aucun mot de passe bancaire, secret 2FA ni jeton n'est inclus : ils restent chiffrés côté serveur et ne sortent jamais dans un fichier.",
       "action": "Exporter mes données"
+    },
+    "tabs": {
+      "navLabel": "Sections des paramètres",
+      "accounts": "Comptes & synchro",
+      "profile": "Profil financier",
+      "security": "Sécurité",
+      "sharing": "Partage & accès",
+      "notifications": "Notifications",
+      "display": "Affichage"
     }
   },
   "shared": {

@@ -7,6 +7,10 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { changeOwnPassword } from "@/lib/actions/users";
+import { guardAction } from "@/lib/utils/action-state";
+import { FormAlert } from "@/components/ui/form-alert";
+
+const guardedChangePassword = guardAction(changeOwnPassword);
 
 /**
  * Your own account: who you are, and how to change your password.
@@ -39,32 +43,30 @@ export function AccountSection({
     setSaving(true);
     setError(null);
     setDone(false);
-    try {
-      const result = await changeOwnPassword(formData);
-      if (!result.ok) {
-        // Returned, not thrown: production replaces a thrown Server Action
-        // error with an opaque digest, so these keys never arrived.
-        const known = {
-          invalid_current_password: t("errorWrongPassword"),
-          username_required: t("errorUsernameRequired"),
-          auth_disabled: t("errorAuthDisabled"),
-        } as const;
-        setError(result.detail ?? known[result.error]);
-        return;
-      }
-      setDone(true);
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
+    // guardAction: a thrown error (lost connection, expired session) used to
+    // land in a catch that displayed e.message - in production an opaque
+    // digest. It now arrives as the "unexpected" key like any other failure.
+    // Same model as SessionControls; see lib/domain/action-result.ts.
+    const result = await guardedChangePassword(formData);
+    setSaving(false);
+    if (!result.ok) {
+      const known: Record<typeof result.error, string> = {
+        invalid_current_password: t("errorWrongPassword"),
+        username_required: t("errorUsernameRequired"),
+        auth_disabled: t("errorAuthDisabled"),
+        unexpected: t("errorUnexpected"),
+      };
+      setError(result.detail ?? known[result.error]);
+      return;
     }
+    setDone(true);
+    router.refresh();
   }
 
   return (
-    <section className="space-y-4">
+    <section id="account" className="space-y-4">
       <div>
-        <h2 className="text-lg font-medium text-[var(--foreground)]">{t("title")}</h2>
+        <h2 className="text-base font-semibold text-[var(--foreground)]">{t("title")}</h2>
         <p className="text-sm text-[var(--muted)] mt-1">
           {username
             ? t("signedInAs", { name: displayName ?? username, role: role === "ADMIN" ? t("roleAdmin") : t("roleMember") })
@@ -121,9 +123,9 @@ export function AccountSection({
             <KeyRound size={14} aria-hidden="true" />
             {saving ? t("saving") : needsSetup ? t("finishSetup") : t("changePassword")}
           </Button>
-          {done && <span className="text-sm text-[var(--positive)]">{t("saved")}</span>}
-          {error && <span className="text-sm text-[var(--negative)]">{error}</span>}
         </div>
+        <FormAlert tone="success">{done ? t("saved") : null}</FormAlert>
+        <FormAlert tone="error">{error}</FormAlert>
       </form>
     </section>
   );

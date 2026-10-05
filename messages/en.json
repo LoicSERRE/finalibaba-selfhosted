@@ -1053,7 +1053,8 @@
       "roleMember": "member",
       "errorWrongPassword": "Current password is incorrect.",
       "errorUsernameRequired": "Choose a username.",
-      "errorAuthDisabled": "Authentication is disabled on this instance."
+      "errorAuthDisabled": "Authentication is disabled on this instance.",
+      "errorUnexpected": "Something unexpected went wrong. Check your connection and try again."
     },
     "security": {
       "title": "Security",
@@ -1070,13 +1071,30 @@
       "colWhen": "When",
       "colWhat": "Action",
       "colWho": "Who",
-      "colWhere": "From"
+      "colWhere": "From",
+      "policySavedRequired": "Saved: two-factor authentication is now required for every user.",
+      "policySavedOptional": "Saved: two-factor authentication stays optional.",
+      "errors": {
+        "authDisabled": "Not available here: password sign-in is not enabled on this instance.",
+        "revokeFailed": "Your sessions could not be ended. Nothing changed - try again in a moment.",
+        "policySaveFailed": "The policy could not be saved. Nothing changed - try again in a moment.",
+        "unexpected": "Something unexpected went wrong. Check your connection and try again."
+      }
     },
     "myData": {
       "title": "My data",
       "description": "Download everything your account holds: accounts, balances, transactions, holdings, categories, budgets and goals. One JSON file, your data only.",
       "noCredentials": "No bank password, 2FA secret or token is included: those stay encrypted on the server and never leave in a file.",
       "action": "Export my data"
+    },
+    "tabs": {
+      "navLabel": "Settings sections",
+      "accounts": "Accounts & sync",
+      "profile": "Financial profile",
+      "security": "Security",
+      "sharing": "Sharing & access",
+      "notifications": "Notifications",
+      "display": "Display"
     }
   },
   "shared": {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { settingsTabHref } from "@/lib/domain/settings-tabs";
 
 const linkClass =
   "text-[var(--accent-text)] underline underline-offset-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]";
@@ -11,7 +12,7 @@ export async function DashboardEmptyState() {
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-10 text-center">
       <p className="text-sm text-[var(--muted)]">
         {t("emptyStateIntro")}{" "}
-        <Link href="/settings" className={linkClass}>
+        <Link href={settingsTabHref("accounts")} className={linkClass}>
           {t("emptyStateSettings")}
         </Link>
         {t("emptyStateConnector")}{" "}
