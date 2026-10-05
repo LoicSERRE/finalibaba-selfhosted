@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.11.3**
+Current release: **v2.12.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -22,7 +22,25 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **End-to-end encryption of bank credentials, per user.** The only design under which the instance operator genuinely cannot read them: a key derived from the user's own password, held in their session. The cost is that their bank only syncs while they are logged in - no 4h cron, no overnight alerts for them - so it is a per-user choice rather than a setting, and a real piece of work. Worth revisiting only if somebody actually asks for it.
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
+- **Convert the remaining Server Actions to `ActionResult`.** v2.12 converted the Security tab's session controls and the password form and documented the pattern in `components/settings/session-controls.tsx`; about sixty sites in `lib/actions/*` still throw, which production turns into an opaque digest. Convert per domain as each is touched, most-used forms first.
+- **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
+- **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.12.0 - Settings in tabs, and nobody is the owner by default
+
+- **Settings is six tabs instead of one 22-section column**: Accounts & sync, Financial profile, Security, Sharing & access, Notifications, Display. Each tab is its own Server Component that loads only what it shows, so opening Display no longer pays for every institution's sync status, the audit log and the alert-rule pickers. Selected by `?tab=`, so a tab is linkable and the back button works; tabs with nothing to show in a mode (demo) are left out.
+- **An anonymous request is no longer the instance owner.** With `AUTH_ENABLED=true`, `getViewer()` used to resolve "no session" to the owner with role ADMIN - meant for the public routes' layout, but a Server Action is invocable from any page, those included. It now refuses; only the root layout may ask for a nullable viewer (`getPublicViewer`), and it renders a bare page for nobody.
+- **Paths ending in an image extension were exempt from the session gate**, and dynamic routes accept dots, so `/accounts/x.png` rendered with no session. No real file needed the exemption (`public/` holds none); the exemptions now name the real files.
+- **The login rate limit could be bypassed** by writing a new `X-Forwarded-For` on every attempt: it read the first entry, which the client controls, even behind a proxy that appends the real one. It now counts trusted proxies from the right (`TRUSTED_PROXY_COUNT`) and trusts no forwarding header by default.
+- **A database restore checks its `Origin`.** It is a Route Handler, so it had none of the protection Server Actions get, and on a default instance (no auth) any page on any site could submit a form to it. Strict against `APP_URL` when set, against the request's own host otherwise.
+- **The backup passphrase left the URL.** The download was `GET /api/backup?passphrase=...`, written into browser history and every proxy log; it is now a form `POST` to `/api/backup/download`. A request without a passphrase also no longer starts a full `pg_dump` before being refused.
+- **Failures in Settings say so.** "Sign out everywhere" threw into a form nobody read, so a failure looked exactly like success on the control used when a device is stolen. Expected failures are now returned (`ActionResult`), shown beside the control, and anything thrown arrives as a readable "unexpected" message rather than a digest - the pattern to copy, documented in `session-controls.tsx`.
+- **`computeAnalytics` 44 -> 4 and `buildMarkdown` 52 -> 1** cyclomatic complexity, split into named pure steps. Characterization snapshots were added first, generated against the old code, and the refactor was held to them byte for byte.
+- **17 dependency advisories closed** and the open Dependabot PRs folded in: Next 16.3.8 (critical `next/og` advisory), nodemailer 10, React 19.3, `fast-uri`, `js-yaml`, `brace-expansion`, and the Python floors (`cryptography` 50, `playwright`, `python-jose`...).
+- Two tests were failing on `main`: one hardcoded the current month and broke on 1 October, the other assumed Node <25's storage globals.
 
 ---
 
