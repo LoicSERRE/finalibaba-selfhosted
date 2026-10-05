@@ -21,6 +21,13 @@ echo "→ Syncing from $UPSTREAM"
 echo "→ Into       $SELFHOSTED"
 echo ""
 
+# LICENSE* is a glob, not the exact name: LICENSE-AGPL-3.0 was NOT covered by a
+# bare 'LICENSE', and since the upstream has no licence files at all, --delete
+# would have removed it - taking with it the text that governs every release
+# through v2.0.1 and that README.md links to.
+# dev-docs/ is selfhosted-only too, so --delete would wipe it the same way.
+# Keep comments OUT of the continued command below: a '#' line inside a
+# backslash continuation ends the command there.
 rsync -av --delete \
   --exclude='.git/' \
   --exclude='.github/' \
@@ -43,10 +50,7 @@ rsync -av --delete \
   --exclude='README.md' \
   --exclude='AGENTS.md' \
   --exclude='ROADMAP.md' \
-  # Glob, not the exact name: LICENSE-AGPL-3.0 was NOT covered by a bare
-  # 'LICENSE', and since the upstream has no licence files at all, --delete
-  # would have removed it - taking with it the text that governs every
-  # release through v2.0.1 and that README.md links to.
+  --exclude='dev-docs/' \
   --exclude='LICENSE*' \
   --exclude='CONTRIBUTING.md' \
   --exclude='scripts/' \
