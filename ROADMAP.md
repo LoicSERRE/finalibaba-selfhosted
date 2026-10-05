@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.12.0**
+Current release: **v2.12.1**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -26,6 +26,18 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.12.1 - v2.12.0 never deployed, and the screens it missed
+
+- **v2.12.0 published its images but never deployed.** Trivy failed the app image on undici 6.28.0 (CVE-2026-19534), bundled inside the pnpm that corepack caches in the image rather than in this project's tree - the same shape as the earlier `tar` incidents - so `notify-deploy` was skipped. pnpm 11.28.2 bundles 6.28.1. The same scan found `/app/.pnpm-store` in the image: with the store on a cache mount pnpm cannot hard-link across filesystems and quietly makes a second one inside the project, and the `rm -rf` the Dockerfile comment promised did not exist.
+- **A visual audit of every page** (`scripts/ui-audit/run.sh`): six widths from 360px to 2560px, both themes, axe-core plus overflow, touch-target and console checks, and screenshots. 186 WCAG 2.1 AA violations down to 0, 725 undersized phone targets down to 92.
+- **On a phone, the amount was off-screen on every transaction row.** It now follows the label in both transaction tables; the account folds under the label.
+- Contrast: dimmed secondary text and text on the red/green tints fell as low as 2.89:1. New `--negative-text` / `--positive-text` tokens, measured with the WCAG formula.
+- Every `<Button>` is at least 44px wide; scrollable tables are reachable from the keyboard; the Settings tab row now actually stays at the top on phones and opens on the active tab.
+- **The public demo's net worth chart ended at ~23k under a 230k figure**: the seed wrote loans as negative balances and the history subtracted them again, and investments had no history. Its transactions could also be dated in the future.
+- `python-jose` CVE-2026-85394 (no fix released) is ignored in both workflows with its reasoning: the only consumer reads tokens with `get_unverified_claims()` and never verifies one. `urllib3` raised to 2.8.0 in the sync image.
 
 ---
 
