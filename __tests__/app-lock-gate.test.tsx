@@ -54,6 +54,27 @@ function gate(enabled: boolean, userId: string) {
   );
 }
 
+// Node 25+ ships its own global localStorage/sessionStorage, which shadows
+// happy-dom's and is undefined unless Node runs with --localstorage-file. The
+// component reads the bare globals, so when they are missing give it a plain
+// in-memory Storage. A no-op on Node 24, where happy-dom's are already there.
+function memoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() { return data.size; },
+    clear: () => data.clear(),
+    getItem: (k) => data.get(k) ?? null,
+    key: (i) => [...data.keys()][i] ?? null,
+    removeItem: (k) => { data.delete(k); },
+    setItem: (k, v) => { data.set(k, String(v)); },
+  };
+}
+for (const name of ["localStorage", "sessionStorage"] as const) {
+  if (!globalThis[name]) {
+    Object.defineProperty(globalThis, name, { value: memoryStorage(), configurable: true, writable: true });
+  }
+}
+
 beforeEach(() => {
   pathname.current = "/login";
   localStorage.clear();

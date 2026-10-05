@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The user-defined AlertRule checkers, which decide whether a phone buzzes
@@ -285,7 +285,17 @@ describe("a NEW_TRANSACTION rule, where one sync batch shares one timestamp", ()
 
 
 describe("a BUDGET_OVERRUN rule, where the bug is always a missing filter", () => {
+  // The checker derives "this month" from the clock, so the clock is pinned:
+  // a hardcoded MONTH against the real date made this suite fail the moment
+  // the calendar moved past it (it went red on 2026-10-01).
   const MONTH = "2026-09";
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-15T12:00:00.000Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   function budgetRule(over: Record<string, unknown> = {}) {
     return rule({

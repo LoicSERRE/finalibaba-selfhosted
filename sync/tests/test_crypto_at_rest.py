@@ -50,10 +50,13 @@ def _node(script: str, env_extra: dict | None = None, drop: tuple = ()) -> str:
     env = {**os.environ, **(env_extra or {})}
     for name in drop:
         env.pop(name, None)
-    result = subprocess.run(
-        ["node", "--input-type=module", "-e", script],
-        capture_output=True, text=True, cwd=REPO, env=env, check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script],
+            capture_output=True, text=True, cwd=REPO, env=env, check=False,
+        )
+    except FileNotFoundError:
+        pytest.skip("node is not installed")
     if result.returncode != 0:
         pytest.skip(f"node unavailable or module not loadable: {result.stderr[:200]}")
     return result.stdout.strip()
