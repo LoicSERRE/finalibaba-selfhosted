@@ -145,8 +145,15 @@ USER node
 # (several large multi-MB .jsonl files) to occasionally exceed its 5-minute
 # default timeout and abort the whole scan with a generic, hard-to-diagnose
 # "context deadline exceeded" failure that looks like a real finding but
-# isn't. The cache mount keeps it out of the layer in the first place; the
-# rm -rf below stays too, defensively, for anyone building without BuildKit.
+# isn't. The cache mount was meant to keep it out of the layer, and it did
+# not: pnpm hard-links packages from its store into node_modules, which only
+# works within one filesystem, so with the store on a separate cache mount it
+# quietly creates a second one at /app/.pnpm-store - on the image's own
+# filesystem, in this layer. The v2.12.0 release scan found it there. The
+# rm -rf in the same RUN below is what actually removes it; node_modules keeps
+# its files, since a hard link outlives the directory entry it was made from.
+# (An earlier version of this comment promised that rm -rf "below" while no
+# such line existed.)
 #
 # No --ignore-scripts here (unlike deps/builder, where it's needed because
 # schema.prisma isn't copied in yet): this install must run @prisma/engines'
@@ -165,7 +172,8 @@ USER node
 # scripts/postinstall.js on that same image produced a correctly
 # permissioned -rwxr-xr-x file).
 RUN --mount=type=cache,id=pnpm-store-runner,target=/home/node/.local/share/pnpm,uid=1000,gid=1000 \
-    pnpm install --frozen-lockfile --prod
+    pnpm install --frozen-lockfile --prod \
+    && rm -rf /app/.pnpm-store
 USER root
 
 # App runtime

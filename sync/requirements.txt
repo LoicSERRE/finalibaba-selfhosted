@@ -65,3 +65,7 @@ fastapi>=0.141.1
 uvicorn>=0.52.4
 apscheduler>=3.11.3
 playwright>=1.63.0
+# Transitive (requests, woob, pytr), pinned here only to raise its floor:
+# CVE-2026-97687 and CVE-2026-97689, both fixed in 2.8.0, were found by the
+# v2.12.0 release scan of the sync image. pip-audit had not flagged them yet.
+urllib3>=2.8.0
