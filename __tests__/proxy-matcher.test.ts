@@ -38,6 +38,7 @@ describe("proxy matcher - paths that must stay public", () => {
     ["/site.webmanifest", "nor a manifest fetch"],
     ["/icon-512", "nor a generated icon"],
     ["/_next/static/chunk.js", "build assets"],
+    ["/favicon.ico", "the browser tab icon, fetched before any login"],
   ])("%s is exempt (%s)", (path) => {
     expect(isGated(path)).toBe(false);
   });
@@ -72,6 +73,18 @@ describe("proxy matcher - exemptions must not become prefix holes", () => {
   ])("%s is still gated", (path) => {
     expect(isGated(path)).toBe(true);
   });
+
+  // Exemptions used to be by file EXTENSION, and dynamic segments accept dots,
+  // so these page routes rendered with no session at all.
+  it.each([
+    ["/accounts/x.png"],
+    ["/budgets/x.jpg"],
+    ["/accounts/x.webp"],
+    ["/accounts/favicon.ico"],
+    ["/favicon.ico/x"],
+  ])("%s is gated, an image extension is not an exemption", (path) => {
+    expect(isGated(path)).toBe(true);
+  });
 });
 
 describe("the matcher is wider than the gate, on purpose", () => {
@@ -82,6 +95,8 @@ describe("the matcher is wider than the gate, on purpose", () => {
     ["/invite/sometoken", "so does an invitee"],
     ["/login", "and anyone at all"],
     ["/", "and every authenticated page"],
+    ["/accounts/x.png", "a page route whose last segment looks like an image"],
+    ["/budgets/x.svg", "same, for any extension"],
   ])("%s still runs the middleware, so it gets a CSP nonce (%s)", (path) => {
     expect(matcher.test(path)).toBe(true);
   });
@@ -99,6 +114,7 @@ describe("the matcher is wider than the gate, on purpose", () => {
   it.each([
     ["/_next/static/chunk.js", "build assets execute no inline script"],
     ["/icon.svg", "nor does an image"],
+    ["/favicon.ico", "nor the tab icon"],
   ])("%s is skipped entirely (%s)", (path) => {
     expect(matcher.test(path)).toBe(false);
   });

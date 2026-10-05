@@ -4,6 +4,7 @@ import { createBackupCipher, decryptBackup, isEncryptedBackup } from "@/lib/doma
 import { requireAdmin } from "@/lib/auth-context";
 import { spawn } from "node:child_process";
 import { createGzip, gunzipSync } from "node:zlib";
+import { isAllowedOrigin } from "@/lib/domain/request-origin";
 
 // Strip the password out of the connection string (so it never appears in
 // `ps` output for the spawned pg_dump/psql) but keep every other part -
@@ -157,6 +158,20 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Before anything else, including the admin check: this is the one request
+  // in the app that replaces the whole database, and on a default instance
+  // (AUTH_ENABLED off) the admin check alone admits any page on any site
+  // that can reach this address. See lib/domain/request-origin.ts.
+  const sameOrigin = isAllowedOrigin({
+    origin: req.headers.get("origin"),
+    host: req.headers.get("host"),
+    forwardedHost: req.headers.get("x-forwarded-host"),
+    appUrl: process.env.APP_URL,
+  });
+  if (!sameOrigin) {
+    return NextResponse.json({ error: "Cross-origin request refused." }, { status: 403 });
+  }
+
   const denied = await assertBackupAllowed();
   if (denied) return denied;
 

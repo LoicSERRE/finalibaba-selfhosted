@@ -79,8 +79,12 @@ const AUTH_EXEMPT: RegExp[] = [
   /^\/apple-icon$/,
   /^\/site\.webmanifest$/,
   /^\/sw\.js$/,
-  // Real image files, anywhere in the tree.
-  /\.(?:png|jpg|ico|webp)/,
+  // The one real image file outside public/: app/favicon.ico. Named exactly,
+  // never by extension - an unanchored /\.(?:png|jpg|ico|webp)/ used to sit
+  // here, and since dynamic segments accept dots it exempted
+  // /accounts/<anything>.png and /budgets/<anything>.png from the session
+  // gate, protecting no real file in exchange (public/ holds none).
+  /^\/favicon\.ico$/,
 ];
 
 /** True when the session gate applies to this path. */
@@ -165,11 +169,12 @@ export const config = {
   matcher: [
     // Deliberately wider than the auth gate: every HTML response needs its own
     // CSP nonce, so the middleware has to run on the public token pages too.
-    // Only genuinely static assets are skipped, since none of them execute
-    // script and a nonce would mean nothing to them.
+    // Only genuinely static files are skipped, and they are NAMED: skipping by
+    // extension also skipped the gate for any page route whose last segment
+    // ended in one (/accounts/x.png rendered with no session at all).
     //
     // NOSONAR (typescript:S7780) - Next statically parses this export and
     // needs a plain literal, so String.raw is not an option here.
-    "/((?!_next/static|_next/image|.*\\.(?:png|jpg|jpeg|ico|webp|svg)$).*)", // NOSONAR
+    "/((?!_next/static|_next/image|favicon\\.ico$|icon\\.svg$).*)", // NOSONAR
   ],
 };

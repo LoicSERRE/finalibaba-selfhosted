@@ -67,6 +67,8 @@ const provider = (authOptions.providers[0] as unknown as { options: CredentialsC
 // checkRateLimit is a module-level singleton (created once at import time,
 // not per-test) - every test below must use its own unique IP so it doesn't
 // silently get rate-limited by an earlier test's attempts in this same file.
+// That only works while X-Forwarded-For is trusted, so beforeEach declares one
+// proxy (TRUSTED_PROXY_COUNT=1); with none, every attempt shares one bucket.
 let ipCounter = 0;
 function nextIp(): string {
   ipCounter++;
@@ -91,34 +93,21 @@ const OWNER_ROW = {
 };
 
 beforeEach(() => {
+  process.env.TRUSTED_PROXY_COUNT = "1";
   findUniqueMock.mockReset().mockResolvedValue({ ...OWNER_ROW });
   updateMock.mockReset().mockResolvedValue({});
 });
 
 describe("getClientIp", () => {
-  it("reads the first hop of x-forwarded-for", () => {
-    expect(getClientIp({ "x-forwarded-for": "203.0.113.5, 10.0.0.1" })).toBe("203.0.113.5");
+  // The extraction rules themselves are pinned in client-ip.test.ts; this only
+  // checks that the login path reads TRUSTED_PROXY_COUNT from the environment.
+  it("trusts no forwarding header when TRUSTED_PROXY_COUNT is unset", () => {
+    delete process.env.TRUSTED_PROXY_COUNT;
+    expect(getClientIp({ "x-forwarded-for": "203.0.113.5" })).toBe("unknown");
   });
 
-  it("falls back to x-real-ip when x-forwarded-for is absent", () => {
-    expect(getClientIp({ "x-real-ip": "203.0.113.9" })).toBe("203.0.113.9");
-  });
-
-  it("prefers x-forwarded-for over x-real-ip when both are present", () => {
-    expect(getClientIp({ "x-forwarded-for": "203.0.113.5", "x-real-ip": "203.0.113.9" })).toBe(
-      "203.0.113.5"
-    );
-  });
-
-  it("falls back to a shared 'unknown' bucket when no proxy header is present", () => {
-    expect(getClientIp(undefined)).toBe("unknown");
-    expect(getClientIp({})).toBe("unknown");
-  });
-
-  it("ignores blank header values", () => {
-    expect(getClientIp({ "x-forwarded-for": "   ", "x-real-ip": "203.0.113.9" })).toBe(
-      "203.0.113.9"
-    );
+  it("reads the right-most entry behind one declared proxy, not the client-written first", () => {
+    expect(getClientIp({ "x-forwarded-for": "198.51.100.66, 203.0.113.5" })).toBe("203.0.113.5");
   });
 });
 

@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db/prisma";
 import { verifyTotpCode, matchBackupCode } from "@/lib/domain/totp";
 import { OWNER_USER_ID } from "@/lib/domain/users";
 import { TOTP_REQUIRED } from "@/lib/domain/auth-constants";
+import { clientIpFromHeaders, trustedProxyCountFromEnv } from "@/lib/domain/client-ip";
 
 
 // Compared against when no account matched, so an unknown username costs the
@@ -24,23 +25,12 @@ import { TOTP_REQUIRED } from "@/lib/domain/auth-constants";
 // that looks like a credential.
 const UNMATCHED_USER_HASH = bcrypt.hashSync(randomBytes(32).toString("hex"), 10);
 
-// x-forwarded-for/x-real-ip are only trustworthy behind a reverse proxy that
-// sets them itself (Nginx Proxy Manager, Caddy, Traefik, Cloudflare - see
-// README "Securing access"). Without one in front, a direct client can set
-// these headers to whatever it wants, same as it could previously spoof the
-// old client-supplied `ip` credential field - this is the same baseline
-// every self-hosted app without a trusted-proxy allowlist has, not a
-// regression. The fix here closes the much worse prior bug: the client
-// literally hardcoded a constant string, so every visitor shared one
-// rate-limit bucket and the limit couldn't distinguish anyone at all.
+// Which address a login attempt counts against. Never the left-most
+// X-Forwarded-For entry, which the client writes: see lib/domain/client-ip.ts.
+// TRUSTED_PROXY_COUNT says how many proxies the operator runs in front of the
+// app; unset, no forwarding header is trusted and the limit is per account.
 export function getClientIp(headers: Record<string, unknown> | undefined): string {
-  const forwardedFor = headers?.["x-forwarded-for"];
-  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
-    return forwardedFor.split(",")[0].trim();
-  }
-  const realIp = headers?.["x-real-ip"];
-  if (typeof realIp === "string" && realIp.trim()) return realIp.trim();
-  return "unknown";
+  return clientIpFromHeaders(headers, trustedProxyCountFromEnv(process.env.TRUSTED_PROXY_COUNT));
 }
 
 type AuthUser = {

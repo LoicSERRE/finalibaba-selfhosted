@@ -42,6 +42,9 @@ services:
       AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
       AUTH_USER_NAME: ${AUTH_USER_NAME:-}
       APP_URL: ${APP_URL:-}
+      # Number of reverse proxies in front of the app; decides which
+      # X-Forwarded-For entry the login rate limit trusts (see .env.example).
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
       GOCARDLESS_SECRET_ID: ${GOCARDLESS_SECRET_ID:-}
       GOCARDLESS_SECRET_KEY: ${GOCARDLESS_SECRET_KEY:-}
       # Optional sector-exposure fallback providers - see .env.example and
