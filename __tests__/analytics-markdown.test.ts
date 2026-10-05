@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Decimal from "decimal.js";
 import { buildMarkdown, type Section, type AnalyticsExportStrings } from "@/lib/utils/analytics-markdown";
 import { buildAnalyticsExport } from "@/lib/domain/analytics-export";
 import { computeAnalytics, type AnalyticsInput } from "@/lib/domain/analytics";
 import type { AnalyticsExportData } from "@/lib/domain/analytics-export";
+import { INPUT_WITH_MARKET_DATA } from "@/__tests__/fixtures/awkward-portfolio";
 
 /**
  * The analytics export document, at 52 cyclomatic complexity the second most
@@ -182,5 +183,46 @@ describe("the whole document", () => {
 
   it("is deterministic for the same input", () => {
     expect(build(ALL)).toEqual(build(ALL));
+  });
+});
+
+// Characterization, not specification: the WHOLE document, byte for byte,
+// recorded before the v2.11 complexity split of buildMarkdown. The tests above
+// pin properties; these notice any change at all. Three data shapes, because
+// most of the branching is "is there anything to say" - a rich portfolio, the
+// small one above, and one with no salary, savings or expenses declared.
+describe("the whole document, pinned (characterization)", () => {
+  beforeEach(() => {
+    // The title carries today's date.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-28T12:00:00.000Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const rich = () =>
+    buildAnalyticsExport(computeAnalytics(INPUT_WITH_MARKET_DATA), { investments: "Investissements" }, { INVESTMENT: "Titres" });
+  const undeclared = () =>
+    payload({
+      settings: {
+        salaryNetCents: BigInt(0),
+        monthlyExpensesCents: BigInt(0),
+        monthlySavedCents: BigInt(0),
+        taxRatePea: 0.172,
+        taxRateCto: 0.314,
+      },
+    });
+
+  it.each([
+    ["rich portfolio", rich],
+    ["small portfolio", () => payload()],
+    ["nothing declared", undeclared],
+  ])("every section together - %s", (_name, data) => {
+    expect(build(ALL, data())).toMatchSnapshot();
+  });
+
+  it.each(ALL)("section %s on its own - rich portfolio", (section) => {
+    expect(build([section], rich())).toMatchSnapshot();
   });
 });

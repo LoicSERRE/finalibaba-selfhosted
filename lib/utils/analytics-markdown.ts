@@ -112,10 +112,280 @@ export interface AnalyticsExportStrings {
 
 // ── Markdown generation ───────────────────────────────────────────────────────
 
-// Same rationale as export-accounts-button.tsx's buildMarkdown - one
-// function per every toggleable section keeps it directly, mechanically
-// checkable against __tests__/export-completeness.test.ts.
-// eslint-disable-next-line sonarjs/cognitive-complexity
+// One pure function per toggleable section, each answering "what does this
+// section print" and nothing else - including the empty answer when there is
+// nothing to say. buildMarkdown only decides which sections were asked for,
+// in a fixed order, so the "ticked AND non-empty" double gate the tests pin
+// lives in exactly one place per section. Same section list as
+// __tests__/export-completeness.test.ts checks against.
+//
+// Every renderer returns its own lines including the trailing blank line, so
+// the document is the plain concatenation of what each one returns - which is
+// what the characterization snapshots in __tests__/analytics-markdown.test.ts
+// hold it to, byte for byte.
+
+type Renderer = (data: AnalyticsExportData, s: AnalyticsExportStrings, intlLocale: string) => string[];
+
+function signedFixed(value: number, digits = 1): string {
+  return `${sign(value)}${value.toFixed(digits)}`;
+}
+
+function summaryCashFlowRows(data: AnalyticsExportData, s: AnalyticsExportStrings): string[] {
+  const rows: string[] = [];
+  if (data.savingsRate !== null) {
+    rows.push(`| ${s.savingsRate} | ${signedFixed(data.savingsRate)}% |`);
+  }
+  if (data.salaryNetCents > 0) rows.push(`| ${s.salary} | ${fmt(data.salaryNetCents)} |`);
+  // Declared monthly savings win over the month-on-month delta, which is
+  // distorted by transfers and market moves.
+  if (data.monthlySavedCents > 0) {
+    rows.push(`| ${s.monthlySaved} | ${fmt(data.monthlySavedCents)} |`);
+  } else if (data.momDeltaCents !== null) {
+    rows.push(`| ${s.momDelta} | ${sign(data.momDeltaCents)}${fmt(data.momDeltaCents)} |`);
+  }
+  if (data.runwayMonths !== null) {
+    rows.push(`| ${s.runway} | ${Math.floor(data.runwayMonths)} ${s.months} |`);
+    rows.push(`| ${s.savingsAvailable} | ${fmt(data.savingsCents)} |`);
+    rows.push(`| ${s.monthlyExpenses} | ${fmt(data.monthlyExpensesCents)} |`);
+  }
+  return rows;
+}
+
+function summaryGoalRows(data: AnalyticsExportData, s: AnalyticsExportStrings): string[] {
+  return data.goals.flatMap((goal) => {
+    const rows = [`| ${s.goal} - ${goal.name} | ${s.goalFmt(fmt(goal.targetCents), goal.pct)} |`];
+    if (goal.remainingCents > 0) rows.push(`| ${s.goalRemaining} - ${goal.name} | ${fmt(goal.remainingCents)} |`);
+    return rows;
+  });
+}
+
+const renderSummary: Renderer = (data, s) => {
+  // data.netWorth is already net of latent tax; the label only says so
+  // explicitly when there is a deduction to speak of.
+  const netLabel = data.hasTaxData ? s.netWorthAfterTax : s.netWorth;
+  const taxRows = data.hasTaxData
+    ? [`| ${s.taxes} | ${fmt(data.totalLatentTax)} |`, `| ${s.netWorth} | ${fmt(data.netWorthBeforeTax)} |`]
+    : [];
+  return [
+    `## ${s.summary}`, "",
+    `| ${s.indicator} | ${s.value} |`,
+    "|---|---|",
+    `| ${netLabel} | **${fmt(data.netWorth)}** |`,
+    `| ${s.gross} | ${fmt(data.grossAssets)} |`,
+    `| ${s.debts} | ${fmt(data.totalLiabilities)} |`,
+    ...taxRows,
+    `| ${s.investedRate} | ${data.investedPct}% |`,
+    ...summaryCashFlowRows(data, s),
+    ...summaryGoalRows(data, s),
+    "",
+  ];
+};
+
+const renderAllocation: Renderer = (data, s) => {
+  if (data.allocationSlices.length === 0) return [];
+  return [
+    `## ${s.allocation}`, "",
+    `| ${s.category} | ${s.value} | ${s.pct} |`,
+    "|---|---|---|",
+    ...data.allocationSlices.map((slice) => `| ${slice.name} | ${fmt(slice.valueCents)} | ${slice.pct}% |`),
+    "",
+  ];
+};
+
+function labelWithSubtype(name: string, subtype: string | null): string {
+  return subtype ? `${name} (${subtype})` : name;
+}
+
+function performanceSummaryLine(data: AnalyticsExportData, s: AnalyticsExportStrings): string {
+  const netGain = data.investTotalGainCents - data.investTotalTaxCents;
+  const cagrSuffix = data.investCAGR !== null ? s.cagrSuffix(signedFixed(data.investCAGR)) : "";
+  return s.summaryLine({
+    invested: fmt(data.investTotalCostBasisCents),
+    value: fmt(data.investTotalValueCents),
+    gain: `${sign(data.investTotalGainCents)}${fmt(data.investTotalGainCents)}`,
+    netGain: `${sign(netGain)}${fmt(netGain)}`,
+    perf: signedFixed(data.investReturnPct),
+    cagr: cagrSuffix,
+  });
+}
+
+const renderPerformance: Renderer = (data, s) => {
+  if (data.investPerfRows.length === 0) return [];
+  return [
+    `## ${s.performance}`, "",
+    `| ${s.colAccount} | ${s.colValue} | ${s.colInvested} | ${s.colGrossGain} | ${s.colTax} | ${s.colPerf} |`,
+    "|---|---|---|---|---|---|",
+    ...data.investPerfRows.map(
+      (r) =>
+        `| ${labelWithSubtype(r.name, r.subtype)} | ${fmt(r.valueCents)} | ${fmt(r.costBasisCents)} | ${sign(r.gainCents)}${fmt(r.gainCents)} | -${fmt(r.taxCents)} | ${signedFixed(r.returnPct)}% |`
+    ),
+    "",
+    performanceSummaryLine(data, s),
+    "",
+  ];
+};
+
+// A document someone plans with must not quietly under-report. The interest
+// half of the passive figure only counts accounts whose rate is set, and an
+// unset rate is invisible everywhere else in the app - so if any are missing,
+// the export says so rather than presenting a partial total as a complete one.
+function passiveNotes(data: AnalyticsExportData, s: AnalyticsExportStrings): string[] {
+  const notes: string[] = [];
+  if (data.accountsMissingInterestRate > 0) {
+    notes.push("", `> ${s.passiveMissingRates({ count: data.accountsMissingInterestRate })}`);
+  }
+  if (data.weightedSavingsRatePct !== null) {
+    notes.push("", s.passiveWeightedRate({ rate: (data.weightedSavingsRatePct * 100).toFixed(2) }));
+  }
+  if (data.estimatedYearEndSavingsInterestCents > 0) {
+    notes.push("", s.passiveYearEndEstimate({ amount: fmt(data.estimatedYearEndSavingsInterestCents) }));
+  }
+  return notes;
+}
+
+function exDividendCell(date: AnalyticsExportData["dividendRows"][number]["exDividendDate"], intlLocale: string): string {
+  if (!date) return "-";
+  return new Date(date).toLocaleDateString(intlLocale, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function dividendTable(data: AnalyticsExportData, s: AnalyticsExportStrings, intlLocale: string): string[] {
+  if (data.dividendRows.length === 0) return [];
+  return [
+    `| ${s.colAsset} | ${s.colEnvelope} | ${s.colYield} | ${s.colAnnualGross} | ${s.colAnnualNet} | ${s.colExDiv} |`,
+    "|---|---|---|---|---|---|",
+    ...data.dividendRows.map(
+      (r) =>
+        `| ${r.name} | ${r.subtype ?? "CTO"} | ${(r.divYield * 100).toFixed(2)}% | ${fmt(r.annualEstCents)} | ${fmt(r.annualNetCents)} | ${exDividendCell(r.exDividendDate, intlLocale)} |`
+    ),
+    "",
+  ];
+}
+
+const renderPassive: Renderer = (data, s, intlLocale) => {
+  if (data.annualPassiveCents <= 0) return [];
+  return [
+    `## ${s.passive}`, "",
+    s.passiveLine({
+      annual: fmt(data.annualPassiveCents),
+      monthly: fmt(data.monthlyPassiveCents),
+      dividends: fmt(data.annualDividendsCents),
+      interest: fmt(data.annualInterestCents),
+    }),
+    ...passiveNotes(data, s),
+    "",
+    ...dividendTable(data, s, intlLocale),
+  ];
+};
+
+const renderRealIncome: Renderer = (data, s) => {
+  if (data.realYtdPassiveNetCents <= 0) return [];
+  return [
+    `## ${s.realIncome}`, "",
+    `| ${s.indicator} | ${s.value} |`,
+    "|---|---|",
+    `| ${s.ytdDividends} | ${fmt(data.realYtdDividendsNetCents)} |`,
+    `| ${s.ytdInterest} | ${fmt(data.realYtdInterestNetCents)} |`,
+    `| ${s.ytdTotal} | **${fmt(data.realYtdPassiveNetCents)}** |`,
+    "",
+  ];
+};
+
+const renderBenchmark: Renderer = (data, s) => {
+  const benchmark = data.benchmark;
+  if (benchmark === null) return [];
+  const cagrCell = (v: number) => `${signedFixed(v)}%`;
+  // An index with no history is left out rather than shown as 0%.
+  const indices: [string, number | null][] = [
+    [s.msciWorld, benchmark.msciWorld],
+    [s.sp500, benchmark.sp500],
+    [s.cac40, benchmark.cac40],
+  ];
+  return [
+    `## ${s.benchmark}`, "",
+    `| ${s.indicator} | CAGR |`,
+    "|---|---|",
+    `| ${s.yourPortfolio} | **${cagrCell(benchmark.investCAGR)}** |`,
+    ...indices.filter(([, v]) => v !== null).map(([label, v]) => `| ${label} | ${cagrCell(v!)} |`),
+    "",
+  ];
+};
+
+const renderRadar: Renderer = (data, s) => [
+  `## ${s.radar}`, "",
+  `| ${s.indicator} | ${s.value} |`,
+  "|---|---|",
+  `| ${s.safeVsRisky} | ${s.safe} ${fmt(data.garantisCents)} (${data.garantisPct}%) · ${s.risky} ${fmt(data.risquesCents)} (${100 - data.garantisPct}%) |`,
+  "",
+];
+
+function topAssetTaxCell(taxCents: number | null): string {
+  if (taxCents === null) return "-";
+  return taxCents > 0 ? `-${fmt(taxCents)}` : fmt(0);
+}
+
+const renderTopAssets: Renderer = (data, s) => {
+  if (data.topAssets.length === 0) return [];
+  return [
+    `## ${s.topAssets}`, "",
+    `| ${s.colAsset} | ${s.category} | ${s.colValue} | ${s.colGain} | ${s.colTax} | ${s.pct} |`,
+    "|---|---|---|---|---|---|",
+    ...data.topAssets.map((a) => {
+      const gainStr = a.gainCents !== null ? `${sign(a.gainCents)}${fmt(a.gainCents)}` : "-";
+      return `| ${labelWithSubtype(a.name, a.subtype)} | ${a.typeLabel} | ${fmt(a.valueCents)} | ${gainStr} | ${topAssetTaxCell(a.taxCents)} | ${a.pct}% |`;
+    }),
+    "",
+  ];
+};
+
+const renderFinancing: Renderer = (data, s) => {
+  if (data.debtAccounts.length === 0) return [];
+  return [
+    `## ${s.financing}`, "",
+    `| ${s.indicator} | ${s.value} |`,
+    "|---|---|",
+    `| ${s.totalLiabilities} | ${fmt(data.totalLiabilities)} |`,
+    `| ${s.debtRatio} | ${data.debtRatio}% |`,
+    `| ${s.equity} | ${fmt(data.grossAssets - data.totalLiabilities)} |`,
+    "",
+    `| ${s.colAsset} | ${s.colValue} | ${s.colLoan} | ${s.colEquity} | ${s.colLtv} |`,
+    "|---|---|---|---|---|",
+    ...data.debtAccounts.map(
+      (a) => `| ${a.name} | ${fmt(a.valueCents)} | ${fmt(a.liabilityCents)} | ${fmt(a.equityCents)} | ${a.ltv}% |`
+    ),
+    "",
+  ];
+};
+
+const renderHistory: Renderer = (data, s) => {
+  if (data.performanceRows.length === 0) return [];
+  return [
+    `## ${s.history}`, "",
+    `| ${s.colMonth} | ${s.colNetWorth} | ${s.colChange} | ${s.pct} |`,
+    "|---|---|---|---|",
+    ...data.performanceRows.map((r) => {
+      const delta = r.delta !== null ? `${sign(r.delta)}${fmt(r.delta)}` : "-";
+      const deltaPct = r.deltaPct !== null ? `${signedFixed(r.deltaPct)}%` : "-";
+      return `| ${r.date} | ${fmt(r.netWorth)} | ${delta} | ${deltaPct} |`;
+    }),
+    "",
+  ];
+};
+
+// Document order. A Section missing here would never print; the type makes
+// adding one to the union without a renderer a compile error.
+const RENDERERS: Record<Section, Renderer> = {
+  resume: renderSummary,
+  allocation: renderAllocation,
+  performance: renderPerformance,
+  dividendes: renderPassive,
+  revenusReels: renderRealIncome,
+  benchmark: renderBenchmark,
+  radar: renderRadar,
+  topActifs: renderTopAssets,
+  financement: renderFinancing,
+  historique: renderHistory,
+};
+
 export function buildMarkdown(
   data: AnalyticsExportData,
   sections: Set<Section>,
@@ -127,222 +397,8 @@ export function buildMarkdown(
     month: "long",
     year: "numeric",
   });
-  const lines: string[] = [`# ${s.title} - ${date}`, ""];
-
-  // ── Global summary ──
-  if (sections.has("resume")) {
-    lines.push(`## ${s.summary}`, "");
-    lines.push(`| ${s.indicator} | ${s.value} |`);
-    lines.push("|---|---|");
-    // data.netWorth is already net of latent tax; the label only says so
-    // explicitly when there is a deduction to speak of.
-    const netLabel = data.hasTaxData ? s.netWorthAfterTax : s.netWorth;
-    lines.push(`| ${netLabel} | **${fmt(data.netWorth)}** |`);
-    lines.push(`| ${s.gross} | ${fmt(data.grossAssets)} |`);
-    lines.push(`| ${s.debts} | ${fmt(data.totalLiabilities)} |`);
-    if (data.hasTaxData) {
-      lines.push(`| ${s.taxes} | ${fmt(data.totalLatentTax)} |`);
-      lines.push(`| ${s.netWorth} | ${fmt(data.netWorthBeforeTax)} |`);
-    }
-    lines.push(`| ${s.investedRate} | ${data.investedPct}% |`);
-    if (data.savingsRate !== null) {
-      lines.push(
-        `| ${s.savingsRate} | ${sign(data.savingsRate)}${data.savingsRate.toFixed(1)}% |`
-      );
-    }
-    if (data.salaryNetCents > 0) {
-      lines.push(`| ${s.salary} | ${fmt(data.salaryNetCents)} |`);
-    }
-    if (data.monthlySavedCents > 0) {
-      lines.push(`| ${s.monthlySaved} | ${fmt(data.monthlySavedCents)} |`);
-    } else if (data.momDeltaCents !== null) {
-      lines.push(`| ${s.momDelta} | ${sign(data.momDeltaCents)}${fmt(data.momDeltaCents)} |`);
-    }
-    if (data.runwayMonths !== null) {
-      lines.push(`| ${s.runway} | ${Math.floor(data.runwayMonths)} ${s.months} |`);
-      lines.push(`| ${s.savingsAvailable} | ${fmt(data.savingsCents)} |`);
-      lines.push(`| ${s.monthlyExpenses} | ${fmt(data.monthlyExpensesCents)} |`);
-    }
-    for (const goal of data.goals) {
-      lines.push(`| ${s.goal} - ${goal.name} | ${s.goalFmt(fmt(goal.targetCents), goal.pct)} |`);
-      if (goal.remainingCents > 0) {
-        lines.push(`| ${s.goalRemaining} - ${goal.name} | ${fmt(goal.remainingCents)} |`);
-      }
-    }
-    lines.push("");
-  }
-
-  // ── Allocation ──
-  if (sections.has("allocation") && data.allocationSlices.length > 0) {
-    lines.push(`## ${s.allocation}`, "");
-    lines.push(`| ${s.category} | ${s.value} | ${s.pct} |`);
-    lines.push("|---|---|---|");
-    for (const slice of data.allocationSlices) {
-      lines.push(`| ${slice.name} | ${fmt(slice.valueCents)} | ${slice.pct}% |`);
-    }
-    lines.push("");
-  }
-
-  // ── Performance investissements ──
-  if (sections.has("performance") && data.investPerfRows.length > 0) {
-    lines.push(`## ${s.performance}`, "");
-    lines.push(
-      `| ${s.colAccount} | ${s.colValue} | ${s.colInvested} | ${s.colGrossGain} | ${s.colTax} | ${s.colPerf} |`
-    );
-    lines.push("|---|---|---|---|---|---|");
-    for (const r of data.investPerfRows) {
-      const label = r.subtype ? `${r.name} (${r.subtype})` : r.name;
-      lines.push(
-        `| ${label} | ${fmt(r.valueCents)} | ${fmt(r.costBasisCents)} | ${sign(r.gainCents)}${fmt(r.gainCents)} | -${fmt(r.taxCents)} | ${sign(r.returnPct)}${r.returnPct.toFixed(1)}% |`
-      );
-    }
-    lines.push("");
-    const netGain = data.investTotalGainCents - data.investTotalTaxCents;
-    const cagrSuffix =
-      data.investCAGR !== null
-        ? s.cagrSuffix(`${sign(data.investCAGR)}${data.investCAGR.toFixed(1)}`)
-        : "";
-    lines.push(
-      s.summaryLine({
-        invested: fmt(data.investTotalCostBasisCents),
-        value: fmt(data.investTotalValueCents),
-        gain: `${sign(data.investTotalGainCents)}${fmt(data.investTotalGainCents)}`,
-        netGain: `${sign(netGain)}${fmt(netGain)}`,
-        perf: `${sign(data.investReturnPct)}${data.investReturnPct.toFixed(1)}`,
-        cagr: cagrSuffix,
-      })
-    );
-    lines.push("");
-  }
-
-  // ── Revenus passifs & dividendes ──
-  if (sections.has("dividendes") && data.annualPassiveCents > 0) {
-    lines.push(`## ${s.passive}`, "");
-    lines.push(
-      s.passiveLine({
-        annual: fmt(data.annualPassiveCents),
-        monthly: fmt(data.monthlyPassiveCents),
-        dividends: fmt(data.annualDividendsCents),
-        interest: fmt(data.annualInterestCents),
-      })
-    );
-    // A document someone plans with must not quietly under-report. The
-    // interest half of this figure only counts accounts whose rate is set,
-    // and an unset rate is invisible everywhere else in the app - so if any
-    // are missing, the export says so rather than presenting a partial total
-    // as a complete one.
-    if (data.accountsMissingInterestRate > 0) {
-      lines.push("", `> ${s.passiveMissingRates({ count: data.accountsMissingInterestRate })}`);
-    }
-    if (data.weightedSavingsRatePct !== null) {
-      lines.push("", s.passiveWeightedRate({ rate: (data.weightedSavingsRatePct * 100).toFixed(2) }));
-    }
-    if (data.estimatedYearEndSavingsInterestCents > 0) {
-      lines.push("", s.passiveYearEndEstimate({ amount: fmt(data.estimatedYearEndSavingsInterestCents) }));
-    }
-    lines.push("");
-    if (data.dividendRows.length > 0) {
-      lines.push(
-        `| ${s.colAsset} | ${s.colEnvelope} | ${s.colYield} | ${s.colAnnualGross} | ${s.colAnnualNet} | ${s.colExDiv} |`
-      );
-      lines.push("|---|---|---|---|---|---|");
-      for (const r of data.dividendRows) {
-        const envelope = r.subtype ?? "CTO";
-        const yieldStr = `${(r.divYield * 100).toFixed(2)}%`;
-        const exDiv = r.exDividendDate
-          ? new Date(r.exDividendDate).toLocaleDateString(intlLocale, {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })
-          : "-";
-        lines.push(
-          `| ${r.name} | ${envelope} | ${yieldStr} | ${fmt(r.annualEstCents)} | ${fmt(r.annualNetCents)} | ${exDiv} |`
-        );
-      }
-      lines.push("");
-    }
-  }
-
-  // ── Revenus réels perçus (IncomeEvent, année en cours) ──
-  if (sections.has("revenusReels") && data.realYtdPassiveNetCents > 0) {
-    lines.push(`## ${s.realIncome}`, "");
-    lines.push(`| ${s.indicator} | ${s.value} |`);
-    lines.push("|---|---|");
-    lines.push(`| ${s.ytdDividends} | ${fmt(data.realYtdDividendsNetCents)} |`);
-    lines.push(`| ${s.ytdInterest} | ${fmt(data.realYtdInterestNetCents)} |`);
-    lines.push(`| ${s.ytdTotal} | **${fmt(data.realYtdPassiveNetCents)}** |`);
-    lines.push("");
-  }
-
-  // ── Comparaison aux indices ──
-  if (sections.has("benchmark") && data.benchmark !== null) {
-    lines.push(`## ${s.benchmark}`, "");
-    lines.push(`| ${s.indicator} | CAGR |`);
-    lines.push("|---|---|");
-    const cagrCell = (v: number) => `${sign(v)}${v.toFixed(1)}%`;
-    lines.push(`| ${s.yourPortfolio} | **${cagrCell(data.benchmark.investCAGR)}** |`);
-    if (data.benchmark.msciWorld !== null) lines.push(`| ${s.msciWorld} | ${cagrCell(data.benchmark.msciWorld)} |`);
-    if (data.benchmark.sp500 !== null) lines.push(`| ${s.sp500} | ${cagrCell(data.benchmark.sp500)} |`);
-    if (data.benchmark.cac40 !== null) lines.push(`| ${s.cac40} | ${cagrCell(data.benchmark.cac40)} |`);
-    lines.push("");
-  }
-
-  // ── Radar d'allocation ──
-  if (sections.has("radar")) {
-    lines.push(`## ${s.radar}`, "");
-    lines.push(`| ${s.indicator} | ${s.value} |`);
-    lines.push("|---|---|");
-    lines.push(`| ${s.safeVsRisky} | ${s.safe} ${fmt(data.garantisCents)} (${data.garantisPct}%) · ${s.risky} ${fmt(data.risquesCents)} (${100 - data.garantisPct}%) |`);
-    lines.push("");
-  }
-
-  // ── Mes actifs (top 10) ──
-  if (sections.has("topActifs") && data.topAssets.length > 0) {
-    lines.push(`## ${s.topAssets}`, "");
-    lines.push(`| ${s.colAsset} | ${s.category} | ${s.colValue} | ${s.colGain} | ${s.colTax} | ${s.pct} |`);
-    lines.push("|---|---|---|---|---|---|");
-    for (const a of data.topAssets) {
-      const label = a.subtype ? `${a.name} (${a.subtype})` : a.name;
-      const gainStr = a.gainCents !== null ? `${sign(a.gainCents)}${fmt(a.gainCents)}` : "-";
-      let taxStr = "-";
-      if (a.taxCents !== null) taxStr = a.taxCents > 0 ? `-${fmt(a.taxCents)}` : fmt(0);
-      lines.push(`| ${label} | ${a.typeLabel} | ${fmt(a.valueCents)} | ${gainStr} | ${taxStr} | ${a.pct}% |`);
-    }
-    lines.push("");
-  }
-
-  // ── Analyse du financement ──
-  if (sections.has("financement") && data.debtAccounts.length > 0) {
-    lines.push(`## ${s.financing}`, "");
-    lines.push(`| ${s.indicator} | ${s.value} |`);
-    lines.push("|---|---|");
-    lines.push(`| ${s.totalLiabilities} | ${fmt(data.totalLiabilities)} |`);
-    lines.push(`| ${s.debtRatio} | ${data.debtRatio}% |`);
-    lines.push(`| ${s.equity} | ${fmt(data.grossAssets - data.totalLiabilities)} |`);
-    lines.push("");
-    lines.push(`| ${s.colAsset} | ${s.colValue} | ${s.colLoan} | ${s.colEquity} | ${s.colLtv} |`);
-    lines.push("|---|---|---|---|---|");
-    for (const a of data.debtAccounts) {
-      lines.push(`| ${a.name} | ${fmt(a.valueCents)} | ${fmt(a.liabilityCents)} | ${fmt(a.equityCents)} | ${a.ltv}% |`);
-    }
-    lines.push("");
-  }
-
-  // ── Historique mensuel ──
-  if (sections.has("historique") && data.performanceRows.length > 0) {
-    lines.push(`## ${s.history}`, "");
-    lines.push(`| ${s.colMonth} | ${s.colNetWorth} | ${s.colChange} | ${s.pct} |`);
-    lines.push("|---|---|---|---|");
-    for (const r of data.performanceRows) {
-      const delta = r.delta !== null ? `${sign(r.delta)}${fmt(r.delta)}` : "-";
-      const deltaPct =
-        r.deltaPct !== null ? `${sign(r.deltaPct)}${r.deltaPct.toFixed(1)}%` : "-";
-      lines.push(`| ${r.date} | ${fmt(r.netWorth)} | ${delta} | ${deltaPct} |`);
-    }
-    lines.push("");
-  }
-
-  return lines.join("\n");
+  const body = (Object.keys(RENDERERS) as Section[])
+    .filter((section) => sections.has(section))
+    .flatMap((section) => RENDERERS[section](data, s, intlLocale));
+  return [`# ${s.title} - ${date}`, "", ...body].join("\n");
 }
-

@@ -19,6 +19,7 @@ import {
   computeBenchmarkCAGRs,
   analyseHoldings,
   analyseFiatAccount,
+  type PendingDividendRow,
 } from "@/lib/domain/analytics-sections";
 import type {
   AnalyticsInput,
@@ -37,206 +38,393 @@ export * from "@/lib/domain/analytics-types";
 export * from "@/lib/domain/analytics-export";
 
 // ── computeAnalytics ─────────────────────────────────────────────────────────
+//
+// One pass over the accounts, then a series of pure derivations from what that
+// pass accumulated. Split at v2.11 from a single CCN-44 function into the
+// steps below; __tests__/money-characterization.test.ts pins the whole result
+// to the cent, with and without market data, and did not move.
 
-// Single-pass aggregation over every account, deliberately kept as one
-// function so each account is only iterated once (accumulating gross
-// assets, allocation, tax, dividends, top assets, debt in the same loop
-// rather than N separate passes). Covered by __tests__/analytics.test.ts;
-// splitting it would mean passing a lot of shared running state between
-// pieces for no behavioral benefit.
-// eslint-disable-next-line sonarjs/cognitive-complexity
-export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
-  const { accounts, allBalances, settings, goals, yfData, incomeEventsYtd, intlLocale, now } = input;
-  const nowMs = now.getTime();
+type InvestPerfRowInternal = Omit<InvestPerfRow, "returnPct" | "gainNet" | "cagr">;
+type Account = AnalyticsInput["accounts"][number];
 
-  // ── Compute current values ──────────────────────────────────────────────
-  let grossAssets = BigInt(0);
-  let totalLiabilities = BigInt(0);
-  let totalLatentTax = BigInt(0);
-  // v1.14 - cost-basis-weighted... no, gain-weighted blended effective tax
-  // rate across every account with a real unrealized gain, for the
-  // projection chart's tax-aware mode (see lib/domain/projection.ts). Same
-  // "weight by the account's own contribution" pattern investCAGRWeightedYears
-  // below already uses, just weighted by gain-in-cents instead of years.
-  // EXEMPT/DEFERRED accounts contribute rate 0, naturally pulling the
-  // blended rate down for a mostly tax-advantaged portfolio - mirrors how
-  // totalLatentTax itself already behaves, just expressed as one reusable
-  // rate instead of only ever an absolute cents amount.
-  let weightedTaxRateSum = 0; // Σ(taxRate * gainCents)
-  let totalPositiveGainCents = BigInt(0); // Σ(gainCents), gains only
-  let annualDividendsCents = BigInt(0);    // gross
-  let annualDividendsNetCents = BigInt(0); // net after tax
-  let annualInterestCents = BigInt(0);     // already net (French regulated savings accounts are income-tax-exempt)
+/** Everything the per-account pass accumulates. */
+type AccountTotals = {
+  grossAssets: bigint;
+  totalLiabilities: bigint;
+  totalLatentTax: bigint;
+  // Gain-weighted blended effective tax rate across every account with a real
+  // unrealized gain, for the projection chart's tax-aware mode (see
+  // lib/domain/projection.ts): Σ(taxRate * gainCents) over Σ(gainCents).
+  // EXEMPT/DEFERRED accounts contribute rate 0, pulling the blend down for a
+  // mostly tax-advantaged portfolio, exactly as totalLatentTax itself does.
+  weightedTaxRateSum: number;
+  totalPositiveGainCents: bigint;
+  annualDividendsCents: bigint;    // gross
+  annualDividendsNetCents: bigint; // net after tax
+  annualInterestCents: bigint;     // already net (French regulated savings are income-tax-exempt)
   // Interest-bearing accounts with no rate set. A null rate contributes
   // nothing, which is correct - but indistinguishable on screen from an
   // account that genuinely pays none, and this estimate is consumed by the
   // markdown export where nobody would ever see the shortfall. Counting it
-  // lets the consumer say "this figure covers 2 of your 4 savings accounts"
-  // instead of quietly under-reporting.
-  let accountsMissingInterestRate = 0;
-  // Balance-weighted average rate across SAVINGS accounts with a known
-  // rate, for the Analytics page - a plain average of the rates themselves
-  // would treat a 50€ Livret Jeune at 2.5% as equally significant as a
-  // 15,000€ Livret A at 1.5%, which answers a different question than "what
-  // is my money as a whole actually earning". Accounts with no rate set are
-  // excluded from both sums rather than assumed to earn 0 - the same
-  // "missing is not zero" reasoning accountsMissingInterestRate exists for.
-  let weightedSavingsRateSum = 0; // Σ(rate * balanceCents)
-  let savingsBalanceWithRateCents = BigInt(0);
+  // lets the consumer say "this figure covers 2 of your 4 savings accounts".
+  accountsMissingInterestRate: number;
+  // Balance-weighted average rate across SAVINGS accounts with a known rate:
+  // a plain average would treat a 50€ Livret Jeune at 2.5% as equally
+  // significant as a 15,000€ Livret A at 1.5%. Accounts with no rate are left
+  // out of both sums rather than assumed to earn 0.
+  weightedSavingsRateSum: number; // Σ(rate * balanceCents)
+  savingsBalanceWithRateCents: bigint;
+  allocation: Record<string, bigint>;
+  assetRows: AssetRow[];
+  investPerfRowsInternal: InvestPerfRowInternal[];
+  dividendRowsData: PendingDividendRow[];
+};
 
-  const dividendRowsData: Omit<DividendCalendarRow, "exDividendDate" | "annualRatePerShare" | "daysLeft" | "isPast" | "isSoon">[] = [];
-
-  const allocation: Record<string, bigint> = {
-    cash: BigInt(0),
-    savings: BigInt(0),
-    investments: BigInt(0),
-    crypto: BigInt(0),
-    realEstate: BigInt(0),
-    auto: BigInt(0),
+function emptyTotals(): AccountTotals {
+  return {
+    grossAssets: BigInt(0),
+    totalLiabilities: BigInt(0),
+    totalLatentTax: BigInt(0),
+    weightedTaxRateSum: 0,
+    totalPositiveGainCents: BigInt(0),
+    annualDividendsCents: BigInt(0),
+    annualDividendsNetCents: BigInt(0),
+    annualInterestCents: BigInt(0),
+    accountsMissingInterestRate: 0,
+    weightedSavingsRateSum: 0,
+    savingsBalanceWithRateCents: BigInt(0),
+    allocation: {
+      cash: BigInt(0),
+      savings: BigInt(0),
+      investments: BigInt(0),
+      crypto: BigInt(0),
+      realEstate: BigInt(0),
+      auto: BigInt(0),
+    },
+    assetRows: [],
+    investPerfRowsInternal: [],
+    dividendRowsData: [],
   };
+}
 
-  const assetRows: AssetRow[] = [];
+/** An account's value, and its cost basis/gain/tax when those are known. */
+type AccountValuation = {
+  value: bigint;
+  basis: { costBasis: bigint; gain: bigint; tax: bigint } | null;
+};
 
-  type InvestPerfRowInternal = Omit<InvestPerfRow, "returnPct" | "gainNet" | "cagr">;
-  const investPerfRowsInternal: InvestPerfRowInternal[] = [];
+/** Real estate and cars: a manual value, with equity counted in allocation. */
+function addManualAsset(t: AccountTotals, account: Account): AccountValuation {
+  const value = account.manualValueCents ?? BigInt(0);
+  const liability = account.liabilityCents ?? BigInt(0);
+  t.totalLiabilities += liability;
+  const equity = value - liability > BigInt(0) ? value - liability : BigInt(0);
+  t.allocation[account.type === "AUTOMOBILE" ? "auto" : "realEstate"] += equity;
+  t.grossAssets += value;
+  return { value, basis: null };
+}
 
+/** Latent tax on a gain, accumulated into the blended-rate sums. */
+function addLatentTax(t: AccountTotals, gain: bigint, taxRate: number): bigint {
+  const tax = gain > BigInt(0) ? BigInt(Math.round(Number(gain) * taxRate)) : BigInt(0);
+  t.totalLatentTax += tax;
+  if (gain > BigInt(0)) {
+    t.weightedTaxRateSum += taxRate * Number(gain);
+    t.totalPositiveGainCents += gain;
+  }
+  return tax;
+}
+
+function addInvestmentAccount(t: AccountTotals, account: Account, yfData: AnalyticsInput["yfData"]): AccountValuation {
+  const taxRate = getAccountTaxRate(account);
+  const contrib = analyseHoldings(account, taxRate, yfData);
+  t.annualDividendsCents += contrib.dividendsGrossCents;
+  t.annualDividendsNetCents += contrib.dividendsNetCents;
+  t.dividendRowsData.push(...contrib.dividendRows);
+
+  const tax = contrib.hasBasis && taxRate !== null ? addLatentTax(t, contrib.gain, taxRate) : BigInt(0);
+  if (contrib.hasBasis && account.type === "INVESTMENT") {
+    t.investPerfRowsInternal.push({
+      id: account.id,
+      name: account.name,
+      institution: account.institution?.name ?? "",
+      subtype: account.investmentSubtype ?? null,
+      value: contrib.value,
+      costBasis: contrib.costBasis,
+      gain: contrib.gain,
+      tax,
+      investmentStartDate: account.investmentStartDate ?? null,
+    });
+  }
+  t.allocation[account.type === "CRYPTO" ? "crypto" : "investments"] += contrib.value;
+  t.grossAssets += contrib.value;
+  return {
+    value: contrib.value,
+    basis: contrib.hasBasis ? { costBasis: contrib.costBasis, gain: contrib.gain, tax } : null,
+  };
+}
+
+/** A loan is a pure liability: it reduces net worth and has no asset row. */
+function loanOutstanding(account: Account, now: Date): bigint {
+  if (!hasLoanParams(account)) return account.liabilityCents ?? BigInt(0);
+  return calcCurrentCapital(
+    {
+      loanAmountCents: account.loanAmountCents,
+      loanTaeg: account.loanTaeg,
+      loanDurationMonths: account.loanDurationMonths,
+      loanDeferralMonths: account.loanDeferralMonths ?? 0,
+      loanStartDate: account.loanStartDate,
+    },
+    now
+  );
+}
+
+function addFiatAccount(t: AccountTotals, account: Account): AccountValuation {
+  const fiat = analyseFiatAccount(account);
+  t.allocation[fiat.bucket] += fiat.value;
+  t.annualInterestCents += fiat.annualInterestCents;
+  t.weightedSavingsRateSum += fiat.weightedRateSum;
+  t.savingsBalanceWithRateCents += fiat.balanceWithRateCents;
+  if (fiat.missingRate) t.accountsMissingInterestRate += 1;
+  t.grossAssets += fiat.value;
+  return { value: fiat.value, basis: null };
+}
+
+function valueAccount(t: AccountTotals, account: Account, yfData: AnalyticsInput["yfData"]): AccountValuation {
+  if (account.type === "REAL_ESTATE" || account.type === "AUTOMOBILE") return addManualAsset(t, account);
+  if (account.type === "INVESTMENT" || account.type === "CRYPTO") return addInvestmentAccount(t, account, yfData);
+  return addFiatAccount(t, account);
+}
+
+/** The single pass: each account is visited once and feeds every total. */
+function aggregateAccounts(accounts: Account[], yfData: AnalyticsInput["yfData"], now: Date): AccountTotals {
+  const t = emptyTotals();
   for (const account of accounts) {
-    let value = BigInt(0);
-    let accountCostBasis = BigInt(0);
-    let accountGain = BigInt(0);
-    let accountTax = BigInt(0);
-    let hasBasis = false;
-
-    const taxRate = getAccountTaxRate(account);
-
-    if (account.type === "REAL_ESTATE" || account.type === "AUTOMOBILE") {
-      value = account.manualValueCents ?? BigInt(0);
-      const liability = account.liabilityCents ?? BigInt(0);
-      totalLiabilities += liability;
-      const equity = value - liability > BigInt(0) ? value - liability : BigInt(0);
-      allocation[account.type === "AUTOMOBILE" ? "auto" : "realEstate"] += equity;
-      grossAssets += value;
-    } else if (account.type === "INVESTMENT" || account.type === "CRYPTO") {
-      const contrib = analyseHoldings(account, taxRate, yfData);
-      value += contrib.value;
-      accountCostBasis += contrib.costBasis;
-      accountGain += contrib.gain;
-      hasBasis = contrib.hasBasis;
-      annualDividendsCents += contrib.dividendsGrossCents;
-      annualDividendsNetCents += contrib.dividendsNetCents;
-      dividendRowsData.push(...contrib.dividendRows);
-      if (hasBasis && taxRate !== null) {
-        accountTax = accountGain > BigInt(0)
-          ? BigInt(Math.round(Number(accountGain) * taxRate))
-          : BigInt(0);
-        totalLatentTax += accountTax;
-        if (accountGain > BigInt(0)) {
-          weightedTaxRateSum += taxRate * Number(accountGain);
-          totalPositiveGainCents += accountGain;
-        }
-      }
-      if (hasBasis && account.type === "INVESTMENT") {
-        investPerfRowsInternal.push({
-          id: account.id,
-          name: account.name,
-          institution: account.institution?.name ?? "",
-          subtype: account.investmentSubtype ?? null,
-          value,
-          costBasis: accountCostBasis,
-          gain: accountGain,
-          tax: accountTax,
-          investmentStartDate: account.investmentStartDate ?? null,
-        });
-      }
-      allocation[account.type === "CRYPTO" ? "crypto" : "investments"] += value;
-      grossAssets += value;
-    } else if (account.type === "LOAN") {
-      // Loan: pure liability - reduces net worth, no asset counterpart
-      const loanBalance = hasLoanParams(account)
-        ? calcCurrentCapital(
-            {
-              loanAmountCents: account.loanAmountCents,
-              loanTaeg: account.loanTaeg,
-              loanDurationMonths: account.loanDurationMonths,
-              loanDeferralMonths: account.loanDeferralMonths ?? 0,
-              loanStartDate: account.loanStartDate,
-            },
-            now
-          )
-        : (account.liabilityCents ?? BigInt(0));
-      totalLiabilities += loanBalance;
-      // Skip assetRows - this is a liability, not an asset
+    if (account.type === "LOAN") {
+      t.totalLiabilities += loanOutstanding(account, now);
       continue;
-    } else {
-      const fiatContrib = analyseFiatAccount(account);
-      value = fiatContrib.value;
-      allocation[fiatContrib.bucket] += value;
-      annualInterestCents += fiatContrib.annualInterestCents;
-      weightedSavingsRateSum += fiatContrib.weightedRateSum;
-      savingsBalanceWithRateCents += fiatContrib.balanceWithRateCents;
-      if (fiatContrib.missingRate) accountsMissingInterestRate += 1;
-      grossAssets += value;
     }
-
-    assetRows.push({
+    const { value, basis } = valueAccount(t, account, yfData);
+    t.assetRows.push({
       id: account.id,
       name: account.name,
       institution: account.institution?.name ?? "",
       type: account.type,
       subtype: account.investmentSubtype ?? null,
       value,
-      costBasis: hasBasis ? accountCostBasis : null,
-      gain: hasBasis ? accountGain : null,
-      tax: hasBasis ? accountTax : null,
+      costBasis: basis ? basis.costBasis : null,
+      gain: basis ? basis.gain : null,
+      tax: basis ? basis.tax : null,
     });
   }
+  return t;
+}
 
-  // ── Investment performance (CTO / PEA) ──────────────────────────────────
-  const investTotalCostBasis = investPerfRowsInternal.reduce((s, r) => s + r.costBasis, BigInt(0));
-  const investTotalValue = investPerfRowsInternal.reduce((s, r) => s + r.value, BigInt(0));
-  const investTotalGain = investPerfRowsInternal.reduce((s, r) => s + r.gain, BigInt(0));
-  const investTotalTax = investPerfRowsInternal.reduce((s, r) => s + r.tax, BigInt(0));
-  const investTotalGainNet = investTotalGain - investTotalTax;
+const YEAR_MS = 365.25 * 86_400_000;
+
+/** CAGR(r) = (value / cost)^(1/years) − 1, as a percentage. */
+function cagrPct(value: number, cost: number, years: number): number {
+  return (Math.pow(value / cost, 1 / years) - 1) * 100;
+}
+
+/** Math.round(part / whole * 100), or the fallback when there is no whole. */
+function roundedPct(part: bigint, whole: bigint, fallback: number): number {
+  return whole > BigInt(0) ? Math.round((Number(part) / Number(whole)) * 100) : fallback;
+}
+
+function sumBy(rows: InvestPerfRowInternal[], pick: (r: InvestPerfRowInternal) => bigint): bigint {
+  return rows.reduce((s, r) => s + pick(r), BigInt(0));
+}
+
+/**
+ * Overall CAGR, over a duration weighted by invested capital. Only when every
+ * account has a start date, and never for less than a month of history.
+ */
+function portfolioCAGR(rows: InvestPerfRowInternal[], totalCost: bigint, totalValue: bigint, nowMs: number) {
+  const allHaveDates = rows.length > 0 && rows.every((r) => r.investmentStartDate !== null);
+  if (!allHaveDates || totalCost <= BigInt(0)) return { allHaveDates, cagr: null, weightedYears: null };
+  const weightedYears = rows.reduce((sum, r) => {
+    const years = (nowMs - r.investmentStartDate!.getTime()) / YEAR_MS;
+    return sum + years * Number(r.costBasis);
+  }, 0) / Number(totalCost);
+  if (weightedYears < 1 / 12) return { allHaveDates, cagr: null, weightedYears: null };
+  return { allHaveDates, cagr: cagrPct(Number(totalValue), Number(totalCost), weightedYears), weightedYears };
+}
+
+/** Per-row return%, net gain and CAGR, computed once rather than in JSX. */
+function withReturns(row: InvestPerfRowInternal, nowMs: number): InvestPerfRow {
+  const returnPct = Number(row.costBasis) > 0 ? (Number(row.gain) / Number(row.costBasis)) * 100 : 0;
+  let cagr: number | null = null;
+  if (row.investmentStartDate && Number(row.costBasis) > 0) {
+    const years = (nowMs - row.investmentStartDate.getTime()) / YEAR_MS;
+    if (years >= 1 / 12) cagr = cagrPct(Number(row.value), Number(row.costBasis), years);
+  }
+  return { ...row, returnPct, gainNet: row.gain - row.tax, cagr };
+}
+
+/** Investment performance (CTO / PEA): totals, overall CAGR, per-row figures. */
+function computeInvestmentPerformance(rows: InvestPerfRowInternal[], nowMs: number) {
+  const investTotalCostBasis = sumBy(rows, (r) => r.costBasis);
+  const investTotalValue = sumBy(rows, (r) => r.value);
+  const investTotalGain = sumBy(rows, (r) => r.gain);
+  const investTotalTax = sumBy(rows, (r) => r.tax);
   const investReturnPct = investTotalCostBasis > BigInt(0)
     ? (Number(investTotalGain) / Number(investTotalCostBasis)) * 100
     : 0;
-  // Overall CAGR - weighted by invested capital when start dates are known
-  // CAGR(r) = (value / cost)^(1/years) − 1
-  const investAllHaveDates = investPerfRowsInternal.length > 0 && investPerfRowsInternal.every((r) => r.investmentStartDate !== null);
-  let investCAGR: number | null = null;
-  let investCAGRWeightedYears: number | null = null;
-  if (investAllHaveDates && investTotalCostBasis > BigInt(0)) {
-    // Duration in years per account, weighted by cost basis
-    const weightedYears = investPerfRowsInternal.reduce((sum, r) => {
-      const years = (nowMs - r.investmentStartDate!.getTime()) / (365.25 * 86_400_000);
-      return sum + years * Number(r.costBasis);
-    }, 0) / Number(investTotalCostBasis);
-    if (weightedYears >= 1 / 12) {
-      const totalReturn = Number(investTotalValue) / Number(investTotalCostBasis);
-      investCAGR = (Math.pow(totalReturn, 1 / weightedYears) - 1) * 100;
-      investCAGRWeightedYears = weightedYears;
-    }
+  const overall = portfolioCAGR(rows, investTotalCostBasis, investTotalValue, nowMs);
+  return {
+    investTotalCostBasis,
+    investTotalValue,
+    investTotalGain,
+    investTotalTax,
+    investTotalGainNet: investTotalGain - investTotalTax,
+    investReturnPct,
+    investAllHaveDates: overall.allHaveDates,
+    investCAGR: overall.cagr,
+    investCAGRWeightedYears: overall.weightedYears,
+    investPerfRows: rows.map((row) => withReturns(row, nowMs)),
+  };
+}
+
+/**
+ * Real tracked income (IncomeEvent, year to date) - what the "Passive income"
+ * card displays. Distinct from the dividend/interest ESTIMATE, which the
+ * dividend calendar still needs.
+ */
+function computeRealYtdIncome(events: AnalyticsInput["incomeEventsYtd"]) {
+  const net = (type: string) =>
+    events
+      .filter((e) => e.type === type)
+      .reduce((sum, e) => sum + (e.amountCents - (e.taxWithheldCents ?? BigInt(0))), BigInt(0));
+  const realYtdDividendsNetCents = net("DIVIDEND");
+  const realYtdInterestNetCents = net("INTEREST");
+  return {
+    realYtdDividendsNetCents,
+    realYtdInterestNetCents,
+    realYtdPassiveNetCents: realYtdDividendsNetCents + realYtdInterestNetCents,
+  };
+}
+
+/** Known ex-dividend dates first, soonest first; unknown ones last. */
+function byExDividendDate(a: { exDividendDate: Date | null }, b: { exDividendDate: Date | null }): number {
+  if (!a.exDividendDate && !b.exDividendDate) return 0;
+  if (!a.exDividendDate) return 1;
+  if (!b.exDividendDate) return -1;
+  return a.exDividendDate.getTime() - b.exDividendDate.getTime();
+}
+
+function buildDividendCalendar(
+  rows: PendingDividendRow[],
+  yfData: AnalyticsInput["yfData"],
+  nowMs: number
+): DividendCalendarRow[] {
+  return rows
+    .map((r) => ({ ...r, ...(yfData[r.symbol] ?? { exDividendDate: null, annualYield: null, annualRatePerShare: null }) }))
+    .sort(byExDividendDate)
+    .map((r) => {
+      const daysLeft = r.exDividendDate ? Math.ceil((r.exDividendDate.getTime() - nowMs) / 86_400_000) : null;
+      const isPast = daysLeft !== null && daysLeft < 0;
+      const isSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 30;
+      return { ...r, daysLeft, isPast, isSoon };
+    });
+}
+
+/**
+ * Month-end net worth, carrying each account's last known balance forward
+ * through months where it has no row. Liabilities count only once their
+ * account has appeared.
+ */
+function computeMonthlyHistory(
+  accounts: Account[],
+  allBalances: AnalyticsInput["allBalances"],
+  intlLocale: string
+): MonthlyHistoryPoint[] {
+  const liabMap = new Map<string, bigint>();
+  for (const a of accounts) liabMap.set(a.id, a.liabilityCents ?? BigInt(0));
+
+  const monthMap = new Map<string, Map<string, bigint>>();
+  for (const b of allBalances) {
+    const month = b.recordedAt.toISOString().slice(0, 7);
+    if (!monthMap.has(month)) monthMap.set(month, new Map());
+    monthMap.get(month)!.set(b.accountId, b.balanceCents);
   }
-
-  // Per-row return%, net gain, and CAGR - computed once here instead of inline in JSX
-  const investPerfRows: InvestPerfRow[] = investPerfRowsInternal.map((row) => {
-    const returnPct = Number(row.costBasis) > 0
-      ? (Number(row.gain) / Number(row.costBasis)) * 100
-      : 0;
-    const gainNet = row.gain - row.tax;
-    let cagr: number | null = null;
-    if (row.investmentStartDate && Number(row.costBasis) > 0) {
-      const years = (nowMs - row.investmentStartDate.getTime()) / (365.25 * 86_400_000);
-      if (years >= 1 / 12) {
-        cagr = (Math.pow(Number(row.value) / Number(row.costBasis), 1 / years) - 1) * 100;
-      }
-    }
-    return { ...row, returnPct, gainNet, cagr };
+  const running = new Map<string, bigint>();
+  // NOSONAR (typescript:S2871) - "YYYY-MM" keys (ISO 8601, from
+  // toISOString().slice(0,7) above): lexicographic order already equals
+  // chronological order by design, localeCompare adds nothing here.
+  return [...monthMap.keys()].sort().map((month) => { // NOSONAR
+    for (const [id, v] of monthMap.get(month)!) running.set(id, v);
+    let gross = BigInt(0);
+    for (const v of running.values()) gross += v;
+    let liab = BigInt(0);
+    for (const [id, v] of liabMap) { if (running.has(id)) liab += v; }
+    const [y, m] = month.split("-");
+    return {
+      month,
+      date: new Intl.DateTimeFormat(intlLocale, { month: "short", year: "2-digit" }).format(new Date(+y, +m - 1, 1)),
+      netWorth: Number(gross - liab),
+    };
   });
+}
 
+/** The last six months, each with its change against the month before. */
+function computePerformanceRows(monthlyHistory: MonthlyHistoryPoint[]): PerformanceRow[] {
+  const last6Months = monthlyHistory.slice(-6);
+  return last6Months.map((row, i) => {
+    const prev = i > 0 ? last6Months[i - 1].netWorth : null;
+    const delta = prev !== null ? row.netWorth - prev : null;
+    const deltaPct = prev && prev !== 0 ? (delta! / Math.abs(prev)) * 100 : null;
+    return { ...row, delta, deltaPct };
+  });
+}
+
+function monthOnMonthDelta(monthlyHistory: MonthlyHistoryPoint[]): number | null {
+  return monthlyHistory.length >= 2
+    ? monthlyHistory.at(-1)!.netWorth - monthlyHistory.at(-2)!.netWorth
+    : null;
+}
+
+/**
+ * Declared monthly savings take priority over the month-on-month delta,
+ * which inter-account transfers, market moves and first-sync imports distort.
+ */
+function computeSavingsRate(settings: AnalyticsInput["settings"], momDelta: number | null): number | null {
+  if (settings.salaryNetCents <= BigInt(0)) return null;
+  if (settings.monthlySavedCents > BigInt(0)) {
+    return (Number(settings.monthlySavedCents) / Number(settings.salaryNetCents)) * 100;
+  }
+  return momDelta !== null ? (momDelta / Number(settings.salaryNetCents)) * 100 : null;
+}
+
+function buildTopAssets(assetRows: AssetRow[], grossAssets: bigint): TopAssetRow[] {
+  return [...assetRows]
+    .sort((a, b) => Number(b.value - a.value))
+    .slice(0, 10)
+    .map((asset) => ({ ...asset, pct: roundedPct(asset.value, grossAssets, 0) }));
+}
+
+function buildAllocationSlices(allocation: Record<string, bigint>): AllocationSliceResult[] {
+  return Object.entries(allocation)
+    .filter(([, v]) => v > BigInt(0))
+    .map(([key, value]) => ({
+      key,
+      value: Number(value),
+      color: CATEGORY_COLORS[key] ?? "#6b7280",
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
+  const { accounts, allBalances, settings, goals, yfData, incomeEventsYtd, intlLocale, now } = input;
+  const nowMs = now.getTime();
+
+  const t = aggregateAccounts(accounts, yfData, now);
+  const { grossAssets, totalLiabilities, totalLatentTax, allocation, assetRows } = t;
+
+  const perf = computeInvestmentPerformance(t.investPerfRowsInternal, nowMs);
   const benchmarkCAGRs = computeBenchmarkCAGRs(
     { msciWorld: input.msciWorldHistory, sp500: input.sp500History, cac40: input.cac40History },
-    investCAGRWeightedYears,
+    perf.investCAGRWeightedYears,
     nowMs,
   );
 
@@ -248,232 +436,86 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   // directly above it said you did not have.
   const netWorthBeforeTax = grossAssets - totalLiabilities;
   const netWorth = netWorthBeforeTax - totalLatentTax;
-  const debtRatio = grossAssets > BigInt(0)
-    ? Math.round((Number(totalLiabilities) / Number(grossAssets)) * 100)
-    : 0;
-  const investedPct = grossAssets > BigInt(0)
-    ? Math.round(
-        (Number(allocation["investments"] + allocation["crypto"]) / Number(grossAssets)) * 100
-      )
-    : 0;
-  const hasTaxData = totalLatentTax > BigInt(0);
-  const effectiveTaxRate = totalPositiveGainCents > BigInt(0) ? weightedTaxRateSum / Number(totalPositiveGainCents) : 0;
-  // null (not 0) when no SAVINGS account has a known rate - same "unknown is
-  // not zero" convention as accountsMissingInterestRate itself, so a
-  // display can say "no data" instead of a misleading 0%.
-  const weightedSavingsRatePct = savingsBalanceWithRateCents > BigInt(0)
-    ? weightedSavingsRateSum / Number(savingsBalanceWithRateCents)
-    : null;
 
-  // ── Allocation metrics ───────────────────────────────────────────────────
+  // Allocation metrics: "garantis" (cash + savings) against "risqués".
   const garantis = allocation["cash"] + allocation["savings"];
   const risques = allocation["investments"] + allocation["crypto"];
-  const garantisTotal = garantis + risques;
-  const garantisPct = garantisTotal > BigInt(0)
-    ? Math.round((Number(garantis) / Number(garantisTotal)) * 100)
-    : 50;
 
-  // ── Passive income (net after tax) ──────────────────────────────────────
-  // Dividends: net after flat tax / social levies depending on account type
-  // Savings interest: already net (Livret A, LDDS, LEP are income-tax-exempt in France)
-  const annualPassiveCents = annualDividendsNetCents + annualInterestCents;
-  const monthlyPassiveCents = Number(annualPassiveCents) / 12;
+  // Passive income ESTIMATE, net after tax. Dividends: net of flat tax /
+  // social levies by account type. Savings interest: already net.
+  const annualPassiveCents = t.annualDividendsNetCents + t.annualInterestCents;
 
-  // ── Real tracked income (IncomeEvent, year-to-date) ─────────────────────
-  // This is what the "Passive income" card displays - real, user-entered
-  // events, not the estimate above (annualPassiveCents/annualDividendsCents/
-  // annualInterestCents survive untouched - the dividend calendar below still
-  // needs them).
-  const netIncomeCents = (e: { amountCents: bigint; taxWithheldCents: bigint | null }) =>
-    e.amountCents - (e.taxWithheldCents ?? BigInt(0));
-  const realYtdDividendsNetCents = incomeEventsYtd
-    .filter((e) => e.type === "DIVIDEND")
-    .reduce((sum, e) => sum + netIncomeCents(e), BigInt(0));
-  const realYtdInterestNetCents = incomeEventsYtd
-    .filter((e) => e.type === "INTEREST")
-    .reduce((sum, e) => sum + netIncomeCents(e), BigInt(0));
-  const realYtdPassiveNetCents = realYtdDividendsNetCents + realYtdInterestNetCents;
-
-  // ── Dividend calendar ────────────────────────────────────────────────────
-  const dividendCalendar: DividendCalendarRow[] = dividendRowsData
-    .map((r) => ({ ...r, ...(yfData[r.symbol] ?? { exDividendDate: null, annualYield: null, annualRatePerShare: null }) }))
-    .sort((a, b) => {
-      if (!a.exDividendDate && !b.exDividendDate) return 0;
-      if (!a.exDividendDate) return 1;
-      if (!b.exDividendDate) return -1;
-      return a.exDividendDate.getTime() - b.exDividendDate.getTime();
-    })
-    .map((r) => {
-      const daysLeft = r.exDividendDate
-        ? Math.ceil((r.exDividendDate.getTime() - nowMs) / 86_400_000)
-        : null;
-      const isPast = daysLeft !== null && daysLeft < 0;
-      const isSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 30;
-      return { ...r, daysLeft, isPast, isSoon };
-    });
-
-  // ── Goal progress (v1.14 - N independent goals) ─────────────────────────
-  // Built once, not per-goal inside the .map below - accountId: null
-  // (net-worth-tracking) never needs a lookup, but every account-linked
-  // goal does, and a fresh Map lookup per goal is cheap either way for the
-  // handful of goals a personal instance realistically has.
-  const goalRows = computeGoalRows(goals, assetRows, accounts, netWorth);
-
-  // ── Cash-flow metrics (require user settings) ───────────────────────────
-  const hasSalary = settings.salaryNetCents > BigInt(0);
   const hasExpenses = settings.monthlyExpensesCents > BigInt(0);
-
-  // Runway = total savings / monthly expenses
-  const runwayMonths = hasExpenses
-    ? Number(allocation["savings"]) / Number(settings.monthlyExpensesCents)
-    : null;
-
-  // ── Year-end savings interest projection (méthode des quinzaines) ───────
+  // Year-end savings interest projection (méthode des quinzaines).
   const { estimatedYearEndSavingsInterestCents, estimatedYearEndInterestHistory } =
     computeSavingsInterestProjection(accounts, allBalances, now, intlLocale);
 
-  // ── History ─────────────────────────────────────────────────────────────
-  const liabMap = new Map<string, bigint>();
-  for (const a of accounts) liabMap.set(a.id, a.liabilityCents ?? BigInt(0));
-
-  // Monthly aggregation - for performance table & MOM delta
-  const monthMap = new Map<string, Map<string, bigint>>();
-  for (const b of allBalances) {
-    const month = b.recordedAt.toISOString().slice(0, 7);
-    if (!monthMap.has(month)) monthMap.set(month, new Map());
-    monthMap.get(month)!.set(b.accountId, b.balanceCents);
-  }
-  const runningM = new Map<string, bigint>();
-  // NOSONAR (typescript:S2871) - "YYYY-MM" keys (ISO 8601, from
-  // toISOString().slice(0,7) above): lexicographic order already equals
-  // chronological order by design, localeCompare adds nothing here.
-  const monthlyHistory: MonthlyHistoryPoint[] = [...monthMap.keys()].sort().map((month) => { // NOSONAR
-    for (const [id, v] of monthMap.get(month)!) runningM.set(id, v);
-    let gross = BigInt(0);
-    for (const v of runningM.values()) gross += v;
-    let liab = BigInt(0);
-    for (const [id, v] of liabMap) { if (runningM.has(id)) liab += v; }
-    const [y, m] = month.split("-");
-    return {
-      month,
-      date: new Intl.DateTimeFormat(intlLocale, { month: "short", year: "2-digit" }).format(new Date(+y, +m - 1, 1)),
-      netWorth: Number(gross - liab),
-    };
-  });
-
-  // ── MOM performance ─────────────────────────────────────────────────────
-  const last6Months = monthlyHistory.slice(-6);
-  const performanceRows: PerformanceRow[] = last6Months.map((row, i) => {
-    const prev = i > 0 ? last6Months[i - 1].netWorth : null;
-    const delta = prev !== null ? row.netWorth - prev : null;
-    const deltaPct = prev && prev !== 0 ? (delta! / Math.abs(prev)) * 100 : null;
-    return { ...row, delta, deltaPct };
-  });
-
-  const momDelta =
-    monthlyHistory.length >= 2
-      ? monthlyHistory.at(-1)!.netWorth -
-        monthlyHistory.at(-2)!.netWorth
-      : null;
-
-  // Savings rate: declared monthly savings take priority (avoids MOM distortion from
-  // inter-account transfers, market performance, and first-sync balance imports)
-  const hasDeclaredSavings = settings.monthlySavedCents > BigInt(0);
-  let savingsRate: number | null = null;
-  if (hasSalary) {
-    if (hasDeclaredSavings) {
-      savingsRate = (Number(settings.monthlySavedCents) / Number(settings.salaryNetCents)) * 100;
-    } else if (momDelta !== null) {
-      savingsRate = (momDelta / Number(settings.salaryNetCents)) * 100;
-    }
-  }
-
-  // ── Top assets ──────────────────────────────────────────────────────────
-  const topAssets: TopAssetRow[] = [...assetRows]
-    .sort((a, b) => Number(b.value - a.value))
-    .slice(0, 10)
-    .map((asset) => ({
-      ...asset,
-      pct: grossAssets > BigInt(0) ? Math.round((Number(asset.value) / Number(grossAssets)) * 100) : 0,
-    }));
-
-  // ── Allocation slices ───────────────────────────────────────────────────
-  const allocationSlices: AllocationSliceResult[] = Object.entries(allocation)
-    .filter(([, v]) => v > BigInt(0))
-    .map(([key, value]) => ({
-      key,
-      value: Number(value),
-      color: CATEGORY_COLORS[key] ?? "#6b7280",
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  const totalAllocation = allocationSlices.reduce((s, d) => s + d.value, 0);
-
-  // ── Debt accounts ────────────────────────────────────────────────────────
-  // Asset-backed liabilities (real estate, auto) only - LOAN accounts have their own tab
-  const debtAccounts = computeDebtAccounts(accounts);
-
-  // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
-  // real payments) but zero gross assets by design (pure liability, no
-  // asset counterpart). Gating on grossAssets showed the empty state to a
-  // user who'd already added an account.
-  const hasData = accounts.length > 0;
+  const monthlyHistory = computeMonthlyHistory(accounts, allBalances, intlLocale);
+  const momDelta = monthOnMonthDelta(monthlyHistory);
+  const allocationSlices = buildAllocationSlices(allocation);
 
   return {
-    hasData,
+    // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
+    // real payments) but zero gross assets by design. Gating on grossAssets
+    // showed the empty state to a user who had already added an account.
+    hasData: accounts.length > 0,
     netWorth,
     netWorthBeforeTax,
     grossAssets,
     totalLiabilities,
     totalLatentTax,
-    investedPct,
-    hasTaxData,
-    effectiveTaxRate,
+    investedPct: roundedPct(allocation["investments"] + allocation["crypto"], grossAssets, 0),
+    hasTaxData: totalLatentTax > BigInt(0),
+    effectiveTaxRate: t.totalPositiveGainCents > BigInt(0) ? t.weightedTaxRateSum / Number(t.totalPositiveGainCents) : 0,
     momDelta,
-    hasSalary,
-    hasDeclaredSavings,
-    savingsRate,
+    hasSalary: settings.salaryNetCents > BigInt(0),
+    hasDeclaredSavings: settings.monthlySavedCents > BigInt(0),
+    savingsRate: computeSavingsRate(settings, momDelta),
     salaryNetCents: settings.salaryNetCents,
     monthlySavedCents: settings.monthlySavedCents,
     hasExpenses,
-    runwayMonths,
+    // Runway = total savings / monthly expenses.
+    runwayMonths: hasExpenses ? Number(allocation["savings"]) / Number(settings.monthlyExpensesCents) : null,
     monthlyExpensesCents: settings.monthlyExpensesCents,
     savingsCents: allocation["savings"],
-    goals: goalRows,
-    realYtdDividendsNetCents,
-    realYtdInterestNetCents,
-    realYtdPassiveNetCents,
-    annualDividendsCents,
-    annualDividendsNetCents,
-    annualInterestCents,
-    accountsMissingInterestRate,
-    weightedSavingsRatePct,
+    goals: computeGoalRows(goals, assetRows, accounts, netWorth),
+    ...computeRealYtdIncome(incomeEventsYtd),
+    annualDividendsCents: t.annualDividendsCents,
+    annualDividendsNetCents: t.annualDividendsNetCents,
+    annualInterestCents: t.annualInterestCents,
+    accountsMissingInterestRate: t.accountsMissingInterestRate,
+    // null (not 0) when no SAVINGS account has a known rate, so a display can
+    // say "no data" instead of a misleading 0%.
+    weightedSavingsRatePct: t.savingsBalanceWithRateCents > BigInt(0)
+      ? t.weightedSavingsRateSum / Number(t.savingsBalanceWithRateCents)
+      : null,
     estimatedYearEndSavingsInterestCents,
     estimatedYearEndInterestHistory,
     annualPassiveCents,
-    monthlyPassiveCents,
-    dividendCalendar,
-    investPerfRows,
-    investTotalCostBasis,
-    investTotalValue,
-    investTotalGain,
-    investTotalTax,
-    investTotalGainNet,
-    investReturnPct,
-    investCAGR,
-    investAllHaveDates,
+    monthlyPassiveCents: Number(annualPassiveCents) / 12,
+    dividendCalendar: buildDividendCalendar(t.dividendRowsData, yfData, nowMs),
+    investPerfRows: perf.investPerfRows,
+    investTotalCostBasis: perf.investTotalCostBasis,
+    investTotalValue: perf.investTotalValue,
+    investTotalGain: perf.investTotalGain,
+    investTotalTax: perf.investTotalTax,
+    investTotalGainNet: perf.investTotalGainNet,
+    investReturnPct: perf.investReturnPct,
+    investCAGR: perf.investCAGR,
+    investAllHaveDates: perf.investAllHaveDates,
     taxRatePea: settings.taxRatePea,
     taxRateCto: settings.taxRateCto,
     benchmarkCAGRs,
     garantis,
     risques,
-    garantisPct,
+    garantisPct: roundedPct(garantis, garantis + risques, 50),
     allocationSlices,
-    totalAllocation,
-    performanceRows,
-    topAssets,
+    totalAllocation: allocationSlices.reduce((s, d) => s + d.value, 0),
+    performanceRows: computePerformanceRows(monthlyHistory),
+    topAssets: buildTopAssets(assetRows, grossAssets),
     assetRows,
-    debtAccounts,
-    debtRatio,
+    // Asset-backed liabilities (real estate, auto) only - LOAN accounts have their own tab.
+    debtAccounts: computeDebtAccounts(accounts),
+    debtRatio: roundedPct(totalLiabilities, grossAssets, 0),
   };
 }
