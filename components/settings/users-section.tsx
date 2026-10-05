@@ -84,7 +84,7 @@ export function UsersSection({
     <section className="space-y-4">
       <div className="flex items-start justify-between flex-wrap gap-x-3 gap-y-2">
         <div>
-          <h2 className="text-lg font-medium text-[var(--foreground)]">{t("title")}</h2>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">{t("title")}</h2>
           <p className="text-sm text-[var(--muted)] mt-1">{t("description")}</p>
         </div>
         <Button onClick={handleInvite} disabled={creating} className="shrink-0">

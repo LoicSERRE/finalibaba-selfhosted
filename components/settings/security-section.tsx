@@ -2,6 +2,7 @@ import { getTranslations, getLocale } from "next-intl/server";
 import type { AuditRow } from "@/lib/actions/security";
 import { SessionControls } from "@/components/settings/session-controls";
 import { formatDateShort, localeToIntl } from "@/lib/utils/format";
+import { ScrollRegion } from "@/components/ui/scroll-region";
 
 /**
  * The two things an instance operator could not do before v2.10.6: end a
@@ -48,7 +49,7 @@ export async function SecuritySection({
           // Scrolls inside its own container: a long IP plus a long label is
           // wider than a phone, and the page itself must never scroll
           // sideways.
-          <div className="overflow-x-auto">
+          <ScrollRegion label={t("auditTitle")}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-[var(--muted)] border-b border-[var(--border)]">
@@ -78,7 +79,7 @@ export async function SecuritySection({
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollRegion>
         )}
       </div>
     </section>

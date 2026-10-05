@@ -2,6 +2,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { InvestPerfRow } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
+import { ScrollRegion } from "@/components/ui/scroll-region";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -62,7 +63,7 @@ export function InvestmentPerformanceSection({
           <p className={`text-lg font-semibold tabular-nums ${investTotalGain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
             {investTotalGain >= BigInt(0) ? "+" : ""}{formatCurrency(investTotalGain, 0)}
           </p>
-          <p className="text-xs text-[var(--muted)] mt-0.5 opacity-70">
+          <p className="text-xs text-[var(--muted)] mt-0.5">
             {investReturnPct >= 0 ? "+" : ""}{investReturnPct.toFixed(1)}% {t("performance.onCost")}
             {investCAGR !== null && (
               <> · <span className={investCAGR >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
@@ -77,7 +78,7 @@ export function InvestmentPerformanceSection({
             {investTotalGainNet >= BigInt(0) ? "+" : ""}{formatCurrency(investTotalGainNet, 0)}
           </p>
           {investTotalTax > BigInt(0) && (
-            <p className="text-xs text-[var(--muted)] mt-0.5 opacity-70">
+            <p className="text-xs text-[var(--muted)] mt-0.5">
               {t("performance.latentTax")} −{formatCurrency(investTotalTax, 0)}
             </p>
           )}
@@ -86,7 +87,7 @@ export function InvestmentPerformanceSection({
 
       {/* Détail par compte */}
       {investPerfRows.length > 1 && (
-        <div className="overflow-x-auto border-t border-[var(--border)] pt-4">
+        <ScrollRegion label={t("performance.title")} className="border-t border-[var(--border)] pt-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)]">
@@ -123,7 +124,7 @@ export function InvestmentPerformanceSection({
                     <span className={row.gain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
                       {row.gain >= BigInt(0) ? "+" : ""}{formatCurrency(row.gain, 0)}
                     </span>
-                    <span className="block text-xs text-[var(--muted)] opacity-70">
+                    <span className="block text-xs text-[var(--muted)]">
                       {row.returnPct >= 0 ? "+" : ""}{row.returnPct.toFixed(1)}%
                     </span>
                   </td>
@@ -145,14 +146,14 @@ export function InvestmentPerformanceSection({
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollRegion>
       )}
       {/* The CAGR methodology text moved into the header's InfoTooltip above
           (collapsed by default - was previously an always-visible footnote,
           real mobile-decluttering feedback). addDateHint stays visible here
           since it's actionable advice, not just descriptive methodology. */}
       {!investAllHaveDates && investPerfRows.length > 0 && (
-        <p className="text-xs text-[var(--muted)] mt-3 opacity-70">{t("performance.addDateHint")}</p>
+        <p className="text-xs text-[var(--muted)] mt-3">{t("performance.addDateHint")}</p>
       )}
     </div>
   );

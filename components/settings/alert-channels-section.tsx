@@ -291,7 +291,7 @@ export function AlertChannelsSection({
               className={inputClass}
             />
           </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("emailHint")}</p>
+          <p className="text-xs text-[var(--muted)]">{t("emailHint")}</p>
           </div>
         </div>
 

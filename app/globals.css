@@ -19,6 +19,15 @@
   --accent-strong: #4f46e5;
   --positive: #22c55e;
   --negative: #ef4444;
+  /* --negative on its own 15% tint (destructive buttons, error badges) is
+     4.24:1 here and 3.81:1 in light - both under AA. Text sitting on that
+     tint uses this instead: 5.77:1 dark, 5.1:1 light (#b91c1c). Measured
+     with the WCAG formula against the tint as rendered over --surface,
+     found by the v2.12 visual audit (scripts/ui-audit). */
+  --negative-text: #f87171;
+  /* Same story for the success tint: --positive on its 15% tint is 6.36:1
+     here (fine) but 4.09:1 in light, so light gets a darker green (5.82:1). */
+  --positive-text: #22c55e;
   /* Third semantic status color - "getting close to a limit, not yet over."
      Was previously reinvented ad hoc as raw `amber-400` in several files
      with no shared token; also fixes budget/LTV/loan progress bars that had
@@ -65,6 +74,8 @@
   --accent-text: #4f46e5; /* 6.29:1 on --surface */
   --positive: #15803d; /* 5.02:1 on --surface */
   --negative: #dc2626; /* 4.83:1 on --surface */
+  --negative-text: #b91c1c; /* 5.1:1 on its own 15% tint */
+  --positive-text: #166534; /* 5.82:1 on its own 15% tint */
   --warning: #b45309; /* 5.02:1 on --surface */
   color-scheme: light;
 }
@@ -100,6 +111,8 @@
     --accent-text: #4f46e5;
     --positive: #15803d;
     --negative: #dc2626;
+    --negative-text: #b91c1c;
+    --positive-text: #166534;
     --warning: #b45309;
     color-scheme: light;
   }

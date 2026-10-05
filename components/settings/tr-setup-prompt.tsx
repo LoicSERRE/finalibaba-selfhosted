@@ -303,7 +303,7 @@ function TradeRepublicSteps({ step }: Readonly<{ step: Step }>) {
             <span
               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium ${
                 done
-                  ? "border-[var(--positive)] bg-[var(--positive)]/15 text-[var(--positive)]"
+                  ? "border-[var(--positive)] bg-[var(--positive)]/15 text-[var(--positive-text)]"
                   : active
                     ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-text)]"
                     : "border-[var(--border)] text-[var(--muted)]"

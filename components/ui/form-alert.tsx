@@ -3,8 +3,8 @@ import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 type Tone = "error" | "success" | "warning";
 
 const TONE_CLASSES: Record<Tone, string> = {
-  error: "border-[var(--negative)]/40 bg-[var(--negative)]/10 text-[var(--negative)]",
-  success: "border-[var(--positive)]/40 bg-[var(--positive)]/10 text-[var(--positive)]",
+  error: "border-[var(--negative)]/40 bg-[var(--negative)]/10 text-[var(--negative-text)]",
+  success: "border-[var(--positive)]/40 bg-[var(--positive)]/10 text-[var(--positive-text)]",
   warning: "border-[var(--warning)]/40 bg-[var(--warning)]/10 text-[var(--warning)]",
 };
 

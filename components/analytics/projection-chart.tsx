@@ -259,7 +259,7 @@ export function ProjectionChart({
             </p>
             <p className="text-sm text-[var(--muted)] mt-1">{t("horizonLabel", { years: horizonYears })}</p>
             {showAfterTax && (
-              <p className="text-xs text-[var(--muted)] opacity-70 mt-0.5">
+              <p className="text-xs text-[var(--muted)] mt-0.5">
                 {t("beforeTaxCalloutNote", { amount: formatCurrency(points[horizonYears].netWorthCents, 0) })}
               </p>
             )}

@@ -141,7 +141,7 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
               />
               <span className="text-sm text-[var(--foreground)]">{t("rolloverEnabled")}</span>
             </label>
-            <p className="text-xs text-[var(--muted)] opacity-70 -mt-2">{t("rolloverHint")}</p>
+            <p className="text-xs text-[var(--muted)] -mt-2">{t("rolloverHint")}</p>
           </>
         )}
 

@@ -326,7 +326,7 @@ export function ConfigureWoobDialog({
           {/* Only meaningful for Woob: the hint explains its module catalogue,
               and "Autre" lets a module name be typed in by hand. Trade Republic
               is reached directly by pytr, with no module to name. */}
-          {!isTradeRepublic && <p className="text-xs text-[var(--muted)] opacity-70">{t("listHint")}</p>}
+          {!isTradeRepublic && <p className="text-xs text-[var(--muted)]">{t("listHint")}</p>}
         </div>
 
         <CredentialFields

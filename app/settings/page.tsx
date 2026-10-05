@@ -9,6 +9,7 @@ import {
   type SettingsTab,
 } from "@/lib/domain/settings-tabs";
 import { SettingsTabNav } from "@/components/settings/settings-tab-nav";
+import { ActiveTabIntoView } from "@/components/settings/active-tab-into-view";
 import { FormAlert } from "@/components/ui/form-alert";
 import { AccountsTab } from "./_tabs/accounts-tab";
 import { ProfileTab } from "./_tabs/profile-tab";
@@ -67,8 +68,15 @@ export default async function SettingsPage({
       {gcStatus && <FormAlert tone={gcStatus.tone}>{t(gcStatus.key)}</FormAlert>}
 
       <div className="md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8 md:items-start">
-        <div className="mb-6 md:mb-0 md:sticky md:top-8">
-          <SettingsTabNav tabs={tabs} active={active} />
+        {/* Sticky HERE, not on the <nav>: a sticky element only sticks inside
+            its parent, and this wrapper is exactly as tall as the nav, so a
+            sticky nav inside it never stuck at all. This div's parent spans
+            the whole tab content, so the tab row now stays in reach on a
+            phone while the content scrolls under it. */}
+        <div className="sticky top-0 z-10 mb-6 md:mb-0 md:top-8">
+          <ActiveTabIntoView>
+            <SettingsTabNav tabs={tabs} active={active} />
+          </ActiveTabIntoView>
         </div>
         <div id={`settings-${active}`} data-settings-panel={active} className="min-w-0 space-y-8">
           <Content viewer={viewer} show={show} isAdmin={isAdmin} isMulti={isMulti} />

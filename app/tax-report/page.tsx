@@ -10,6 +10,7 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { getAccountTaxRate } from "@/lib/domain/tax";
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
+import { ScrollRegion } from "@/components/ui/scroll-region";
 
 export default async function TaxReportPage({
   searchParams,
@@ -166,7 +167,7 @@ export default async function TaxReportPage({
                 <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(totalInterestNetCents, 0)}</p>
               </div>
             </div>
-            <p className="text-xs text-[var(--muted)] mt-4 opacity-70 flex items-center gap-1">
+            <p className="text-xs text-[var(--muted)] mt-4 flex items-center gap-1">
               {t("disclaimerShort")}
               <InfoTooltip>{t("disclaimer")}</InfoTooltip>
             </p>
@@ -177,7 +178,7 @@ export default async function TaxReportPage({
               <div className="px-6 py-4 border-b border-[var(--border)]">
                 <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("realizedGains")}</h2>
               </div>
-              <div className="overflow-x-auto">
+              <ScrollRegion label={t("realizedGains")}>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[var(--border)]">
@@ -207,7 +208,7 @@ export default async function TaxReportPage({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ScrollRegion>
             </div>
           )}
 

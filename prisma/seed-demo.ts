@@ -20,7 +20,13 @@ function at(monthsBack: number, day = 1): Date {
   d.setMonth(d.getMonth() - monthsBack);
   d.setDate(day);
   d.setHours(12, 0, 0, 0);
-  return d;
+  // A fixed day in the CURRENT month lands in the future whenever the script
+  // runs before it (the 28th, seeded on the 6th): the demo then showed
+  // transactions weeks ahead of today. Clamp to today rather than move them
+  // to last month, which would double that month's figures.
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  return d > today ? today : d;
 }
 
 // For IncomeEvent/Sale rows that need to land in the *current calendar year*
@@ -245,14 +251,21 @@ async function main() {
     [3_200, 8_500, 12_000, 425],
   ];
 
-  // Prêt immo : capital restant approx à chaque mois (négatif = passif dans le graphique)
-  // Démarré juin 2022 - au mois 23 (juillet 2024) ≈ 170k restant → aujourd'hui ≈ 158k
-  const mortgageAtOldest = 170_000;
-  const mortgageAtNow    = 158_000;
+  // Loans get a ZERO balance row each month, exactly like createAccount does
+  // for a new loan: the row only makes the account "present" on that day, and
+  // the dashboard history subtracts the capital still owed separately, from
+  // the loan's own parameters (lib/domain/dashboard-history.ts). This used to
+  // write the remaining capital as a negative balance, so every loan was
+  // subtracted twice and the demo's "Évolution du patrimoine" chart ended at
+  // ~23k against a 230k net worth printed right above it - visible to every
+  // visitor of the public demo. Found by the v2.12 visual audit.
 
-  // Prêt auto : démarré jan 2024 - au mois 23 (juillet 2024, 6 mois) ≈ 10 500 → aujourd'hui ≈ 7 500
-  const carLoanAtOldest = 10_500;
-  const carLoanAtNow    = 7_500;
+  // Investment and crypto values, oldest -> today. The real app snapshots
+  // them every 4h (/api/investments/snapshot-balances); the seed has to write
+  // the history itself or the chart leaves ~45k of assets out entirely. Each
+  // ends on the account's current market value, so the last point of the
+  // chart agrees with the figures printed above it.
+  const investmentPath = (oldest: number, now: number, t: number) => Math.round(oldest + t * (now - oldest));
 
   // Voiture : achetée jan 2024 pour 31 500 → 24 000 aujourd'hui (6k sur ~30 mois ≈ 200€/mois)
   const carAtOldest = 30_000; // 6 mois après achat (juillet 2024)
@@ -268,8 +281,6 @@ async function main() {
     // Valeurs interpolées linéairement
     const aptVal      = EUR(295_000); // appartement constant
     const carVal      = EUR(Math.round(carAtOldest + t * (carAtNow - carAtOldest)));
-    const mortgageVal = EUR(-Math.round(mortgageAtOldest + t * (mortgageAtNow - mortgageAtOldest)));
-    const carLoanVal  = EUR(-Math.round(carLoanAtOldest + t * (carLoanAtNow - carLoanAtOldest)));
 
     await prisma.historicalBalance.createMany({ data: [
       // Comptes fiat
@@ -280,9 +291,14 @@ async function main() {
       // Patrimoine physique
       { accountId: appart.id,   balanceCents: aptVal,       recordedAt: at(monthsBack) },
       { accountId: voiture.id,  balanceCents: carVal,       recordedAt: at(monthsBack) },
-      // Passifs (valeurs négatives → soustraits du patrimoine net historique)
-      { accountId: pretImmo.id, balanceCents: mortgageVal,  recordedAt: at(monthsBack) },
-      { accountId: pretAuto.id, balanceCents: carLoanVal,   recordedAt: at(monthsBack) },
+      // Loans: presence only, see the comment above the loop.
+      { accountId: pretImmo.id, balanceCents: BigInt(0),    recordedAt: at(monthsBack) },
+      { accountId: pretAuto.id, balanceCents: BigInt(0),    recordedAt: at(monthsBack) },
+      // Investments and crypto, ending on today's market value.
+      { accountId: pea.id,      balanceCents: EUR(investmentPath(11_000, 17_445, t)), recordedAt: at(monthsBack) },
+      { accountId: cto.id,      balanceCents: EUR(investmentPath(4_500, 7_084, t)),   recordedAt: at(monthsBack) },
+      { accountId: cryptoTR.id, balanceCents: EUR(investmentPath(7_000, 16_140, t)),  recordedAt: at(monthsBack) },
+      { accountId: btcCB.id,    balanceCents: EUR(investmentPath(2_100, 4_600, t)),   recordedAt: at(monthsBack) },
     ]});
   }
 

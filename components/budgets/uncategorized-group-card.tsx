@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { useTranslations } from "next-intl";
 
 const selectClass =
-  "bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer";
+  "bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-2 py-1.5 min-h-11 md:min-h-0 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer";
 
 export function UncategorizedGroupCard({
   label,
@@ -45,7 +45,7 @@ export function UncategorizedGroupCard({
         </p>
       </div>
       <div className="flex items-center gap-2 w-full sm:w-auto">
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={`${selectClass} min-w-0 flex-1 sm:flex-initial`}>
+        <select aria-label={t("chooseCategory")} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={`${selectClass} min-w-0 flex-1 sm:flex-initial`}>
           <option value="" disabled>
             {t("chooseCategory")}
           </option>

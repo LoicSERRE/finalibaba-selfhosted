@@ -135,13 +135,21 @@ export default async function TransactionsPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    {[td("tableHeaders.date"), t("account"), td("tableHeaders.label"), td("tableHeaders.category"), td("tableHeaders.amount")].map(
-                      (h) => (
-                        <th key={h} className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
-                          {h}
-                        </th>
-                      ),
-                    )}
+                    {/* Amount straight after the label: on a phone the table
+                        scrolls sideways, and the amount sat last, off-screen
+                        on every row - found by the v2.12 visual audit. The
+                        account column folds under the label below sm. */}
+                    {[
+                      { h: td("tableHeaders.date"), cls: "" },
+                      { h: t("account"), cls: "hidden sm:table-cell" },
+                      { h: td("tableHeaders.label"), cls: "" },
+                      { h: td("tableHeaders.amount"), cls: "" },
+                      { h: td("tableHeaders.category"), cls: "" },
+                    ].map(({ h, cls }) => (
+                      <th key={h} className={`px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap ${cls}`}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -155,9 +163,16 @@ export default async function TransactionsPage({
                       <td className="px-3 sm:px-6 py-3 text-[var(--muted)] tabular-nums whitespace-nowrap text-xs sm:text-sm">
                         {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(tx.date)}
                       </td>
-                      <td className="px-3 sm:px-6 py-3 text-[var(--muted)] whitespace-nowrap text-xs sm:text-sm">{tx.account.name}</td>
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-3 text-[var(--muted)] whitespace-nowrap text-xs sm:text-sm">{tx.account.name}</td>
                       <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={tx.label}>
                         {tx.label}
+                        <span className="block sm:hidden text-xs text-[var(--muted)] mt-0.5">{tx.account.name}</span>
+                      </td>
+                      <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
+                        <span className={tx.amountCents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                          {tx.amountCents > BigInt(0) ? "+" : ""}
+                          {formatCurrency(tx.amountCents)}
+                        </span>
                       </td>
                       <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
                         <TransactionCategoryCell
@@ -169,12 +184,6 @@ export default async function TransactionsPage({
                           isInternalTransfer={tx.isInternalTransfer}
                           readOnly={readOnly}
                         />
-                      </td>
-                      <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
-                        <span className={tx.amountCents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
-                          {tx.amountCents > BigInt(0) ? "+" : ""}
-                          {formatCurrency(tx.amountCents)}
-                        </span>
                       </td>
                     </tr>
                   ))}

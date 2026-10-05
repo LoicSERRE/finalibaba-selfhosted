@@ -98,7 +98,7 @@ export async function ProfileTab({ viewer }: SettingsTabProps) {
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
               </div>
-              <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.profile.savedHint")}</p>
+              <p className="text-xs text-[var(--muted)]">{t("settings.profile.savedHint")}</p>
             </div>
           </div>
           <div className="flex justify-end">

@@ -55,7 +55,7 @@ export function TransactionCategorySelect({
         onChange={handleChange}
         disabled={pending}
         aria-label={t("assignLabel")}
-        className="bg-transparent border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer disabled:opacity-50 max-w-[140px]"
+        className="bg-transparent border border-[var(--border)] rounded-lg px-2 py-1 min-h-11 md:min-h-0 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer disabled:opacity-50 max-w-[140px]"
       >
         <option value="">{t("uncategorized")}</option>
         {categories.map((c) => (

@@ -49,8 +49,8 @@ export function BenchmarkSection({
                 <span
                   className={`text-xs font-medium tabular-nums px-1.5 py-0.5 rounded ${
                     investCAGR >= indexCAGR
-                      ? "bg-[var(--positive)]/15 text-[var(--positive)]"
-                      : "bg-[var(--negative)]/15 text-[var(--negative)]"
+                      ? "bg-[var(--positive)]/15 text-[var(--positive-text)]"
+                      : "bg-[var(--negative)]/15 text-[var(--negative-text)]"
                   }`}
                 >
                   {investCAGR >= indexCAGR ? "+" : ""}

@@ -84,8 +84,11 @@ export function TransactionsTable({
             {[
               td("tableHeaders.date"),
               td("tableHeaders.label"),
-              td("tableHeaders.category"),
+              // Amount before category: on a phone the table scrolls
+              // sideways, and a last-but-one amount sat off-screen on every
+              // row (v2.12 visual audit).
               td("tableHeaders.amount"),
+              td("tableHeaders.category"),
               ...(showIncomeColumn ? [td("tableHeaders.income")] : []),
               ...(showManualColumn ? [td("tableHeaders.actions")] : []),
             ].map((h) => (
@@ -116,17 +119,6 @@ export function TransactionsTable({
               <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={tx.label ?? undefined}>
                 {tx.label}
               </td>
-              <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
-                <TransactionCategoryCell
-                  transactionId={tx.id}
-                  categoryId={tx.categoryId}
-                  amountCents={tx.amountCents}
-                  categories={categories}
-                  splits={tx.splits}
-                  isInternalTransfer={tx.isInternalTransfer}
-                  readOnly={readOnly}
-                />
-              </td>
               <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
                 <span
                   className={
@@ -138,6 +130,17 @@ export function TransactionsTable({
                   {tx.amountCents > BigInt(0) ? "+" : ""}
                   {formatCurrency(tx.amountCents)}
                 </span>
+              </td>
+              <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
+                <TransactionCategoryCell
+                  transactionId={tx.id}
+                  categoryId={tx.categoryId}
+                  amountCents={tx.amountCents}
+                  categories={categories}
+                  splits={tx.splits}
+                  isInternalTransfer={tx.isInternalTransfer}
+                  readOnly={readOnly}
+                />
               </td>
               {showIncomeColumn && (
                 <td className="px-3 sm:px-6 py-3 whitespace-nowrap">

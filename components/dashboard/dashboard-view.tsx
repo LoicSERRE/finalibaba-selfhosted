@@ -84,7 +84,7 @@ export function DashboardView({
               {delta30.amount === 0 ? "—" : delta30.amount > 0 ? "▲" : "▼"}
               {formatCurrency(Math.abs(delta30.amount), 0)}
               {delta30.percent !== null && delta30.amount !== 0 && (
-                <span className="font-normal opacity-80">
+                <span className="font-normal">
                   ({delta30.percent > 0 ? "+" : ""}{delta30.percent.toFixed(1)}%)
                 </span>
               )}

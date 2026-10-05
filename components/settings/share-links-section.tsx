@@ -186,8 +186,8 @@ export function ShareLinksSection({ links }: Readonly<{ links: ShareLinkRow[] }>
                     <span
                       className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded ${
                         expired
-                          ? "bg-[var(--negative)]/15 text-[var(--negative)]"
-                          : "bg-[var(--positive)]/15 text-[var(--positive)]"
+                          ? "bg-[var(--negative)]/15 text-[var(--negative-text)]"
+                          : "bg-[var(--positive)]/15 text-[var(--positive-text)]"
                       }`}
                     >
                       {expired ? t("statusExpired") : t("statusActive")}

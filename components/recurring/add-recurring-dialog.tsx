@@ -107,7 +107,7 @@ export function AddRecurringDialog({
                 aria-pressed={type === "expense"}
                 onClick={() => setType("expense")}
                 className={`flex-1 py-2 min-h-[44px] text-xs font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${
-                  type === "expense" ? "bg-[var(--negative)]/15 text-[var(--negative)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  type === "expense" ? "bg-[var(--negative)]/15 text-[var(--negative-text)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
                 }`}
               >
                 {t("expense")}
@@ -117,7 +117,7 @@ export function AddRecurringDialog({
                 aria-pressed={type === "income"}
                 onClick={() => setType("income")}
                 className={`flex-1 py-2 min-h-[44px] text-xs font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${
-                  type === "income" ? "bg-[var(--positive)]/15 text-[var(--positive)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  type === "income" ? "bg-[var(--positive)]/15 text-[var(--positive-text)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
                 }`}
               >
                 {t("income")}

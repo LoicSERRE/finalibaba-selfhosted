@@ -1,6 +1,7 @@
 import { formatCurrency } from "@/lib/utils/format";
 import type { PerformanceRow } from "@/lib/domain/analytics";
 import type { getTranslations } from "next-intl/server";
+import { ScrollRegion } from "@/components/ui/scroll-region";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -20,7 +21,7 @@ export function MonthlyPerformanceSection({
           {t("monthlyPerf.title")}
         </h2>
       </div>
-      <div className="overflow-x-auto">
+      <ScrollRegion label={t("monthlyPerf.title")}>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--border)]">
@@ -64,7 +65,7 @@ export function MonthlyPerformanceSection({
           ))}
         </tbody>
       </table>
-      </div>
+      </ScrollRegion>
     </div>
   );
 }

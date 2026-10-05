@@ -67,3 +67,6 @@ __pycache__/
 sync/coverage.xml
 sync/.coverage
 lizard-blind-spots.json
+
+# Output of scripts/ui-audit/run.sh (screenshots and report), never committed
+/ui-audit-out/

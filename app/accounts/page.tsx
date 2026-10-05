@@ -152,7 +152,7 @@ export default async function AccountsPage({
           >
             <span className="text-xs font-medium sm:hidden">{labelShort}</span>
             <span className="text-sm font-medium hidden sm:block">{label}</span>
-            <span className="hidden sm:block text-xs mt-0.5 tabular-nums opacity-75">
+            <span className="hidden sm:block text-xs mt-0.5 tabular-nums">
               {formatCurrency(tabTotals[id], 0)}
             </span>
           </Link>

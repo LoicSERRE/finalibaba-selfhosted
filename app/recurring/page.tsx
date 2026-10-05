@@ -201,7 +201,7 @@ export default async function RecurringPage() {
                         </span>
                       )}
                       {r.active && missedById.get(r.id) && (
-                        <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-[var(--negative)]/15 text-[var(--negative)] shrink-0">
+                        <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-[var(--negative)]/15 text-[var(--negative-text)] shrink-0">
                           <AlertTriangle size={10} aria-hidden="true" />
                           {t("missedBadge")}
                         </span>
@@ -273,7 +273,7 @@ export default async function RecurringPage() {
                 >
                   <div className="min-w-0">
                     <p className="text-sm text-[var(--muted)] break-words">{r.label}</p>
-                    <p className="text-xs text-[var(--muted)] opacity-70 tabular-nums">
+                    <p className="text-xs text-[var(--muted)] tabular-nums">
                       {formatCurrency(r.amountCents)} · {r.account.name}
                     </p>
                   </div>

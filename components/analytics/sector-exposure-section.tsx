@@ -103,7 +103,7 @@ export function SectorExposureSection({
 
       <div
         className="flex h-3 rounded-full gap-0.5"
-        role="img"
+        role="group"
         aria-label={t("sectorExposure.ariaLabel")}
       >
         {rows.map((r, i) => {

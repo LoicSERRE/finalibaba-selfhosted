@@ -31,7 +31,7 @@ export async function MyDataSection() {
 
       <a
         href="/api/my-data"
-        className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-[var(--accent)] text-white font-medium hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+        className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-[var(--accent-strong)] text-white font-medium hover:bg-[var(--accent-strong)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
       >
         <Download size={14} aria-hidden="true" />
         {t("action")}

@@ -58,7 +58,7 @@ export async function TaxSettingsSection({
             </option>
           ))}
         </select>
-        <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.countryHint")}</p>
+        <p className="text-xs text-[var(--muted)]">{t("settings.tax.countryHint")}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="space-y-1.5">
@@ -81,7 +81,7 @@ export async function TaxSettingsSection({
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
           </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.peaHint")}</p>
+          <p className="text-xs text-[var(--muted)]">{t("settings.tax.peaHint")}</p>
         </div>
         <div className="space-y-1.5">
           <label htmlFor="taxRateCto" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
@@ -103,7 +103,7 @@ export async function TaxSettingsSection({
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
           </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.ctoHint")}</p>
+          <p className="text-xs text-[var(--muted)]">{t("settings.tax.ctoHint")}</p>
         </div>
         <div className="space-y-1.5">
           <label htmlFor="taxRateCrypto" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
@@ -125,7 +125,7 @@ export async function TaxSettingsSection({
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">%</span>
           </div>
-          <p className="text-xs text-[var(--muted)] opacity-70">{t("settings.tax.cryptoHint")}</p>
+          <p className="text-xs text-[var(--muted)]">{t("settings.tax.cryptoHint")}</p>
         </div>
       </div>
       <div className="flex items-center justify-between">

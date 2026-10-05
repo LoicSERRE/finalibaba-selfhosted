@@ -31,7 +31,7 @@ export async function TwoFactorRequired() {
         </div>
         <Link
           href={settingsTabHref("security")}
-          className="inline-block w-full px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+          className="inline-block w-full px-4 py-2 rounded-lg bg-[var(--accent-strong)] text-white text-sm font-medium hover:bg-[var(--accent-strong)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
         >
           {t("action")}
         </Link>

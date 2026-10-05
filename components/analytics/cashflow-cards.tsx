@@ -66,7 +66,7 @@ export function CashflowCards({
                 {savingsRate >= 0 ? "+" : ""}{savingsRate.toFixed(1)}%
               </p>
               {savingsRate >= 40 && (
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--positive)]/15 text-[var(--positive)]">
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-[var(--positive)]/15 text-[var(--positive-text)]">
                   {t("savingsRate.elite")}
                 </span>
               )}
@@ -82,7 +82,7 @@ export function CashflowCards({
                 : t("savingsRate.momSavings", { mom: formatCurrency(momDelta!, 0), salary: formatCurrency(salaryNetCents, 0) })
               }
             </p>
-            <p className="text-xs text-[var(--muted)] mt-0.5 opacity-70">
+            <p className="text-xs text-[var(--muted)] mt-0.5">
               {hasDeclaredSavings
                 ? t("savingsRate.hintDeclared")
                 : t("savingsRate.hintMom")
@@ -120,7 +120,7 @@ export function CashflowCards({
             <p className="text-xs text-[var(--muted)] mt-1">
               {t("runway.detail", { savings: formatCurrency(savingsCents, 0), expenses: formatCurrency(monthlyExpensesCents, 0) })}
             </p>
-            <p className="text-xs text-[var(--muted)] mt-0.5 opacity-70">
+            <p className="text-xs text-[var(--muted)] mt-0.5">
               {runwayMonths >= 12
                 ? t("runway.safe")
                 : runwayMonths >= 6

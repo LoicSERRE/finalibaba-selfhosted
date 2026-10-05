@@ -17,11 +17,12 @@ const TAB_ICONS: Record<SettingsTab, typeof Bell> = {
  * its own URL with its own server render, and for navigation that changes the
  * page a list of links marked `aria-current="page"` is the pattern assistive
  * technology expects - a `role="tab"` widget promises arrow-key behaviour and
- * an in-page panel that do not exist here. No client JavaScript at all.
+ * an in-page panel that do not exist here. The nav itself needs no client
+ * JavaScript; ActiveTabIntoView only adjusts the phone row's scroll position.
  *
  * A vertical menu beside the content from `md` up; below it, a row that
- * scrolls sideways on its own (never the page) and stays at the top while the
- * tab's content scrolls under it.
+ * scrolls sideways on its own (never the page). The page makes its wrapper
+ * sticky, so the row stays at the top while the tab's content scrolls.
  */
 export async function SettingsTabNav({
   tabs,
@@ -31,7 +32,7 @@ export async function SettingsTabNav({
   return (
     <nav
       aria-label={t("navLabel")}
-      className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-[var(--background)] md:static md:mx-0 md:px-0 md:py-0 md:bg-transparent"
+      className="-mx-4 px-4 py-2 bg-[var(--background)] md:mx-0 md:px-0 md:py-0 md:bg-transparent"
     >
       <ul className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
         {tabs.map((tab) => {

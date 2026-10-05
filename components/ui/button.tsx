@@ -19,13 +19,15 @@ const variantClasses: Record<Variant, string> = {
   ghost:
     "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed",
   destructive:
-    "bg-[var(--negative)]/15 text-[var(--negative)] hover:bg-[var(--negative)]/25 active:scale-[0.97] active:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed",
+    "bg-[var(--negative)]/15 text-[var(--negative-text)] hover:bg-[var(--negative)]/25 active:scale-[0.97] active:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed",
 };
 
 const sizeClasses: Record<Size, string> = {
-  sm: "px-3 py-1.5 text-xs min-h-[44px]",
-  md: "px-4 py-2 text-sm min-h-[44px]",
-  lg: "px-5 py-2.5 text-sm min-h-[44px]",
+  // min-w as well as min-h: an icon-only "sm" button was 36px wide, under
+  // the 44px touch target every other dimension here already guarantees.
+  sm: "px-3 py-1.5 text-xs min-h-[44px] min-w-[44px] justify-center",
+  md: "px-4 py-2 text-sm min-h-[44px] min-w-[44px] justify-center",
+  lg: "px-5 py-2.5 text-sm min-h-[44px] min-w-[44px] justify-center",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

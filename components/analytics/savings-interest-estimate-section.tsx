@@ -45,7 +45,7 @@ export function SavingsInterestEstimateSection({
       <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-1">
         {t("savingsEstimate.title")}
       </p>
-      <p className="text-xs text-[var(--muted)] opacity-70 mb-3">{t("savingsEstimate.subtitle")}</p>
+      <p className="text-xs text-[var(--muted)] mb-3">{t("savingsEstimate.subtitle")}</p>
       <div className="grid grid-cols-2 gap-2 sm:gap-4">
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("savingsEstimate.weightedRate")}</p>

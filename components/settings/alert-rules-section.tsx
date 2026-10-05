@@ -206,7 +206,7 @@ export function AlertRulesSection({
                   <span
                     className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded ${
                       rule.active
-                        ? "bg-[var(--positive)]/15 text-[var(--positive)]"
+                        ? "bg-[var(--positive)]/15 text-[var(--positive-text)]"
                         : "bg-[var(--muted)]/15 text-[var(--muted)]"
                     }`}
                   >
