@@ -21,8 +21,8 @@ woob[lcl,swile]==3.7.*
 #
 # When a new bank reports a missing package, the error message now names it:
 # add it here and rebuild.
-python-jose>=3.3.0
-chompjs>=1.2.2
+python-jose>=3.5.0
+chompjs>=1.4.1
 # Pinned to a commit, not just the bare repo URL: pytr has no PyPI release
 # (pip-audit can't check it either, see ci.yml), and an unpinned git
 # dependency means every fresh install silently resolves to whatever's on
@@ -59,9 +59,9 @@ pytr @ git+https://github.com/pytr-org/pytr.git@1cff3d701e0db82e3425dae2194f2eb7
 # Declared explicitly rather than leaned on as woob's transitive dependency:
 # sync/crypto_at_rest.py decrypts real bank credentials with it, and a
 # dependency that arrives by accident can leave by accident too.
-cryptography>=42.0.0
-psycopg2-binary>=2.9.12
+cryptography>=50.0.1
+psycopg2-binary>=2.9.13
 fastapi>=0.141.1
 uvicorn>=0.52.4
 apscheduler>=3.11.3
-playwright>=1.61.0
+playwright>=1.63.0
