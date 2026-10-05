@@ -140,52 +140,28 @@ export function isSessionRevoked(
 }
 
 /**
- * The current user.
+ * Raised when auth is on and the request carries no session at all.
  *
- * **The owner fallback is only ever reachable with NO live session** - that is
- * the security property of this function. Reachable with one, a session naming
- * a deleted user fell through and came back as the owner with role ADMIN.
- * A deleted user raises DeletedSessionUserError instead; app/layout.tsx catches
- * it and signs the browser out (not a redirect - the layout renders on /login
- * too, so it would loop).
+ * Before this existed, "no session" resolved to the instance owner with role
+ * ADMIN. That was meant for the public routes (/login, /invite/*, /shared/*),
+ * where the layout still has to render something - but a Server Action is
+ * invocable from any page, those three included, so an anonymous request to a
+ * public route ran every action on that page as the owner. "Nobody is signed
+ * in" now means exactly that, and only getPublicViewer() may turn it into a
+ * value.
  */
-export async function getViewer(): Promise<Viewer> {
-  if (isAuthEnabled()) {
-    const session = await getServerSession(authOptions);
-    const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
-
-    if (sessionUserId) {
-      const user = await prisma.user.findUnique({
-        where: { id: sessionUserId },
-        // sessionsRevokedAt rides along on the query this already makes, so
-        // checking revocation on every request costs nothing extra.
-        select: { id: true, role: true, sessionsRevokedAt: true },
-      });
-      // No fallback here, ever. Anything other than the real row for the id
-      // this session names is somebody else's identity.
-      if (!user) throw new DeletedSessionUserError(sessionUserId);
-
-      // Revocation compares against when the token was ISSUED, not when it
-      // expires: a 30-day JWT cannot be recalled, so the only way to end one
-      // is to refuse it. Until this existed the sole way to stop somebody's
-      // session was to delete their account, which cascades their whole
-      // portfolio - a stolen phone meant choosing between a live session and
-      // destroying real data.
-      const issuedAt = (session?.user as { issuedAt?: number } | undefined)?.issuedAt;
-      if (isSessionRevoked(user.sessionsRevokedAt, issuedAt)) {
-        throw new RevokedSessionError(user.id);
-      }
-      return { id: user.id, role: user.role, isMonoMode: false };
-    }
-
-    // No session id at all. Two cases, both benign: a pre-v2 JWT still live in
-    // a browser from before the upgrade (the old token only carried
-    // `sub: "owner"`, and mapping it to the owner is what keeps the upgrade
-    // from logging everyone out mid-flight), or no session cookie - which
-    // reaches here only on the routes the middleware exempts, /login and
-    // /invite among them, where the layout still has to render something.
+export class UnauthenticatedError extends Error {
+  constructor() {
+    super("Authentication required.");
+    this.name = "UnauthenticatedError";
   }
+}
 
+export function isUnauthenticated(e: unknown): boolean {
+  return e instanceof UnauthenticatedError;
+}
+
+async function ownerViewer(isMonoMode: boolean): Promise<Viewer> {
   const owner = await prisma.user.findUnique({
     where: { id: OWNER_USER_ID },
     select: { id: true, role: true },
@@ -195,7 +171,77 @@ export async function getViewer(): Promise<Viewer> {
       "No owner user found - the v2.0 multi-user migration has not been applied to this database."
     );
   }
-  return { id: owner.id, role: owner.role, isMonoMode: !isAuthEnabled() };
+  return { id: owner.id, role: owner.role, isMonoMode };
+}
+
+/**
+ * The signed-in user, or null when auth is on and nobody is signed in.
+ *
+ * Every caller except getPublicViewer goes through getViewer, which turns the
+ * null into an UnauthenticatedError. A deleted or revoked session still
+ * throws here: those are not "anonymous", they are a browser that must be
+ * signed out.
+ */
+async function resolveViewer(): Promise<Viewer | null> {
+  if (!isAuthEnabled()) return ownerViewer(true);
+
+  const session = await getServerSession(authOptions);
+  if (!session) return null;
+
+  const sessionUserId = (session.user as { id?: string } | undefined)?.id;
+  if (!sessionUserId) {
+    // A SIGNED session that carries no user id: a pre-v2 JWT still live in a
+    // browser from before the upgrade (it only carried `sub: "owner"`). The
+    // jwt callback stamps userId onto every token it sees, so this is legacy
+    // only - but it is a real, verified token, which is what separates it
+    // from the anonymous case above.
+    return ownerViewer(false);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: sessionUserId },
+    // sessionsRevokedAt rides along on the query this already makes, so
+    // checking revocation on every request costs nothing extra.
+    select: { id: true, role: true, sessionsRevokedAt: true },
+  });
+  // No fallback here, ever. Anything other than the real row for the id
+  // this session names is somebody else's identity.
+  if (!user) throw new DeletedSessionUserError(sessionUserId);
+
+  // Revocation compares against when the token was ISSUED, not when it
+  // expires: a 30-day JWT cannot be recalled, so the only way to end one
+  // is to refuse it.
+  const issuedAt = (session.user as { issuedAt?: number } | undefined)?.issuedAt;
+  if (isSessionRevoked(user.sessionsRevokedAt, issuedAt)) {
+    throw new RevokedSessionError(user.id);
+  }
+  return { id: user.id, role: user.role, isMonoMode: false };
+}
+
+/**
+ * The current user. Throws UnauthenticatedError when auth is on and the
+ * request has no session - never falls back to the owner for an anonymous
+ * caller. In mono mode (AUTH_ENABLED off) the owner IS the user.
+ *
+ * A session naming a deleted user raises DeletedSessionUserError, a revoked
+ * one RevokedSessionError; app/layout.tsx catches both and signs the browser
+ * out (not a redirect - the layout renders on /login too, so it would loop).
+ */
+export async function getViewer(): Promise<Viewer> {
+  const viewer = await resolveViewer();
+  if (!viewer) throw new UnauthenticatedError();
+  return viewer;
+}
+
+/**
+ * The current user, or null for an anonymous visitor. Only for the root
+ * layout, which renders on the public routes (/login, /invite/*, /shared/*)
+ * too and has to decide what shell to draw there. Nothing that reads or
+ * writes user data may use it: a null here must render less, never resolve to
+ * somebody.
+ */
+export async function getPublicViewer(): Promise<Viewer | null> {
+  return resolveViewer();
 }
 
 export async function requireAdmin(): Promise<Viewer> {

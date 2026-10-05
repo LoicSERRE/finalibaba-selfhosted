@@ -59,6 +59,9 @@ vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 
 import {
   getViewer,
+  getPublicViewer,
+  isUnauthenticated,
+  UnauthenticatedError,
   requireAdmin,
   baseAccountIds,
   viewAccountIds,
@@ -413,5 +416,73 @@ describe("getViewer with a session for a user that no longer exists", () => {
     userFindUniqueMock.mockResolvedValue(null);
 
     await expect(requireAdmin()).rejects.toBeInstanceOf(DeletedSessionUserError);
+  });
+});
+
+// Before this existed, "auth is on but there is no session" resolved to the
+// instance owner with role ADMIN. That fallback was meant for the layout on
+// the public routes, but a Server Action is invocable from any page - those
+// included - so an anonymous request ran the page's actions as the owner.
+describe("getViewer with auth enabled and no session at all", () => {
+  beforeEach(() => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue(null);
+    userFindUniqueMock.mockResolvedValue(OWNER);
+  });
+
+  it("refuses with UnauthenticatedError instead of resolving to the owner", async () => {
+    await expect(getViewer()).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it("never looks the owner up, so it cannot hand that identity out", async () => {
+    await getViewer().catch(() => {});
+    expect(userFindUniqueMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks requireAdmin, the role the old fallback granted", async () => {
+    await expect(requireAdmin()).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it("blocks every guarded read and write path built on it", async () => {
+    await expect(getViewContext()).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it("is distinguishable from an ended session, which the layout signs out", async () => {
+    const caught = await getViewer().catch((e) => e);
+    expect(isUnauthenticated(caught)).toBe(true);
+    expect(isDeletedSessionUser(caught)).toBe(false);
+  });
+});
+
+describe("getPublicViewer (the root layout only)", () => {
+  it("returns null for an anonymous visitor rather than anybody's identity", async () => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue(null);
+    userFindUniqueMock.mockResolvedValue(OWNER);
+
+    await expect(getPublicViewer()).resolves.toBeNull();
+    expect(userFindUniqueMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the signed-in user exactly as getViewer does", async () => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue({ user: { id: "user-b" } });
+    userFindUniqueMock.mockResolvedValue(MEMBER);
+
+    await expect(getPublicViewer()).resolves.toEqual({ id: "user-b", role: "MEMBER", isMonoMode: false });
+  });
+
+  it("still throws for a deleted user, so the layout can sign that browser out", async () => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue({ user: { id: "user-deleted" } });
+    userFindUniqueMock.mockResolvedValue(null);
+
+    await expect(getPublicViewer()).rejects.toBeInstanceOf(DeletedSessionUserError);
+  });
+
+  it("is the owner in mono mode, where there is no login at all", async () => {
+    userFindUniqueMock.mockResolvedValue(OWNER);
+
+    await expect(getPublicViewer()).resolves.toEqual({ id: OWNER_USER_ID, role: "ADMIN", isMonoMode: true });
   });
 });

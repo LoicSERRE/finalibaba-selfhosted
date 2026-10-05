@@ -53,6 +53,7 @@ describe("proxy matcher - paths that must stay gated", () => {
     ["/analytics"],
     ["/transactions"],
     ["/api/backup"],
+    ["/api/backup/download"],
     // Opened by the browser with a real session, unlike /api/realtime/notify.
     ["/api/realtime/stream"],
   ])("%s goes through the auth gate", (path) => {

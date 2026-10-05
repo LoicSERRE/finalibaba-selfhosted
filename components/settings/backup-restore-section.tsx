@@ -74,31 +74,37 @@ export function BackupRestoreSection() {
         <p className="text-xs text-[var(--muted)] mt-0.5">{t("subtitle")}</p>
       </div>
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 flex flex-wrap gap-3">
-        {/* Not a Next.js page - /api/backup streams a gzip DB dump for the
-            browser to download, so a real navigation (not the client
-            router) is required for its Content-Disposition header to take
-            effect. */}
-        <div className="flex flex-col gap-2 w-full sm:w-auto">
+        {/* A plain HTML form, not fetch and not the client router: the
+            download is a real navigation, so Content-Disposition takes effect
+            and the browser streams the dump to disk itself. POST so the
+            passphrase travels in the body - it used to sit in the query
+            string, i.e. in browser history and in every proxy access log. */}
+        <form
+          method="post"
+          action="/api/backup/download"
+          className="flex flex-col gap-2 w-full sm:w-auto"
+          onSubmit={() => {
+            // Cleared once the browser has read the field for this submit, so
+            // the secret does not linger in the page afterwards.
+            setTimeout(() => setDownloadPass(""), 0);
+          }}
+        >
           <div className="flex flex-wrap items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
             <Button
+              type="submit"
               variant="outline"
               // The route refuses an unencrypted whole-database dump, so the
-              // button has to refuse too: navigating anyway would answer a
+              // button has to refuse too: submitting anyway would answer a
               // click with a 400 the browser renders as a blank page, with
               // nothing saying the passphrase was the missing piece.
               disabled={!downloadPass}
-              onClick={() => {
-                // A real navigation, not the client router: Content-Disposition
-                // only takes effect on one.
-                window.location.href = `/api/backup?passphrase=${encodeURIComponent(downloadPass)}`;
-              }}
             >
               <Download size={14} aria-hidden="true" />
               {t("download")}
             </Button>
             <input
               type="password"
+              name="passphrase"
               value={downloadPass}
               onChange={(e) => setDownloadPass(e.target.value)}
               placeholder={t("passphrasePlaceholder")}
@@ -108,7 +114,7 @@ export function BackupRestoreSection() {
             />
           </div>
           <p className="text-xs text-[var(--muted)] max-w-md">{t("passphraseHint")}</p>
-        </div>
+        </form>
 
         <Dialog
           open={open}

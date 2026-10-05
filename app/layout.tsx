@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -13,7 +14,7 @@ import { TwoFactorRequired } from "@/components/auth/two-factor-required";
 import { requiresTwoFactor } from "@/lib/services/two-factor-policy";
 import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, isEndedSession, isRevokedSession, isDemoMode } from "@/lib/auth-context";
+import { getPublicViewer, isEndedSession, isRevokedSession, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { isBareRoute } from "@/lib/domain/bare-routes";
 import "./globals.css";
@@ -98,16 +99,28 @@ export default async function RootLayout({
   // stays valid for its full 30 days, so the browser keeps sending it. The
   // page is replaced by SessionEnded, which signs the browser out - rendering
   // children here would run a page for an account that no longer exists.
-  let viewer: Awaited<ReturnType<typeof getViewer>> | null = null;
+  //
+  // getPublicViewer, not getViewer: this layout also renders the public routes
+  // (/login, /invite/*, /shared/*), where nobody is signed in. A null viewer
+  // there draws a bare shell and nothing that reads user data; anywhere else it
+  // goes to /login. It never resolves to the owner.
+  let viewer: Awaited<ReturnType<typeof getPublicViewer>> = null;
+  let sessionEnded = false;
   let endedReason: "deleted" | "revoked" = "deleted";
   try {
-    viewer = await getViewer();
+    viewer = await getPublicViewer();
   } catch (e) {
     // Deleted OR revoked: both mean this browser must be signed out, but the
     // two say very different things to the person reading the screen.
     if (!isEndedSession(e)) throw e;
+    sessionEnded = true;
     endedReason = isRevokedSession(e) ? "revoked" : "deleted";
   }
+
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  // The middleware sends anonymous requests for private routes to /login
+  // before they get here; this is the backstop if it ever does not.
+  if (!viewer && !sessionEnded && !isBareRoute(pathname)) redirect("/login");
 
   const account =
     isDemoMode() || !viewer
@@ -116,14 +129,12 @@ export default async function RootLayout({
           where: { id: viewer.id },
           select: { appLockEnabled: true, totpEnabled: true },
         });
-  // Never the owner's setting on a route where nobody is signed in. /login,
-  // /invite and /shared reach getViewer() with no session, so it resolves to
-  // the instance owner by design - and handing an anonymous browser the
-  // OWNER's app-lock flag is what let a freshly signed-in member inherit a
-  // lock screen that belonged to somebody else (see AppLockGate). The gate
-  // carries its own bare-route guard too; this stops the value being produced
-  // in the first place rather than relying on the consumer to ignore it.
-  const pathname = (await headers()).get("x-pathname") ?? "";
+  // Never applied on a public route. Before getPublicViewer existed, /login,
+  // /invite and /shared resolved to the instance owner, and handing an
+  // anonymous browser the OWNER's app-lock flag is what let a freshly
+  // signed-in member inherit a lock screen that belonged to somebody else
+  // (see AppLockGate). Anonymous visitors now get no viewer at all; the guard
+  // stays for a signed-in user opening a share link.
   const appLockEnabled = isBareRoute(pathname) ? false : (account?.appLockEnabled ?? false);
 
   // The instance policy, checked here rather than in a page: this gate has to
@@ -193,8 +204,13 @@ export default async function RootLayout({
               <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} userId={viewer.id} />
               <RealtimeRefresh />
             </>
-          ) : (
+          ) : sessionEnded ? (
             <SessionEnded reason={endedReason} />
+          ) : (
+            // Anonymous visitor on a public route: the page alone. No sidebar,
+            // no auto-sync, no realtime stream, no service worker - every one
+            // of those acts on behalf of a user, and there is none.
+            <MainContent>{children}</MainContent>
           )}
         </NextIntlClientProvider>
       </body>

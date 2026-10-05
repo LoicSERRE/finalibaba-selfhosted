@@ -1,179 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
-import { createBackupCipher, decryptBackup, isEncryptedBackup } from "@/lib/domain/backup-encryption";
-import { requireAdmin } from "@/lib/auth-context";
+import { decryptBackup, isEncryptedBackup } from "@/lib/domain/backup-encryption";
 import { spawn } from "node:child_process";
-import { createGzip, gunzipSync } from "node:zlib";
-import { isAllowedOrigin } from "@/lib/domain/request-origin";
-
-// Strip the password out of the connection string (so it never appears in
-// `ps` output for the spawned pg_dump/psql) but keep every other part -
-// including query params like ?sslmode=require - intact. libpq falls back to
-// PGPASSWORD when the URI has a username but no password.
-function buildConnectionString(databaseUrl: string): { connStr: string; password: string } {
-  const u = new URL(databaseUrl);
-  const password = decodeURIComponent(u.password);
-  u.password = "";
-  return { connStr: u.toString(), password };
-}
+import { gunzipSync } from "node:zlib";
+import { buildConnectionString, refuseBackupRequest } from "@/lib/services/database-backup";
 
 const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
 
-// Both handlers operate on the WHOLE database - every user's data, by design
-// (this wraps pg_dump/psql, not a per-user export). That makes it a
-// full-instance takeover primitive in multi-user: a GET reads everyone's
-// finances, a POST replaces the entire instance including the user table.
-// Admin-only as of v2.0; before that the route had no auth of its own at all,
-// relying entirely on proxy.ts's blanket session gate, which in multi-user
-// any member passes. In mono mode the viewer is the owner, who is ADMIN, so
-// this never fires.
-async function assertBackupAllowed(): Promise<NextResponse | null> {
-  try {
-    await requireAdmin();
-    return null;
-  } catch {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
-  }
-}
-
-export async function GET(req: NextRequest) {
-  const denied = await assertBackupAllowed();
-  if (denied) return denied;
-
-  // Recorded before the dump starts, not after: this streams the whole
-  // database, every user included, and a download that fails halfway still
-  // happened. The single most sensitive action the app offers.
-  await recordAuditEvent({ action: AUDIT.backupDownloaded });
-
-  const { connStr, password } = buildConnectionString(process.env.DATABASE_URL!);
-
-  // sonarjs flags resolving pg_dump via PATH rather than an absolute path.
-  // In production PATH is fixed by the Dockerfile (apk-installed
-  // postgresql16-client, not attacker-influenced without prior code
-  // execution in the container already); hardcoding an absolute path would
-  // instead break `pnpm dev` on every OS/package-manager combo where
-  // pg_dump isn't symlinked to the same location.
-  // eslint-disable-next-line sonarjs/no-os-command-from-path
-  const dump = spawn("pg_dump", ["--clean", "--if-exists", "--no-owner", connStr], {
-    env: { ...process.env, PGPASSWORD: password },
-  });
-
-  let stderr = "";
-  dump.stderr.on("data", (chunk) => (stderr += chunk));
-
-  // Passphrase encryption of the FILE, now REQUIRED rather than opt-in.
-  //
-  // This dump is the whole database: every user's accounts, balances and
-  // transaction labels, in clear. It was optional while the instance had one
-  // user, where the only record in the file was the downloader's own. On a
-  // multi-user instance the admin is carrying other people's finances into a
-  // Downloads folder, and "I forgot to tick the box" is not a decision anybody
-  // makes deliberately. Per-user exports (/api/my-data) need no passphrase,
-  // because there the file holds only its owner's data.
-  //
-  // Still the user's own passphrase and not the instance key: a backup exists
-  // to survive a disaster, and disasters take .env with them.
-  const passphrase = req.nextUrl.searchParams.get("passphrase") ?? "";
-  if (!passphrase) {
-    return NextResponse.json(
-      { error: "A passphrase is required: this file contains every user's data." },
-      { status: 400 }
-    );
-  }
-  const gzip = createGzip();
-  dump.stdout.pipe(gzip);
-  const encryption = passphrase ? createBackupCipher(passphrase) : null;
-  // gzip FIRST, then encrypt: compressing ciphertext achieves nothing, and
-  // this way the compression ratio leaks no more than the file size already
-  // does.
-  const outbound = encryption ? gzip.pipe(encryption.cipher) : gzip;
-
-  // Two independent completion signals race here: gzip's "end" (all bytes
-  // flushed) and pg_dump's "close" (exit code known). If we settled the
-  // stream as soon as gzip finished, a pg_dump that wrote a valid-looking
-  // partial dump before dying mid-run would look like a *successful*
-  // download - the corruption would only surface later, during an actual
-  // restore. Wait for both, and only close() if the exit code was 0;
-  // otherwise error() so the download visibly fails.
-  let gzipEnded = false;
-  let dumpExitCode: number | null = null;
-  let settled = false;
-
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      function finish() {
-        if (settled || !gzipEnded || dumpExitCode === null) return;
-        settled = true;
-        if (dumpExitCode === 0) {
-          controller.close();
-        } else {
-          console.error(`pg_dump exited with code ${dumpExitCode}: ${stderr}`);
-          controller.error(new Error(`pg_dump exited with code ${dumpExitCode}`));
-        }
-      }
-
-      // The header goes out first, so a partial download is still
-      // recognisable as one of ours rather than as corrupt gzip.
-      if (encryption) controller.enqueue(encryption.header);
-
-      outbound.on("data", (chunk) => {
-        if (settled) return;
-        controller.enqueue(chunk);
-      });
-      outbound.on("end", () => {
-        // The GCM tag exists only once the cipher has finished, and it goes
-        // at the end: without it the file cannot be authenticated, and
-        // decryptBackup refuses anything it cannot authenticate.
-        if (encryption && !settled) controller.enqueue(encryption.cipher.getAuthTag());
-        gzipEnded = true;
-        finish();
-      });
-      dump.on("error", (err) => {
-        if (settled) return;
-        settled = true;
-        console.error("pg_dump failed to start:", err);
-        controller.error(err);
-      });
-      dump.on("close", (code) => {
-        dumpExitCode = code ?? 1;
-        finish();
-      });
-    },
-    cancel() {
-      settled = true;
-      dump.kill();
-    },
-  });
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  // The extension is how somebody finds it again months later and knows
-  // they will be asked for a passphrase.
-  const extension = encryption ? "sql.gz.enc" : "sql.gz";
-  return new NextResponse(stream, {
-    headers: {
-      "Content-Type": "application/gzip",
-      "Content-Disposition": `attachment; filename="finalibaba-backup-${timestamp}.${extension}"`,
-    },
-  });
-}
-
+// Restore only. Downloading moved to POST /api/backup/download, so that the
+// passphrase travels in a request body rather than in a URL that ends up in
+// browser history and proxy logs. With no GET here, no URL can carry it.
 export async function POST(req: NextRequest) {
-  // Before anything else, including the admin check: this is the one request
-  // in the app that replaces the whole database, and on a default instance
-  // (AUTH_ENABLED off) the admin check alone admits any page on any site
-  // that can reach this address. See lib/domain/request-origin.ts.
-  const sameOrigin = isAllowedOrigin({
-    origin: req.headers.get("origin"),
-    host: req.headers.get("host"),
-    forwardedHost: req.headers.get("x-forwarded-host"),
-    appUrl: process.env.APP_URL,
-  });
-  if (!sameOrigin) {
-    return NextResponse.json({ error: "Cross-origin request refused." }, { status: 403 });
-  }
-
-  const denied = await assertBackupAllowed();
-  if (denied) return denied;
+  const refused = await refuseBackupRequest(req);
+  if (refused) return refused;
 
   // A restore replaces the entire instance, the User table included, so it
   // can install arbitrary credentials. Recorded first - the row is written to
