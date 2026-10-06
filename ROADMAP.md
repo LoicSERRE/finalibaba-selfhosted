@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.12.1**
+Current release: **v2.12.2**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -26,6 +26,17 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.12.2 - Transactions that fit, at every width
+
+- **On an account page the transactions table scrolled sideways even on a large desktop**, hiding the income button; on a phone it was still a table. All three transaction lists (an account, `/transactions`, a budget category) share one `TransactionList`: a card per transaction below xl - label and amount first, date and account under them, then the controls - and a grid of fixed shared columns from xl. Nothing scrolls sideways at any width. One DOM rather than a table plus a hidden card list, since the category cell is interactive and would otherwise exist twice.
+- **Settings on a phone**: a 3x2 grid of tiles with short names instead of a row that scrolled sideways with nothing saying more tabs existed. The side menu only from lg; at md it left so little room that the page scrolled sideways.
+- **The "sync in progress" badge showed for two minutes when no sync ran**: `autoTriggerSync` answered "triggered" even when the request to the sync service failed, and the client only recognised the `.env` Trade Republic source finishing. It no longer takes taps meant for what is under it either.
+- Overflows at 768px (Analytics KPI cards, account tabs, dashboard row) and a clipped account header and import button on narrow phones.
+- **The visual audit measures what it missed**: content hidden in a scroller at 1024px+, `<main>` scrolling sideways (naming the element responsible), text spilling out of its box, content clipped by an ancestor, and controls under a fixed element. All at 0 after these changes, and confirmed to fire on the version before them.
+- The new list's first CI run failed the lizard blind-spot ratchet: its header type used the `Readonly<{...}>` alias this repository documents as blinding lizard. Fixed rather than re-baselined.
 
 ---
 
