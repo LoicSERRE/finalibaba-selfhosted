@@ -38,7 +38,7 @@ const THEMES = ["dark", "light"];
 // Screenshots for a reviewable subset: every page on a phone and a laptop in
 // dark, plus light and the extreme widths on the pages people open daily.
 const SHOT_ALWAYS = new Set(["phone-390|dark", "laptop-1366|dark"]);
-const SHOT_KEY_PAGES = new Set(["phone-390|light", "laptop-1366|light", "phone-360|dark", "wide-2560|dark"]);
+const SHOT_KEY_PAGES = new Set(["phone-390|light", "tablet-768|dark", "laptop-1366|light", "phone-360|dark", "wide-2560|dark"]);
 const KEY_PAGES = new Set(["dashboard", "accounts", "account-checking", "transactions", "budgets", "analytics"]);
 
 // Three small measurements rather than one large one: each runs in the page
@@ -104,12 +104,117 @@ function measureClipped(page) {
   );
 }
 
-async function measure(page, mobile) {
+/**
+ * Containers that actually scroll sideways. On a phone that can be the
+ * intended pattern for a wide table; at 1024px and up it means content does
+ * not fit and is hidden behind a scrollbar - the account page's income
+ * button was, on a large screen, and nothing above flagged it, because
+ * measureOverflow deliberately allows anything inside a scroller.
+ */
+function measureScrollers(page) {
+  return page.evaluate(() => {
+    // The widest descendant poking past the scroller's right edge: the
+    // element to go and fix. Essential for <main>, which scrolls the whole
+    // page - "main hides 25px" alone says nothing about where to look.
+    const culprit = (box) => {
+      const edge = box.getBoundingClientRect().right;
+      let worst = null;
+      for (const el of box.querySelectorAll("*")) {
+        const over = el.getBoundingClientRect().right - edge;
+        if (over > 1 && (!worst || over > worst.over)) worst = { el, over };
+      }
+      if (!worst) return "";
+      const cls = typeof worst.el.className === "string" ? worst.el.className.split(/\s+/).slice(0, 4).join(".") : "";
+      return " <- " + worst.el.tagName.toLowerCase() + "." + cls + " +" + Math.round(worst.over) + "px";
+    };
+    return [...document.querySelectorAll("body *")]
+      .filter((el) => ["auto", "scroll"].includes(getComputedStyle(el).overflowX))
+      .filter((el) => el.scrollWidth > el.clientWidth + 1)
+      .slice(0, 10)
+      .map((el) => el.tagName.toLowerCase() + " hides " + (el.scrollWidth - el.clientWidth) + "px: " + (el.getAttribute("aria-label") || el.innerText || "").trim().slice(0, 40) + (el.tagName === "MAIN" ? culprit(el) : ""));
+  });
+}
+
+/** Text that spills out of its own box (a label wider than its button). */
+function measureSelfOverflow(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll("button, a, span, p, td, th, label, h1, h2, h3, li")]
+      .filter((el) => getComputedStyle(el).overflowX === "visible" && el.clientWidth > 0)
+      .filter((el) => el.scrollWidth > el.clientWidth + 2 && (el.innerText || "").trim())
+      // A wrapper spills because a child does; report the innermost only.
+      .filter((el, _i, all) => !all.some((o) => o !== el && el.contains(o)))
+      .slice(0, 10)
+      .map((el) => el.tagName.toLowerCase() + " +" + (el.scrollWidth - el.clientWidth) + "px: " + el.innerText.trim().slice(0, 40))
+  );
+}
+
+/** Content cut off by an ancestor that clips without scrolling. */
+function measureClippedByAncestor(page) {
+  return page.evaluate(() => {
+    const clipper = (el) => {
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (["auto", "scroll"].includes(s.overflowX)) return null;
+        if (["hidden", "clip"].includes(s.overflowX) || ["hidden", "clip"].includes(s.overflowY)) return p;
+      }
+      return null;
+    };
+    const outside = (r, b) => r.right > b.right + 2 || r.left < b.left - 2 || r.bottom > b.bottom + 2 || r.top < b.top - 2;
+    return [...document.querySelectorAll("button, a, input, select, p, span, td, h2, h3")]
+      .filter((el) => !el.closest(".sr-only") && el.getBoundingClientRect().width > 0)
+      .map((el) => [el, clipper(el)])
+      .filter(([el, c]) => c && outside(el.getBoundingClientRect(), c.getBoundingClientRect()))
+      .slice(0, 10)
+      .map(([el]) => el.tagName.toLowerCase() + ": " + (el.innerText || el.getAttribute("aria-label") || "").trim().slice(0, 40));
+  });
+}
+
+/**
+ * At the very bottom of the page, what a fixed element (the phone nav, a
+ * toast) sits on top of. Only interactive elements count - text passing
+ * under a bar while scrolling is normal; a button you cannot reach is not.
+ */
+async function measureUnderFixed(page) {
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    document.querySelectorAll("main").forEach((m) => { m.scrollTop = m.scrollHeight; });
+  });
+  await page.waitForTimeout(300);
+  return page.evaluate(() => {
+    const fixed = [...document.querySelectorAll("body *")].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return getComputedStyle(el).position === "fixed" && r.width > 0 && r.height > 0;
+    });
+    const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const covered = [];
+    for (const el of document.querySelectorAll("button, a[href], input, select")) {
+      if (fixed.some((f) => f.contains(el))) continue;
+      const r = el.getBoundingClientRect();
+      const over = r.width > 0 && fixed.find((f) => hit(r, f.getBoundingClientRect()));
+      if (over) covered.push((el.innerText || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30) + " under " + (over.innerText || over.tagName).trim().slice(0, 25));
+    }
+    return covered.slice(0, 10);
+  });
+}
+
+async function measure(page, mobile, width) {
   const overflow = await measureOverflow(page);
+  const scrollers = await measureScrollers(page);
   return {
     ...overflow,
     smallTargets: mobile ? await measureTargets(page) : [],
     clipped: await measureClipped(page),
+    // Reported at every width, but only a defect from 1024px up.
+    scrollers,
+    desktopScrollers: width >= 1024 ? scrollers : [],
+    // <main> is the page's own scroll container in this app, so a sideways
+    // scroll on it is page overflow at any width - which the document-level
+    // pageOverflow check above cannot see.
+    mainScrolls: scrollers.filter((x) => x.startsWith("main ")),
+    selfOverflow: await measureSelfOverflow(page),
+    clippedByAncestor: await measureClippedByAncestor(page),
+    // Last: it scrolls the page to the bottom.
+    underFixed: await measureUnderFixed(page),
   };
 }
 
@@ -183,7 +288,7 @@ async function auditOne(browser, state, [name, path], vp, theme, publicPage = fa
   // never arrives; give client components a fixed moment to hydrate instead.
   await page.waitForTimeout(1200);
 
-  const m = await measure(page, vp.mobile && vp.width < 768);
+  const m = await measure(page, vp.mobile && vp.width < 768, vp.width);
   let axe = [];
   try {
     const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

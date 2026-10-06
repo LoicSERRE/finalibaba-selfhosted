@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatCurrency, centsToEuro } from "@/lib/utils/format";
+import { centsToEuro } from "@/lib/utils/format";
+import { TransactionList, TransactionListItem } from "@/components/shared/transaction-list";
 import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
 import { ManualEntryDialog } from "@/components/account-detail/manual-entry-dialog";
 import { DeleteManualEntryButton } from "@/components/account-detail/delete-manual-entry-button";
@@ -51,6 +52,7 @@ export function TransactionsTable({
   // from a CSV import never grows an empty column.
   const showManualColumn =
     canImportCsv && !readOnly && transactions.some((tx) => isManualEntry(tx.syncId));
+  const dateFormat = new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" });
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
@@ -64,7 +66,7 @@ export function TransactionsTable({
         <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider min-w-0 truncate">
           {td("transactions", { count: transactions.length, suffix: transactions.length !== 1 ? "s" : "" })}
         </h2>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center flex-wrap gap-3">
           <Link
             href={`/transactions?accountId=${accountId}`}
             className="text-xs text-[var(--muted)] hover:text-[var(--accent-text)] transition-colors whitespace-nowrap min-h-[44px] flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] rounded"
@@ -77,94 +79,56 @@ export function TransactionsTable({
           )}
         </div>
       </div>
-      <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--border)]">
-            {[
-              td("tableHeaders.date"),
-              td("tableHeaders.label"),
-              // Amount before category: on a phone the table scrolls
-              // sideways, and a last-but-one amount sat off-screen on every
-              // row (v2.12 visual audit).
-              td("tableHeaders.amount"),
-              td("tableHeaders.category"),
-              ...(showIncomeColumn ? [td("tableHeaders.income")] : []),
-              ...(showManualColumn ? [td("tableHeaders.actions")] : []),
-            ].map((h) => (
-              <th
-                key={h}
-                className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {transactions.map((tx, i) => (
-            <tr
-              key={tx.id}
-              className={`${
-                i < transactions.length - 1 ? "border-b border-[var(--border)]" : ""
-              } hover:bg-[var(--surface-elevated)] transition-colors`}
-            >
-              <td className="px-3 sm:px-6 py-3 text-[var(--muted)] tabular-nums whitespace-nowrap text-xs sm:text-sm">
-                {new Intl.DateTimeFormat(intlLocale, {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                }).format(tx.date)}
-              </td>
-              <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={tx.label ?? undefined}>
-                {tx.label}
-              </td>
-              <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
-                <span
-                  className={
-                    tx.amountCents > BigInt(0)
-                      ? "text-[var(--positive)]"
-                      : "text-[var(--negative)]"
-                  }
-                >
-                  {tx.amountCents > BigInt(0) ? "+" : ""}
-                  {formatCurrency(tx.amountCents)}
-                </span>
-              </td>
-              <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
-                <TransactionCategoryCell
-                  transactionId={tx.id}
-                  categoryId={tx.categoryId}
-                  amountCents={tx.amountCents}
-                  categories={categories}
-                  splits={tx.splits}
-                  isInternalTransfer={tx.isInternalTransfer}
-                  readOnly={readOnly}
-                />
-              </td>
-              {showIncomeColumn && (
-                <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
-                  {tx.amountCents > BigInt(0) && (
-                    <MarkAsIncomeButton
-                      transactionId={tx.id}
-                      accountType={accountType}
-                      amountEuro={centsToEuro(tx.amountCents)}
-                      date={tx.date.toISOString().slice(0, 10)}
-                      alreadyMarked={!!tx.incomeEvent}
-                    />
-                  )}
-                </td>
-              )}
-              {showManualColumn && (
-                <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
-                  {isManualEntry(tx.syncId) && <DeleteManualEntryButton transactionId={tx.id} />}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
+      <TransactionList
+        headers={{
+          date: td("tableHeaders.date"),
+          label: td("tableHeaders.label"),
+          amount: td("tableHeaders.amount"),
+          category: td("tableHeaders.category"),
+          actions: [
+            ...(showIncomeColumn ? [td("tableHeaders.income")] : []),
+            ...(showManualColumn ? [td("tableHeaders.actions")] : []),
+          ],
+        }}
+      >
+        {transactions.map((tx) => (
+          <TransactionListItem
+            key={tx.id}
+            date={dateFormat.format(tx.date)}
+            label={tx.label ?? ""}
+            amountCents={tx.amountCents}
+            category={
+              <TransactionCategoryCell
+                transactionId={tx.id}
+                categoryId={tx.categoryId}
+                amountCents={tx.amountCents}
+                categories={categories}
+                splits={tx.splits}
+                isInternalTransfer={tx.isInternalTransfer}
+                readOnly={readOnly}
+              />
+            }
+            actions={[
+              ...(showIncomeColumn
+                ? [
+                    tx.amountCents > BigInt(0) ? (
+                      <MarkAsIncomeButton
+                        transactionId={tx.id}
+                        accountType={accountType}
+                        amountEuro={centsToEuro(tx.amountCents)}
+                        date={tx.date.toISOString().slice(0, 10)}
+                        alreadyMarked={!!tx.incomeEvent}
+                      />
+                    ) : null,
+                  ]
+                : []),
+              ...(showManualColumn
+                ? [isManualEntry(tx.syncId) ? <DeleteManualEntryButton transactionId={tx.id} /> : null]
+                : []),
+            ]}
+          />
+        ))}
+      </TransactionList>
     </div>
   );
 }

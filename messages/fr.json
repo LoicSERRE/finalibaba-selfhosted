@@ -1094,7 +1094,15 @@
       "security": "Sécurité",
       "sharing": "Partage & accès",
       "notifications": "Notifications",
-      "display": "Affichage"
+      "display": "Affichage",
+      "short": {
+        "accounts": "Comptes",
+        "profile": "Profil",
+        "security": "Sécurité",
+        "sharing": "Partage",
+        "notifications": "Alertes",
+        "display": "Affichage"
+      }
     }
   },
   "shared": {

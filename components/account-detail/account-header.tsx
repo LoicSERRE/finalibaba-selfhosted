@@ -72,8 +72,13 @@ export function AccountHeader({
 }>) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      {/* flex-wrap + min-w-0: on a 360px phone a long account name, its two
+          header buttons and the shrink-0 balance did not fit on one line, and
+          <main> scrolled sideways by 11px (scripts/ui-audit, main-scroll
+          check). The name now wraps, and the balance drops under it when it
+          has to. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             {account.institution && (
               <InstitutionLogo
@@ -95,8 +100,8 @@ export function AccountHeader({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
-            <h1 className="text-2xl font-semibold text-[var(--foreground)]">{account.name}</h1>
+          <div className="flex items-center gap-1 min-w-0">
+            <h1 className="text-2xl font-semibold text-[var(--foreground)] break-words min-w-0">{account.name}</h1>
             {!readOnly && <RenameAccountDialog id={account.id} name={account.name} />}
             {/* Account-level actions belong together, at the top. Co-ownership
                 used to live in a card below the transactions table - up to 200

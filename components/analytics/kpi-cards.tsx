@@ -26,7 +26,7 @@ export function KpiCards({
   momDelta: number | null;
 }>) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
         <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-2">{t("kpis.netWorth")}</p>
         <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--accent-text)]">

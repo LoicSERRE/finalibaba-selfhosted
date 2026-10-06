@@ -361,9 +361,16 @@ export async function autoTriggerSync(): Promise<{ triggered: boolean }> {
   const isStale = !lastSync || Date.now() - lastSync.createdAt.getTime() > STALE_MS;
   if (!isStale) return { triggered: false };
 
+  // "triggered" means a sync actually started: the client shows a "sync in
+  // progress" badge and polls on it. It used to answer true even when the
+  // request failed (.catch(() => {}) swallowed it), so every instance whose
+  // sync service was down - or absent, which is a supported setup - showed a
+  // phantom badge for two minutes on every page load.
+  const started = (path: string) =>
+    fetchSync(path, { method: "POST" }).then((res) => res.ok).catch(() => false);
+
   if (viewer.id === OWNER_USER_ID) {
-    await fetchSync("/sync/all/async", { method: "POST" }).catch(() => {});
-    return { triggered: true };
+    return { triggered: await started("/sync/all/async") };
   }
 
   const institutions = await prisma.institution.findMany({
@@ -372,8 +379,6 @@ export async function autoTriggerSync(): Promise<{ triggered: boolean }> {
   });
   if (institutions.length === 0) return { triggered: false };
 
-  await Promise.all(
-    institutions.map((i) => fetchSync(`/sync/institution/${i.id}`, { method: "POST" }).catch(() => {}))
-  );
-  return { triggered: true };
+  const results = await Promise.all(institutions.map((i) => started(`/sync/institution/${i.id}`)));
+  return { triggered: results.some(Boolean) };
 }
