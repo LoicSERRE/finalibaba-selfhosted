@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.12.3**
+Current release: **v2.12.4**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -26,6 +26,15 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.12.4 - Logout everywhere, a readable recurring interval
+
+- **Logout was unreachable**: at the bottom of a long page on desktop, absent on phones. The sidebar is now viewport-sticky, and phones get the button in the Settings header (shared `LogoutButton`).
+- **The recurring interval field ("Tous les [__]", no unit) was filled with the payment day** on a real instance - a salary saved as every 28 months, a benefit as every 5 - so neither ever matched again. Now "Revient tous les [1] mois" with the unit following the frequency, a hint, and a per-frequency cap (`parseIntervalCount`, also enforced server-side).
+- **Restoring a hidden series reactivates it** instead of leaving it paused.
+- `sharp` override raised to >=0.35.5 (CVE-2026-96889).
 
 ---
 
