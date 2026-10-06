@@ -120,14 +120,14 @@ export function DashboardView({
 
       {/* Charts */}
       {hasData && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="md:col-span-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
               {t("dashboard.netWorthChart")}
             </h2>
             <NetWorthChart data={history} />
           </div>
-          <div className="md:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
+          <div className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4 flex items-center gap-1">
               {t("dashboard.allocationChart")}
               <InfoTooltip>{t("dashboard.allocationHint")}</InfoTooltip>

@@ -7,7 +7,7 @@ export default function AnalyticsLoading() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-2">
             <div className="h-3 w-24 bg-[var(--surface-elevated)] rounded" />

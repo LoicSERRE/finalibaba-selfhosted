@@ -150,8 +150,11 @@ export default async function AccountsPage({
                 : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)]"
             }`}
           >
-            <span className="text-xs font-medium sm:hidden">{labelShort}</span>
-            <span className="text-sm font-medium hidden sm:block">{label}</span>
+            {/* Short label until lg: from md the sidebar leaves ~500px for
+                six tabs, and "Investissements" overflowed its tab at 768px
+                (scripts/ui-audit, self-overflow check). */}
+            <span className="text-xs font-medium lg:hidden">{labelShort}</span>
+            <span className="text-sm font-medium hidden lg:block">{label}</span>
             <span className="hidden sm:block text-xs mt-0.5 tabular-nums">
               {formatCurrency(tabTotals[id], 0)}
             </span>

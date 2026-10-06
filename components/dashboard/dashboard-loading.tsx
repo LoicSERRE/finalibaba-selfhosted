@@ -29,12 +29,12 @@ export function DashboardLoading() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="md:col-span-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
           <div className="h-3 w-36 bg-[var(--surface-elevated)] rounded mb-4" />
           <div className="h-[260px] bg-[var(--surface-elevated)] rounded-lg" />
         </div>
-        <div className="md:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
+        <div className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
           <div className="h-3 w-32 bg-[var(--surface-elevated)] rounded mb-4" />
           <div className="h-[190px] bg-[var(--surface-elevated)] rounded-full mx-auto w-[190px]" />
           <div className="grid grid-cols-2 gap-2 mt-4">

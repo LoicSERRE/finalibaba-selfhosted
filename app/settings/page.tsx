@@ -9,7 +9,6 @@ import {
   type SettingsTab,
 } from "@/lib/domain/settings-tabs";
 import { SettingsTabNav } from "@/components/settings/settings-tab-nav";
-import { ActiveTabIntoView } from "@/components/settings/active-tab-into-view";
 import { FormAlert } from "@/components/ui/form-alert";
 import { AccountsTab } from "./_tabs/accounts-tab";
 import { ProfileTab } from "./_tabs/profile-tab";
@@ -67,16 +66,17 @@ export default async function SettingsPage({
 
       {gcStatus && <FormAlert tone={gcStatus.tone}>{t(gcStatus.key)}</FormAlert>}
 
-      <div className="md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8 md:items-start">
-        {/* Sticky HERE, not on the <nav>: a sticky element only sticks inside
-            its parent, and this wrapper is exactly as tall as the nav, so a
-            sticky nav inside it never stuck at all. This div's parent spans
-            the whole tab content, so the tab row now stays in reach on a
-            phone while the content scrolls under it. */}
-        <div className="sticky top-0 z-10 mb-6 md:mb-0 md:top-8">
-          <ActiveTabIntoView>
-            <SettingsTabNav tabs={tabs} active={active} />
-          </ActiveTabIntoView>
+      {/* lg, not md: from md the app's own sidebar takes 13rem, and putting
+          a second 13rem menu beside the content left it so narrow that the
+          institution rows overflowed and <main> scrolled sideways at 768px
+          (scripts/ui-audit). Below lg the tab tiles sit above the content. */}
+      <div className="lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8 lg:items-start">
+        {/* Sticky beside the content from lg up. Not on a phone: the 3x2 tile
+            grid is two rows tall, and pinning that over the content would eat
+            a fifth of the screen. (A sticky element only sticks inside its
+            parent, which is why this is on the wrapper rather than the nav.) */}
+        <div className="mb-6 lg:mb-0 lg:sticky lg:top-8">
+          <SettingsTabNav tabs={tabs} active={active} />
         </div>
         <div id={`settings-${active}`} data-settings-panel={active} className="min-w-0 space-y-8">
           <Content viewer={viewer} show={show} isAdmin={isAdmin} isMulti={isMulti} />

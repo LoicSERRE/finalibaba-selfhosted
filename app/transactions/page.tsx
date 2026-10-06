@@ -5,8 +5,9 @@ import { getViewContext } from "@/lib/auth-context";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { TransactionCategoryCell } from "@/components/shared/transaction-category-cell";
+import { TransactionList, TransactionListItem } from "@/components/shared/transaction-list";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
-import { formatCurrency, localeToIntl } from "@/lib/utils/format";
+import { localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
   parseTransactionLedgerFilters,
@@ -110,6 +111,8 @@ export default async function TransactionsPage({
     return params.toString() ? `/transactions?${params.toString()}` : "/transactions";
   };
 
+  const dateFormat = new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" });
+
   return (
     // max-w-5xl, not this app's usual max-w-4xl (every other page) -
     // deliberate, confirmed during the v1.15 UI/UX audit rather than left
@@ -131,65 +134,36 @@ export default async function TransactionsPage({
       ) : (
         <>
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border)]">
-                    {/* Amount straight after the label: on a phone the table
-                        scrolls sideways, and the amount sat last, off-screen
-                        on every row - found by the v2.12 visual audit. The
-                        account column folds under the label below sm. */}
-                    {[
-                      { h: td("tableHeaders.date"), cls: "" },
-                      { h: t("account"), cls: "hidden sm:table-cell" },
-                      { h: td("tableHeaders.label"), cls: "" },
-                      { h: td("tableHeaders.amount"), cls: "" },
-                      { h: td("tableHeaders.category"), cls: "" },
-                    ].map(({ h, cls }) => (
-                      <th key={h} className={`px-3 sm:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap ${cls}`}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((tx, i) => (
-                    <tr
-                      key={tx.id}
-                      className={`${
-                        i < transactions.length - 1 ? "border-b border-[var(--border)]" : ""
-                      } hover:bg-[var(--surface-elevated)] transition-colors`}
-                    >
-                      <td className="px-3 sm:px-6 py-3 text-[var(--muted)] tabular-nums whitespace-nowrap text-xs sm:text-sm">
-                        {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(tx.date)}
-                      </td>
-                      <td className="hidden sm:table-cell px-3 sm:px-6 py-3 text-[var(--muted)] whitespace-nowrap text-xs sm:text-sm">{tx.account.name}</td>
-                      <td className="px-3 sm:px-6 py-3 text-[var(--foreground)] break-words sm:max-w-xs sm:truncate" title={tx.label}>
-                        {tx.label}
-                        <span className="block sm:hidden text-xs text-[var(--muted)] mt-0.5">{tx.account.name}</span>
-                      </td>
-                      <td className="px-3 sm:px-6 py-3 tabular-nums font-medium whitespace-nowrap">
-                        <span className={tx.amountCents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
-                          {tx.amountCents > BigInt(0) ? "+" : ""}
-                          {formatCurrency(tx.amountCents)}
-                        </span>
-                      </td>
-                      <td className="px-3 sm:px-6 py-3 whitespace-nowrap">
-                        <TransactionCategoryCell
-                          transactionId={tx.id}
-                          categoryId={tx.categoryId}
-                          amountCents={tx.amountCents}
-                          categories={categories}
-                          splits={tx.splits}
-                          isInternalTransfer={tx.isInternalTransfer}
-                          readOnly={readOnly}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <TransactionList
+              headers={{
+                date: td("tableHeaders.date"),
+                account: t("account"),
+                label: td("tableHeaders.label"),
+                amount: td("tableHeaders.amount"),
+                category: td("tableHeaders.category"),
+              }}
+            >
+              {transactions.map((tx) => (
+                <TransactionListItem
+                  key={tx.id}
+                  date={dateFormat.format(tx.date)}
+                  account={tx.account.name}
+                  label={tx.label}
+                  amountCents={tx.amountCents}
+                  category={
+                    <TransactionCategoryCell
+                      transactionId={tx.id}
+                      categoryId={tx.categoryId}
+                      amountCents={tx.amountCents}
+                      categories={categories}
+                      splits={tx.splits}
+                      isInternalTransfer={tx.isInternalTransfer}
+                      readOnly={readOnly}
+                    />
+                  }
+                />
+              ))}
+            </TransactionList>
           </div>
 
           {totalPages > 1 && (

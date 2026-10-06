@@ -51,10 +51,13 @@ export function AutoSync() {
 
       intervalRef.current = setInterval(async () => {
         attempts += 1;
+        // ANY source finishing after mount ends the wait. This used to look
+        // at "trade_republic" alone - the .env Trade Republic connection - so
+        // for a bank configured in Settings (woob:<id>, tr:<id>) the badge
+        // never saw its sync finish and stayed up for the full two minutes.
         const status = await getSyncStatus();
-        const tr = status["trade_republic"];
-        const trTime = tr ? new Date(tr.createdAt).getTime() : 0;
-        if (trTime > mountedAt.current || attempts >= MAX_ATTEMPTS) {
+        const latest = Math.max(0, ...Object.values(status).map((log) => new Date(log.createdAt).getTime()));
+        if (latest > mountedAt.current || attempts >= MAX_ATTEMPTS) {
           clearInterval(intervalRef.current!);
           setSyncing(false);
           router.refresh();
@@ -68,7 +71,12 @@ export function AutoSync() {
   if (!syncing) return null;
 
   return (
-    <div aria-live="polite" aria-label={t("syncing")} className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] rounded-full px-3 py-1.5 text-xs text-[var(--muted)] shadow-lg">
+    // pointer-events-none: a status badge must never take a tap meant for
+    // what is under it. On a phone it sat bottom-right just above the nav,
+    // exactly where each transaction row's action buttons and the
+    // pagination's "Next" live (found by scripts/ui-audit's under-fixed
+    // check); it now sits at the top centre there, over page headings.
+    <div aria-live="polite" aria-label={t("syncing")} className="pointer-events-none fixed top-[calc(env(safe-area-inset-top,0px)+0.75rem)] left-1/2 -translate-x-1/2 md:top-auto md:left-auto md:translate-x-0 md:bottom-6 md:right-6 z-50 flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] rounded-full px-3 py-1.5 text-xs text-[var(--muted)] shadow-lg">
       <span className="relative flex h-2 w-2" aria-hidden="true">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent)] opacity-75" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent)]" />
