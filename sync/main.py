@@ -28,6 +28,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 from crypto_at_rest import decrypt_institution_row
+from sync_activity import is_running, running, tracked
 from workers import executor
 
 scheduler = AsyncIOScheduler()
@@ -38,6 +39,7 @@ _tr_lock = threading.Lock()
 
 # ── Sync runners ──────────────────────────────────────────────────────────────
 
+@tracked("lcl")
 def _run_lcl():
     if not os.environ.get("LCL_LOGIN"):
         log.info("LCL_LOGIN not set - LCL sync disabled")
@@ -61,6 +63,7 @@ def _run_lcl():
         _lcl_lock.release()
 
 
+@tracked("trade_republic")
 def _run_tr():
     if not os.environ.get("TR_PHONE"):
         log.info("TR_PHONE not set - Trade Republic sync disabled")
@@ -127,6 +130,7 @@ def _notify_owner(institution_id: str) -> None:
         log.warning("realtime notify failed for institution %s: %s", institution_id, e)
 
 
+@tracked(lambda inst_id, *_rest: f"woob:{inst_id}")
 def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str, password: str):
     try:
         import sync_woob
@@ -290,6 +294,7 @@ from realtime_supervisor import (
 )
 
 
+@tracked("woob-sources")
 def _run_woob_sources():
     """LCL + every user-configured Woob institution, plus the categorize/
     alert follow-up so a freshly-synced transaction gets processed within
@@ -311,6 +316,7 @@ def _run_woob_sources():
     log.info("=== Woob-source sync done ===")
 
 
+@tracked("all")
 def _run_all():
     """Full sync - Trade Republic (batch fallback, on top of its own
     optional real-time listener) + investment balance snapshots, plus the
@@ -415,11 +421,28 @@ async def trigger_lcl_async():
 
 @app.post("/sync/all/async")
 async def trigger_all_async():
-    """Fire-and-forget - triggers LCL, TR, and all Woob institutions in the background."""
+    """Fire-and-forget - the full sync (_run_all) in the background.
+
+    Refuses to queue a second one while the first still runs: the app calls
+    this on page load, and nothing used to stop each load stacking another
+    full sync behind the one in progress.
+    """
     import asyncio
+    if is_running("all"):
+        return {"status": "already_running"}
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, _run_all)
     return {"status": "started"}
+
+
+@app.get("/sync/running")
+async def get_running_syncs():
+    """The sync jobs running in this process right now (see sync_activity).
+
+    What the app's "sync in progress" badge shows from - it used to infer it
+    from SyncLog rows appearing, which a sync that writes none never does.
+    """
+    return {"running": running()}
 
 
 @app.get("/realtime/status")
@@ -556,6 +579,7 @@ def _institution_provider(institution_id: str) -> str | None:
     return None
 
 
+@tracked(lambda inst_id: f"tr:{inst_id}")
 def _run_tr_institution(inst_id: str):
     """Sync one UI-configured Trade Republic institution, mirroring
     _run_woob_institution's own error handling: an auth failure has already
@@ -670,11 +694,10 @@ async def institution_setup_complete(institution_id: str, request: Request):
         return _setup_failure_response("Woob setup/complete", institution_id)
 
 
-@app.post("/sync/institution/{institution_id}")
-async def trigger_institution_sync(institution_id: str):
-    """Trigger Woob sync for a specific institution (identified by DB id)."""
-    import asyncio
-
+def _institution_job(institution_id: str):
+    """The (callable, args, activity key) that syncs one institution, or a
+    JSONResponse explaining why it cannot. Shared by the blocking and the
+    fire-and-forget trigger below."""
     import psycopg2.extras
 
     from db import get_conn
@@ -699,26 +722,52 @@ async def trigger_institution_sync(institution_id: str):
     if not inst:
         return JSONResponse({"error": "Institution not found"}, status_code=404)
 
-    loop = asyncio.get_event_loop()
-
     # Trade Republic first: an institution carries one provider or the other,
     # never both, so this order only decides which error a misconfigured row
     # gets - not which sync a valid one runs.
     if inst["trPhone"]:
-        await loop.run_in_executor(executor, _run_tr_institution, inst["id"])
-        return {"status": "ok", "institution": inst["name"]}
+        return _run_tr_institution, (inst["id"],), f"tr:{inst['id']}", inst["name"]
 
     if not inst["woobModule"]:
         return JSONResponse(
             {"error": "No sync backend configured for this institution"}, status_code=400
         )
 
-    await loop.run_in_executor(
-        executor,
-        _run_woob_institution,
-        inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"],
-    )
-    return {"status": "ok", "institution": inst["name"]}
+    args = (inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
+    return _run_woob_institution, args, f"woob:{inst['id']}", inst["name"]
+
+
+@app.post("/sync/institution/{institution_id}")
+async def trigger_institution_sync(institution_id: str):
+    """Sync one institution (identified by DB id) and wait for it to finish."""
+    import asyncio
+
+    job = _institution_job(institution_id)
+    if isinstance(job, JSONResponse):
+        return job
+    fn, args, _key, name = job
+    await asyncio.get_event_loop().run_in_executor(executor, fn, *args)
+    return {"status": "ok", "institution": name}
+
+
+@app.post("/sync/institution/{institution_id}/async")
+async def trigger_institution_sync_async(institution_id: str):
+    """Fire-and-forget version, for the sync the app starts on page load.
+
+    The blocking route above holds the request for the whole bank sync, and
+    Next runs one tab's Server Actions one after another - so a page load
+    waiting on it held up everything else that tab asked the server for.
+    """
+    import asyncio
+
+    job = _institution_job(institution_id)
+    if isinstance(job, JSONResponse):
+        return job
+    fn, args, key, name = job
+    if is_running(key):
+        return {"status": "already_running", "institution": name}
+    asyncio.get_event_loop().run_in_executor(executor, fn, *args)
+    return {"status": "started", "institution": name}
 
 
 @app.get("/woob/modules")

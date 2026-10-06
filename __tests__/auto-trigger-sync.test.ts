@@ -26,7 +26,7 @@ vi.mock("@/lib/auth-context", async () => {
   return { OWNER_USER_ID, getViewer: getViewerMock, assertOwned: vi.fn() };
 });
 
-import { autoTriggerSync } from "@/lib/actions/sync";
+import { autoTriggerSync, getSyncActivity } from "@/lib/actions/sync";
 import { OWNER_USER_ID } from "@/lib/domain/users";
 
 const fetchMock = vi.fn();
@@ -63,12 +63,37 @@ describe("autoTriggerSync - the owner's .env sync", () => {
     await expect(autoTriggerSync()).resolves.toEqual({ triggered: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("measures staleness from the last ATTEMPT, so a failing bank is not retried on every page", async () => {
+    syncLogFindFirst.mockResolvedValue({ createdAt: new Date(), status: "auth_required" });
+    await expect(autoTriggerSync()).resolves.toEqual({ triggered: false });
+    expect(syncLogFindFirst.mock.calls[0][0].where).not.toHaveProperty("status");
+  });
+
+  it("counts a sync already in progress as running, without queueing another", async () => {
+    fetchMock.mockResolvedValue(Response.json({ status: "already_running" }));
+    await expect(autoTriggerSync()).resolves.toEqual({ triggered: true });
+  });
 });
 
 describe("autoTriggerSync - a member's own banks", () => {
   beforeEach(() => {
     getViewerMock.mockResolvedValue({ id: "user-b", role: "MEMBER", isMonoMode: false });
     institutionFindMany.mockResolvedValue([{ id: "inst-1" }, { id: "inst-2" }]);
+  });
+
+  it("uses the fire-and-forget route, so the action does not wait on a bank", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+    await autoTriggerSync();
+    for (const [url] of fetchMock.mock.calls) expect(String(url)).toMatch(/\/sync\/institution\/inst-\d\/async$/);
+  });
+
+  it("includes Trade Republic institutions, not only Woob ones", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+    await autoTriggerSync();
+    expect(institutionFindMany.mock.calls[0][0].where.OR).toEqual(
+      expect.arrayContaining([{ trPhone: { not: null } }])
+    );
   });
 
   it("counts as triggered when at least one institution's sync started", async () => {
@@ -81,5 +106,35 @@ describe("autoTriggerSync - a member's own banks", () => {
   it("is not triggered when every institution's sync failed to start", async () => {
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
     await expect(autoTriggerSync()).resolves.toEqual({ triggered: false });
+  });
+});
+
+describe("getSyncActivity - what the badge shows", () => {
+  const running = (keys: string[]) => fetchMock.mockResolvedValue(Response.json({ running: keys }));
+
+  it("is running for the owner while one of the .env syncs runs", async () => {
+    running(["all"]);
+    await expect(getSyncActivity()).resolves.toEqual({ running: true });
+  });
+
+  it("is not running once the service reports nothing", async () => {
+    running([]);
+    await expect(getSyncActivity()).resolves.toEqual({ running: false });
+  });
+
+  it("never claims activity it cannot see: unreachable service means not running", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    await expect(getSyncActivity()).resolves.toEqual({ running: false });
+  });
+
+  it("shows a member only their own institutions' syncs", async () => {
+    getViewerMock.mockResolvedValue({ id: "user-b", role: "MEMBER", isMonoMode: false });
+    institutionFindMany.mockResolvedValue([{ id: "inst-1" }]);
+
+    running(["all", "woob:someone-else"]);
+    await expect(getSyncActivity()).resolves.toEqual({ running: false });
+
+    running(["tr:inst-1"]);
+    await expect(getSyncActivity()).resolves.toEqual({ running: true });
   });
 });
