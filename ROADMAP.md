@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.12.2**
+Current release: **v2.12.3**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -26,6 +26,15 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.12.3 - The sync badge only shows while a sync runs
+
+- **The "sync in progress" badge appeared far too often and stayed until a refresh** (reported from a real instance). Four causes: it never cleared on navigation (it lives in the root layout and its cleanup left `syncing` true); every page change started a sync; staleness counted only successful syncs, so a bank stuck failing restarted a sync on every page; and it guessed a sync's end from SyncLog rows, which a sync that writes none never produces.
+- **The sync service now tracks what runs** (`sync/sync_activity.py`, applied to every sync job) and exposes `GET /sync/running`. The badge shows exactly that, scoped to the viewer's own institutions, and disappears when it ends. `/sync/all/async` no longer stacks a second full sync behind a running one; a new `/sync/institution/{id}/async` keeps the page-load trigger from holding a Server Action for a whole bank sync.
+- At most one auto-sync per page load and per 10 minutes per tab, measured from the last attempt. The badge is smaller, translucent, and never takes a tap.
+- A member's own Trade Republic institutions now auto-sync too - only their Woob ones did.
 
 ---
 
