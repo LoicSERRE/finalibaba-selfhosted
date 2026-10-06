@@ -35,14 +35,18 @@ const AMOUNT_COL = "8rem";
 const CATEGORY_COL = "15.5rem";
 const ACTION_COL = "3rem";
 
-export type TransactionListHeaders = Readonly<{
-  date: string;
-  account?: string;
-  label: string;
-  amount: string;
-  category: string;
-  actions?: string[];
-}>;
+// A plain object type with per-field readonly, not `Readonly<{...}>`: a
+// top-level `type X = Readonly<{...}>` alias blinds lizard to every function
+// after it in a .tsx file (documented in CLAUDE.md), and this one hid all four
+// functions here from the complexity gate on its first CI run.
+export type TransactionListHeaders = {
+  readonly date: string;
+  readonly account?: string;
+  readonly label: string;
+  readonly amount: string;
+  readonly category: string;
+  readonly actions?: readonly string[];
+};
 
 function gridTemplate(showAccount: boolean, actionCount: number): string {
   return [
