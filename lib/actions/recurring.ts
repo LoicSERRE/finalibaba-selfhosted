@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
 import { RecurringFrequency } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
+import { parseIntervalCount } from "@/lib/domain/recurring";
 
 const FREQUENCIES = new Set(Object.values(RecurringFrequency));
 
@@ -53,7 +54,9 @@ export async function createRecurringTransaction(formData: FormData) {
 
   const amountCents = parseSignedAmount(formData);
   const frequency = parseFrequency(formData);
-  const intervalCount = Math.max(1, Number.parseInt((formData.get("intervalCount") as string) || "1", 10) || 1);
+  // The form caps this per frequency; a value outside it is forged input.
+  const intervalCount = parseIntervalCount(formData.get("intervalCount") as string | null, frequency);
+  if (intervalCount === null) throw new Error("Invalid interval");
   const anchorDate = parseAnchorDate(formData);
   const categoryId = (formData.get("categoryId") as string | null)?.trim() || null;
   const autoDetected = formData.get("autoDetected") === "true";
@@ -78,7 +81,9 @@ export async function updateRecurringTransaction(id: string, formData: FormData)
 
   const amountCents = parseSignedAmount(formData);
   const frequency = parseFrequency(formData);
-  const intervalCount = Math.max(1, Number.parseInt((formData.get("intervalCount") as string) || "1", 10) || 1);
+  // The form caps this per frequency; a value outside it is forged input.
+  const intervalCount = parseIntervalCount(formData.get("intervalCount") as string | null, frequency);
+  if (intervalCount === null) throw new Error("Invalid interval");
   const anchorDate = parseAnchorDate(formData);
   const categoryId = (formData.get("categoryId") as string | null)?.trim() || null;
 
@@ -124,7 +129,11 @@ export async function restoreRecurringTransaction(id: string) {
   await assertRecurringWritable(id);
   await prisma.recurringTransaction.update({
     where: { id },
-    data: { dismissedAt: null, active: false },
+    // Back to tracked, not paused: "Rétablir" on something hidden means
+    // "follow this again", and a paused series is neither projected nor
+    // checked for a missed payment - restoring used to look like it did
+    // nothing at all.
+    data: { dismissedAt: null, active: true },
   });
   revalidateAll();
 }

@@ -24,7 +24,7 @@ overrides:
   # own next re-exports) - postcss is a real, shipped part of Next's build
   # pipeline, not one of the never-invoked-subcommand exemptions below.
   nanoid: ">=3.3.17"
-  sharp: ">=0.35.0"
+  sharp: ">=0.35.5"
   # GHSA-68fv-2mgg-jv7q - event-loop denial of service through indexed
   # source-map section offsets. Pulled in by postcss (including the copy
   # next ships, so a runtime dependency, not lint-only) and build tooling.

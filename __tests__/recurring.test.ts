@@ -8,6 +8,7 @@ import {
   intervalDays,
   isMissed,
   normalizeLabel,
+  parseIntervalCount,
   projectDailyCumulative,
   type RecurringSeries,
 } from "@/lib/domain/recurring";
@@ -540,5 +541,38 @@ describe("a regular cadence whose amount is never the same", () => {
     // The same shape under a label that identifies somebody is still found.
     const named = varying([51247, 171558, 90000, 62000, 110000], 30, "VIREMENT DUPONT SA");
     expect(detectCandidates(named, new Set())).toHaveLength(1);
+  });
+});
+
+describe("parseIntervalCount - the 'every N' field", () => {
+  it("defaults a blank field to 1", () => {
+    expect(parseIntervalCount("", "MONTHLY")).toBe(1);
+    expect(parseIntervalCount(null, "MONTHLY")).toBe(1);
+  });
+
+  it("accepts a real interval", () => {
+    expect(parseIntervalCount("3", "MONTHLY")).toBe(3);
+    expect(parseIntervalCount("2", "WEEKLY")).toBe(2);
+  });
+
+  // The real case: a salary paid around the 28th was saved as "every 28
+  // months" because the field read as "on the [__]th".
+  it("refuses a day of the month typed into a monthly interval", () => {
+    expect(parseIntervalCount("28", "MONTHLY")).toBeNull();
+    expect(parseIntervalCount("31", "MONTHLY")).toBeNull();
+  });
+
+  it("caps each frequency at its own limit", () => {
+    expect(parseIntervalCount("12", "MONTHLY")).toBe(12);
+    expect(parseIntervalCount("52", "WEEKLY")).toBe(52);
+    expect(parseIntervalCount("53", "WEEKLY")).toBeNull();
+    expect(parseIntervalCount("11", "YEARLY")).toBeNull();
+  });
+
+  it("refuses zero, negatives and garbage", () => {
+    expect(parseIntervalCount("0", "MONTHLY")).toBeNull();
+    expect(parseIntervalCount("-1", "MONTHLY")).toBeNull();
+    expect(parseIntervalCount("2.5", "MONTHLY")).toBeNull();
+    expect(parseIntervalCount("abc", "MONTHLY")).toBeNull();
   });
 });

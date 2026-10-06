@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, PiggyBank, Repeat, Coins, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Wallet, PiggyBank, Repeat, Coins, BarChart3, Settings } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { PortfolioSwitcher, type PortfolioOption } from "@/components/layout/portfolio-switcher";
 import { isBareRoute } from "@/lib/domain/bare-routes";
+import { LogoutButton } from "@/components/layout/logout-button";
 
 type SidebarProps = {
   showLogout?: boolean;
@@ -41,7 +42,7 @@ export function Sidebar({ showLogout = false, portfolios = [], viewingPortfolioI
   return (
     <>
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex flex-col w-56 min-h-screen bg-[var(--surface)] border-r border-[var(--border)] px-3 py-6 shrink-0">
+      <aside className="hidden md:flex flex-col w-56 sticky top-0 h-dvh bg-[var(--surface)] border-r border-[var(--border)] px-3 py-6 shrink-0">
         {/* Logo */}
         <div className="px-3 mb-8 flex items-center gap-2.5">
           <div
@@ -68,7 +69,7 @@ export function Sidebar({ showLogout = false, portfolios = [], viewingPortfolioI
           />
         )}
 
-        <nav aria-label={t("ariaMain")} className="flex flex-col gap-1 flex-1">
+        <nav aria-label={t("ariaMain")} className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
           {navItems.map(({ href, label, icon: Icon, exact }) => {
             const active = exact ? pathname === href : pathname.startsWith(href);
             return (
@@ -89,32 +90,11 @@ export function Sidebar({ showLogout = false, portfolios = [], viewingPortfolioI
           })}
         </nav>
 
-        {/* Logout - only shown when AUTH_ENABLED=true */}
-        {showLogout && (
-          <button
-            type="button"
-            onClick={async () => {
-              // Only relevant when this button is even shown (AUTH_ENABLED=true) -
-              // the service worker (public/sw.js) caches successful GET
-              // responses regardless of auth mode, so a shared/public device
-              // shouldn't keep real financial data sitting in Cache Storage
-              // after an explicit logout, even though it never serves that
-              // cache back on a network failure in this mode (see sw.js's
-              // own offlinePages comment for why offline fallback itself is
-              // already disabled here).
-              if ("caches" in window) {
-                const keys = await caches.keys();
-                await Promise.all(keys.map((key) => caches.delete(key)));
-              }
-              const { signOut } = await import("next-auth/react");
-              signOut({ callbackUrl: "/login" });
-            }}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--muted)] hover:text-[var(--negative)] hover:bg-[var(--surface-elevated)] transition-colors w-full mt-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
-          >
-            <LogOut size={16} aria-hidden="true" />
-            {t("logout")}
-          </button>
-        )}
+        {/* Logout - only shown when AUTH_ENABLED=true. The aside is sticky at
+            the viewport's height, so this stays at the bottom of the SCREEN;
+            it used to sit at the bottom of the whole page, out of reach on
+            any long one. */}
+        {showLogout && <LogoutButton className="w-full mt-2" />}
       </aside>
 
       {/* ── Mobile bottom nav ── */}

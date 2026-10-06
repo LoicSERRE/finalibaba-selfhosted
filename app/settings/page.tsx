@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/settings-tabs";
 import { SettingsTabNav } from "@/components/settings/settings-tab-nav";
 import { FormAlert } from "@/components/ui/form-alert";
+import { LogoutButton } from "@/components/layout/logout-button";
 import { AccountsTab } from "./_tabs/accounts-tab";
 import { ProfileTab } from "./_tabs/profile-tab";
 import { SecurityTab } from "./_tabs/security-tab";
@@ -59,9 +60,15 @@ export default async function SettingsPage({
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
+          <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle")}</p>
+        </div>
+        {/* Phones only: the sidebar that carries "Déconnexion" on a larger
+            screen does not exist below md, and the bottom nav has no room for
+            it, so a phone had no way to sign out at all. */}
+        {isMulti && <LogoutButton className="md:hidden shrink-0 -mr-3" />}
       </div>
 
       {gcStatus && <FormAlert tone={gcStatus.tone}>{t(gcStatus.key)}</FormAlert>}

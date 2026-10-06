@@ -187,6 +187,25 @@ const CYCLE_DAYS: Record<RecurringFrequency, number> = {
   YEARLY: 365,
 };
 
+/**
+ * Largest interval the form accepts per frequency. The field used to read
+ * "Tous les [__]" with no unit, which a real user filled with the DAY of the
+ * month the payment lands on - a salary paid around the 28th became "every
+ * 28 months", a benefit paid on the 5th "every 5 months", and neither was ever
+ * matched against the monthly payments it was meant to track. A cap does not
+ * catch 5, which is a legitimate interval; the unit beside the field does.
+ */
+export const MAX_INTERVAL_COUNT: Record<RecurringFrequency, number> = { WEEKLY: 52, MONTHLY: 12, YEARLY: 10 };
+
+/** The interval from a form value: blank means 1, out of range means null. */
+export function parseIntervalCount(raw: string | null | undefined, frequency: RecurringFrequency): number | null {
+  const trimmed = (raw ?? "").trim();
+  if (trimmed === "") return 1;
+  if (!/^\d+$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return n >= 1 && n <= MAX_INTERVAL_COUNT[frequency] ? n : null;
+}
+
 export function intervalDays(frequency: RecurringFrequency, intervalCount: number): number {
   return CYCLE_DAYS[frequency] * Math.max(1, intervalCount);
 }

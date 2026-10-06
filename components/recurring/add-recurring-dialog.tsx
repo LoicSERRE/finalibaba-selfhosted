@@ -7,8 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { createRecurringTransaction, updateRecurringTransaction } from "@/lib/actions/recurring";
 import { useTranslations } from "next-intl";
+import { MAX_INTERVAL_COUNT } from "@/lib/domain/recurring";
 
 type Frequency = "WEEKLY" | "MONTHLY" | "YEARLY";
+
+const INTERVAL_HINT_KEY: Record<Frequency, string> = {
+  WEEKLY: "intervalHintWeekly",
+  MONTHLY: "intervalHint",
+  YEARLY: "intervalHintYearly",
+};
 
 // Plain serializable initial values only - no BigInt across the RSC boundary.
 // `id` present = editing an existing row; absent = creating (possibly
@@ -43,6 +50,7 @@ export function AddRecurringDialog({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [type, setType] = useState<"income" | "expense">(initial?.type ?? "expense");
+  const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? "MONTHLY");
   const t = useTranslations("recurring");
   const tc = useTranslations("common");
 
@@ -58,6 +66,7 @@ export function AddRecurringDialog({
         await createRecurringTransaction(fd);
         form.reset();
         setType("expense");
+        setFrequency("MONTHLY");
       }
       setOpen(false);
     });
@@ -141,25 +150,42 @@ export function AddRecurringDialog({
             id="rec-frequency"
             label={t("frequency")}
             name="frequency"
-            defaultValue={initial?.frequency ?? "MONTHLY"}
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value as Frequency)}
             options={[
               { value: "WEEKLY", label: t("weekly") },
               { value: "MONTHLY", label: t("monthly") },
               { value: "YEARLY", label: t("yearly") },
             ]}
           />
-          <Input
-            id="rec-interval"
-            label={t("every")}
-            type="number"
-            name="intervalCount"
-            min={1}
-            max={99}
-            defaultValue={initial?.intervalCount ?? 1}
-          />
+          {/* The unit sits beside the number on purpose: without it, "Tous
+              les [5]" read as "on the 5th of the month", and a monthly series
+              became "every 5 months" without anyone noticing. */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="rec-interval" className="text-sm font-medium text-[var(--foreground)]">
+              {t("intervalLabel")}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="rec-interval"
+                type="number"
+                name="intervalCount"
+                min={1}
+                max={MAX_INTERVAL_COUNT[frequency]}
+                defaultValue={initial?.intervalCount ?? 1}
+                required
+                aria-describedby="rec-interval-hint"
+                className="w-20 min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              />
+              <span className="text-sm text-[var(--muted)]">{t(`intervalUnit.${frequency}`)}</span>
+            </div>
+          </div>
         </div>
+        <p id="rec-interval-hint" className="text-xs text-[var(--muted)] -mt-1">
+          {t(INTERVAL_HINT_KEY[frequency])}
+        </p>
 
-        <Input id="rec-anchor" label={t("anchorDate")} type="date" name="anchorDate" defaultValue={initial?.anchorDate} required />
+        <Input id="rec-anchor" label={t("anchorDate")} hint={t("anchorHint")} type="date" name="anchorDate" defaultValue={initial?.anchorDate} required />
 
         <Select
           id="rec-category"
