@@ -352,33 +352,80 @@ export async function completeInstitutionSetup(
 // list of ids.
 export async function autoTriggerSync(): Promise<{ triggered: boolean }> {
   const viewer = await getViewer();
-  const lastSync = await prisma.syncLog.findFirst({
-    where: { userId: viewer.id, status: "success" },
+  // The last ATTEMPT, not the last success. Measured from successes, a bank
+  // stuck failing (a captcha, a session to renew) never had a recent one, so
+  // every single page load started another sync - and showed the badge.
+  const lastAttempt = await prisma.syncLog.findFirst({
+    where: { userId: viewer.id },
     orderBy: { createdAt: "desc" },
   });
 
   const STALE_MS = 10 * 60 * 1000;
-  const isStale = !lastSync || Date.now() - lastSync.createdAt.getTime() > STALE_MS;
+  const isStale = !lastAttempt || Date.now() - lastAttempt.createdAt.getTime() > STALE_MS;
   if (!isStale) return { triggered: false };
 
-  // "triggered" means a sync actually started: the client shows a "sync in
-  // progress" badge and polls on it. It used to answer true even when the
-  // request failed (.catch(() => {}) swallowed it), so every instance whose
-  // sync service was down - or absent, which is a supported setup - showed a
-  // phantom badge for two minutes on every page load.
+  // "triggered" means a sync is now running - started by this call, or
+  // already in progress ("already_running" is a 200 too, and the badge should
+  // show for it). It used to answer true even when the request failed, which
+  // put a phantom badge on every page of an instance whose sync service was
+  // down or absent. Fire-and-forget routes only: a blocking one held this
+  // Server Action for the whole bank sync, and Next runs one tab's actions in
+  // sequence, so everything else the page asked for waited behind it.
   const started = (path: string) =>
-    fetchSync(path, { method: "POST" }).then((res) => res.ok).catch(() => false);
+    fetchSync(path, { method: "POST" }, ACTIVITY_TIMEOUT_MS).then((res) => res.ok).catch(() => false);
 
   if (viewer.id === OWNER_USER_ID) {
     return { triggered: await started("/sync/all/async") };
   }
 
-  const institutions = await prisma.institution.findMany({
-    where: { userId: viewer.id, woobModule: { not: null }, woobLogin: { not: null } },
+  const ids = await syncableInstitutionIds(viewer.id);
+  if (ids.length === 0) return { triggered: false };
+  const results = await Promise.all(ids.map((id) => started(`/sync/institution/${id}/async`)));
+  return { triggered: results.some(Boolean) };
+}
+
+const ACTIVITY_TIMEOUT_MS = 5_000;
+
+/** A member's institutions that have a sync backend: Woob OR Trade Republic.
+ *  The Trade Republic half was missing, so a member's own Trade Republic
+ *  never synced on its own. */
+async function syncableInstitutionIds(userId: string): Promise<string[]> {
+  const rows = await prisma.institution.findMany({
+    where: {
+      userId,
+      OR: [{ woobModule: { not: null }, woobLogin: { not: null } }, { trPhone: { not: null } }],
+    },
     select: { id: true },
   });
-  if (institutions.length === 0) return { triggered: false };
+  return rows.map((r) => r.id);
+}
 
-  const results = await Promise.all(institutions.map((i) => started(`/sync/institution/${i.id}`)));
-  return { triggered: results.some(Boolean) };
+// The keys the sync service tracks for the owner's .env-configured syncs
+// (sync/main.py's @tracked decorators). Institution syncs are woob:<id> and
+// tr:<id>.
+const OWNER_SYNC_KEYS = new Set(["all", "lcl", "trade_republic", "woob-sources"]);
+
+/**
+ * Whether a sync that concerns the viewer is running RIGHT NOW, as the sync
+ * service reports it (GET /sync/running). The badge shows exactly while this
+ * is true and disappears the moment it is not - it used to guess from SyncLog
+ * rows appearing, and a sync that writes none left it up for two minutes.
+ * Unreachable or failing service means "not running": a badge must never
+ * claim activity it cannot see.
+ */
+export async function getSyncActivity(): Promise<{ running: boolean }> {
+  const viewer = await getViewer();
+  let keys: string[];
+  try {
+    const res = await fetchSync("/sync/running", undefined, ACTIVITY_TIMEOUT_MS);
+    if (!res.ok) return { running: false };
+    keys = ((await res.json()) as { running?: string[] }).running ?? [];
+  } catch {
+    return { running: false };
+  }
+  if (keys.length === 0) return { running: false };
+
+  const own = new Set((await syncableInstitutionIds(viewer.id)).flatMap((id) => [`woob:${id}`, `tr:${id}`]));
+  const mine = keys.some((k) => own.has(k) || (viewer.id === OWNER_USER_ID && OWNER_SYNC_KEYS.has(k)));
+  return { running: mine };
 }

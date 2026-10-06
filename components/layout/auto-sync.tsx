@@ -2,84 +2,122 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { autoTriggerSync, getSyncStatus } from "@/lib/actions/sync";
+import { autoTriggerSync, getSyncActivity } from "@/lib/actions/sync";
 import { useTranslations } from "next-intl";
 import { isBareRoute } from "@/lib/domain/bare-routes";
 
 /**
- * Déclenche un sync TR+LCL en arrière-plan au chargement de la page (si données
- * > 10 min), puis rafraîchit automatiquement la page quand le sync se termine.
- * Affiche un badge discret pendant la synchronisation.
+ * Starts a background bank sync when the data is stale, and shows a small
+ * badge for exactly as long as a sync is actually running - then refreshes
+ * the page once it finishes.
+ *
+ * Rewritten after "it is there far too often, and it does not go away until
+ * I refresh". Three causes, all fixed here:
+ *
+ * - It never cleared on navigation. This component lives in the root layout,
+ *   so it outlives page changes; the old cleanup stopped the polling but left
+ *   `syncing` true, and nothing could ever set it back. Every exit path below
+ *   now resets it.
+ * - It started a sync on every page change (the effect depended on the path).
+ *   It now runs once per mount, and at most once per staleness window per tab.
+ * - It guessed when a sync ended from SyncLog rows appearing, and a sync that
+ *   writes none left it up for two minutes. It now asks the sync service what
+ *   is running (getSyncActivity) and shows exactly that.
  */
+
+const POLL_MS = 3_000;
+// Hard ceiling for one badge, should the service never report the end.
+const MAX_POLLS = 60;
+// Mirrors autoTriggerSync's own staleness window, so a tab does not ask the
+// server again on every page load only to be told "fresh".
+const TRIGGER_THROTTLE_MS = 10 * 60 * 1000;
+const LAST_TRIGGER_KEY = "autosync:last-trigger";
+
+function triggeredRecently(): boolean {
+  try {
+    const at = Number(sessionStorage.getItem(LAST_TRIGGER_KEY));
+    return Number.isFinite(at) && Date.now() - at < TRIGGER_THROTTLE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function rememberTrigger() {
+  try {
+    sessionStorage.setItem(LAST_TRIGGER_KEY, String(Date.now()));
+  } catch {
+    // Private mode or blocked storage: the server-side staleness check still
+    // prevents repeated syncs, this only saves the round trip.
+  }
+}
+
 export function AutoSync() {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("autoSync");
-  const mountedAt = useRef(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>(null);
   const [syncing, setSyncing] = useState(false);
+  // Read once at mount: navigating must not re-run the trigger.
+  const firstPath = useRef(pathname ?? "/");
 
   useEffect(() => {
-    // Nobody outside the app triggers a real bank sync just by opening a page.
-    // That was already true of a share-link visitor (see CLAUDE.md's
-    // "Read-only share links" - the one real correctness bug a naive version
-    // of that feature would have shipped) and is true for the same reason of
-    // someone sitting at the login screen or redeeming an invitation: they are
-    // anonymous, and a sync spinner on a page they cannot get past is a
-    // scraping run nobody asked for. Shares the sidebar's own predicate.
-    if (isBareRoute(pathname ?? "/")) return;
+    // Nobody outside the app triggers a real bank sync just by opening a page:
+    // a share-link visitor, someone at the login screen or redeeming an
+    // invitation is anonymous, and a scraping run on their behalf is one
+    // nobody asked for. Shares the sidebar's own predicate.
+    if (isBareRoute(firstPath.current) || triggeredRecently()) return;
 
-    mountedAt.current = Date.now();
-    let attempts = 0;
-    // Safety cap (~2min at 5s/attempt) - without it, a sync that never
-    // completes (crashed, network failure) would poll forever for as long
-    // as the page stays open, same bug class as the missing `triggered`
-    // gate below, just for the failure path instead of the no-op path.
-    const MAX_ATTEMPTS = 24;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let polls = 0;
+    let sawRunning = false;
 
-    autoTriggerSync().then(({ triggered }) => {
-      // Only poll when a sync was actually triggered - previously this
-      // setInterval ran unconditionally on every mount, and only ever
-      // stopped once it saw a *new* trade_republic SyncLog row newer than
-      // mount time. When nothing was triggered (data wasn't stale), that
-      // condition can never become true, so it polled every 5s forever for
-      // as long as the page stayed open - confirmed empirically via a
-      // devtools network capture showing dozens of accumulated requests to
-      // the current route from a single page left open a couple of minutes.
-      if (!triggered) return;
-      setSyncing(true);
+    const poll = async () => {
+      if (cancelled) return;
+      polls += 1;
+      const { running } = await getSyncActivity().catch(() => ({ running: false }));
+      if (cancelled) return;
+      if (running) {
+        sawRunning = true;
+        setSyncing(true);
+      }
+      if (!running || polls >= MAX_POLLS) {
+        setSyncing(false);
+        // Fresh data only exists if a sync really ran.
+        if (sawRunning) router.refresh();
+        return;
+      }
+      timer = setTimeout(poll, POLL_MS);
+    };
 
-      intervalRef.current = setInterval(async () => {
-        attempts += 1;
-        // ANY source finishing after mount ends the wait. This used to look
-        // at "trade_republic" alone - the .env Trade Republic connection - so
-        // for a bank configured in Settings (woob:<id>, tr:<id>) the badge
-        // never saw its sync finish and stayed up for the full two minutes.
-        const status = await getSyncStatus();
-        const latest = Math.max(0, ...Object.values(status).map((log) => new Date(log.createdAt).getTime()));
-        if (latest > mountedAt.current || attempts >= MAX_ATTEMPTS) {
-          clearInterval(intervalRef.current!);
-          setSyncing(false);
-          router.refresh();
-        }
-      }, 5000);
-    });
+    autoTriggerSync()
+      .then(({ triggered }) => {
+        if (cancelled || !triggered) return;
+        rememberTrigger();
+        void poll();
+      })
+      .catch(() => {});
 
-    return () => clearInterval(intervalRef.current!);
-  }, [router, pathname]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      setSyncing(false);
+    };
+  }, [router]);
 
   if (!syncing) return null;
 
   return (
-    // pointer-events-none: a status badge must never take a tap meant for
-    // what is under it. On a phone it sat bottom-right just above the nav,
-    // exactly where each transaction row's action buttons and the
-    // pagination's "Next" live (found by scripts/ui-audit's under-fixed
-    // check); it now sits at the top centre there, over page headings.
-    <div aria-live="polite" aria-label={t("syncing")} className="pointer-events-none fixed top-[calc(env(safe-area-inset-top,0px)+0.75rem)] left-1/2 -translate-x-1/2 md:top-auto md:left-auto md:translate-x-0 md:bottom-6 md:right-6 z-50 flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] rounded-full px-3 py-1.5 text-xs text-[var(--muted)] shadow-lg">
-      <span className="relative flex h-2 w-2" aria-hidden="true">
+    // Deliberately quiet: a small, translucent pill that never takes a tap
+    // meant for what is under it. Top centre on a phone (bottom right is
+    // where row actions and the pagination live), bottom right from md.
+    <div
+      role="status"
+      aria-label={t("syncing")}
+      className="pointer-events-none fixed top-[calc(env(safe-area-inset-top,0px)+0.5rem)] left-1/2 -translate-x-1/2 md:top-auto md:left-auto md:translate-x-0 md:bottom-4 md:right-4 z-50 flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)]/70 backdrop-blur px-2.5 py-1 text-[11px] text-[var(--muted)]"
+    >
+      <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent)] opacity-75" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent)]" />
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[var(--accent)]" />
       </span>
       {t("syncing")}
     </div>
