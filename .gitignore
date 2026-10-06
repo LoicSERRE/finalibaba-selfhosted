@@ -70,3 +70,6 @@ lizard-blind-spots.json
 
 # Output of scripts/ui-audit/run.sh (screenshots and report), never committed
 /ui-audit-out/
+
+# Personal data exports dropped in for debugging (e.g. /api/my-data). Never commit.
+/dataset/
