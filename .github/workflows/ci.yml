@@ -194,7 +194,15 @@ jobs:
       #     SECURITY.md), so there is nobody positioned to do that.
       #
       # Re-check on any pip-audit bump: if ecdsa ever ships a fix, drop this.
-      - run: pip-audit -r sync/requirements.txt --ignore-vuln PYSEC-2026-1325
+      # CVE-2026-85394 (GHSA-3qf3-8w2g-rqmx, python-jose <= 3.5.0, no fix
+      # released): HS256 algorithm confusion when VERIFYING a token with a
+      # DER-encoded public key. Unreachable here: the one consumer, Woob's
+      # caissedepargne module (banquepopulaire only lists the requirement),
+      # calls jwt.get_unverified_claims() to READ a token the bank issued and
+      # never verifies a signature at all - checked against woob's source,
+      # modules/caissedepargne/browser.py. Same shape as the ecdsa exemption
+      # above. docker.yml carries the identical ignore; keep the two in step.
+      - run: pip-audit -r sync/requirements.txt --ignore-vuln PYSEC-2026-1325 --ignore-vuln CVE-2026-85394
 
   dependency-review:
     name: Dependency review

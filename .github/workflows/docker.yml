@@ -88,7 +88,9 @@ jobs:
       # identical line: no fix exists, ecdsa is unavoidable under python-jose,
       # the flaw is in signing rather than verification, and sync/'s API is
       # Docker-network-only.
-      - run: pip-audit -r sync/requirements.txt --ignore-vuln PYSEC-2026-1325
+      # CVE-2026-85394 (python-jose, no fix): see ci.yml - the only consumer
+      # reads tokens with get_unverified_claims() and never verifies one.
+      - run: pip-audit -r sync/requirements.txt --ignore-vuln PYSEC-2026-1325 --ignore-vuln CVE-2026-85394
       - run: pip install -r sync/requirements.txt -r sync/requirements-dev.txt
       - run: cd sync && python -m pytest
 
