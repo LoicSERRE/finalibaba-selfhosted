@@ -224,7 +224,7 @@ export default async function RecurringPage() {
                         accounts={dialogAccounts}
                         categories={categories}
                       />
-                      <DeleteButton iconOnly label={tc("delete")} description={t("deleteConfirm")} onDelete={deleteRecurringTransaction.bind(null, r.id)} />
+                      <DeleteButton iconOnly undoable label={tc("delete")} deletedMessage={tc("deletedNamed", { name: r.label })} onDelete={deleteRecurringTransaction.bind(null, r.id)} />
                     </div>
                   </div>
                   <p className="text-sm tabular-nums font-medium">

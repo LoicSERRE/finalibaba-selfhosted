@@ -126,13 +126,15 @@ export function GoalsSection({
 }>) {
   const t = useTranslations("settings.goals");
   const ta = useTranslations("accountTypes");
+  const tc = useTranslations("common");
   const router = useRouter();
   const intlLocale = localeToIntl(useLocale());
 
   function handleDelete(id: string) {
     return async () => {
-      await deleteGoal(id);
+      const result = await deleteGoal(id);
       router.refresh();
+      return result;
     };
   }
 
@@ -161,7 +163,7 @@ export function GoalsSection({
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <GoalDialog goal={goal} accounts={accounts} ta={ta} />
-                <DeleteButton iconOnly label={t("delete")} description={t("deleteDescription")} onDelete={handleDelete(goal.id)} />
+                <DeleteButton iconOnly undoable label={t("delete")} deletedMessage={tc("deletedNamed", { name: goal.name })} onDelete={handleDelete(goal.id)} />
               </div>
             </div>
           ))}

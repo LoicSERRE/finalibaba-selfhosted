@@ -18,6 +18,7 @@ import { getPublicViewer, isEndedSession, isRevokedSession, isDemoMode } from "@
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { DISCRETION_COOKIE, isDiscreet } from "@/lib/domain/discretion";
 import { DiscretionShortcut } from "@/components/layout/discretion";
+import { Toaster } from "@/components/ui/toast";
 import { isBareRoute } from "@/lib/domain/bare-routes";
 import "./globals.css";
 
@@ -194,6 +195,7 @@ export default async function RootLayout({
       <body className="flex min-h-full bg-[var(--background)]">
         <NextIntlClientProvider messages={messages}>
           <DiscretionShortcut />
+          <Toaster />
           <a
             href="#main-content"
             className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 z-[100] px-4 py-2 bg-[var(--accent-strong)] text-white rounded-lg text-sm font-medium"

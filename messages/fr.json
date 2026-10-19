@@ -26,7 +26,16 @@
     "notFoundTitle": "Page introuvable",
     "backToDashboard": "Retour au dashboard",
     "unexpectedError": "Une erreur inattendue s'est produite.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "deleted": "Supprimé",
+    "deletedNamed": "Supprimé : {name}",
+    "undo": "Annuler",
+    "restored": "Restauré",
+    "undoExpired": "Trop tard pour annuler : la suppression est définitive.",
+    "undoConflict": "Impossible de restaurer : un élément du même nom existe déjà, ou ce dont il dépendait a été supprimé entre-temps.",
+    "deleteFailed": "La suppression a échoué.",
+    "dismiss": "Fermer",
+    "notifications": "Notifications"
   },
   "nav": {
     "dashboard": "Tableau de bord",

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
+import { rememberUndo } from "@/lib/services/undo-store";
+import { actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { parseCents } from "@/lib/utils/format";
 
 export async function getGoals() {
@@ -79,11 +81,13 @@ export async function updateGoal(id: string, formData: FormData) {
   revalidateGoals();
 }
 
-export async function deleteGoal(id: string) {
+/** Undoable for a minute: the token goes to undoDeletion (lib/actions/undo.ts). */
+export async function deleteGoal(id: string): Promise<ActionResult<{ undoToken: string }>> {
   const viewer = await getViewer();
   await assertOwned("goal", id, viewer.id);
-  await prisma.goal.delete({ where: { id } });
+  const goal = await prisma.goal.delete({ where: { id } });
   revalidateGoals();
+  return actionOk({ undoToken: rememberUndo(viewer.id, { kind: "goal" as const, goal }) });
 }
 
 // Settings manages goals, Analytics displays their progress - both need

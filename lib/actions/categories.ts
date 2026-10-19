@@ -3,6 +3,9 @@
 import { revalidateCategory } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned } from "@/lib/auth-context";
+import { rememberUndo } from "@/lib/services/undo-store";
+import { actionOk, type ActionResult } from "@/lib/domain/action-result";
+import { snapshotCategory } from "@/lib/services/undo-deletion";
 import { parseCents } from "@/lib/utils/format";
 import { CategoryKind } from "@/app/generated/prisma/enums";
 
@@ -96,9 +99,12 @@ export async function updateCategory(id: string, formData: FormData) {
   revalidateAll();
 }
 
-export async function deleteCategory(id: string) {
+/** Undoable for a minute: the token goes to undoDeletion (lib/actions/undo.ts). */
+export async function deleteCategory(id: string): Promise<ActionResult<{ undoToken: string }>> {
   const viewer = await getViewer();
   await assertOwned("category", id, viewer.id);
+  const snapshot = await snapshotCategory(id);
   await prisma.category.delete({ where: { id } });
   revalidateAll();
+  return actionOk({ undoToken: rememberUndo(viewer.id, snapshot) });
 }

@@ -61,7 +61,7 @@ export function CategoryCard({
               rolloverEnabled: category.budgetRolloverEnabled,
             }}
           />
-          <DeleteButton iconOnly label={tc("delete")} description={tc("irreversible")} onDelete={deleteCategory.bind(null, category.id)} />
+          <DeleteButton iconOnly undoable label={tc("delete")} deletedMessage={tc("deletedNamed", { name: category.name })} onDelete={deleteCategory.bind(null, category.id)} />
         </div>
       </div>
 
