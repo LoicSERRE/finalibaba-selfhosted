@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.14.0**
+Current release: **v2.15.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -14,11 +14,10 @@ Before tagging a `vX.Y`, run the release-boundary health audit in `CLAUDE.md`.
 
 Scheduled, in this order. Each step is small enough to ship on its own, and the order is chosen so later steps build on earlier ones: toasts before bulk actions (a bulk change needs an undo), notes and tags before the CSV export and the command palette (both should carry them), onboarding last (it points at everything above).
 
-1. **v2.15 - Command palette (Ctrl+K) and keyboard shortcuts.** Jump to a page, find an account or a transaction (label, note, tag), trigger a sync, toggle discretion mode; the app has no keyboard shortcut today.
-2. **v2.16 - Upcoming payments on the dashboard.** The month ahead in one list: recurring debits and credits, loan instalments, expected dividends (the dividend calendar already exists on `/analytics`).
-3. **v2.16 - Money-flow diagram.** A Sankey of income → spending categories → savings for a period, on `/budgets` or `/analytics`.
-4. **v2.17 - First-run checklist.** Replaces the bare dashboard empty state with guided steps: add an account, connect a bank, set the tax profile, set a goal - each ticking itself off from real data.
-5. **Later - Configurable base currency.** Everything is converted to and stored as EUR, which shuts out non-euro users of the public edition. The largest item here (every `*Cents` aggregate, FX history, tax presets); needs a design pass before it gets a version number.
+1. **v2.16 - Upcoming payments on the dashboard.** The month ahead in one list: recurring debits and credits, loan instalments, expected dividends (the dividend calendar already exists on `/analytics`).
+2. **v2.16 - Money-flow diagram.** A Sankey of income → spending categories → savings for a period, on `/budgets` or `/analytics`.
+3. **v2.17 - First-run checklist.** Replaces the bare dashboard empty state with guided steps: add an account, connect a bank, set the tax profile, set a goal - each ticking itself off from real data.
+4. **Later - Configurable base currency.** Everything is converted to and stored as EUR, which shuts out non-euro users of the public edition. The largest item here (every `*Cents` aggregate, FX history, tax presets); needs a design pass before it gets a version number.
 
 ## Next
 
@@ -36,6 +35,13 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.15.0 - Find anything, from the keyboard
+
+- **Command palette** (`Ctrl/Cmd+K`, a sidebar button, a phone dashboard icon): pages and Settings tabs, actions (discretion, theme, language), and from two characters accounts, categories and transactions by label, note or tag through `searchPalette` (view-context scoped, text only, 2-80 chars). Name matches rank above search results, keyword-only matches below.
+- **Shortcuts**: `?` lists them, `g` + letter jumps to a page, `H` discretion - one typing guard for all of them (`lib/domain/shortcuts.ts`), never firing in a field.
 
 ---
 
