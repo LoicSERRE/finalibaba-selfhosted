@@ -392,7 +392,19 @@
     },
     "noteColumn": "Note",
     "tagFilterLabel": "Filtrer par étiquette",
-    "allTags": "Toutes les étiquettes"
+    "allTags": "Toutes les étiquettes",
+    "exportCsv": "Exporter (.csv)",
+    "csv": {
+      "date": "Date",
+      "account": "Compte",
+      "label": "Libellé",
+      "amount": "Montant",
+      "currency": "Devise",
+      "category": "Catégorie",
+      "note": "Note",
+      "tags": "Étiquettes",
+      "uncategorized": "Sans catégorie"
+    }
   },
   "categories": {
     "create": "Nouvelle catégorie",

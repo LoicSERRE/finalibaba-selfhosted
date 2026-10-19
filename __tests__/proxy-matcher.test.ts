@@ -56,6 +56,10 @@ describe("proxy matcher - paths that must stay gated", () => {
     ["/api/backup/download"],
     // Opened by the browser with a real session, unlike /api/realtime/notify.
     ["/api/realtime/stream"],
+    // The ledger CSV (v2.14) and the my-data export: a person's data as a
+    // file. Under /api/transactions/ the first would have been public.
+    ["/api/export/transactions"],
+    ["/api/my-data"],
   ])("%s goes through the auth gate", (path) => {
     expect(isGated(path)).toBe(true);
   });

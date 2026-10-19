@@ -110,7 +110,8 @@ app/                  Next.js App Router pages and Server Actions - routing is t
                       reorganized by technical concern (DB/API/front) without breaking routes
   api/                Route Handlers - sync->app callbacks (alerts/check, investments/snapshot-balances,
                       transactions/auto-categorize, realtime/notify), realtime/stream (SSE), health,
-                      set-locale/set-theme, backup, my-data export, GoCardless connect/callback, and
+                      set-locale/set-theme, backup, my-data and ledger CSV exports (export/transactions -
+                      never under the auth-exempt api/transactions/), GoCardless connect/callback, and
                       the versioned public REST API (v1/*, see `dev-docs/multi-user-and-security.md`)
                       - everything else in this tree is a page (plus icon/manifest routes)
   generated/prisma/   Prisma client (generated - do not edit)
