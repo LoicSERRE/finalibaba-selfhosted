@@ -8,6 +8,7 @@ import { PortfolioSwitcher, type PortfolioOption } from "@/components/layout/por
 import { isBareRoute } from "@/lib/domain/bare-routes";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { DiscretionToggle } from "@/components/layout/discretion";
+import { PaletteButton } from "@/components/layout/palette-button";
 
 type SidebarProps = {
   showLogout?: boolean;
@@ -69,6 +70,8 @@ export function Sidebar({ showLogout = false, portfolios = [], viewingPortfolioI
             selfLabel={t("myPortfolio")}
           />
         )}
+
+        <PaletteButton className="w-full mb-4" />
 
         <nav aria-label={t("ariaMain")} className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
           {navItems.map(({ href, label, icon: Icon, exact }) => {

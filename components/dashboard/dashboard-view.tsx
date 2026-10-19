@@ -8,6 +8,7 @@ import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-stat
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { DiscretionToggleServer } from "@/components/layout/discretion-toggle-server";
+import { PaletteButton } from "@/components/layout/palette-button";
 import type {
   DashboardDelta,
   DashboardHistoryPoint,
@@ -63,7 +64,10 @@ export function DashboardView({
         </div>
         {/* Phones have no sidebar and no room left in the bottom nav, so the
             discretion toggle sits here; the desktop sidebar carries its own. */}
-        <DiscretionToggleServer variant="icon" className="md:hidden -mt-1 -mr-2 shrink-0" />
+        <div className="md:hidden flex -mt-1 -mr-2 shrink-0">
+          {interactive && <PaletteButton variant="icon" />}
+          <DiscretionToggleServer variant="icon" />
+        </div>
       </div>
 
       {/* Hero KPI */}

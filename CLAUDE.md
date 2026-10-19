@@ -131,7 +131,7 @@ components/          Grouped by feature domain, mirroring the app/ route it belo
   transactions/      /transactions page (global cross-account ledger filters)
   settings/          /settings page (institutions, sync status, backup/restore, i18n)
   dashboard/         Dashboard-only pieces (/ page) - dashboard-loading.tsx is the one exception, reused by app/shared/[token]/loading.tsx since that route renders the same DashboardView shape
-  layout/            App shell rendered on every page - sidebar, auto-sync bootstrap
+  layout/            App shell rendered on every page - sidebar, auto-sync bootstrap, command palette
   auth/              Login form (signIn/signOut are dynamically imported where needed, no SessionProvider)
   shared/            Used by 2+ domains above - charts, exports, generic dialogs/buttons
 lib/

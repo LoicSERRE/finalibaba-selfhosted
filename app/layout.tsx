@@ -19,6 +19,7 @@ import { resolveThemePreference } from "@/lib/domain/theme";
 import { DISCRETION_COOKIE, isDiscreet } from "@/lib/domain/discretion";
 import { DiscretionShortcut } from "@/components/layout/discretion";
 import { Toaster } from "@/components/ui/toast";
+import { CommandPalette } from "@/components/layout/command-palette";
 import { isBareRoute } from "@/lib/domain/bare-routes";
 import "./globals.css";
 
@@ -213,6 +214,7 @@ export default async function RootLayout({
               {!isDemoMode() && <AutoSync />}
               <ServiceWorkerRegistration offlinePages={process.env.AUTH_ENABLED !== "true"} userId={viewer.id} />
               <RealtimeRefresh />
+              <CommandPalette />
             </>
           ) : sessionEnded ? (
             <SessionEnded reason={endedReason} />

@@ -1694,5 +1694,66 @@
   "discretion": {
     "hide": "Masquer les montants",
     "show": "Afficher les montants"
+  },
+  "palette": {
+    "open": "Rechercher…",
+    "title": "Palette de commandes",
+    "inputLabel": "Rechercher une page, un compte, une transaction ou une action",
+    "placeholder": "Page, compte, transaction, action…",
+    "resultsLabel": "Résultats",
+    "empty": "Aucun résultat",
+    "searchIn": "Rechercher « {q} » dans les transactions",
+    "footer": "↑ ↓ pour choisir · Entrée pour ouvrir · Échap pour fermer · ? pour les raccourcis",
+    "groups": {
+      "pages": "Page",
+      "actions": "Action",
+      "accounts": "Compte",
+      "categories": "Catégorie",
+      "transactions": "Transaction",
+      "search": "Recherche"
+    },
+    "pages": {
+      "dashboard": "Tableau de bord",
+      "accounts": "Comptes",
+      "transactions": "Transactions",
+      "budgets": "Budgets",
+      "recurring": "Récurrent",
+      "income": "Revenus",
+      "analytics": "Analytique",
+      "taxReport": "Rapport fiscal",
+      "settings": "Paramètres"
+    },
+    "keywords": {
+      "dashboard": "accueil,patrimoine,net worth",
+      "accounts": "banque,livret,pea,cto,crypto,immobilier",
+      "transactions": "grand livre,opérations,dépenses",
+      "budgets": "catégories,dépenses",
+      "recurring": "abonnements,prélèvements,échéances",
+      "income": "dividendes,intérêts,salaire",
+      "analytics": "performance,répartition,projection",
+      "taxReport": "impôts,plus-values,fiscalité",
+      "settings": "réglages,préférences,options",
+      "discretion": "masquer,cacher,flouter,montants,discrétion",
+      "theme": "thème apparence sombre clair",
+      "language": "langue",
+      "help": "raccourcis clavier aide"
+    },
+    "actions": {
+      "hideAmounts": "Masquer les montants",
+      "showAmounts": "Afficher les montants",
+      "themeDark": "Thème sombre",
+      "themeLight": "Thème clair",
+      "themeAuto": "Thème automatique",
+      "localeFr": "Passer en français",
+      "localeEn": "Passer en anglais",
+      "help": "Raccourcis clavier"
+    },
+    "help": {
+      "title": "Raccourcis clavier",
+      "intro": "Ces raccourcis fonctionnent partout, sauf pendant la saisie dans un champ.",
+      "palette": "Ouvrir la palette de commandes",
+      "help": "Afficher cette liste",
+      "discretion": "Masquer ou afficher les montants"
+    }
   }
 }
