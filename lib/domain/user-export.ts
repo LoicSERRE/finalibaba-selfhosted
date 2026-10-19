@@ -76,6 +76,8 @@ export type TransactionExport = {
   isSecuritiesMovement: boolean;
   sourceEventType: string | null;
   splits: { amountCents: string; categoryRef: string | null }[];
+  note: string | null;
+  tags: string[];
 };
 
 export type HoldingExport = {
@@ -307,6 +309,8 @@ export function buildUserExport(input: UserExportInput): UserExport {
         internalTransferManual: (t.internalTransferManual as boolean) ?? null,
         isSecuritiesMovement: Boolean(t.isSecuritiesMovement),
         sourceEventType: (t.sourceEventType as string) ?? null,
+        note: (t.note as string) ?? null,
+        tags: (t.tags as string[]) ?? [],
         splits: ((t.splits as Row[]) ?? []).map((s) => ({
           amountCents: cents(s.amountCents as bigint)!,
           categoryRef: (s.categoryId as string) ?? null,

@@ -152,6 +152,17 @@ Authorization still throws.
 
 Verified against a real database in a browser: a selection of three with one split categorizes two and leaves the split row and its split untouched; undo returns each row to its own previous category; marking two removes them from the ledger and undo brings them back with their prior manual flag; "select page" selects 50; page 2 starts empty; the toolbar stays on screen while scrolling; no sideways overflow on a phone.
 
+### Notes and tags (v2.14)
+
+Every transaction can carry a note and up to ten tags, edited from the note button on `/transactions` and on an account's page (`TransactionNoteButton`), shown under the label (`TransactionNoteDetails`). A tag is a link to the ledger filtered on it, and the ledger has a tag filter once any tag exists; its search box matches notes as well as labels.
+
+- **One definition of a tag**, `lib/domain/transaction-notes.ts`: trimmed, inner whitespace collapsed, a leading `#` dropped, deduplicated without regard to case with the first spelling kept. The action, the ledger filter (`parseTransactionLedgerFilters`'s `tag`) and the exports all go through it, so a tag saved as "Vacances" is never searched as "#vacances ". Matching is exact otherwise: "Vacances" and "vacances" on two different transactions are two tags.
+- **Limits come back as keys** (`note_too_long`, `too_many_tags`, `tag_too_long`), shown in the dialog; nothing is written.
+- **Private by default**: in the "mes données" export (the user's own data, in full), but neither on read-only share links nor in the REST API v1 - free text a person wrote is exactly the blast radius that API's scope was drawn to exclude (`multi-user-and-security.md`, "Scope deliberately stops at these four endpoints").
+- **Never touched by a sync**: see the column note in `data-model.md`.
+
+Verified in a browser against a real database: a note plus "#vacances" (Enter) and "frais pro," (comma) saves as `["vacances", "frais pro"]`; an existing tag is suggested; a removed chip is not saved; searching a word of the note finds the row; the tag link and the tag select both filter to it and keep "Vacances" separate; an eleventh tag is refused with its reason and leaves the row unchanged; the account page carries the same control; the my-data export includes both.
+
 ### Budget rollover
 
 Opt-in per category (`Category.budgetRolloverEnabled`, off by default so every existing budget keeps today's behavior) - unused envelope carries into next month instead of resetting to zero, matching YNAB's "give every dollar a job" model. `lib/domain/budgets.ts` holds the pure math (`monthsBetween`, `computeRolloverCarryInCents`); the actual `Transaction` query and per-month bucketing stay in `app/budgets/page.tsx`, same lib/domain-has-no-DB-calls split as `lib/domain/transactions-ledger.ts`.

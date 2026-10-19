@@ -7,6 +7,7 @@ import { getViewer, assertTransactionsWritable, assertOwned, baseAccountIds } fr
 import { rememberUndo } from "@/lib/services/undo-store";
 import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { parseBulkIds } from "@/lib/domain/transactions-ledger";
+import { normalizeNote, parseTags, validateNoteAndTags, type NoteError } from "@/lib/domain/transaction-notes";
 import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
@@ -318,4 +319,32 @@ export async function bulkMarkInternalTransfers(
     accountIds,
   });
   return actionOk({ updated: rows.length, undoToken });
+}
+
+type SavedNote = { note: string | null; tags: string[] };
+
+/**
+ * A transaction's note and tags (v2.14). Both are the user's own and are
+ * never written by a sync. Limits come back as error keys, not exceptions,
+ * so the dialog can say which one was hit.
+ */
+export async function setTransactionNote(
+  transactionId: string,
+  note: string,
+  tags: string[]
+): Promise<ActionResult<SavedNote, NoteError>> {
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, [String(transactionId)]);
+  const cleanNote = normalizeNote(typeof note === "string" ? note : null);
+  const cleanTags = parseTags(Array.isArray(tags) ? (tags.filter((tag) => typeof tag === "string") as string[]) : []);
+  const error = validateNoteAndTags(cleanNote, cleanTags);
+  if (error) return actionError(error);
+
+  const tx = await prisma.transaction.update({
+    where: { id: transactionId },
+    data: { note: cleanNote, tags: cleanTags },
+    select: { accountId: true, categoryId: true },
+  });
+  revalidateTransactions(tx.accountId, [tx.categoryId]);
+  return actionOk({ note: cleanNote, tags: cleanTags });
 }

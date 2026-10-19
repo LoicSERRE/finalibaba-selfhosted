@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { centsToEuro } from "@/lib/utils/format";
 import { TransactionList, TransactionListItem } from "@/components/shared/transaction-list";
+import { TransactionNoteDetails } from "@/components/transactions/transaction-note-details";
+import { TransactionNoteButton } from "@/components/transactions/transaction-note-button";
 import { ImportTransactionsDialog } from "@/components/account-detail/import-transactions-dialog";
 import { ManualEntryDialog } from "@/components/account-detail/manual-entry-dialog";
 import { DeleteManualEntryButton } from "@/components/account-detail/delete-manual-entry-button";
@@ -29,6 +31,7 @@ export function TransactionsTable({
   canImportCsv,
   existingFingerprints,
   readOnly = false,
+  tagSuggestions = [],
 }: Readonly<{
   td: T;
   intlLocale: string;
@@ -38,6 +41,8 @@ export function TransactionsTable({
   categories: { id: string; name: string; color: string }[];
   canImportCsv: boolean;
   existingFingerprints: string[];
+  /** Tags in use, offered in the note dialog (v2.14). */
+  tagSuggestions?: string[];
   /** True when a granted (read-only) portfolio is on screen. The Server
    *  Actions behind these controls guard ownership themselves; this only
    *  avoids rendering buttons that could not succeed. */
@@ -86,6 +91,7 @@ export function TransactionsTable({
           amount: td("tableHeaders.amount"),
           category: td("tableHeaders.category"),
           actions: [
+            ...(readOnly ? [] : [td("tableHeaders.note")]),
             ...(showIncomeColumn ? [td("tableHeaders.income")] : []),
             ...(showManualColumn ? [td("tableHeaders.actions")] : []),
           ],
@@ -96,6 +102,7 @@ export function TransactionsTable({
             key={tx.id}
             date={dateFormat.format(tx.date)}
             label={tx.label ?? ""}
+            details={<TransactionNoteDetails note={tx.note} tags={tx.tags} />}
             amountCents={tx.amountCents}
             category={
               <TransactionCategoryCell
@@ -109,6 +116,9 @@ export function TransactionsTable({
               />
             }
             actions={[
+              ...(readOnly
+                ? []
+                : [<TransactionNoteButton key="note" transactionId={tx.id} label={tx.label ?? ""} note={tx.note} tags={tx.tags} suggestions={tagSuggestions} />]),
               ...(showIncomeColumn
                 ? [
                     tx.amountCents > BigInt(0) ? (

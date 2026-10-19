@@ -119,6 +119,7 @@ export function TransactionListItem({
   category,
   actions = [],
   select,
+  details,
 }: Readonly<{
   /** Already formatted for the viewer's locale. */
   date: string;
@@ -131,6 +132,8 @@ export function TransactionListItem({
   actions?: React.ReactNode[];
   /** The row's selection checkbox, when the list is `selectable`. */
   select?: React.ReactNode;
+  /** Under the label: the transaction's note and tags (v2.14). */
+  details?: React.ReactNode;
 }>) {
   const meta = account ? `${date} · ${account}` : date;
   // With a checkbox, a phone row is [checkbox | card] side by side; from xl
@@ -149,6 +152,7 @@ export function TransactionListItem({
       <div className="flex items-start justify-between gap-3 min-w-0">
         <div className="min-w-0">
           <p className="text-sm text-[var(--foreground)] break-words">{label}</p>
+          {details}
           <p className="xl:hidden text-xs text-[var(--muted)] mt-0.5 tabular-nums">{meta}</p>
         </div>
         <span className="xl:hidden shrink-0 text-sm">
