@@ -36,7 +36,7 @@ export function RebalancingSection({
             </div>
             {h.showSuggestion && (
               <div className="text-right shrink-0">
-                <p className={`text-sm font-medium tabular-nums ${h.isOverweight ? "text-[var(--negative)]" : "text-[var(--positive)]"}`}>
+                <p className={`text-sm font-medium tabular-nums ${h.isOverweight ? "text-[var(--negative)]" : "text-[var(--positive)]"} amount`}>
                   {h.isOverweight ? td("rebalancing.suggestSell") : td("rebalancing.suggestBuy")}{" "}
                   {formatCurrency(h.isOverweight ? h.driftValueCents : -h.driftValueCents)}
                 </p>

@@ -55,14 +55,14 @@ export function TopAssetsSection({
                 {ta(asset.type as Parameters<typeof ta>[0])}
                 {asset.subtype && <span className="ml-1 text-xs">· {asset.subtype}</span>}
               </td>
-              <td className="px-4 sm:px-6 py-3 tabular-nums font-medium text-[var(--foreground)]">
+              <td className="px-4 sm:px-6 py-3 tabular-nums font-medium text-[var(--foreground)] amount">
                 {formatCurrency(asset.value, 0)}
               </td>
               <td className="hidden sm:table-cell px-6 py-3 tabular-nums">
                 {asset.gain === null ? (
                   <span className="text-[var(--muted)] text-xs">-</span>
                 ) : (
-                  <span className={asset.gain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                  <span className={asset.gain >= BigInt(0) ? "amount text-[var(--positive)]" : "amount text-[var(--negative)]"}>
                     {asset.gain >= BigInt(0) ? "+" : ""}{formatCurrency(asset.gain, 0)}
                   </span>
                 )}
@@ -71,9 +71,9 @@ export function TopAssetsSection({
                 {asset.tax === null ? (
                   <span className="text-[var(--muted)] text-xs">-</span>
                 ) : asset.tax === BigInt(0) ? (
-                  <span className="text-[var(--muted)] text-xs">0 €</span>
+                  <span className="text-[var(--muted)] text-xs amount">0 €</span>
                 ) : (
-                  <span className="text-[var(--negative)]">-{formatCurrency(asset.tax, 0)}</span>
+                  <span className="text-[var(--negative)] amount">-{formatCurrency(asset.tax, 0)}</span>
                 )}
               </td>
               <td className="px-4 sm:px-6 py-3">

@@ -40,14 +40,14 @@ export function MonthlyPerformanceSection({
               } hover:bg-[var(--surface-elevated)] transition-colors`}
             >
               <td className="px-4 sm:px-6 py-3 text-[var(--muted)] capitalize">{row.date}</td>
-              <td className="px-4 sm:px-6 py-3 tabular-nums font-medium text-[var(--foreground)]">
+              <td className="px-4 sm:px-6 py-3 tabular-nums font-medium text-[var(--foreground)] amount">
                 {formatCurrency(row.netWorth, 0)}
               </td>
               <td className="px-4 sm:px-6 py-3 tabular-nums">
                 {row.delta === null ? (
                   <span className="text-[var(--muted)]">-</span>
                 ) : (
-                  <span className={row.delta >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                  <span className={row.delta >= 0 ? "amount text-[var(--positive)]" : "amount text-[var(--negative)]"}>
                     {row.delta >= 0 ? "+" : ""}{formatCurrency(row.delta, 0)}
                   </span>
                 )}

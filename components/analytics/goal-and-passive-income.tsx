@@ -11,7 +11,7 @@ function GoalProgressBar({ goal, t }: Readonly<{ goal: GoalRow; t: T }>) {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-y-1 mb-2">
-        <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+        <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider amount">
           {t("goal.title", { name: goal.name, amount: formatCurrency(goal.targetCents, 0) })}
         </p>
         <div className="flex items-center gap-2">
@@ -23,7 +23,7 @@ function GoalProgressBar({ goal, t }: Readonly<{ goal: GoalRow; t: T }>) {
             {goal.pct}%
           </span>
           {goal.remaining > BigInt(0) && (
-            <span className="text-xs text-[var(--muted)] hidden sm:inline">
+            <span className="text-xs text-[var(--muted)] hidden sm:inline amount">
               · {t("goal.remaining", { amount: formatCurrency(goal.remaining, 0) })}
             </span>
           )}
@@ -48,7 +48,7 @@ function GoalProgressBar({ goal, t }: Readonly<{ goal: GoalRow; t: T }>) {
           style={{ width: `${goal.pct}%` }}
         />
       </div>
-      <div className="flex justify-between text-xs text-[var(--muted)] mt-1.5">
+      <div className="flex justify-between text-xs text-[var(--muted)] mt-1.5 amount">
         <span>{formatCurrency(goal.currentCents, 0)}</span>
         <span>{formatCurrency(goal.targetCents, 0)}</span>
       </div>
@@ -114,19 +114,19 @@ export function GoalAndPassiveIncome({
           <div className="grid grid-cols-3 gap-2 sm:gap-4">
             <div>
               <p className="text-xs text-[var(--muted)] mb-1">{tIncome("ytdDividends")}</p>
-              <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">
+              <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">
                 {formatCurrency(realYtdDividendsNetCents, 0)}
               </p>
             </div>
             <div>
               <p className="text-xs text-[var(--muted)] mb-1">{tIncome("ytdInterest")}</p>
-              <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">
+              <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">
                 {formatCurrency(realYtdInterestNetCents, 0)}
               </p>
             </div>
             <div>
               <p className="text-xs text-[var(--muted)] mb-1">{tIncome("ytdTotal")}</p>
-              <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">
+              <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">
                 {formatCurrency(realYtdPassiveNetCents, 0)}
               </p>
             </div>

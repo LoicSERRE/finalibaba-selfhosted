@@ -31,14 +31,14 @@ export function FiscalSummarySection({
           <div className="flex items-center justify-between gap-6 text-sm flex-wrap">
             <div>
               <p className="text-xs text-[var(--muted)] mb-0.5">{td("fiscalSummary.costBasis")}</p>
-              <p className="tabular-nums font-medium text-[var(--foreground)]">
+              <p className="tabular-nums font-medium text-[var(--foreground)] amount">
                 {formatCurrency(totalCostBasis)}
               </p>
             </div>
             <div>
               <p className="text-xs text-[var(--muted)] mb-0.5">{td("fiscalSummary.latentGain")}</p>
               <p
-                className={`tabular-nums font-semibold ${
+                className={`amount tabular-nums font-semibold ${
                   totalGain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"
                 }`}
               >
@@ -56,13 +56,13 @@ export function FiscalSummarySection({
               <p className="text-xs text-[var(--muted)] mb-0.5">
                 {td("fiscalSummary.taxLabel", { rate: ((taxRate ?? 0) * 100).toFixed(1) })}
               </p>
-              <p className="tabular-nums font-semibold text-[var(--negative)]">
+              <p className="tabular-nums font-semibold text-[var(--negative)] amount">
                 -{formatCurrency(totalTax)}
               </p>
             </div>
             <div className="sm:border-l sm:border-[var(--border)] sm:pl-6">
               <p className="text-xs text-[var(--muted)] mb-0.5">{td("fiscalSummary.netAfterTax")}</p>
-              <p className="tabular-nums font-semibold text-[var(--accent-text)]">
+              <p className="tabular-nums font-semibold text-[var(--accent-text)] amount">
                 {formatCurrency(netAfterTax)}
               </p>
             </div>

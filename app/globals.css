@@ -216,3 +216,24 @@ select option {
 .dialog-overlay[data-state="closed"] { animation: dialog-overlay-out 150ms ease-in; }
 .dialog-content[data-state="open"] { animation: dialog-content-in 180ms ease-out; }
 .dialog-content[data-state="closed"] { animation: dialog-content-out 150ms ease-in; }
+
+/* ── Discretion mode (v2.13) ─────────────────────────────────────────────
+   <html data-discreet> is rendered from the DISCREET cookie by the root
+   layout and toggled client-side (lib/domain/discretion.ts). Every figure is
+   marked rather than guessed: any element showing an amount carries the
+   `amount` class, and the chart parts that print figures - value axes,
+   tooltips, label lists, pie labels - are listed here. Recharts 3 renders
+   tick labels in their own z-index layer (`.recharts-yAxis-tick-labels`),
+   outside the axis group, so an axis's own className cannot reach them. Text-based detection
+   was rejected because it can only run after hydration, which would flash
+   the figures it exists to hide. `em` keeps the blur proportional, so a
+   48px net worth is as unreadable as a 12px table cell.
+   __tests__/discretion.test.ts pins this selector list. */
+.amount { transition: filter 150ms ease-out; }
+[data-discreet] .amount,
+[data-discreet] .recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value,
+[data-discreet] .recharts-tooltip-wrapper,
+[data-discreet] .recharts-label-list,
+[data-discreet] .recharts-pie-labels {
+  filter: blur(0.4em);
+}

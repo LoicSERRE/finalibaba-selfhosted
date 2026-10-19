@@ -136,7 +136,7 @@ export function ProjectionChart({
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
       <div className="mb-6">
         <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-1">{t("title")}</h2>
-        <p className="text-xs text-[var(--muted)]">
+        <p className="text-xs text-[var(--muted)] amount">
           {annualContributionCents !== null
             ? t("contributionNote", { amount: formatCurrency(annualContributionCents, 0) })
             : t("noContributionNote")}
@@ -251,7 +251,7 @@ export function ProjectionChart({
             {/* After tax leads, before tax is the sub-line - the same order
                 the KPI card at the top of this page uses, so the two agree
                 on what "net worth" means. */}
-            <p className="text-3xl sm:text-4xl font-bold text-[var(--accent-text)] tabular-nums mt-1">
+            <p className="text-3xl sm:text-4xl font-bold text-[var(--accent-text)] tabular-nums mt-1 amount">
               {formatCurrency(
                 showAfterTax ? points[horizonYears].netWorthAfterTaxCents : points[horizonYears].netWorthCents,
                 0,
@@ -259,7 +259,7 @@ export function ProjectionChart({
             </p>
             <p className="text-sm text-[var(--muted)] mt-1">{t("horizonLabel", { years: horizonYears })}</p>
             {showAfterTax && (
-              <p className="text-xs text-[var(--muted)] mt-0.5">
+              <p className="text-xs text-[var(--muted)] mt-0.5 amount">
                 {t("beforeTaxCalloutNote", { amount: formatCurrency(points[horizonYears].netWorthCents, 0) })}
               </p>
             )}
@@ -272,7 +272,7 @@ export function ProjectionChart({
                 className="inline-flex items-center gap-2 rounded-full bg-[var(--surface-elevated)] px-3 py-1.5 text-xs"
               >
                 <span className="text-[var(--muted)]">{t("horizonLabel", { years })}</span>
-                <span className="font-medium text-[var(--foreground)] tabular-nums">
+                <span className="font-medium text-[var(--foreground)] tabular-nums amount">
                   {formatCurrency(points[years].netWorthCents, 0)}
                 </span>
               </div>

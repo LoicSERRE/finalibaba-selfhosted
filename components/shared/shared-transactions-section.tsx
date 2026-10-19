@@ -48,7 +48,7 @@ export function SharedTransactionsSection({
               </div>
             </div>
             <span
-              className={`text-sm font-medium tabular-nums shrink-0 ${
+              className={`amount text-sm font-medium tabular-nums shrink-0 ${
                 tx.amountCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--foreground)]"
               }`}
             >

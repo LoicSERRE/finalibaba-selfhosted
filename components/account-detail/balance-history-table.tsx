@@ -83,7 +83,7 @@ export function BalanceHistoryTable({
                   minute: "2-digit",
                 }).format(row.recordedAt)}
               </td>
-              <td className="px-6 py-3 tabular-nums font-medium text-[var(--foreground)]">
+              <td className="px-6 py-3 tabular-nums font-medium text-[var(--foreground)] amount">
                 {formatCurrency(row.balanceCents)}
               </td>
               <td className="px-6 py-3 tabular-nums">
@@ -95,8 +95,8 @@ export function BalanceHistoryTable({
                   <span
                     className={
                       row.delta > BigInt(0)
-                        ? "text-[var(--positive)]"
-                        : "text-[var(--negative)]"
+                        ? "amount text-[var(--positive)]"
+                        : "amount text-[var(--negative)]"
                     }
                   >
                     {row.delta > BigInt(0) ? "+" : ""}

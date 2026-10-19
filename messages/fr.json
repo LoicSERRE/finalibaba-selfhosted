@@ -1110,6 +1110,10 @@
         "notifications": "Alertes",
         "display": "Affichage"
       }
+    },
+    "discretion": {
+      "title": "Discrétion",
+      "description": "Floute tous les montants de l'application sur cet appareil, pour l'ouvrir en public ou partager votre écran. Raccourci : touche H."
     }
   },
   "shared": {
@@ -1625,5 +1629,9 @@
     "errorUsernameRequired": "Saisis un nom d'utilisateur.",
     "errorNoSuchUser": "Aucun utilisateur avec ce nom sur cette instance.",
     "errorThatIsYou": "C'est ton propre compte."
+  },
+  "discretion": {
+    "hide": "Masquer les montants",
+    "show": "Afficher les montants"
   }
 }

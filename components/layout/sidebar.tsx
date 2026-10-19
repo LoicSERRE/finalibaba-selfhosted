@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { PortfolioSwitcher, type PortfolioOption } from "@/components/layout/portfolio-switcher";
 import { isBareRoute } from "@/lib/domain/bare-routes";
 import { LogoutButton } from "@/components/layout/logout-button";
+import { DiscretionToggle } from "@/components/layout/discretion";
 
 type SidebarProps = {
   showLogout?: boolean;
@@ -94,6 +95,9 @@ export function Sidebar({ showLogout = false, portfolios = [], viewingPortfolioI
             the viewport's height, so this stays at the bottom of the SCREEN;
             it used to sit at the bottom of the whole page, out of reach on
             any long one. */}
+        {/* initial is never used: this sidebar is client-only (ssr:false in
+            sidebar-dynamic.tsx), so the toggle reads <html> directly. */}
+        <DiscretionToggle initial={false} className="w-full mt-2" />
         {showLogout && <LogoutButton className="w-full mt-2" />}
       </aside>
 

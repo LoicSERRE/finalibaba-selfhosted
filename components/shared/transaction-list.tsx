@@ -97,7 +97,7 @@ export function TransactionList({
 
 function Amount({ cents }: Readonly<{ cents: bigint }>) {
   return (
-    <span className={`tabular-nums font-medium whitespace-nowrap ${cents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+    <span className={`tabular-nums font-medium whitespace-nowrap ${cents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
       {cents > BigInt(0) ? "+" : ""}
       {formatCurrency(cents)}
     </span>

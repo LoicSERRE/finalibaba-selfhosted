@@ -7,6 +7,7 @@ import { AllocationHistoryChart } from "@/components/shared/allocation-history-c
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { DiscretionToggleServer } from "@/components/layout/discretion-toggle-server";
 import type {
   DashboardDelta,
   DashboardHistoryPoint,
@@ -55,15 +56,20 @@ export function DashboardView({
 }>) {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("dashboard.title")}</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">{t("dashboard.subtitle")}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("dashboard.title")}</h1>
+          <p className="text-sm text-[var(--muted)] mt-1">{t("dashboard.subtitle")}</p>
+        </div>
+        {/* Phones have no sidebar and no room left in the bottom nav, so the
+            discretion toggle sits here; the desktop sidebar carries its own. */}
+        <DiscretionToggleServer variant="icon" className="md:hidden -mt-1 -mr-2 shrink-0" />
       </div>
 
       {/* Hero KPI */}
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 sm:p-8">
         <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-3">{t("dashboard.netWorth")}</p>
-        <p className="text-4xl sm:text-5xl font-bold tabular-nums text-[var(--accent)] break-words leading-none">
+        <p className="text-4xl sm:text-5xl font-bold tabular-nums text-[var(--accent)] break-words leading-none amount">
           {formatCurrency(netWorth, 0)}
         </p>
         {delta30 && (
@@ -73,7 +79,7 @@ export function DashboardView({
                 good news about nothing having happened. Zero is not a gain, so
                 it gets the muted treatment and a flat marker. */}
             <span
-              className={`inline-flex items-center gap-1 text-sm font-medium tabular-nums ${
+              className={`amount inline-flex items-center gap-1 text-sm font-medium tabular-nums ${
                 delta30.amount === 0
                   ? "text-[var(--muted)]"
                   : delta30.amount > 0
@@ -95,22 +101,22 @@ export function DashboardView({
         <div className="mt-5 pt-5 border-t border-[var(--border)] grid grid-cols-2 gap-4">
           <div>
             <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-1">{t("dashboard.gross")}</p>
-            <p className="text-lg font-semibold tabular-nums text-[var(--foreground)]">
+            <p className="text-lg font-semibold tabular-nums text-[var(--foreground)] amount">
               {formatCurrency(grossAssets, 0)}
             </p>
           </div>
           <div>
             <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-1">{t("dashboard.liabilities")}</p>
-            <p className="text-lg font-semibold tabular-nums text-[var(--negative)]">
+            <p className="text-lg font-semibold tabular-nums text-[var(--negative)] amount">
               {formatCurrency(totalPassif, 0)}
             </p>
             {totalPassif > BigInt(0) && (
               <div className="mt-0.5 space-y-0.5">
                 {totalLiabilities > BigInt(0) && (
-                  <p className="text-xs text-[var(--muted)]">{t("dashboard.debts")} {formatCurrency(totalLiabilities, 0)}</p>
+                  <p className="text-xs text-[var(--muted)] amount">{t("dashboard.debts")} {formatCurrency(totalLiabilities, 0)}</p>
                 )}
                 {totalLatentTax > BigInt(0) && (
-                  <p className="text-xs text-[var(--muted)]">{t("dashboard.latentTax")} {formatCurrency(totalLatentTax, 0)}</p>
+                  <p className="text-xs text-[var(--muted)] amount">{t("dashboard.latentTax")} {formatCurrency(totalLatentTax, 0)}</p>
                 )}
               </div>
             )}
@@ -161,7 +167,7 @@ export function DashboardView({
                     <InstitutionLogo name={inst.name ?? t("common.personal")} logoUrl={inst.logoUrl} size={28} />
                     <p className="text-sm font-semibold text-[var(--foreground)]">{inst.name ?? t("common.personal")}</p>
                   </div>
-                  <p className="text-sm font-semibold tabular-nums text-[var(--foreground)]">
+                  <p className="text-sm font-semibold tabular-nums text-[var(--foreground)] amount">
                     {formatCurrency(inst.total, 0)}
                   </p>
                 </div>
@@ -176,7 +182,7 @@ export function DashboardView({
                         <span className="text-[var(--muted)] group-hover:text-[var(--foreground)] transition-colors">
                           {account.name}
                         </span>
-                        <span className="tabular-nums text-[var(--foreground)]">
+                        <span className="tabular-nums text-[var(--foreground)] amount">
                           {formatCurrency(account.value, 0)}
                         </span>
                       </Link>
@@ -186,7 +192,7 @@ export function DashboardView({
                         className="flex items-center justify-between text-xs min-h-[44px] -mx-2 px-2"
                       >
                         <span className="text-[var(--muted)]">{account.name}</span>
-                        <span className="tabular-nums text-[var(--foreground)]">
+                        <span className="tabular-nums text-[var(--foreground)] amount">
                           {formatCurrency(account.value, 0)}
                         </span>
                       </div>

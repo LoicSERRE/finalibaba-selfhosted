@@ -24,7 +24,7 @@ export function SharedHoldingsSection({
           <div key={group.accountId} className="px-6 py-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold text-[var(--foreground)]">{group.accountName}</p>
-              <p className="text-sm font-semibold tabular-nums text-[var(--foreground)]">
+              <p className="text-sm font-semibold tabular-nums text-[var(--foreground)] amount">
                 {formatCurrency(group.totalCents, 0)}
               </p>
             </div>
@@ -36,9 +36,9 @@ export function SharedHoldingsSection({
                 >
                   <span className="text-[var(--muted)]">
                     {holding.ticker}
-                    <span className="opacity-70"> · {holding.quantity}</span>
+                    <span className="opacity-70 amount"> · {holding.quantity}</span>
                   </span>
-                  <span className="tabular-nums text-[var(--foreground)]">
+                  <span className="tabular-nums text-[var(--foreground)] amount">
                     {formatCurrency(holding.valueCents, 0)}
                   </span>
                 </div>

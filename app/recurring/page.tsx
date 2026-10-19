@@ -168,7 +168,7 @@ export default async function RecurringPage() {
               <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("chartTitle")}</h2>
               <span className="text-sm font-medium tabular-nums">
                 {t("netTotal")}:{" "}
-                <span className={netTotalCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                <span className={netTotalCents >= 0 ? "amount text-[var(--positive)]" : "amount text-[var(--negative)]"}>
                   {formatCurrency(netTotalCents)}
                 </span>
               </span>
@@ -228,7 +228,7 @@ export default async function RecurringPage() {
                     </div>
                   </div>
                   <p className="text-sm tabular-nums font-medium">
-                    <span className={Number(r.amountCents) >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                    <span className={Number(r.amountCents) >= 0 ? "amount text-[var(--positive)]" : "amount text-[var(--negative)]"}>
                       {r.amountVaries ? t("approxAmount", { amount: formatCurrency(r.amountCents) }) : formatCurrency(r.amountCents)}
                     </span>
                     <span className="text-[var(--muted)] font-normal">
@@ -273,7 +273,7 @@ export default async function RecurringPage() {
                 >
                   <div className="min-w-0">
                     <p className="text-sm text-[var(--muted)] break-words">{r.label}</p>
-                    <p className="text-xs text-[var(--muted)] tabular-nums">
+                    <p className="text-xs text-[var(--muted)] tabular-nums amount">
                       {formatCurrency(r.amountCents)} · {r.account.name}
                     </p>
                   </div>
@@ -305,7 +305,7 @@ export default async function RecurringPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0 text-sm tabular-nums">
                       <span className="text-[var(--muted)]">{new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(o.date)}</span>
-                      <span className={Number(o.amountCents) >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                      <span className={Number(o.amountCents) >= 0 ? "amount text-[var(--positive)]" : "amount text-[var(--negative)]"}>
                         {formatCurrency(o.amountCents)}
                       </span>
                     </div>

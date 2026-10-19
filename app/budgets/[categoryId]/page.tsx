@@ -112,7 +112,7 @@ export default async function CategoryDetailPage({
           <span className="w-4 h-4 rounded-full shrink-0" style={{ background: category.color }} aria-hidden="true" />
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">{category.name}</h1>
         </div>
-        <span className="text-sm font-medium tabular-nums text-[var(--muted)]">{formatCurrency(totalCents)}</span>
+        <span className="text-sm font-medium tabular-nums text-[var(--muted)] amount">{formatCurrency(totalCents)}</span>
       </div>
 
       {rows.length === 0 ? (

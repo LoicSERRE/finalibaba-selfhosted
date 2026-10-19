@@ -64,7 +64,7 @@ export function SuggestionCard({
     <div className="flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
       <div className="min-w-0">
         <p className="text-sm font-medium text-[var(--foreground)] break-words">{candidate.label}</p>
-        <p className="text-xs text-[var(--muted)]">
+        <p className="text-xs text-[var(--muted)] amount">
           {candidate.accountName} · {formatFrequencyLabel(candidate.frequency, candidate.intervalCount, t)} ·{" "}
           {/* A varying series stores a MEDIAN. Printing it bare would present
               an estimate as a figure the user could hold the app to. */}

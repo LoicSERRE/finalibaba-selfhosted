@@ -48,19 +48,19 @@ export function InvestmentPerformanceSection({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("performance.invested")}</p>
-          <p className="text-lg font-semibold tabular-nums text-[var(--foreground)]">
+          <p className="text-lg font-semibold tabular-nums text-[var(--foreground)] amount">
             {formatCurrency(investTotalCostBasis, 0)}
           </p>
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("performance.currentValue")}</p>
-          <p className="text-lg font-semibold tabular-nums text-[var(--foreground)]">
+          <p className="text-lg font-semibold tabular-nums text-[var(--foreground)] amount">
             {formatCurrency(investTotalValue, 0)}
           </p>
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("performance.grossGain")}</p>
-          <p className={`text-lg font-semibold tabular-nums ${investTotalGain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+          <p className={`text-lg font-semibold tabular-nums ${investTotalGain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
             {investTotalGain >= BigInt(0) ? "+" : ""}{formatCurrency(investTotalGain, 0)}
           </p>
           <p className="text-xs text-[var(--muted)] mt-0.5">
@@ -74,11 +74,11 @@ export function InvestmentPerformanceSection({
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("performance.netGain")}</p>
-          <p className={`text-lg font-semibold tabular-nums ${investTotalGainNet >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+          <p className={`text-lg font-semibold tabular-nums ${investTotalGainNet >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
             {investTotalGainNet >= BigInt(0) ? "+" : ""}{formatCurrency(investTotalGainNet, 0)}
           </p>
           {investTotalTax > BigInt(0) && (
-            <p className="text-xs text-[var(--muted)] mt-0.5">
+            <p className="text-xs text-[var(--muted)] mt-0.5 amount">
               {t("performance.latentTax")} −{formatCurrency(investTotalTax, 0)}
             </p>
           )}
@@ -114,14 +114,14 @@ export function InvestmentPerformanceSection({
                       )}
                     </p>
                   </td>
-                  <td className="py-3 px-2 text-right tabular-nums text-[var(--muted)]">
+                  <td className="py-3 px-2 text-right tabular-nums text-[var(--muted)] amount">
                     {formatCurrency(row.costBasis, 0)}
                   </td>
-                  <td className="py-3 px-2 text-right tabular-nums font-medium text-[var(--foreground)]">
+                  <td className="py-3 px-2 text-right tabular-nums font-medium text-[var(--foreground)] amount">
                     {formatCurrency(row.value, 0)}
                   </td>
                   <td className="py-3 px-2 text-right tabular-nums">
-                    <span className={row.gain >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                    <span className={row.gain >= BigInt(0) ? "amount text-[var(--positive)]" : "amount text-[var(--negative)]"}>
                       {row.gain >= BigInt(0) ? "+" : ""}{formatCurrency(row.gain, 0)}
                     </span>
                     <span className="block text-xs text-[var(--muted)]">
@@ -129,7 +129,7 @@ export function InvestmentPerformanceSection({
                     </span>
                   </td>
                   <td className="hidden sm:table-cell py-3 px-2 text-right tabular-nums">
-                    <span className={row.gainNet >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}>
+                    <span className={row.gainNet >= BigInt(0) ? "amount text-[var(--positive)]" : "amount text-[var(--negative)]"}>
                       {row.gainNet >= BigInt(0) ? "+" : ""}{formatCurrency(row.gainNet, 0)}
                     </span>
                   </td>

@@ -29,12 +29,12 @@ export function KpiCards({
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
         <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-2">{t("kpis.netWorth")}</p>
-        <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--accent-text)]">
+        <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--accent-text)] amount">
           {formatCurrency(netWorth, 0)}
         </p>
         {momDelta !== null && (
           <p
-            className={`text-xs tabular-nums mt-1 ${
+            className={`amount text-xs tabular-nums mt-1 ${
               momDelta >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"
             }`}
           >
@@ -43,29 +43,29 @@ export function KpiCards({
           </p>
         )}
         {hasTaxData && (
-          <p className="text-xs text-[var(--muted)] mt-1">
+          <p className="text-xs text-[var(--muted)] mt-1 amount">
             ~{formatCurrency(netWorthBeforeTax, 0)} {t("kpis.beforeTax")}
           </p>
         )}
       </div>
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
         <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-2">{t("kpis.grossWorth")}</p>
-        <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--foreground)]">
+        <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--foreground)] amount">
           {formatCurrency(grossAssets, 0)}
         </p>
       </div>
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
         <p className="text-xs text-[var(--muted)] uppercase tracking-wider mb-2">{t("kpis.totalLiabilities")}</p>
-        <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--negative)]">
+        <p className="text-xl sm:text-2xl font-semibold tabular-nums text-[var(--negative)] amount">
           {formatCurrency(totalLiabilities + totalLatentTax, 0)}
         </p>
         {grossAssets > BigInt(0) && (
           <div className="mt-1 space-y-0.5">
-            <p className="text-xs text-[var(--muted)]">
+            <p className="text-xs text-[var(--muted)] amount">
               {t("kpis.debts")} {formatCurrency(totalLiabilities, 0)}
             </p>
             {hasTaxData && (
-              <p className="text-xs text-[var(--muted)]">
+              <p className="text-xs text-[var(--muted)] amount">
                 {t("kpis.latentTax")} {formatCurrency(totalLatentTax, 0)}
               </p>
             )}

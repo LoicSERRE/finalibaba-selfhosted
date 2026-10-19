@@ -55,7 +55,7 @@ export function SavingsInterestEstimateSection({
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("savingsEstimate.yearEndAmount")}</p>
-          <p className="text-lg font-semibold tabular-nums text-[var(--foreground)]">
+          <p className="text-lg font-semibold tabular-nums text-[var(--foreground)] amount">
             {estimatedYearEndSavingsInterestCents > BigInt(0)
               ? `~${formatCurrency(estimatedYearEndSavingsInterestCents, 0)}`
               : "-"}

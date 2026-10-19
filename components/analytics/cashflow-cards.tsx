@@ -76,7 +76,7 @@ export function CashflowCards({
                 </span>
               )}
             </div>
-            <p className="text-xs text-[var(--muted)] mt-1">
+            <p className="text-xs text-[var(--muted)] mt-1 amount">
               {hasDeclaredSavings
                 ? t("savingsRate.declaredSavings", { saved: formatCurrency(monthlySavedCents, 0), salary: formatCurrency(salaryNetCents, 0) })
                 : t("savingsRate.momSavings", { mom: formatCurrency(momDelta!, 0), salary: formatCurrency(salaryNetCents, 0) })
@@ -117,7 +117,7 @@ export function CashflowCards({
             >
               {t("runway.months", { count: Math.floor(runwayMonths) })}
             </p>
-            <p className="text-xs text-[var(--muted)] mt-1">
+            <p className="text-xs text-[var(--muted)] mt-1 amount">
               {t("runway.detail", { savings: formatCurrency(savingsCents, 0), expenses: formatCurrency(monthlyExpensesCents, 0) })}
             </p>
             <p className="text-xs text-[var(--muted)] mt-0.5">

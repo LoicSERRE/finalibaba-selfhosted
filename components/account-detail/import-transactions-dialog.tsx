@@ -173,7 +173,7 @@ export function ImportTransactionsDialog({
                         <TruncatedText text={r.label} className="w-full" />
                       </td>
                       <td
-                        className={`px-2 py-1.5 text-right tabular-nums whitespace-nowrap ${
+                        className={`amount px-2 py-1.5 text-right tabular-nums whitespace-nowrap ${
                           r.amountCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"
                         }`}
                       >

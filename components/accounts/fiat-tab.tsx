@@ -44,12 +44,12 @@ export function FiatTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: FiatAccou
                 </span>
               )}
               <div className="text-right min-w-[110px]">
-                <p className="text-lg font-semibold tabular-nums text-[var(--foreground)]">
+                <p className="text-lg font-semibold tabular-nums text-[var(--foreground)] amount">
                   {formatCurrency(account.currentCents)}
                 </p>
                 {account.deltaCents !== BigInt(0) && (
                   <p
-                    className={`text-xs tabular-nums ${
+                    className={`amount text-xs tabular-nums ${
                       account.deltaCents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"
                     }`}
                   >
