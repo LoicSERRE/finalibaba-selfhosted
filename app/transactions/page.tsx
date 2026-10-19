@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { getViewContext } from "@/lib/auth-context";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { TransactionCategoryCell } from "@/components/shared/transaction-category-cell";
 import { TransactionList, TransactionListItem } from "@/components/shared/transaction-list";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
@@ -11,67 +11,14 @@ import { BulkSelectionProvider, BulkToolbar, RowSelectCheckbox } from "@/compone
 import { TransactionNoteDetails } from "@/components/transactions/transaction-note-details";
 import { TransactionNoteButton } from "@/components/transactions/transaction-note-button";
 import { listTags } from "@/lib/services/transaction-tags";
+import { buildTransactionWhere } from "@/lib/services/ledger-query";
 import { localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
   parseTransactionLedgerFilters,
-  dayAfter,
-  amountMagnitudeRanges,
   TRANSACTIONS_PAGE_SIZE,
-  UNCATEGORIZED_SENTINEL,
-  type TransactionLedgerFilters,
   type TransactionLedgerSearchParams,
 } from "@/lib/domain/transactions-ledger";
-
-// Kept as its own function (not inlined into the page component below) to
-// stay under the sonarjs cognitive-complexity gate - same reasoning as
-// lib/actions/auto-categorize.ts's resolveDefaultCategoryIds/
-// matchAgainstDefaults split. Still Prisma-specific and still lives in
-// app/transactions/page.tsx, not lib/domain/transactions-ledger.ts - this
-// project's lib/domain-has-no-DB-calls convention, see that file's own
-// header comment.
-//
-// Built as an explicit AND of independent conditions, not one flat object
-// with spread-in fields, because the category filter and the amount filter
-// each need their own top-level "OR" (a category match has to check both
-// the transaction's own categoryId and any of its splits' - see CLAUDE.md's
-// "Split transactions") - a plain object can only ever hold one "OR" key,
-// so two would silently collide/overwrite each other.
-function buildTransactionWhere(filters: TransactionLedgerFilters) {
-  const amountRanges = amountMagnitudeRanges(filters.amountMin, filters.amountMax);
-  const conditions: object[] = [{ isInternalTransfer: false }];
-  // The search box reads notes too (v2.14): a note is exactly where someone
-  // writes the word they will later search for.
-  if (filters.q) {
-    conditions.push({
-      OR: [
-        { label: { contains: filters.q, mode: "insensitive" as const } },
-        { note: { contains: filters.q, mode: "insensitive" as const } },
-      ],
-    });
-  }
-  if (filters.tag) conditions.push({ tags: { has: filters.tag } });
-  if (filters.accountId) conditions.push({ accountId: filters.accountId });
-  if (filters.categoryId === UNCATEGORIZED_SENTINEL) {
-    // Genuinely uncategorized (no category, no splits at all) OR a split
-    // transaction with at least one deliberately-uncategorized line - both
-    // count as "uncategorized" the same way app/budgets/page.tsx's own
-    // uncategorizedSpentCents does.
-    conditions.push({ OR: [{ categoryId: null, splits: { none: {} } }, { splits: { some: { categoryId: null } } }] });
-  } else if (filters.categoryId) {
-    conditions.push({ OR: [{ categoryId: filters.categoryId }, { splits: { some: { categoryId: filters.categoryId } } }] });
-  }
-  if (filters.from || filters.to) {
-    conditions.push({
-      date: {
-        ...(filters.from ? { gte: filters.from } : {}),
-        ...(filters.to ? { lt: dayAfter(filters.to) } : {}),
-      },
-    });
-  }
-  if (amountRanges) conditions.push({ OR: amountRanges.map((range) => ({ amountCents: range })) });
-  return { AND: conditions };
-}
 
 export default async function TransactionsPage({
   searchParams,
@@ -138,9 +85,24 @@ export default async function TransactionsPage({
     // category columns in particular need more room than the per-account
     // transactions table (which never shows an account column at all).
     <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
-        <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle", { count: totalCount, suffix: totalCount !== 1 ? "s" : "" })}</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">{t("title")}</h1>
+          <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle", { count: totalCount, suffix: totalCount !== 1 ? "s" : "" })}</p>
+        </div>
+        {/* The same filters as the list, every page of it. Not on a granted
+            portfolio: exports only ever cover the viewer's own accounts
+            (app/api/export/transactions/route.ts). */}
+        {!readOnly && totalCount > 0 && (
+          <a
+            href={pageHref(1).replace(/^\/transactions/, "/api/export/transactions")}
+            download
+            className="flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          >
+            <Download size={14} aria-hidden="true" />
+            {t("exportCsv")}
+          </a>
+        )}
       </div>
 
       <TransactionFilters accounts={accounts} categories={categories} tags={tags} />

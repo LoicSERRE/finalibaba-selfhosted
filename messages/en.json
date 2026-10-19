@@ -392,7 +392,19 @@
     },
     "noteColumn": "Note",
     "tagFilterLabel": "Filter by tag",
-    "allTags": "All tags"
+    "allTags": "All tags",
+    "exportCsv": "Export (.csv)",
+    "csv": {
+      "date": "Date",
+      "account": "Account",
+      "label": "Label",
+      "amount": "Amount",
+      "currency": "Currency",
+      "category": "Category",
+      "note": "Note",
+      "tags": "Tags",
+      "uncategorized": "Uncategorized"
+    }
   },
   "categories": {
     "create": "New category",

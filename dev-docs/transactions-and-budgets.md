@@ -163,6 +163,18 @@ Every transaction can carry a note and up to ten tags, edited from the note butt
 
 Verified in a browser against a real database: a note plus "#vacances" (Enter) and "frais pro," (comma) saves as `["vacances", "frais pro"]`; an existing tag is suggested; a removed chip is not saved; searching a word of the note finds the row; the tag link and the tag select both filter to it and keep "Vacances" separate; an eleventh tag is refused with its reason and leaves the row unchanged; the account page carries the same control; the my-data export includes both.
 
+### Ledger CSV export (v2.14)
+
+"Exporter (.csv)" on `/transactions` downloads every transaction matching the page's current filters, all pages, from `GET /api/export/transactions` (same query string; the `where` is the page's own, `lib/services/ledger-query.ts`).
+
+- **Not under `/api/transactions/`**: `proxy.ts` exempts that whole prefix from the session check (the sync service's bearer-token callbacks live there), so an export placed there would have been public. `__tests__/proxy-matcher.test.ts` pins `/api/export/transactions` as gated.
+- **Scope is `baseAccountIds`** (own + co-owned), not the view context: an export is a derived artifact. The button is hidden on a read-only granted portfolio.
+- **Dialect follows the UI language** (`lib/utils/transactions-csv.ts`): `;` and a decimal comma in French, `,` and a point in English, ISO dates, UTF-8 BOM, CRLF. Amounts come from integer cents without a float. A split transaction's category cell spells each line out ("Alimentation -100,00 + Sans catégorie -23,45").
+- **Formula injection**: a text cell starting with `=`, `+`, `-`, `@`, tab or CR gets a leading apostrophe - labels come from the bank and notes from anyone with write access. Amounts are left numeric.
+- Recorded in the audit log as `data.exported` ("ledger CSV: N transaction(s)").
+
+Verified in a browser against a real database: the unfiltered file has exactly the 112 non-transfer rows the SQL count gives, the `q=carrefour` file exactly its 9; French and English headers and dialects; a label `=HYPERLINK("http://evil","x")` comes out as `'=HYPERLINK(...)`; note and tags present; three exports, three audit rows.
+
 ### Budget rollover
 
 Opt-in per category (`Category.budgetRolloverEnabled`, off by default so every existing budget keeps today's behavior) - unused envelope carries into next month instead of resetting to zero, matching YNAB's "give every dollar a job" model. `lib/domain/budgets.ts` holds the pure math (`monthsBetween`, `computeRolloverCarryInCents`); the actual `Transaction` query and per-month bucketing stay in `app/budgets/page.tsx`, same lib/domain-has-no-DB-calls split as `lib/domain/transactions-ledger.ts`.
