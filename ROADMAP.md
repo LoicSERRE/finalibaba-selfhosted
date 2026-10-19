@@ -10,6 +10,22 @@ Before tagging a `vX.Y`, run the release-boundary health audit in `CLAUDE.md`.
 
 ---
 
+## Planned
+
+Scheduled, in this order. Each step is small enough to ship on its own, and the order is chosen so later steps build on earlier ones: toasts before bulk actions (a bulk change needs an undo), notes and tags before the CSV export and the command palette (both should carry them), onboarding last (it points at everything above).
+
+1. **v2.12.5 - Exports follow the UI language.** `fmt` in `lib/utils/markdown-export.ts` hard-codes `fr-FR` and EUR, the accounts export dates itself with the browser's locale rather than the app's, and labels keep French typography (`**Balance** :`) - an English export comes out half French.
+2. **v2.13 - Discretion mode.** One toggle (sidebar, settings, keyboard shortcut) that blurs every amount on every page, remembered per device; for opening the app in public or sharing a screen.
+3. **v2.13 - Toasts, with undo.** An app-wide confirmation toast after a mutation, offering "Annuler" for destructive ones (delete a category, a recurring series, a holding, a goal); today only in-form `FormAlert` exists.
+4. **v2.14 - Bulk actions in the ledger.** Multi-select on `/transactions` to set a category or flag/unflag an internal transfer; `bulkAssignCategory` already exists but only backs the budgets' uncategorized card.
+5. **v2.14 - Notes and tags on transactions.** `Transaction` has no free-text field: a note ("remboursement", "frais déductible") and user tags, both filterable in the ledger. Schema change.
+6. **v2.14 - CSV export of the filtered ledger.** Same filters as the URL, including notes and tags; today CSV is import-only and exports are Markdown or the full JSON dump.
+7. **v2.15 - Command palette (Ctrl+K) and keyboard shortcuts.** Jump to a page, find an account or a transaction (label, note, tag), trigger a sync, toggle discretion mode; the app has no keyboard shortcut today.
+8. **v2.16 - Upcoming payments on the dashboard.** The month ahead in one list: recurring debits and credits, loan instalments, expected dividends (the dividend calendar already exists on `/analytics`).
+9. **v2.16 - Money-flow diagram.** A Sankey of income → spending categories → savings for a period, on `/budgets` or `/analytics`.
+10. **v2.17 - First-run checklist.** Replaces the bare dashboard empty state with guided steps: add an account, connect a bank, set the tax profile, set a goal - each ticking itself off from real data.
+11. **Later - Configurable base currency.** Everything is converted to and stored as EUR, which shuts out non-euro users of the public edition. The largest item here (every `*Cents` aggregate, FX history, tax presets); needs a design pass before it gets a version number.
+
 ## Next
 
 Demand-driven, not scheduled. Each needs a real user asking, or a materially bigger integration than anything shipped so far.
