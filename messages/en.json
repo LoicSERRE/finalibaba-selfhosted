@@ -352,7 +352,21 @@
     "amountMaxPlaceholder": "Max €",
     "previousPage": "Previous",
     "nextPage": "Next",
-    "pageOf": "Page {page} of {total}"
+    "pageOf": "Page {page} of {total}",
+    "bulk": {
+      "selectPage": "Select all on this page",
+      "selectRow": "Select: {label}",
+      "selected": "{count} selected",
+      "categoryLabel": "Category to apply",
+      "uncategorized": "Uncategorized",
+      "apply": "Apply",
+      "markTransfer": "Internal transfer",
+      "clear": "Clear selection",
+      "categorized": "{count} transaction{suffix} categorized",
+      "skippedSplit": "{count} split transaction{suffix} left unchanged",
+      "marked": "{count} transaction{suffix} marked as internal transfer",
+      "failed": "The change failed."
+    }
   },
   "categories": {
     "create": "New category",

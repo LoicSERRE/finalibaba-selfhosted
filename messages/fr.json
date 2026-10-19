@@ -352,7 +352,21 @@
     "amountMaxPlaceholder": "Max €",
     "previousPage": "Précédent",
     "nextPage": "Suivant",
-    "pageOf": "Page {page} / {total}"
+    "pageOf": "Page {page} / {total}",
+    "bulk": {
+      "selectPage": "Tout sélectionner sur cette page",
+      "selectRow": "Sélectionner : {label}",
+      "selected": "{count} sélectionnée{suffix}",
+      "categoryLabel": "Catégorie à appliquer",
+      "uncategorized": "Sans catégorie",
+      "apply": "Appliquer",
+      "markTransfer": "Virement interne",
+      "clear": "Désélectionner",
+      "categorized": "{count} transaction{suffix} catégorisée{suffix}",
+      "skippedSplit": "{count} ventilée{suffix} laissée{suffix} telle{suffix} quelle{suffix}",
+      "marked": "{count} transaction{suffix} marquée{suffix} comme virement interne",
+      "failed": "La modification a échoué."
+    }
   },
   "categories": {
     "create": "Nouvelle catégorie",

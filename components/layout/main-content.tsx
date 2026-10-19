@@ -23,12 +23,20 @@ export function MainContent({ children }: Readonly<{ children: React.ReactNode }
   const bare = isBareRoute(usePathname() ?? "/");
 
   return (
+    // min-w-0, not overflow-y-auto: <main> never has a bounded height - the
+    // window is what scrolls - so an overflow here scrolled nothing, but it
+    // did make <main> the scroll container every `sticky` inside it is
+    // measured against, and none of them ever stuck (the offline banner, the
+    // Settings tab menu, the ledger's bulk toolbar; found in v2.14). The one
+    // thing it really did - letting this flex child shrink below its content
+    // width - is what min-w-0 says directly. Measured before and after on
+    // every page at 1280/768/390px: no sideways overflow either way.
     <main
       id="main-content"
       className={
         bare
-          ? "flex-1 overflow-y-auto"
-          : "flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8"
+          ? "flex-1 min-w-0"
+          : "flex-1 min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8"
       }
     >
       {/* The offline banner stays on every route, bare ones included: a share

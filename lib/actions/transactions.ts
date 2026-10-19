@@ -4,6 +4,9 @@ import { revalidateTransactions } from "@/lib/actions/revalidate";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertTransactionsWritable, assertOwned, baseAccountIds } from "@/lib/auth-context";
+import { rememberUndo } from "@/lib/services/undo-store";
+import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
+import { parseBulkIds } from "@/lib/domain/transactions-ledger";
 import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
@@ -231,4 +234,88 @@ export async function bulkAssignCategory(transactionIds: string[], categoryId: s
   for (const { accountId } of accountIds) revalidateTransactions(accountId, [categoryId]);
 
   return { updated: result.count };
+}
+
+export type BulkEditError = "invalid_selection";
+
+type BulkCategorized = { updated: number; skippedSplit: number; undoToken: string | null };
+
+/**
+ * The ledger's bulk "set category" (v2.14). Unlike bulkAssignCategory, which
+ * backs the budgets' uncategorized groups and deliberately replaces splits,
+ * this leaves a split transaction alone and counts it: a split is a decision
+ * the user made line by line, and a checkbox on a page of fifty rows is not
+ * the place to silently undo it. Undoable for a minute.
+ */
+export async function bulkCategorizeTransactions(
+  transactionIds: string[],
+  categoryId: string | null
+): Promise<ActionResult<BulkCategorized, BulkEditError>> {
+  const ids = parseBulkIds(transactionIds);
+  if (!ids) return actionError("invalid_selection");
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, ids);
+  if (categoryId) await assertOwned("category", categoryId, viewer.id);
+
+  const rows = await prisma.transaction.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, categoryId: true, accountId: true, splits: { select: { id: true }, take: 1 } },
+  });
+  const skippedSplit = rows.filter((row) => row.splits.length > 0).length;
+  const changed = rows.filter((row) => row.splits.length === 0 && row.categoryId !== categoryId);
+  if (changed.length === 0) return actionOk({ updated: 0, skippedSplit, undoToken: null });
+
+  await prisma.transaction.updateMany({
+    where: { id: { in: changed.map((row) => row.id) }, splits: { none: {} } },
+    data: { categoryId },
+  });
+
+  const accountIds = [...new Set(changed.map((row) => row.accountId))];
+  const categoryIds = [categoryId, ...changed.map((row) => row.categoryId)];
+  for (const accountId of accountIds) revalidateTransactions(accountId, categoryIds);
+
+  const undoToken = rememberUndo(viewer.id, {
+    kind: "transactionsCategory" as const,
+    assignedCategoryId: categoryId,
+    previous: changed.map((row) => ({ id: row.id, categoryId: row.categoryId })),
+    accountIds,
+  });
+  return actionOk({ updated: changed.length, skippedSplit, undoToken });
+}
+
+/**
+ * The ledger's bulk "mark as internal transfer" (v2.14). Marking by hand
+ * stops at the rows asked about, exactly like setInternalTransferFlag does
+ * for one: there is no counterpart to pair them with. Undoable for a minute.
+ */
+export async function bulkMarkInternalTransfers(
+  transactionIds: string[]
+): Promise<ActionResult<{ updated: number; undoToken: string | null }, BulkEditError>> {
+  const ids = parseBulkIds(transactionIds);
+  if (!ids) return actionError("invalid_selection");
+  const viewer = await getViewer();
+  await assertTransactionsWritable(viewer.id, ids);
+
+  const rows = await prisma.transaction.findMany({
+    where: { id: { in: ids }, isInternalTransfer: false },
+    select: { id: true, accountId: true, categoryId: true, internalTransferManual: true },
+  });
+  if (rows.length === 0) return actionOk({ updated: 0, undoToken: null });
+
+  await prisma.transaction.updateMany({
+    where: { id: { in: rows.map((row) => row.id) }, isInternalTransfer: false },
+    data: { isInternalTransfer: true, internalTransferManual: true },
+  });
+
+  const accountIds = [...new Set(rows.map((row) => row.accountId))];
+  for (const accountId of accountIds) {
+    revalidateTransactions(accountId, rows.filter((row) => row.accountId === accountId).map((row) => row.categoryId));
+  }
+
+  const undoToken = rememberUndo(viewer.id, {
+    kind: "transactionsTransfer" as const,
+    previous: rows.map((row) => ({ id: row.id, internalTransferManual: row.internalTransferManual })),
+    accountIds,
+  });
+  return actionOk({ updated: rows.length, undoToken });
 }
