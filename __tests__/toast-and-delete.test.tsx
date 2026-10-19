@@ -96,6 +96,13 @@ describe("the toast stack", () => {
 describe("DeleteButton", () => {
   const ok = { ok: true as const, data: { undoToken: "tok-1" } };
 
+  /** An undoable button, already clicked and settled: the toast is up. */
+  async function deletedWithUndo() {
+    render(<><Toaster /><DeleteButton undoable iconOnly label="delete" onDelete={async () => ok} /></>);
+    fireEvent.click(screen.getByRole("button", { name: "delete" }));
+    await flush();
+  }
+
   it("deletes an undoable item on the first click, with no dialog, and offers undo", async () => {
     const onDelete = vi.fn(async () => ok);
     render(<><Toaster /><DeleteButton undoable iconOnly label="delete" deletedMessage="Deleted: Rent" onDelete={onDelete} /></>);
@@ -112,9 +119,7 @@ describe("DeleteButton", () => {
 
   it("spends the token on undo, then confirms and refreshes", async () => {
     undoDeletion.mockResolvedValueOnce({ ok: true, data: undefined });
-    render(<><Toaster /><DeleteButton undoable iconOnly label="delete" onDelete={async () => ok} /></>);
-    fireEvent.click(screen.getByRole("button", { name: "delete" }));
-    await flush();
+    await deletedWithUndo();
     fireEvent.click(screen.getByRole("button", { name: "undo" }));
     await flush();
     expect(undoDeletion).toHaveBeenCalledWith("tok-1");
@@ -124,9 +129,7 @@ describe("DeleteButton", () => {
 
   it("says why an undo failed instead of swallowing it", async () => {
     undoDeletion.mockResolvedValueOnce({ ok: false, error: "undo_conflict" });
-    render(<><Toaster /><DeleteButton undoable iconOnly label="delete" onDelete={async () => ok} /></>);
-    fireEvent.click(screen.getByRole("button", { name: "delete" }));
-    await flush();
+    await deletedWithUndo();
     fireEvent.click(screen.getByRole("button", { name: "undo" }));
     await flush();
     expect(screen.getByRole("alert").textContent).toContain("undoConflict");
