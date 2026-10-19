@@ -27,10 +27,14 @@ function sweep(now: number) {
   }
 }
 
-export function rememberUndo<T>(userId: string, value: T, now = Date.now()): string {
-  sweep(now);
+// No type parameter and no `= Date.now()` default here: either one makes
+// lizard drop the function from its report (dev-docs/release-audit.md,
+// item 2), and callers cast what takeUndo returns anyway.
+export function rememberUndo(userId: string, value: unknown, now?: number): string {
+  const at = now ?? Date.now();
+  sweep(at);
   const token = randomUUID();
-  store.set(token, { userId, value, expiresAt: now + UNDO_WINDOW_MS });
+  store.set(token, { userId, value, expiresAt: at + UNDO_WINDOW_MS });
   return token;
 }
 
@@ -39,11 +43,11 @@ export function rememberUndo<T>(userId: string, value: T, now = Date.now()): str
  * exactly like an unknown or expired one (and stays usable by its owner), so
  * a guessed token learns nothing.
  */
-export function takeUndo<T>(userId: string, token: string, now = Date.now()): T | null {
+export function takeUndo(userId: string, token: string, now?: number): unknown {
   const entry = store.get(token);
   if (!entry || entry.userId !== userId) return null;
   store.delete(token);
-  return entry.expiresAt > now ? (entry.value as T) : null;
+  return entry.expiresAt > (now ?? Date.now()) ? entry.value : null;
 }
 
 /** Test seam: forget every pending ticket. */

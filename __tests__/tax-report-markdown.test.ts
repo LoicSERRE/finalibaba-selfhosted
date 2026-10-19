@@ -29,6 +29,11 @@ const DATA: TaxReportExportData = {
   interest: [],
 };
 
+const WITH_INTEREST: TaxReportExportData = {
+  ...DATA,
+  interest: [{ accountName: "Livret A", date: "2026-12-31", grossCents: 1_234, netCents: 1_234 }],
+};
+
 describe("the tax report", () => {
   const fr = buildTaxReportMarkdown(DATA, S, "fr-FR");
   const F = exportFormat("fr-FR");
@@ -56,6 +61,12 @@ describe("the tax report", () => {
   it("drops a section with nothing in it", () => {
     expect(fr).toContain("## DIVIDENDINCOME");
     expect(fr).not.toContain("## INTERESTINCOME");
+  });
+
+  it("lists interest with its cents when there is some", () => {
+    const md = buildTaxReportMarkdown(WITH_INTEREST, S, "fr-FR");
+    expect(md).toContain("## INTERESTINCOME");
+    expect(md).toContain(`| 2026-12-31 | Livret A | ${F.money(1_234, 2)} |`);
   });
 
   it("writes an English report's figures the English way", () => {

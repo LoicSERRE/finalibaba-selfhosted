@@ -25,7 +25,7 @@ export type UndoError = "undo_expired" | "undo_conflict";
  */
 export async function undoDeletion(token: string): Promise<ActionResult<void, UndoError>> {
   const viewer = await getViewer();
-  const snapshot = typeof token === "string" ? takeUndo<DeletionSnapshot>(viewer.id, token) : null;
+  const snapshot = typeof token === "string" ? (takeUndo(viewer.id, token) as DeletionSnapshot | null) : null;
   if (!snapshot) return actionError("undo_expired");
 
   try {
