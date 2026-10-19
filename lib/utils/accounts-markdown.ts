@@ -61,9 +61,12 @@ export type ExportStrings = {
 
 // "<institution> · <qualifiers> - <name>", dropping any qualifier the name
 // already says: a Trade Republic account is named "PEA" with subtype "PEA".
-function accountHeading(institution: string, qualifiers: (string | null)[], name: string): string {
-  const kept = qualifiers.filter((q): q is string => !!q && !nameMentions(name, q));
-  return `### ${[institution, ...kept].join(" · ")} - ${name}`;
+function accountHeading(institution: string, qualifiers: Array<string | null>, name: string): string {
+  const parts = [institution];
+  for (const q of qualifiers) {
+    if (q && !nameMentions(name, q)) parts.push(q);
+  }
+  return `### ${parts.join(" · ")} - ${name}`;
 }
 
 // Single-pass markdown builder covering every account-type section - see
