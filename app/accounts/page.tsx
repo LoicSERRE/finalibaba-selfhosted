@@ -155,7 +155,7 @@ export default async function AccountsPage({
                 (scripts/ui-audit, self-overflow check). */}
             <span className="text-xs font-medium lg:hidden">{labelShort}</span>
             <span className="text-sm font-medium hidden lg:block">{label}</span>
-            <span className="hidden sm:block text-xs mt-0.5 tabular-nums">
+            <span className="hidden sm:block text-xs mt-0.5 tabular-nums amount">
               {formatCurrency(tabTotals[id], 0)}
             </span>
           </Link>

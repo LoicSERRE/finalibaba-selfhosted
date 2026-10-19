@@ -21,19 +21,19 @@ export function RealEstateSection({
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-sm">
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("realEstate.value")}</p>
-          <p className="tabular-nums font-semibold text-[var(--foreground)]">
+          <p className="tabular-nums font-semibold text-[var(--foreground)] amount">
             {formatCurrency(value, 0)}
           </p>
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("realEstate.remaining")}</p>
-          <p className="tabular-nums font-semibold text-[var(--negative)]">
+          <p className="tabular-nums font-semibold text-[var(--negative)] amount">
             {formatCurrency(liability, 0)}
           </p>
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("realEstate.equity")}</p>
-          <p className="tabular-nums font-semibold text-[var(--positive)]">
+          <p className="tabular-nums font-semibold text-[var(--positive)] amount">
             {formatCurrency(equity, 0)}
           </p>
         </div>

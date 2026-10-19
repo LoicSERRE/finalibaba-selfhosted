@@ -30,10 +30,10 @@ export function DividendCalendarSection({
           </InfoTooltip>
         </h2>
         <div className="text-right">
-          <span className="text-sm font-semibold tabular-nums text-[var(--positive)]">
+          <span className="text-sm font-semibold tabular-nums text-[var(--positive)] amount">
             ~{formatCurrency(annualDividendsNetCents, 0)} {t("dividends.netPerYear")}
           </span>
-          <span className="text-xs text-[var(--muted)] ml-2">
+          <span className="text-xs text-[var(--muted)] ml-2 amount">
             brut {formatCurrency(annualDividendsCents, 0)}
           </span>
         </div>
@@ -51,10 +51,10 @@ export function DividendCalendarSection({
               </p>
             </div>
             <div className="text-right shrink-0">
-              <p className="text-sm font-semibold tabular-nums text-[var(--positive)]">
+              <p className="text-sm font-semibold tabular-nums text-[var(--positive)] amount">
                 ~{formatCurrency(row.annualNetCents, 0)} net
               </p>
-              <p className="text-xs text-[var(--muted)]">
+              <p className="text-xs text-[var(--muted)] amount">
                 brut {formatCurrency(row.annualEstCents, 0)}
                 {row.alreadyNet ? (
                   <> · {t("dividends.alreadyNet")}</>

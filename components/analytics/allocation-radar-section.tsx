@@ -64,7 +64,7 @@ export function AllocationRadarSection({
             style={{ background: ALLOCATION_CATEGORY_COLORS.investments }}
           />
         </div>
-        <div className="flex justify-between text-xs text-[var(--muted)] mt-1.5">
+        <div className="flex justify-between text-xs text-[var(--muted)] mt-1.5 amount">
           <span>{t("radar.safe", { amount: formatCurrency(garantis, 0) })}</span>
           <span>{t("radar.risky", { amount: formatCurrency(risques, 0) })}</span>
         </div>

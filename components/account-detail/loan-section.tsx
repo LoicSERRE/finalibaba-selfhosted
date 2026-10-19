@@ -34,13 +34,13 @@ export function LoanSection({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-sm">
         <div>
           <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.amountBorrowed")}</p>
-          <p className="tabular-nums font-semibold text-[var(--foreground)]">
+          <p className="tabular-nums font-semibold text-[var(--foreground)] amount">
             {formatCurrency(loanAmountCents, 0)}
           </p>
         </div>
         <div>
           <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.remaining")}</p>
-          <p className="tabular-nums font-semibold text-[var(--negative)]">
+          <p className="tabular-nums font-semibold text-[var(--negative)] amount">
             {formatCurrency(loanStats.currentCapitalCents, 0)}
           </p>
         </div>
@@ -65,7 +65,7 @@ export function LoanSection({
             <p className="text-[var(--muted)] text-xs mb-1">
               {td("loanDetail.monthlyDuring", { months: deferralMonths })}
             </p>
-            <p className="tabular-nums font-semibold text-[var(--foreground)]">
+            <p className="tabular-nums font-semibold text-[var(--foreground)] amount">
               {formatCurrency(loanStats.deferralPaymentCents + insurance)}
               <span className="text-xs text-[var(--muted)] font-normal ml-1">{td("loanDetail.perMonth")}</span>
             </p>
@@ -76,19 +76,19 @@ export function LoanSection({
           <p className="text-[var(--muted)] text-xs mb-1">
             {deferralMonths > 0 ? td("loanDetail.monthlyAfterDeferred") : td("loanDetail.monthly")}
           </p>
-          <p className="tabular-nums font-semibold text-[var(--foreground)]">
+          <p className="tabular-nums font-semibold text-[var(--foreground)] amount">
             {formatCurrency(loanStats.amortPaymentCents + insurance)}
             <span className="text-xs text-[var(--muted)] font-normal ml-1">{td("loanDetail.perMonth")}</span>
           </p>
           {insurance > BigInt(0) && (
-            <p className="text-xs text-[var(--muted)]">
+            <p className="text-xs text-[var(--muted)] amount">
               {td("loanDetail.insuranceAmount", { amount: formatCurrency(insurance) })}
             </p>
           )}
         </div>
         <div>
           <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.currentMonthly")}</p>
-          <p className="tabular-nums font-semibold text-[var(--accent-text)]">
+          <p className="tabular-nums font-semibold text-[var(--accent-text)] amount">
             {formatCurrency(loanStats.currentMonthlyTotalCents)}
             <span className="text-xs text-[var(--muted)] font-normal ml-1">{td("loanDetail.perMonth")}</span>
           </p>
@@ -99,21 +99,21 @@ export function LoanSection({
       <div className="border-t border-[var(--border)] pt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
         <div>
           <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.totalInterest")}</p>
-          <p className="tabular-nums font-semibold text-[var(--negative)]">
+          <p className="tabular-nums font-semibold text-[var(--negative)] amount">
             {formatCurrency(loanStats.totalInterestCents, 0)}
           </p>
         </div>
         {insurance > BigInt(0) && (
           <div>
             <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.totalInsurance")}</p>
-            <p className="tabular-nums font-semibold text-[var(--negative)]">
+            <p className="tabular-nums font-semibold text-[var(--negative)] amount">
               {formatCurrency(insurance * BigInt(loanDurationMonths), 0)}
             </p>
           </div>
         )}
         <div>
           <p className="text-[var(--muted)] text-xs mb-1">{td("loanDetail.totalCost")}</p>
-          <p className="tabular-nums font-semibold text-[var(--negative)]">
+          <p className="tabular-nums font-semibold text-[var(--negative)] amount">
             {formatCurrency(loanStats.totalCostCents, 0)}
           </p>
         </div>

@@ -16,6 +16,8 @@ import { RealtimeRefresh } from "@/components/layout/realtime-refresh";
 import { prisma } from "@/lib/db/prisma";
 import { getPublicViewer, isEndedSession, isRevokedSession, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
+import { DISCRETION_COOKIE, isDiscreet } from "@/lib/domain/discretion";
+import { DiscretionShortcut } from "@/components/layout/discretion";
 import { isBareRoute } from "@/lib/domain/bare-routes";
 import "./globals.css";
 
@@ -81,7 +83,11 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
-  const theme = resolveThemePreference((await cookies()).get("THEME")?.value);
+  const cookieStore = await cookies();
+  const theme = resolveThemePreference(cookieStore.get("THEME")?.value);
+  // Rendered server-side so the figures are blurred from the first paint,
+  // never flashed until hydration - see lib/domain/discretion.ts.
+  const discreet = isDiscreet(cookieStore.get(DISCRETION_COOKIE)?.value);
   // Skipped entirely in demo mode - no real device-pairing story for a
   // public demo, and this would just be an extra query on every page load
   // for a feature that can never actually be enabled there anyway (see
@@ -165,6 +171,7 @@ export default async function RootLayout({
       // OS). See globals.css's "Light theme"/"Auto theme" comments for the
       // full reasoning.
       {...(theme === "auto" ? {} : { "data-theme": theme })}
+      {...(discreet ? { "data-discreet": "" } : {})}
       className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased h-full`}
     >
       <head>
@@ -186,6 +193,7 @@ export default async function RootLayout({
       </head>
       <body className="flex min-h-full bg-[var(--background)]">
         <NextIntlClientProvider messages={messages}>
+          <DiscretionShortcut />
           <a
             href="#main-content"
             className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 z-[100] px-4 py-2 bg-[var(--accent-strong)] text-white rounded-lg text-sm font-medium"

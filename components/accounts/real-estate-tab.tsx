@@ -65,15 +65,15 @@ export function RealEstateTab({
             <div className="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
               <div>
                 <p className="text-[var(--muted)] text-xs mb-1">{t("realEstate.value")}</p>
-                <p className="tabular-nums font-medium text-[var(--foreground)]">{formatCurrency(p.valueCents, 0)}</p>
+                <p className="tabular-nums font-medium text-[var(--foreground)] amount">{formatCurrency(p.valueCents, 0)}</p>
               </div>
               <div>
                 <p className="text-[var(--muted)] text-xs mb-1">{t("realEstate.remaining")}</p>
-                <p className="tabular-nums font-medium text-[var(--negative)]">{formatCurrency(p.liabilityCents, 0)}</p>
+                <p className="tabular-nums font-medium text-[var(--negative)] amount">{formatCurrency(p.liabilityCents, 0)}</p>
               </div>
               <div>
                 <p className="text-[var(--muted)] text-xs mb-1">{t("realEstate.equity")}</p>
-                <p className="tabular-nums font-medium text-[var(--positive)]">{formatCurrency(p.equityCents, 0)}</p>
+                <p className="tabular-nums font-medium text-[var(--positive)] amount">{formatCurrency(p.equityCents, 0)}</p>
               </div>
             </div>
 

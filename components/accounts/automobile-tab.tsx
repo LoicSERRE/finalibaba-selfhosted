@@ -71,14 +71,14 @@ export function AutomobileTab({
               {a.purchasePriceCents > BigInt(0) && (
                 <div>
                   <p className="text-[var(--muted)] text-xs mb-1">{t("auto.purchasePrice")}</p>
-                  <p className="tabular-nums font-medium text-[var(--foreground)]">{formatCurrency(a.purchasePriceCents, 0)}</p>
+                  <p className="tabular-nums font-medium text-[var(--foreground)] amount">{formatCurrency(a.purchasePriceCents, 0)}</p>
                 </div>
               )}
               <div>
                 <p className="text-[var(--muted)] text-xs mb-1">{t("auto.value")}</p>
-                <p className="tabular-nums font-medium text-[var(--foreground)]">{formatCurrency(a.valueCents, 0)}</p>
+                <p className="tabular-nums font-medium text-[var(--foreground)] amount">{formatCurrency(a.valueCents, 0)}</p>
                 {a.depreciationCents !== null && (
-                  <p className={`text-xs tabular-nums ${a.depreciationCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+                  <p className={`text-xs tabular-nums ${a.depreciationCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
                     {a.depreciationCents >= BigInt(0) ? "+" : ""}
                     {formatCurrency(a.depreciationCents, 0)} ({a.depreciationPct}%)
                   </p>
@@ -86,13 +86,13 @@ export function AutomobileTab({
               </div>
               <div>
                 <p className="text-[var(--muted)] text-xs mb-1">{t("auto.loanDue")}</p>
-                <p className={`tabular-nums font-medium ${a.liabilityCents > BigInt(0) ? "text-[var(--negative)]" : "text-[var(--muted)]"}`}>
+                <p className={`tabular-nums font-medium ${a.liabilityCents > BigInt(0) ? "text-[var(--negative)]" : "text-[var(--muted)]"} amount`}>
                   {a.liabilityCents > BigInt(0) ? formatCurrency(a.liabilityCents, 0) : "-"}
                 </p>
               </div>
               <div>
                 <p className="text-[var(--muted)] text-xs mb-1">{t("auto.netValue")}</p>
-                <p className="tabular-nums font-medium text-[var(--positive)]">{formatCurrency(a.equityCents, 0)}</p>
+                <p className="tabular-nums font-medium text-[var(--positive)] amount">{formatCurrency(a.equityCents, 0)}</p>
               </div>
             </div>
 

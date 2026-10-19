@@ -53,7 +53,7 @@ export function DetailedAllocationSection({
               <span className="text-xs sm:text-sm tabular-nums text-[var(--muted)] w-8 sm:w-10 text-right shrink-0">
                 {pct}%
               </span>
-              <span className="text-xs sm:text-sm tabular-nums font-medium text-[var(--foreground)] w-16 sm:w-28 text-right shrink-0">
+              <span className="text-xs sm:text-sm tabular-nums font-medium text-[var(--foreground)] w-16 sm:w-28 text-right shrink-0 amount">
                 {formatCurrency(slice.value, 0)}
               </span>
             </div>

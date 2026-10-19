@@ -116,7 +116,7 @@ export function SplitTransactionDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen} title={isEdit ? t("splitDialogTitleEdit") : t("splitDialogTitleCreate")} trigger={trigger}>
       <div className="space-y-4">
-        <p className="text-xs text-[var(--muted)]">{t("splitDialogHint", { amount: formatCurrency(totalAbsCents) })}</p>
+        <p className="text-xs text-[var(--muted)] amount">{t("splitDialogHint", { amount: formatCurrency(totalAbsCents) })}</p>
 
         <div className="space-y-3">
           {rows.map((row, i) => (
@@ -161,7 +161,7 @@ export function SplitTransactionDialog({
           {t("splitAddLine")}
         </Button>
 
-        <p className={`text-sm font-medium ${remainingCents === 0 ? "text-[var(--positive)]" : "text-[var(--muted)]"}`}>
+        <p className={`text-sm font-medium ${remainingCents === 0 ? "text-[var(--positive)]" : "text-[var(--muted)]"} amount`}>
           {remainingCents === 0 ? t("splitBalanced") : t("splitRemaining", { amount: formatCurrency(remainingCents) })}
         </p>
 

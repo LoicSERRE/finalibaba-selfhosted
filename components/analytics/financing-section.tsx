@@ -30,7 +30,7 @@ export function FinancingSection({
       <div className="px-4 sm:px-6 py-4 border-b border-[var(--border)] flex flex-wrap items-center gap-4 sm:gap-8 text-sm">
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("financing.totalLiabilities")}</p>
-          <p className="tabular-nums font-semibold text-[var(--negative)]">
+          <p className="tabular-nums font-semibold text-[var(--negative)] amount">
             {formatCurrency(totalLiabilities, 0)}
           </p>
         </div>
@@ -42,7 +42,7 @@ export function FinancingSection({
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("financing.equity")}</p>
-          <p className="tabular-nums font-semibold text-[var(--positive)]">
+          <p className="tabular-nums font-semibold text-[var(--positive)] amount">
             {formatCurrency(grossAssets - totalLiabilities, 0)}
           </p>
         </div>
@@ -70,13 +70,13 @@ export function FinancingSection({
                 <p className="font-medium text-[var(--foreground)]">{a.name}</p>
                 <p className="text-xs text-[var(--muted)]">{a.institution}</p>
               </td>
-              <td className="px-4 sm:px-6 py-3 tabular-nums text-[var(--foreground)]">
+              <td className="px-4 sm:px-6 py-3 tabular-nums text-[var(--foreground)] amount">
                 {formatCurrency(a.value, 0)}
               </td>
-              <td className="px-4 sm:px-6 py-3 tabular-nums text-[var(--negative)]">
+              <td className="px-4 sm:px-6 py-3 tabular-nums text-[var(--negative)] amount">
                 {formatCurrency(a.liability, 0)}
               </td>
-              <td className="hidden sm:table-cell px-6 py-3 tabular-nums text-[var(--positive)]">
+              <td className="hidden sm:table-cell px-6 py-3 tabular-nums text-[var(--positive)] amount">
                 {formatCurrency(a.equity, 0)}
               </td>
               <td className="px-4 sm:px-6 py-3">

@@ -91,13 +91,14 @@ export function HoldingsTable({
                     {h.currency !== "EUR" && ` · ${h.currency}`}
                   </p>
                 </td>
-                <td className="hidden sm:table-cell px-4 py-4 tabular-nums text-[var(--foreground)]">
+                {/* A quantity times a public price is the value: blurred too. */}
+                <td className="hidden sm:table-cell px-4 py-4 tabular-nums text-[var(--foreground)] amount">
                   {new Decimal(h.quantity.toString()).toSignificantDigits(6).toString()}
                 </td>
-                <td className="hidden sm:table-cell px-4 py-4 tabular-nums text-[var(--foreground)]">
+                <td className="hidden sm:table-cell px-4 py-4 tabular-nums text-[var(--foreground)] amount">
                   {formatCurrency(h.lastPriceCents)}
                 </td>
-                <td className="px-4 py-4 tabular-nums font-semibold text-[var(--foreground)]">
+                <td className="px-4 py-4 tabular-nums font-semibold text-[var(--foreground)] amount">
                   {formatCurrency(h.marketValueCents)}
                 </td>
                 {/* Plus-value */}
@@ -107,7 +108,7 @@ export function HoldingsTable({
                   ) : (
                     <div>
                       <p
-                        className={`font-medium ${
+                        className={`amount font-medium ${
                           h.gainCents >= BigInt(0)
                             ? "text-[var(--positive)]"
                             : "text-[var(--negative)]"
@@ -136,9 +137,9 @@ export function HoldingsTable({
                   {h.taxCents === null ? (
                     <span className="text-[var(--muted)] text-xs">-</span>
                   ) : h.taxCents === BigInt(0) ? (
-                    <span className="text-[var(--muted)] text-xs">0,00 €</span>
+                    <span className="text-[var(--muted)] text-xs amount">0,00 €</span>
                   ) : (
-                    <p className="text-[var(--negative)] font-medium">
+                    <p className="text-[var(--negative)] font-medium amount">
                       -{formatCurrency(h.taxCents)}
                     </p>
                   )}

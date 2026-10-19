@@ -66,8 +66,8 @@ export function CategoryCard({
       </div>
 
       <div className="flex items-baseline justify-between text-sm">
-        <span className="text-[var(--foreground)] font-medium tabular-nums">{formatCurrency(spentCents)}</span>
-        <span className="text-[var(--muted)]">
+        <span className="text-[var(--foreground)] font-medium tabular-nums amount">{formatCurrency(spentCents)}</span>
+        <span className="text-[var(--muted)] amount">
           {effectiveBudgetCents === null
             ? t("noBudgetSet")
             : rolloverCarryInCents > 0

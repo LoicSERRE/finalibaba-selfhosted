@@ -150,22 +150,22 @@ export default async function TaxReportPage({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <p className="text-xs text-[var(--muted)] mb-1">{t("realizedGains")}</p>
-                <p className={`text-lg font-semibold tabular-nums ${totalRealizedGainCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+                <p className={`text-lg font-semibold tabular-nums ${totalRealizedGainCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
                   {totalRealizedGainCents >= BigInt(0) ? "+" : ""}
                   {formatCurrency(totalRealizedGainCents, 0)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-[var(--muted)] mb-1">{t("estimatedTaxOnGains")}</p>
-                <p className="text-lg font-semibold tabular-nums text-[var(--negative)]">-{formatCurrency(totalGainTaxCents, 0)}</p>
+                <p className="text-lg font-semibold tabular-nums text-[var(--negative)] amount">-{formatCurrency(totalGainTaxCents, 0)}</p>
               </div>
               <div>
                 <p className="text-xs text-[var(--muted)] mb-1">{t("dividendsNet")}</p>
-                <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(totalDividendsNetCents, 0)}</p>
+                <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">{formatCurrency(totalDividendsNetCents, 0)}</p>
               </div>
               <div>
                 <p className="text-xs text-[var(--muted)] mb-1">{t("interestNet")}</p>
-                <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(totalInterestNetCents, 0)}</p>
+                <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">{formatCurrency(totalInterestNetCents, 0)}</p>
               </div>
             </div>
             <p className="text-xs text-[var(--muted)] mt-4 flex items-center gap-1">
@@ -198,13 +198,13 @@ export default async function TaxReportPage({
                         </td>
                         <td className="px-4 py-3 text-[var(--foreground)] font-medium">{s.ticker}</td>
                         <td className="px-4 py-3 text-[var(--muted)]">{s.account.name}</td>
-                        <td className="px-4 py-3 tabular-nums">{formatCurrency(s.proceedsCents)}</td>
-                        <td className="px-4 py-3 tabular-nums">{formatCurrency(s.costBasisCents)}</td>
-                        <td className={`px-4 py-3 tabular-nums font-medium ${s.gainCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+                        <td className="px-4 py-3 tabular-nums amount">{formatCurrency(s.proceedsCents)}</td>
+                        <td className="px-4 py-3 tabular-nums amount">{formatCurrency(s.costBasisCents)}</td>
+                        <td className={`px-4 py-3 tabular-nums font-medium ${s.gainCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
                           {s.gainCents >= BigInt(0) ? "+" : ""}
                           {formatCurrency(s.gainCents)}
                         </td>
-                        <td className="px-4 py-3 tabular-nums text-[var(--negative)]">-{formatCurrency(s.taxCents)}</td>
+                        <td className="px-4 py-3 tabular-nums text-[var(--negative)] amount">-{formatCurrency(s.taxCents)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -227,7 +227,7 @@ export default async function TaxReportPage({
                         {e.account.name} · {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(e.date)}
                       </p>
                     </div>
-                    <p className="text-sm tabular-nums font-medium text-[var(--positive)]">{formatCurrency(netIncomeCents(e))}</p>
+                    <p className="text-sm tabular-nums font-medium text-[var(--positive)] amount">{formatCurrency(netIncomeCents(e))}</p>
                   </div>
                 ))}
               </div>
@@ -248,7 +248,7 @@ export default async function TaxReportPage({
                         {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(e.date)}
                       </p>
                     </div>
-                    <p className="text-sm tabular-nums font-medium text-[var(--positive)]">{formatCurrency(netIncomeCents(e))}</p>
+                    <p className="text-sm tabular-nums font-medium text-[var(--positive)] amount">{formatCurrency(netIncomeCents(e))}</p>
                   </div>
                 ))}
               </div>

@@ -273,12 +273,12 @@ export default async function BudgetsPage({
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-1">
               <span className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("resteAVivreTitle")}</span>
               <div
-                className={`text-2xl font-semibold tabular-nums ${resteAVivreCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}
+                className={`text-2xl font-semibold tabular-nums ${resteAVivreCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}
               >
                 {resteAVivreCents >= 0 ? "+" : ""}
                 {formatCurrency(resteAVivreCents)}
               </div>
-              <p className="text-xs text-[var(--muted)]">
+              <p className="text-xs text-[var(--muted)] amount">
                 {t("resteAVivreBreakdown", {
                   income: formatCurrency(totalIncomeCents),
                   expenses: formatCurrency(totalExpenseCents),
@@ -303,7 +303,7 @@ export default async function BudgetsPage({
       )}
 
       {uncategorizedSpentCents > 0 && (
-        <p className="text-xs text-[var(--muted)] flex items-center gap-1.5">
+        <p className="text-xs text-[var(--muted)] flex items-center gap-1.5 amount">
           <Tag size={12} aria-hidden="true" />
           {t("uncategorizedSpend", { amount: formatCurrency(uncategorizedSpentCents) })}
         </p>

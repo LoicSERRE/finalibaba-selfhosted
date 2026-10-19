@@ -111,7 +111,7 @@ export function AccountHeader({
           </div>
           {isFiat && latestDelta !== null && latestDelta !== BigInt(0) && (
             <p
-              className={`text-sm tabular-nums mt-2 ${
+              className={`amount text-sm tabular-nums mt-2 ${
                 latestDelta > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"
               }`}
             >
@@ -120,11 +120,11 @@ export function AccountHeader({
           )}
         </div>
         <div className="text-right shrink-0">
-          <p className={`text-2xl sm:text-3xl font-semibold tabular-nums ${isLoan ? "text-[var(--negative)]" : "text-[var(--accent)]"}`}>
+          <p className={`text-2xl sm:text-3xl font-semibold tabular-nums ${isLoan ? "text-[var(--negative)]" : "text-[var(--accent)]"} amount`}>
             {formatCurrency(currentValue, 0)}
           </p>
           {isInvestment && hasCostBasis && taxRate !== null && (
-            <p className="text-xs text-[var(--muted)] mt-1">
+            <p className="text-xs text-[var(--muted)] mt-1 amount">
               {td("afterTax", { amount: formatCurrency(netAfterTax, 0) })}
             </p>
           )}

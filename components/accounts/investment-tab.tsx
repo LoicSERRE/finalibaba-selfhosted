@@ -46,19 +46,19 @@ export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: Inv
               <p className="font-medium text-[var(--foreground)] break-words">{account.name}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="text-base font-semibold tabular-nums text-[var(--foreground)]">
+              <p className="text-base font-semibold tabular-nums text-[var(--foreground)] amount">
                 {formatCurrency(account.totalCents, 0)}
               </p>
               {account.hasCostBasis && (
                 <p
-                  className={`text-xs tabular-nums ${
+                  className={`amount text-xs tabular-nums ${
                     account.gainCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"
                   }`}
                 >
                   {account.gainCents >= BigInt(0) ? "+" : ""}
                   {formatCurrency(account.gainCents, 0)}
                   {account.taxCents > BigInt(0) && (
-                    <span className="text-[var(--muted)] hidden sm:inline">
+                    <span className="text-[var(--muted)] hidden sm:inline amount">
                       {" "}
                       · -{formatCurrency(account.taxCents, 0)} {t("taxes")}
                     </span>
@@ -109,14 +109,14 @@ export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: Inv
                         <p className="font-medium text-[var(--foreground)]">{h.name || h.ticker}</p>
                         <p className="text-xs text-[var(--muted)]">{h.ticker}</p>
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 tabular-nums text-[var(--foreground)]">
+                      <td className="hidden sm:table-cell px-4 py-3 tabular-nums text-[var(--foreground)] amount">
                         {h.quantityDisplay}
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 tabular-nums text-[var(--foreground)]">
+                      <td className="hidden sm:table-cell px-4 py-3 tabular-nums text-[var(--foreground)] amount">
                         {formatCurrency(h.lastPriceCents)}
                       </td>
                       <td className="px-4 py-3">
-                        <p className="tabular-nums font-medium text-[var(--foreground)]">{formatCurrency(h.valueCents)}</p>
+                        <p className="tabular-nums font-medium text-[var(--foreground)] amount">{formatCurrency(h.valueCents)}</p>
                         <p className="text-xs text-[var(--muted)]">{h.pct}%</p>
                       </td>
                       <td className="px-4 py-3 tabular-nums">
@@ -124,7 +124,7 @@ export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: Inv
                           <span className="text-[var(--muted)] text-xs">-</span>
                         ) : (
                           <div>
-                            <p className={`font-medium ${h.gainCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+                            <p className={`font-medium ${h.gainCents >= BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
                               {h.gainCents >= BigInt(0) ? "+" : ""}
                               {formatCurrency(h.gainCents)}
                             </p>
@@ -142,9 +142,9 @@ export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: Inv
                           {h.taxCents === null ? (
                             <span className="text-[var(--muted)] text-xs">-</span>
                           ) : h.taxCents === BigInt(0) ? (
-                            <span className="text-[var(--muted)] text-xs">0,00 €</span>
+                            <span className="text-[var(--muted)] text-xs amount">0,00 €</span>
                           ) : (
-                            <p className="text-[var(--negative)] font-medium">-{formatCurrency(h.taxCents)}</p>
+                            <p className="text-[var(--negative)] font-medium amount">-{formatCurrency(h.taxCents)}</p>
                           )}
                         </td>
                       )}

@@ -102,7 +102,7 @@ export function SellHoldingDialog({ accountId, holding }: Readonly<{ accountId: 
         {showGain && (
           <p className="text-sm">
             {t("gainPreview")}{" "}
-            <span className={`font-semibold tabular-nums ${gainCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>
+            <span className={`font-semibold tabular-nums ${gainCents >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
               {gainCents >= 0 ? "+" : ""}
               {formatCurrency(gainCents)}
             </span>

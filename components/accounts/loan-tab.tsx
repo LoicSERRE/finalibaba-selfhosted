@@ -82,7 +82,7 @@ export function LoanTab({
                 </div>
                 <div className="relative z-10 flex items-center gap-3">
                   <div className="text-right">
-                    <p className="text-lg font-semibold tabular-nums text-[var(--negative)]">
+                    <p className="text-lg font-semibold tabular-nums text-[var(--negative)] amount">
                       {formatCurrency(stats.currentCapitalCents, 0)}
                     </p>
                     <p className="text-xs text-[var(--muted)]">{t("loan.remaining")}</p>
@@ -94,13 +94,13 @@ export function LoanTab({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-sm">
                 <div>
                   <p className="text-[var(--muted)] text-xs mb-1">{t("loan.amountBorrowed")}</p>
-                  <p className="tabular-nums font-medium text-[var(--foreground)]">
+                  <p className="tabular-nums font-medium text-[var(--foreground)] amount">
                     {formatCurrency(loan.amountBorrowedCents, 0)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[var(--muted)] text-xs mb-1">{t("loan.currentPayment")}</p>
-                  <p className="tabular-nums font-medium text-[var(--foreground)]">
+                  <p className="tabular-nums font-medium text-[var(--foreground)] amount">
                     {formatCurrency(stats.currentMonthlyTotalCents)}
                     {loan.insuranceMonthlyCents > BigInt(0) && (
                       <span className="text-xs text-[var(--muted)] font-normal"> ({t("loan.insuranceIncl")})</span>
@@ -109,7 +109,7 @@ export function LoanTab({
                 </div>
                 <div>
                   <p className="text-[var(--muted)] text-xs mb-1">{t("loan.totalCost")}</p>
-                  <p className="tabular-nums font-medium text-[var(--negative)]">{formatCurrency(stats.totalCostCents, 0)}</p>
+                  <p className="tabular-nums font-medium text-[var(--negative)] amount">{formatCurrency(stats.totalCostCents, 0)}</p>
                 </div>
                 <div>
                   <p className="text-[var(--muted)] text-xs mb-1">{t("loan.projectedEnd")}</p>

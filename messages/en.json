@@ -1110,6 +1110,10 @@
         "notifications": "Alerts",
         "display": "Display"
       }
+    },
+    "discretion": {
+      "title": "Discretion",
+      "description": "Blurs every amount in the app on this device, for opening it in public or sharing your screen. Shortcut: the H key."
     }
   },
   "shared": {
@@ -1625,5 +1629,9 @@
     "errorUsernameRequired": "Enter a username.",
     "errorNoSuchUser": "No user with that name on this instance.",
     "errorThatIsYou": "That is your own account."
+  },
+  "discretion": {
+    "hide": "Hide amounts",
+    "show": "Show amounts"
   }
 }

@@ -154,7 +154,7 @@ export function GoalsSection({
             <div key={goal.id} className="px-5 py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-[var(--foreground)]">{goal.name}</p>
-                <p className="text-xs text-[var(--muted)] mt-0.5">
+                <p className="text-xs text-[var(--muted)] mt-0.5 amount">
                   {formatCurrency(goal.targetCents, 0)} · {goal.account ? goal.account.name : t("accountAllNetWorth")}
                   {goal.targetDate && ` · ${new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(goal.targetDate)}`}
                 </p>

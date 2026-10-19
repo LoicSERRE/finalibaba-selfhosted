@@ -28,21 +28,21 @@ export function AutomobileSection({
         {hasPurchasePrice && (
           <div>
             <p className="text-xs text-[var(--muted)] mb-1">{t("auto.purchasePrice")}</p>
-            <p className="tabular-nums font-semibold text-[var(--foreground)]">
+            <p className="tabular-nums font-semibold text-[var(--foreground)] amount">
               {formatCurrency(purchasePrice, 0)}
             </p>
           </div>
         )}
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("auto.value")}</p>
-          <p className="tabular-nums font-semibold text-[var(--foreground)]">
+          <p className="tabular-nums font-semibold text-[var(--foreground)] amount">
             {formatCurrency(value, 0)}
           </p>
         </div>
         {hasPurchasePrice && (
           <div>
             <p className="text-xs text-[var(--muted)] mb-1">{t("auto.depreciation")}</p>
-            <p className={`tabular-nums font-semibold ${depr <= BigInt(0) ? "text-[var(--negative)]" : "text-[var(--positive)]"}`}>
+            <p className={`tabular-nums font-semibold ${depr <= BigInt(0) ? "text-[var(--negative)]" : "text-[var(--positive)]"} amount`}>
               {depr > BigInt(0) ? "+" : ""}{formatCurrency(depr, 0)}
             </p>
             <p className={`text-xs tabular-nums ${depr <= BigInt(0) ? "text-[var(--negative)]" : "text-[var(--positive)]"}`}>
@@ -52,13 +52,13 @@ export function AutomobileSection({
         )}
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("auto.loanDue")}</p>
-          <p className="tabular-nums font-semibold text-[var(--negative)]">
+          <p className="tabular-nums font-semibold text-[var(--negative)] amount">
             {formatCurrency(liability, 0)}
           </p>
         </div>
         <div>
           <p className="text-xs text-[var(--muted)] mb-1">{t("auto.netValue")}</p>
-          <p className="tabular-nums font-semibold text-[var(--positive)]">
+          <p className="tabular-nums font-semibold text-[var(--positive)] amount">
             {formatCurrency(equity, 0)}
           </p>
         </div>

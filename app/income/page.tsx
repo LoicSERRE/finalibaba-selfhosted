@@ -163,15 +163,15 @@ export default async function IncomePage({
               <div className="grid grid-cols-3 gap-2 sm:gap-4">
                 <div>
                   <p className="text-xs text-[var(--muted)] mb-1">{t("ytdDividends")}</p>
-                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdDividendsNetCents, 0)}</p>
+                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">{formatCurrency(ytdDividendsNetCents, 0)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted)] mb-1">{t("ytdInterest")}</p>
-                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdInterestNetCents, 0)}</p>
+                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">{formatCurrency(ytdInterestNetCents, 0)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted)] mb-1">{t("ytdTotal")}</p>
-                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)]">{formatCurrency(ytdTotalNetCents, 0)}</p>
+                  <p className="text-lg font-semibold tabular-nums text-[var(--positive)] amount">{formatCurrency(ytdTotalNetCents, 0)}</p>
                 </div>
               </div>
             </div>
@@ -193,7 +193,7 @@ export default async function IncomePage({
                     <span className="w-3 h-3 rounded-full shrink-0" style={{ background: cat.color }} aria-hidden="true" />
                     <span className="text-sm font-medium text-[var(--foreground)] break-words">{cat.name}</span>
                   </span>
-                  <span className="text-sm font-medium tabular-nums text-[var(--positive)] shrink-0">
+                  <span className="text-sm font-medium tabular-nums text-[var(--positive)] shrink-0 amount">
                     +{formatCurrency(categoryTotalMap.get(cat.id) ?? 0)}
                   </span>
                 </Link>
@@ -239,8 +239,8 @@ export default async function IncomePage({
                   </div>
                 </div>
                 <p className="text-sm tabular-nums font-medium">
-                  <span className="text-[var(--positive)]">{formatCurrency(netCents(e))}</span>
-                  <span className="text-[var(--muted)] font-normal">
+                  <span className="text-[var(--positive)] amount">{formatCurrency(netCents(e))}</span>
+                  <span className="text-[var(--muted)] font-normal amount">
                     {" "}
                     · {new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" }).format(e.date)}
                     {e.taxWithheldCents != null && e.taxWithheldCents > BigInt(0) && (

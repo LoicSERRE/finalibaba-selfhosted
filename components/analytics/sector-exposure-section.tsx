@@ -62,7 +62,7 @@ function SectorTooltip({
         {entry.holdings.map((h) => (
           <li key={h.name} className="flex justify-between gap-3 text-[var(--muted)]">
             <span className="break-words">{h.name}</span>
-            <span className="tabular-nums shrink-0">{formatCurrency(h.cents, 0)}</span>
+            <span className="tabular-nums shrink-0 amount">{formatCurrency(h.cents, 0)}</span>
           </li>
         ))}
       </ul>
@@ -149,7 +149,7 @@ export function SectorExposureSection({
         })}
       </div>
 
-      <p className="text-xs text-[var(--muted)]">
+      <p className="text-xs text-[var(--muted)] amount">
         {t("sectorExposure.totalClassified", { amount: formatCurrency(totalCents - unclassifiedCents, 0) })}
       </p>
     </div>
