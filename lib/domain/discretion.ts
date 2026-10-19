@@ -1,3 +1,5 @@
+import { isBareKey } from "@/lib/domain/shortcuts";
+
 /**
  * Discretion mode (v2.13): every amount on every page blurred, for opening
  * the app in public or sharing a screen. A per-device preference, so a cookie
@@ -40,20 +42,13 @@ type KeyEventLike = {
   target: unknown;
 };
 
-type TargetLike = { tagName?: string; isContentEditable?: boolean };
-
 /**
  * Whether a keydown is the discretion shortcut: a bare "h" (or "H"), held
  * down only once, and never while the user is typing - an "h" in a label or
  * a search box must stay an "h". Modifier combinations are left alone so
- * browser and OS shortcuts keep working.
+ * browser and OS shortcuts keep working. The typing rule is shared with the
+ * other shortcuts (lib/domain/shortcuts.ts).
  */
 export function isDiscretionShortcut(event: KeyEventLike): boolean {
-  if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return false;
-  if (event.key.toLowerCase() !== DISCRETION_SHORTCUT_KEY) return false;
-  const target = event.target as TargetLike | null;
-  if (!target) return true;
-  if (target.isContentEditable) return false;
-  const tag = target.tagName?.toUpperCase();
-  return tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT";
+  return isBareKey(event) && event.key.toLowerCase() === DISCRETION_SHORTCUT_KEY;
 }

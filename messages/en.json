@@ -1694,5 +1694,66 @@
   "discretion": {
     "hide": "Hide amounts",
     "show": "Show amounts"
+  },
+  "palette": {
+    "open": "Search…",
+    "title": "Command palette",
+    "inputLabel": "Search a page, an account, a transaction or an action",
+    "placeholder": "Page, account, transaction, action…",
+    "resultsLabel": "Results",
+    "empty": "No results",
+    "searchIn": "Search transactions for “{q}”",
+    "footer": "↑ ↓ to choose · Enter to open · Esc to close · ? for shortcuts",
+    "groups": {
+      "pages": "Page",
+      "actions": "Action",
+      "accounts": "Account",
+      "categories": "Category",
+      "transactions": "Transaction",
+      "search": "Search"
+    },
+    "pages": {
+      "dashboard": "Dashboard",
+      "accounts": "Accounts",
+      "transactions": "Transactions",
+      "budgets": "Budgets",
+      "recurring": "Recurring",
+      "income": "Income",
+      "analytics": "Analytics",
+      "taxReport": "Tax report",
+      "settings": "Settings"
+    },
+    "keywords": {
+      "dashboard": "home,net worth,overview",
+      "accounts": "bank,savings,brokerage,crypto,real estate",
+      "transactions": "ledger,spending,payments",
+      "budgets": "categories,spending",
+      "recurring": "subscriptions,direct debits,bills",
+      "income": "dividends,interest,salary",
+      "analytics": "performance,allocation,projection",
+      "taxReport": "taxes,capital gains",
+      "settings": "preferences,options",
+      "discretion": "hide,blur,amounts,privacy,discretion",
+      "theme": "theme appearance dark light",
+      "language": "language",
+      "help": "keyboard shortcuts help"
+    },
+    "actions": {
+      "hideAmounts": "Hide amounts",
+      "showAmounts": "Show amounts",
+      "themeDark": "Dark theme",
+      "themeLight": "Light theme",
+      "themeAuto": "Automatic theme",
+      "localeFr": "Switch to French",
+      "localeEn": "Switch to English",
+      "help": "Keyboard shortcuts"
+    },
+    "help": {
+      "title": "Keyboard shortcuts",
+      "intro": "These work everywhere except while typing in a field.",
+      "palette": "Open the command palette",
+      "help": "Show this list",
+      "discretion": "Hide or show amounts"
+    }
   }
 }
