@@ -163,7 +163,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
       # Non-blocking on the absolute number: real pre-existing duplication
@@ -186,7 +186,7 @@ jobs:
           fi
       - name: Upload baseline
         if: github.event_name == 'push' && hashFiles('jscpd-out/jscpd-report.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: quality-duplication-baseline
           path: jscpd-out/jscpd-report.json
@@ -288,7 +288,7 @@ jobs:
           PY
       - name: Upload baseline
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: quality-complexity-baseline
           path: lizard-metrics.json
@@ -346,7 +346,7 @@ jobs:
             echo "$COUNT component(s) detected. Full SBOM attached as a workflow artifact."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sbom
           path: sbom.cyclonedx.json
