@@ -1,80 +1,44 @@
 "use client";
 
 import { Download } from "lucide-react";
-import { fmt, sign, downloadFile } from "@/lib/utils/markdown-export";
-import { useTranslations } from "next-intl";
-
-export type TaxReportExportData = {
-  year: number;
-  totalRealizedGainCents: number;
-  totalGainTaxCents: number;
-  totalDividendsGrossCents: number;
-  totalDividendsNetCents: number;
-  totalInterestGrossCents: number;
-  totalInterestNetCents: number;
-  sales: {
-    ticker: string;
-    accountName: string;
-    date: string;
-    proceedsCents: number;
-    costBasisCents: number;
-    gainCents: number;
-    taxCents: number;
-  }[];
-  dividends: { ticker: string | null; accountName: string; date: string; grossCents: number; netCents: number }[];
-  interest: { accountName: string; date: string; grossCents: number; netCents: number }[];
-};
+import { downloadFile } from "@/lib/utils/markdown-export";
+import { buildTaxReportMarkdown } from "@/lib/utils/tax-report-markdown";
+import type { TaxReportExportData } from "@/lib/domain/tax-report-export";
+import { localeToIntl } from "@/lib/utils/format";
+import { useLocale, useTranslations } from "next-intl";
 
 export function ExportTaxReportButton({ data }: Readonly<{ data: TaxReportExportData }>) {
   const t = useTranslations("taxReport");
+  const intlLocale = localeToIntl(useLocale());
 
   function handleExport() {
-    const lines: string[] = [`# ${t("title")} ${data.year}`, ""];
-
-    lines.push(`## ${t("mdSummary")}`, "");
-    lines.push(`| ${t("mdIndicator")} | ${t("mdValue")} |`);
-    lines.push("|---|---|");
-    lines.push(`| ${t("realizedGains")} | ${sign(data.totalRealizedGainCents)}${fmt(data.totalRealizedGainCents)} |`);
-    lines.push(`| ${t("estimatedTaxOnGains")} | -${fmt(data.totalGainTaxCents)} |`);
-    lines.push(`| ${t("dividendsGross")} | ${fmt(data.totalDividendsGrossCents)} |`);
-    lines.push(`| ${t("dividendsNet")} | ${fmt(data.totalDividendsNetCents)} |`);
-    lines.push(`| ${t("interestGross")} | ${fmt(data.totalInterestGrossCents)} |`);
-    lines.push(`| ${t("interestNet")} | ${fmt(data.totalInterestNetCents)} |`);
-    lines.push("");
-
-    if (data.sales.length > 0) {
-      lines.push(`## ${t("realizedGains")}`, "");
-      lines.push(`| ${t("colDate")} | ${t("colTicker")} | ${t("colAccount")} | ${t("colProceeds")} | ${t("colCostBasis")} | ${t("colGain")} | ${t("colTax")} |`);
-      lines.push("|---|---|---|---|---|---|---|");
-      for (const s of data.sales) {
-        lines.push(
-          `| ${s.date} | ${s.ticker} | ${s.accountName} | ${fmt(s.proceedsCents, 2)} | ${fmt(s.costBasisCents, 2)} | ${sign(s.gainCents)}${fmt(s.gainCents, 2)} | -${fmt(s.taxCents, 2)} |`
-        );
-      }
-      lines.push("");
-    }
-
-    if (data.dividends.length > 0) {
-      lines.push(`## ${t("dividendIncome")}`, "");
-      lines.push(`| ${t("colDate")} | ${t("colTicker")} | ${t("colAccount")} | ${t("colValue")} |`);
-      lines.push("|---|---|---|---|");
-      for (const e of data.dividends) {
-        lines.push(`| ${e.date} | ${e.ticker ?? "-"} | ${e.accountName} | ${fmt(e.netCents, 2)} |`);
-      }
-      lines.push("");
-    }
-
-    if (data.interest.length > 0) {
-      lines.push(`## ${t("interestIncome")}`, "");
-      lines.push(`| ${t("colDate")} | ${t("colAccount")} | ${t("colValue")} |`);
-      lines.push("|---|---|---|");
-      for (const e of data.interest) {
-        lines.push(`| ${e.date} | ${e.accountName} | ${fmt(e.netCents, 2)} |`);
-      }
-      lines.push("");
-    }
-
-    downloadFile(lines.join("\n"), `rapport-fiscal-${data.year}`);
+    const md = buildTaxReportMarkdown(
+      data,
+      {
+        title: t("title"),
+        summary: t("mdSummary"),
+        indicator: t("mdIndicator"),
+        value: t("mdValue"),
+        realizedGains: t("realizedGains"),
+        estimatedTaxOnGains: t("estimatedTaxOnGains"),
+        dividendsGross: t("dividendsGross"),
+        dividendsNet: t("dividendsNet"),
+        interestGross: t("interestGross"),
+        interestNet: t("interestNet"),
+        dividendIncome: t("dividendIncome"),
+        interestIncome: t("interestIncome"),
+        colDate: t("colDate"),
+        colTicker: t("colTicker"),
+        colAccount: t("colAccount"),
+        colProceeds: t("colProceeds"),
+        colCostBasis: t("colCostBasis"),
+        colGain: t("colGain"),
+        colTax: t("colTax"),
+        colValue: t("colValue"),
+      },
+      intlLocale
+    );
+    downloadFile(md, t("mdFileName", { year: String(data.year) }));
   }
 
   return (

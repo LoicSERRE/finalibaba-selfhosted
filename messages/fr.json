@@ -491,7 +491,8 @@
     "export": "Exporter",
     "mdSummary": "Résumé",
     "mdIndicator": "Indicateur",
-    "mdValue": "Valeur"
+    "mdValue": "Valeur",
+    "mdFileName": "rapport-fiscal-{year}"
   },
   "analytics": {
     "title": "Analytique",
@@ -1500,7 +1501,9 @@
     "mdCurrentPayment": "Mensualité actuelle",
     "mdTotalCost": "Coût total crédit",
     "mdProjectedEnd": "Fin prévue",
-    "mdProgress": "Avancement"
+    "mdProgress": "Avancement",
+    "mdField": "**{label}** : {value}",
+    "mdFileName": "comptes"
   },
   "charts": {
     "noData": "Aucune donnée",
@@ -1569,7 +1572,7 @@
     "mdMonthlyExpenses": "Dépenses incompressibles / mois",
     "mdGoal": "Objectif",
     "mdGoalRemaining": "Reste à atteindre",
-    "mdGoalFmt": "{amount} ({pct}% atteint)",
+    "mdGoalFmt": "{amount} ({pct} atteint)",
     "mdIndicator": "Indicateur",
     "mdValue": "Valeur",
     "mdCategory": "Catégorie",
@@ -1580,8 +1583,8 @@
     "mdColGrossGain": "Plus-value brute",
     "mdColTax": "Impôt latent",
     "mdColPerf": "Performance",
-    "mdSummaryLine": "**Total** : investi {invested}  ·  valeur {value}  ·  PV brute {gain}  ·  net après impôts {netGain}  ·  perf {perf}%{cagr}",
-    "mdCagrSuffix": "  ·  CAGR : {cagr}%",
+    "mdSummaryLine": "**Total** : investi {invested}  ·  valeur {value}  ·  PV brute {gain}  ·  net après impôts {netGain}  ·  perf {perf}{cagr}",
+    "mdCagrSuffix": "  ·  CAGR : {cagr}",
     "mdColMonth": "Mois",
     "mdColNetWorth": "Patrimoine net",
     "mdColChange": "Variation",
@@ -1614,8 +1617,9 @@
     "mdDebtRatio": "Ratio dette / brut",
     "mdEquity": "Fonds propres",
     "mdPassiveMissingRates": "Estimation partielle : {count} compte(s) rémunéré(s) n'ont pas de taux d'intérêt renseigné et ne sont pas comptés ici.",
-    "mdPassiveWeightedRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate} %.",
-    "mdPassiveYearEndEstimate": "Estimation alternative, basée sur l'historique réel des soldes plutôt que sur le solde actuel seul (méthode des quinzaines) - peut différer du chiffre ci-dessus si un solde a beaucoup varié cette année : intérêts estimés en fin d'année : {amount}."
+    "mdPassiveWeightedRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate}.",
+    "mdPassiveYearEndEstimate": "Estimation alternative, basée sur l'historique réel des soldes plutôt que sur le solde actuel seul (méthode des quinzaines) - peut différer du chiffre ci-dessus si un solde a beaucoup varié cette année : intérêts estimés en fin d'année : {amount}.",
+    "mdFileName": "analytique"
   },
   "coOwners": {
     "errorUsernameRequired": "Saisis un nom d'utilisateur.",

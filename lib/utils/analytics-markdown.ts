@@ -6,7 +6,7 @@
  * Those types moved to lib/domain/analytics-export.ts, which returns them -
  * lib/ was importing them back out of a component, the wrong way round.
  */
-import { fmt, nameMentions, sign } from "@/lib/utils/markdown-export";
+import { exportFormat, nameMentions, type ExportFormat } from "@/lib/utils/markdown-export";
 import type { AnalyticsExportData } from "@/lib/domain/analytics-export";
 
 // ── Sections ──────────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ export interface AnalyticsExportStrings {
   totalLiabilities: string;
   debtRatio: string;
   equity: string;
-  goalFmt: (amount: string, pct: number) => string;
+  goalFmt: (amount: string, pct: string) => string;
   summaryLine: (params: {
     invested: string;
     value: string;
@@ -124,70 +124,66 @@ export interface AnalyticsExportStrings {
 // what the characterization snapshots in __tests__/analytics-markdown.test.ts
 // hold it to, byte for byte.
 
-type Renderer = (data: AnalyticsExportData, s: AnalyticsExportStrings, intlLocale: string) => string[];
+type Renderer = (data: AnalyticsExportData, s: AnalyticsExportStrings, f: ExportFormat) => string[];
 
-function signedFixed(value: number, digits = 1): string {
-  return `${sign(value)}${value.toFixed(digits)}`;
-}
-
-function summaryCashFlowRows(data: AnalyticsExportData, s: AnalyticsExportStrings): string[] {
+function summaryCashFlowRows(data: AnalyticsExportData, s: AnalyticsExportStrings, f: ExportFormat): string[] {
   const rows: string[] = [];
   if (data.savingsRate !== null) {
-    rows.push(`| ${s.savingsRate} | ${signedFixed(data.savingsRate)}% |`);
+    rows.push(`| ${s.savingsRate} | ${f.signedPct(data.savingsRate, 1)} |`);
   }
-  if (data.salaryNetCents > 0) rows.push(`| ${s.salary} | ${fmt(data.salaryNetCents)} |`);
+  if (data.salaryNetCents > 0) rows.push(`| ${s.salary} | ${f.money(data.salaryNetCents)} |`);
   // Declared monthly savings win over the month-on-month delta, which is
   // distorted by transfers and market moves.
   if (data.monthlySavedCents > 0) {
-    rows.push(`| ${s.monthlySaved} | ${fmt(data.monthlySavedCents)} |`);
+    rows.push(`| ${s.monthlySaved} | ${f.money(data.monthlySavedCents)} |`);
   } else if (data.momDeltaCents !== null) {
-    rows.push(`| ${s.momDelta} | ${sign(data.momDeltaCents)}${fmt(data.momDeltaCents)} |`);
+    rows.push(`| ${s.momDelta} | ${f.signedMoney(data.momDeltaCents)} |`);
   }
   if (data.runwayMonths !== null) {
     rows.push(`| ${s.runway} | ${Math.floor(data.runwayMonths)} ${s.months} |`);
-    rows.push(`| ${s.savingsAvailable} | ${fmt(data.savingsCents)} |`);
-    rows.push(`| ${s.monthlyExpenses} | ${fmt(data.monthlyExpensesCents)} |`);
+    rows.push(`| ${s.savingsAvailable} | ${f.money(data.savingsCents)} |`);
+    rows.push(`| ${s.monthlyExpenses} | ${f.money(data.monthlyExpensesCents)} |`);
   }
   return rows;
 }
 
-function summaryGoalRows(data: AnalyticsExportData, s: AnalyticsExportStrings): string[] {
+function summaryGoalRows(data: AnalyticsExportData, s: AnalyticsExportStrings, f: ExportFormat): string[] {
   return data.goals.flatMap((goal) => {
-    const rows = [`| ${s.goal} - ${goal.name} | ${s.goalFmt(fmt(goal.targetCents), goal.pct)} |`];
-    if (goal.remainingCents > 0) rows.push(`| ${s.goalRemaining} - ${goal.name} | ${fmt(goal.remainingCents)} |`);
+    const rows = [`| ${s.goal} - ${goal.name} | ${s.goalFmt(f.money(goal.targetCents), f.pct(goal.pct))} |`];
+    if (goal.remainingCents > 0) rows.push(`| ${s.goalRemaining} - ${goal.name} | ${f.money(goal.remainingCents)} |`);
     return rows;
   });
 }
 
-const renderSummary: Renderer = (data, s) => {
+const renderSummary: Renderer = (data, s, f) => {
   // data.netWorth is already net of latent tax; the label only says so
   // explicitly when there is a deduction to speak of.
   const netLabel = data.hasTaxData ? s.netWorthAfterTax : s.netWorth;
   const taxRows = data.hasTaxData
-    ? [`| ${s.taxes} | ${fmt(data.totalLatentTax)} |`, `| ${s.netWorth} | ${fmt(data.netWorthBeforeTax)} |`]
+    ? [`| ${s.taxes} | ${f.money(data.totalLatentTax)} |`, `| ${s.netWorth} | ${f.money(data.netWorthBeforeTax)} |`]
     : [];
   return [
     `## ${s.summary}`, "",
     `| ${s.indicator} | ${s.value} |`,
     "|---|---|",
-    `| ${netLabel} | **${fmt(data.netWorth)}** |`,
-    `| ${s.gross} | ${fmt(data.grossAssets)} |`,
-    `| ${s.debts} | ${fmt(data.totalLiabilities)} |`,
+    `| ${netLabel} | **${f.money(data.netWorth)}** |`,
+    `| ${s.gross} | ${f.money(data.grossAssets)} |`,
+    `| ${s.debts} | ${f.money(data.totalLiabilities)} |`,
     ...taxRows,
-    `| ${s.investedRate} | ${data.investedPct}% |`,
-    ...summaryCashFlowRows(data, s),
-    ...summaryGoalRows(data, s),
+    `| ${s.investedRate} | ${f.pct(data.investedPct)} |`,
+    ...summaryCashFlowRows(data, s, f),
+    ...summaryGoalRows(data, s, f),
     "",
   ];
 };
 
-const renderAllocation: Renderer = (data, s) => {
+const renderAllocation: Renderer = (data, s, f) => {
   if (data.allocationSlices.length === 0) return [];
   return [
     `## ${s.allocation}`, "",
     `| ${s.category} | ${s.value} | ${s.pct} |`,
     "|---|---|---|",
-    ...data.allocationSlices.map((slice) => `| ${slice.name} | ${fmt(slice.valueCents)} | ${slice.pct}% |`),
+    ...data.allocationSlices.map((slice) => `| ${slice.name} | ${f.money(slice.valueCents)} | ${f.pct(slice.pct)} |`),
     "",
   ];
 };
@@ -196,20 +192,20 @@ function labelWithSubtype(name: string, subtype: string | null): string {
   return subtype && !nameMentions(name, subtype) ? `${name} (${subtype})` : name;
 }
 
-function performanceSummaryLine(data: AnalyticsExportData, s: AnalyticsExportStrings): string {
+function performanceSummaryLine(data: AnalyticsExportData, s: AnalyticsExportStrings, f: ExportFormat): string {
   const netGain = data.investTotalGainCents - data.investTotalTaxCents;
-  const cagrSuffix = data.investCAGR !== null ? s.cagrSuffix(signedFixed(data.investCAGR)) : "";
+  const cagrSuffix = data.investCAGR !== null ? s.cagrSuffix(f.signedPct(data.investCAGR, 1)) : "";
   return s.summaryLine({
-    invested: fmt(data.investTotalCostBasisCents),
-    value: fmt(data.investTotalValueCents),
-    gain: `${sign(data.investTotalGainCents)}${fmt(data.investTotalGainCents)}`,
-    netGain: `${sign(netGain)}${fmt(netGain)}`,
-    perf: signedFixed(data.investReturnPct),
+    invested: f.money(data.investTotalCostBasisCents),
+    value: f.money(data.investTotalValueCents),
+    gain: f.signedMoney(data.investTotalGainCents),
+    netGain: f.signedMoney(netGain),
+    perf: f.signedPct(data.investReturnPct, 1),
     cagr: cagrSuffix,
   });
 }
 
-const renderPerformance: Renderer = (data, s) => {
+const renderPerformance: Renderer = (data, s, f) => {
   if (data.investPerfRows.length === 0) return [];
   return [
     `## ${s.performance}`, "",
@@ -217,10 +213,10 @@ const renderPerformance: Renderer = (data, s) => {
     "|---|---|---|---|---|---|",
     ...data.investPerfRows.map(
       (r) =>
-        `| ${labelWithSubtype(r.name, r.subtype)} | ${fmt(r.valueCents)} | ${fmt(r.costBasisCents)} | ${sign(r.gainCents)}${fmt(r.gainCents)} | -${fmt(r.taxCents)} | ${signedFixed(r.returnPct)}% |`
+        `| ${labelWithSubtype(r.name, r.subtype)} | ${f.money(r.valueCents)} | ${f.money(r.costBasisCents)} | ${f.signedMoney(r.gainCents)} | -${f.money(r.taxCents)} | ${f.signedPct(r.returnPct, 1)} |`
     ),
     "",
-    performanceSummaryLine(data, s),
+    performanceSummaryLine(data, s, f),
     "",
   ];
 };
@@ -229,71 +225,71 @@ const renderPerformance: Renderer = (data, s) => {
 // half of the passive figure only counts accounts whose rate is set, and an
 // unset rate is invisible everywhere else in the app - so if any are missing,
 // the export says so rather than presenting a partial total as a complete one.
-function passiveNotes(data: AnalyticsExportData, s: AnalyticsExportStrings): string[] {
+function passiveNotes(data: AnalyticsExportData, s: AnalyticsExportStrings, f: ExportFormat): string[] {
   const notes: string[] = [];
   if (data.accountsMissingInterestRate > 0) {
     notes.push("", `> ${s.passiveMissingRates({ count: data.accountsMissingInterestRate })}`);
   }
   if (data.weightedSavingsRatePct !== null) {
-    notes.push("", s.passiveWeightedRate({ rate: (data.weightedSavingsRatePct * 100).toFixed(2) }));
+    notes.push("", s.passiveWeightedRate({ rate: f.pct(data.weightedSavingsRatePct * 100, 2) }));
   }
   if (data.estimatedYearEndSavingsInterestCents > 0) {
-    notes.push("", s.passiveYearEndEstimate({ amount: fmt(data.estimatedYearEndSavingsInterestCents) }));
+    notes.push("", s.passiveYearEndEstimate({ amount: f.money(data.estimatedYearEndSavingsInterestCents) }));
   }
   return notes;
 }
 
-function exDividendCell(date: AnalyticsExportData["dividendRows"][number]["exDividendDate"], intlLocale: string): string {
+function exDividendCell(date: AnalyticsExportData["dividendRows"][number]["exDividendDate"], f: ExportFormat): string {
   if (!date) return "-";
-  return new Date(date).toLocaleDateString(intlLocale, { day: "numeric", month: "short", year: "numeric" });
+  return f.shortDate(new Date(date));
 }
 
-function dividendTable(data: AnalyticsExportData, s: AnalyticsExportStrings, intlLocale: string): string[] {
+function dividendTable(data: AnalyticsExportData, s: AnalyticsExportStrings, f: ExportFormat): string[] {
   if (data.dividendRows.length === 0) return [];
   return [
     `| ${s.colAsset} | ${s.colEnvelope} | ${s.colYield} | ${s.colAnnualGross} | ${s.colAnnualNet} | ${s.colExDiv} |`,
     "|---|---|---|---|---|---|",
     ...data.dividendRows.map(
       (r) =>
-        `| ${r.name} | ${r.subtype ?? "CTO"} | ${(r.divYield * 100).toFixed(2)}% | ${fmt(r.annualEstCents)} | ${fmt(r.annualNetCents)} | ${exDividendCell(r.exDividendDate, intlLocale)} |`
+        `| ${r.name} | ${r.subtype ?? "CTO"} | ${f.pct(r.divYield * 100, 2)} | ${f.money(r.annualEstCents)} | ${f.money(r.annualNetCents)} | ${exDividendCell(r.exDividendDate, f)} |`
     ),
     "",
   ];
 }
 
-const renderPassive: Renderer = (data, s, intlLocale) => {
+const renderPassive: Renderer = (data, s, f) => {
   if (data.annualPassiveCents <= 0) return [];
   return [
     `## ${s.passive}`, "",
     s.passiveLine({
-      annual: fmt(data.annualPassiveCents),
-      monthly: fmt(data.monthlyPassiveCents),
-      dividends: fmt(data.annualDividendsCents),
-      interest: fmt(data.annualInterestCents),
+      annual: f.money(data.annualPassiveCents),
+      monthly: f.money(data.monthlyPassiveCents),
+      dividends: f.money(data.annualDividendsCents),
+      interest: f.money(data.annualInterestCents),
     }),
-    ...passiveNotes(data, s),
+    ...passiveNotes(data, s, f),
     "",
-    ...dividendTable(data, s, intlLocale),
+    ...dividendTable(data, s, f),
   ];
 };
 
-const renderRealIncome: Renderer = (data, s) => {
+const renderRealIncome: Renderer = (data, s, f) => {
   if (data.realYtdPassiveNetCents <= 0) return [];
   return [
     `## ${s.realIncome}`, "",
     `| ${s.indicator} | ${s.value} |`,
     "|---|---|",
-    `| ${s.ytdDividends} | ${fmt(data.realYtdDividendsNetCents)} |`,
-    `| ${s.ytdInterest} | ${fmt(data.realYtdInterestNetCents)} |`,
-    `| ${s.ytdTotal} | **${fmt(data.realYtdPassiveNetCents)}** |`,
+    `| ${s.ytdDividends} | ${f.money(data.realYtdDividendsNetCents)} |`,
+    `| ${s.ytdInterest} | ${f.money(data.realYtdInterestNetCents)} |`,
+    `| ${s.ytdTotal} | **${f.money(data.realYtdPassiveNetCents)}** |`,
     "",
   ];
 };
 
-const renderBenchmark: Renderer = (data, s) => {
+const renderBenchmark: Renderer = (data, s, f) => {
   const benchmark = data.benchmark;
   if (benchmark === null) return [];
-  const cagrCell = (v: number) => `${signedFixed(v)}%`;
+  const cagrCell = (v: number) => f.signedPct(v, 1);
   // An index with no history is left out rather than shown as 0%.
   const indices: [string, number | null][] = [
     [s.msciWorld, benchmark.msciWorld],
@@ -310,62 +306,62 @@ const renderBenchmark: Renderer = (data, s) => {
   ];
 };
 
-const renderRadar: Renderer = (data, s) => [
+const renderRadar: Renderer = (data, s, f) => [
   `## ${s.radar}`, "",
   `| ${s.indicator} | ${s.value} |`,
   "|---|---|",
-  `| ${s.safeVsRisky} | ${s.safe} ${fmt(data.garantisCents)} (${data.garantisPct}%) · ${s.risky} ${fmt(data.risquesCents)} (${100 - data.garantisPct}%) |`,
+  `| ${s.safeVsRisky} | ${s.safe} ${f.money(data.garantisCents)} (${f.pct(data.garantisPct)}) · ${s.risky} ${f.money(data.risquesCents)} (${f.pct(100 - data.garantisPct)}) |`,
   "",
 ];
 
-function topAssetTaxCell(taxCents: number | null): string {
+function topAssetTaxCell(taxCents: number | null, f: ExportFormat): string {
   if (taxCents === null) return "-";
-  return taxCents > 0 ? `-${fmt(taxCents)}` : fmt(0);
+  return taxCents > 0 ? `-${f.money(taxCents)}` : f.money(0);
 }
 
-const renderTopAssets: Renderer = (data, s) => {
+const renderTopAssets: Renderer = (data, s, f) => {
   if (data.topAssets.length === 0) return [];
   return [
     `## ${s.topAssets}`, "",
     `| ${s.colAsset} | ${s.category} | ${s.colValue} | ${s.colGain} | ${s.colTax} | ${s.pct} |`,
     "|---|---|---|---|---|---|",
     ...data.topAssets.map((a) => {
-      const gainStr = a.gainCents !== null ? `${sign(a.gainCents)}${fmt(a.gainCents)}` : "-";
-      return `| ${labelWithSubtype(a.name, a.subtype)} | ${a.typeLabel} | ${fmt(a.valueCents)} | ${gainStr} | ${topAssetTaxCell(a.taxCents)} | ${a.pct}% |`;
+      const gainStr = a.gainCents !== null ? f.signedMoney(a.gainCents) : "-";
+      return `| ${labelWithSubtype(a.name, a.subtype)} | ${a.typeLabel} | ${f.money(a.valueCents)} | ${gainStr} | ${topAssetTaxCell(a.taxCents, f)} | ${f.pct(a.pct)} |`;
     }),
     "",
   ];
 };
 
-const renderFinancing: Renderer = (data, s) => {
+const renderFinancing: Renderer = (data, s, f) => {
   if (data.debtAccounts.length === 0) return [];
   return [
     `## ${s.financing}`, "",
     `| ${s.indicator} | ${s.value} |`,
     "|---|---|",
-    `| ${s.totalLiabilities} | ${fmt(data.totalLiabilities)} |`,
-    `| ${s.debtRatio} | ${data.debtRatio}% |`,
-    `| ${s.equity} | ${fmt(data.grossAssets - data.totalLiabilities)} |`,
+    `| ${s.totalLiabilities} | ${f.money(data.totalLiabilities)} |`,
+    `| ${s.debtRatio} | ${f.pct(data.debtRatio)} |`,
+    `| ${s.equity} | ${f.money(data.grossAssets - data.totalLiabilities)} |`,
     "",
     `| ${s.colAsset} | ${s.colValue} | ${s.colLoan} | ${s.colEquity} | ${s.colLtv} |`,
     "|---|---|---|---|---|",
     ...data.debtAccounts.map(
-      (a) => `| ${a.name} | ${fmt(a.valueCents)} | ${fmt(a.liabilityCents)} | ${fmt(a.equityCents)} | ${a.ltv}% |`
+      (a) => `| ${a.name} | ${f.money(a.valueCents)} | ${f.money(a.liabilityCents)} | ${f.money(a.equityCents)} | ${f.pct(a.ltv)} |`
     ),
     "",
   ];
 };
 
-const renderHistory: Renderer = (data, s) => {
+const renderHistory: Renderer = (data, s, f) => {
   if (data.performanceRows.length === 0) return [];
   return [
     `## ${s.history}`, "",
     `| ${s.colMonth} | ${s.colNetWorth} | ${s.colChange} | ${s.pct} |`,
     "|---|---|---|---|",
     ...data.performanceRows.map((r) => {
-      const delta = r.delta !== null ? `${sign(r.delta)}${fmt(r.delta)}` : "-";
-      const deltaPct = r.deltaPct !== null ? `${signedFixed(r.deltaPct)}%` : "-";
-      return `| ${r.date} | ${fmt(r.netWorth)} | ${delta} | ${deltaPct} |`;
+      const delta = r.delta !== null ? f.signedMoney(r.delta) : "-";
+      const deltaPct = r.deltaPct !== null ? f.signedPct(r.deltaPct, 1) : "-";
+      return `| ${r.date} | ${f.money(r.netWorth)} | ${delta} | ${deltaPct} |`;
     }),
     "",
   ];
@@ -392,13 +388,9 @@ export function buildMarkdown(
   s: AnalyticsExportStrings,
   intlLocale: string
 ): string {
-  const date = new Date().toLocaleDateString(intlLocale, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const f = exportFormat(intlLocale);
   const body = (Object.keys(RENDERERS) as Section[])
     .filter((section) => sections.has(section))
-    .flatMap((section) => RENDERERS[section](data, s, intlLocale));
-  return [`# ${s.title} - ${date}`, "", ...body].join("\n");
+    .flatMap((section) => RENDERERS[section](data, s, f));
+  return [`# ${s.title} - ${f.longDate(new Date())}`, "", ...body].join("\n");
 }

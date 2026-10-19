@@ -491,7 +491,8 @@
     "export": "Export",
     "mdSummary": "Summary",
     "mdIndicator": "Indicator",
-    "mdValue": "Value"
+    "mdValue": "Value",
+    "mdFileName": "tax-report-{year}"
   },
   "analytics": {
     "title": "Analytics",
@@ -1500,7 +1501,9 @@
     "mdCurrentPayment": "Current payment",
     "mdTotalCost": "Total loan cost",
     "mdProjectedEnd": "Projected end",
-    "mdProgress": "Progress"
+    "mdProgress": "Progress",
+    "mdField": "**{label}**: {value}",
+    "mdFileName": "accounts"
   },
   "charts": {
     "noData": "No data",
@@ -1569,7 +1572,7 @@
     "mdMonthlyExpenses": "Fixed monthly expenses",
     "mdGoal": "Goal",
     "mdGoalRemaining": "Remaining to reach goal",
-    "mdGoalFmt": "{amount} ({pct}% reached)",
+    "mdGoalFmt": "{amount} ({pct} reached)",
     "mdIndicator": "Indicator",
     "mdValue": "Value",
     "mdCategory": "Category",
@@ -1580,8 +1583,8 @@
     "mdColGrossGain": "Gross gain",
     "mdColTax": "Latent tax",
     "mdColPerf": "Performance",
-    "mdSummaryLine": "**Total**: invested {invested}  ·  value {value}  ·  gross gain {gain}  ·  net after taxes {netGain}  ·  perf {perf}%{cagr}",
-    "mdCagrSuffix": "  ·  CAGR: {cagr}%",
+    "mdSummaryLine": "**Total**: invested {invested}  ·  value {value}  ·  gross gain {gain}  ·  net after taxes {netGain}  ·  perf {perf}{cagr}",
+    "mdCagrSuffix": "  ·  CAGR: {cagr}",
     "mdColMonth": "Month",
     "mdColNetWorth": "Net worth",
     "mdColChange": "Change",
@@ -1614,8 +1617,9 @@
     "mdDebtRatio": "Debt / gross ratio",
     "mdEquity": "Equity",
     "mdPassiveMissingRates": "Partial estimate: {count} interest-bearing account(s) have no rate set and are not counted here.",
-    "mdPassiveWeightedRate": "Balance-weighted average interest rate across all savings accounts: {rate}%.",
-    "mdPassiveYearEndEstimate": "Alternative estimate, based on real historical balances rather than only today's (fortnight method) - can differ from the figure above if a balance moved a lot this year: estimated year-end interest: {amount}."
+    "mdPassiveWeightedRate": "Balance-weighted average interest rate across all savings accounts: {rate}.",
+    "mdPassiveYearEndEstimate": "Alternative estimate, based on real historical balances rather than only today's (fortnight method) - can differ from the figure above if a balance moved a lot this year: estimated year-end interest: {amount}.",
+    "mdFileName": "analytics"
   },
   "coOwners": {
     "errorUsernameRequired": "Enter a username.",

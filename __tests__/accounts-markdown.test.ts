@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMarkdown, type ExportStrings } from "@/lib/utils/accounts-markdown";
-import { fmt } from "@/lib/utils/markdown-export";
+import { exportFormat } from "@/lib/utils/markdown-export";
 import type {
   FiatAccountExport,
   InvestAccountExport,
@@ -38,7 +38,14 @@ const S: ExportStrings = {
   duration: "DURATION", months: "MONTHS", currentPayment: "PAYMENT", totalCost: "COST",
   projectedEnd: "END", progress: "PROGRESS",
   typeLabels: { CHECKING: "Compte courant", INVESTMENT: "Titres", CRYPTO: "Crypto" },
+  field: (label, value) => `**${label}** : ${value}`,
 };
+
+// The document is built in fr-FR below; expectations go through the same
+// formatter rather than literals, so an ICU data change cannot fail a test
+// while the code is still right.
+const F = exportFormat("fr-FR");
+const fmt = (cents: number, decimals = 0) => F.money(cents, decimals);
 
 const FIAT: FiatAccountExport = {
   id: "f1", name: "Courant", institutionName: "LCL", type: "CHECKING",
@@ -62,10 +69,10 @@ function build(over: Partial<{
   fiat: FiatAccountExport[]; invest: InvestAccountExport[];
   realEstate: RealEstateAccountExport[]; automobiles: AutomobileAccountExport[];
   loans: LoanAccountExport[];
-}> = {}) {
+}> = {}, strings: ExportStrings = S, intlLocale = "fr-FR") {
   return buildMarkdown(
     over.fiat ?? [], over.invest ?? [], over.realEstate ?? [],
-    over.automobiles ?? [], over.loans ?? [], S
+    over.automobiles ?? [], over.loans ?? [], strings, intlLocale
   );
 }
 
@@ -99,11 +106,11 @@ describe("an absent value is never rendered as zero", () => {
 
   it("prints a dash for an unset rebalancing target, not 0%", () => {
     const md = build({ invest: [{ ...INVEST, holdings: [{ ...HOLDING, targetPct: null }] }] });
-    // Asserted on the last cell rather than by searching for "0%": the weight
-    // column next to it legitimately reads "80%", which contains it.
+    // Asserted on the last cell rather than by searching for "0 %": the
+    // weight column next to it legitimately reads "80 %", which contains it.
     const row = md.split("\n").find((l) => l.includes("IE00B4L5Y983"))!;
     expect(row.endsWith("| - |")).toBe(true);
-    expect(build({ invest: [INVEST] }).split("\n").find((l) => l.includes("IE00B4L5Y983"))!.endsWith("| 60% |")).toBe(true);
+    expect(build({ invest: [INVEST] }).split("\n").find((l) => l.includes("IE00B4L5Y983"))!.endsWith(`| ${F.pct(60)} |`)).toBe(true);
   });
 
   it("omits the account gain line entirely when the gain is unknown", () => {
@@ -121,7 +128,8 @@ describe("figures that are zero, which is not the same thing", () => {
 
   it("prints the delta with an explicit plus when it did", () => {
     const md = build({ fiat: [{ ...FIAT, deltaCents: 5_000 }] });
-    expect(md).toContain(`**DELTA** : +${fmt(5_000)}`);
+    expect(md).toContain(`**DELTA** : ${F.signedMoney(5_000)}`);
+    expect(F.signedMoney(5_000).startsWith("+")).toBe(true);
   });
 
   it("prints a negative delta without inventing a sign", () => {
@@ -211,7 +219,7 @@ describe("real estate and automobiles", () => {
       realEstate: [{ ...HOUSE, liabilityCents: 20_000_000, equityCents: 10_000_000, ltv: 67 }],
     });
     expect(md).toContain("**LIABILITY**");
-    expect(md).toContain("**LTV** : 67%");
+    expect(md).toContain(`**LTV** : ${F.pct(67)}`);
   });
 
   it("omits a purchase price nobody entered", () => {
@@ -239,14 +247,56 @@ describe("loans", () => {
     for (const expected of [
       `**BORROWED** : ${fmt(20_000_000)}`,
       `**REMAINING** : ${fmt(15_000_000)}`,
-      "**TAEG** : 1.90%", // toFixed(2): a rate is quoted to the hundredth
+      `**TAEG** : ${F.pct(1.9, 2)}`, // a rate is quoted to the hundredth: "1,90 %"
       "**DURATION** : 240 MONTHS",
       `**PAYMENT** : ${fmt(95_000)}`,
       `**COST** : ${fmt(2_800_000)}`,
       "**END** : mars 2044",
-      "**PROGRESS** : 25%",
+      `**PROGRESS** : ${F.pct(25)}`,
     ]) {
       expect(md).toContain(expected);
     }
+  });
+});
+
+// Until v2.12.5 the labels followed the UI language while every figure stayed
+// fr-FR, and the date came from the browser rather than the app.
+describe("an English export is English throughout", () => {
+  const EN: ExportStrings = { ...S, field: (label, value) => `**${label}**: ${value}` };
+  const md = build({
+    fiat: [{ ...FIAT, deltaCents: -5_000 }],
+    invest: [{ ...INVEST, name: "Mon portefeuille" }],
+    loans: [{
+      id: "l1", name: "Mortgage", institutionName: "LCL",
+      amountBorrowedCents: 20_000_000, remainingCapitalCents: 15_000_000,
+      taeg: 1.9, durationMonths: 240, currentPaymentCents: 95_000,
+      totalCostCents: 2_800_000, progressPct: 25, projectedEnd: "March 2044",
+    }],
+  }, EN, "en-US");
+
+  it("formats amounts, percentages and quantities the English way", () => {
+    expect(md).toContain("**BALANCE**: €1,235");
+    expect(md).toContain("**DELTA**: -€50");
+    expect(md).toContain("**TAEG**: 1.90%");
+    expect(md).toContain("**PROGRESS**: 25%");
+    const row = md.split("\n").find((l) => l.includes("IE00B4L5Y983"))!;
+    expect(row).toContain("| 12.5 | €98.76 | €1,235 | 80% | +€235 (+23.4%) | 60% |");
+  });
+
+  it("dates the document in the app's language", () => {
+    const today = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric" }).format(new Date());
+    expect(md.split("\n")[0]).toBe(`# TITLE - ${today}`);
+  });
+
+  it("never leaves a French figure or separator behind", () => {
+    expect(md).not.toMatch(/\d,\d{2} ?€|\d €| %|\*\* :/);
+  });
+
+  it("formats the same holding the French way in a French export", () => {
+    const fr = build({ invest: [{ ...INVEST, name: "Mon portefeuille" }] });
+    const row = fr.split("\n").find((l) => l.includes("IE00B4L5Y983"))!;
+    expect(row).toContain(`| ${F.quantity("12.5")} | ${fmt(9_876, 2)} |`);
+    expect(F.quantity("12.5")).toBe("12,5");
+    expect(row).toContain(`(${F.signedPct(23.45, 1)})`);
   });
 });

@@ -5,7 +5,8 @@ import { Download } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { downloadFile } from "@/lib/utils/markdown-export";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { localeToIntl } from "@/lib/utils/format";
 import type {
   FiatAccountExport,
   InvestAccountExport,
@@ -36,6 +37,7 @@ export function ExportAccountsButton({
 }: Readonly<Props>) {
   const t = useTranslations("exportAccounts");
   const ta = useTranslations("accountTypes");
+  const intlLocale = localeToIntl(useLocale());
 
   const groups: AccountGroup[] = [
     {
@@ -150,6 +152,7 @@ export function ExportAccountsButton({
         INVESTMENT: ta("INVESTMENT"),
         CRYPTO: ta("CRYPTO"),
       },
+      field: (label, value) => t("mdField", { label, value }),
     };
 
     const md = buildMarkdown(
@@ -158,9 +161,10 @@ export function ExportAccountsButton({
       realEstateAccounts.filter((a) => selected.has(a.id)),
       automobileAccounts.filter((a) => selected.has(a.id)),
       loanAccounts.filter((a) => selected.has(a.id)),
-      exportStrings
+      exportStrings,
+      intlLocale
     );
-    downloadFile(md, "comptes");
+    downloadFile(md, t("mdFileName"));
     setOpen(false);
   }
 

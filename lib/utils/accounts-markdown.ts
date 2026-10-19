@@ -6,7 +6,7 @@
  * buildMarkdown at 30 cyclomatic complexity, and it was sitting inside a
  * component where nothing could test it.
  */
-import { fmt, nameMentions, sign } from "@/lib/utils/markdown-export";
+import { exportFormat, nameMentions } from "@/lib/utils/markdown-export";
 import type {
   FiatAccountExport,
   InvestAccountExport,
@@ -55,6 +55,8 @@ export type ExportStrings = {
   projectedEnd: string;
   progress: string;
   typeLabels: Record<string, string>;
+  /** "**label** : value" - the separator's spacing is the language's own. */
+  field: (label: string, value: string) => string;
 };
 
 // ── Markdown generation ───────────────────────────────────────────────────────
@@ -80,22 +82,20 @@ export function buildMarkdown(
   realEstate: RealEstateAccountExport[],
   automobiles: AutomobileAccountExport[],
   loans: LoanAccountExport[],
-  s: ExportStrings
+  s: ExportStrings,
+  intlLocale: string
 ): string {
-  const date = new Date().toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  const lines: string[] = [`# ${s.title} - ${date}`, ""];
+  const f = exportFormat(intlLocale);
+  const item = (label: string, value: string) => `- ${s.field(label, value)}`;
+  const lines: string[] = [`# ${s.title} - ${f.longDate(new Date())}`, ""];
 
   if (fiat.length > 0) {
     lines.push(`## ${s.cash}`, "");
     for (const a of fiat) {
       lines.push(accountHeading(a.institutionName, [s.typeLabels[a.type] ?? a.type], a.name));
-      lines.push(`- **${s.balance}** : ${fmt(a.balanceCents)}`);
+      lines.push(item(s.balance, f.money(a.balanceCents)));
       if (a.deltaCents !== 0) {
-        lines.push(`- **${s.delta}** : ${sign(a.deltaCents)}${fmt(a.deltaCents)}`);
+        lines.push(item(s.delta, f.signedMoney(a.deltaCents)));
       }
       lines.push("");
     }
@@ -107,12 +107,12 @@ export function buildMarkdown(
       const subtype = a.type === "CRYPTO" ? null : a.investmentSubtype;
       lines.push(accountHeading(a.institutionName, [s.typeLabels[a.type] ?? a.type, subtype], a.name));
 
-      const parts: string[] = [`**${s.total}** : ${fmt(a.totalCents)}`];
+      const parts: string[] = [s.field(s.total, f.money(a.totalCents))];
       if (a.gainCents !== null) {
-        parts.push(`**${s.gain}** : ${sign(a.gainCents)}${fmt(a.gainCents)}`);
+        parts.push(s.field(s.gain, f.signedMoney(a.gainCents)));
       }
       if (a.taxCents !== null && a.taxCents > 0) {
-        parts.push(`**${s.tax}** : -${fmt(a.taxCents)}`);
+        parts.push(s.field(s.tax, `-${f.money(a.taxCents)}`));
       }
       lines.push(parts.join("  ·  "), "");
 
@@ -122,13 +122,13 @@ export function buildMarkdown(
         );
         lines.push("|---|---|---|---|---|---|---|---|");
         for (const h of a.holdings) {
-          const gainPctSuffix = h.gainPct !== null ? ` (${sign(h.gainPct)}${h.gainPct.toFixed(1)}%)` : "";
-          const gainStr = h.gainCents !== null ? `${sign(h.gainCents)}${fmt(h.gainCents)}${gainPctSuffix}` : "-";
-          const targetStr = h.targetPct !== null ? `${h.targetPct}%` : "-";
+          const gainPctSuffix = h.gainPct !== null ? ` (${f.signedPct(h.gainPct, 1)})` : "";
+          const gainStr = h.gainCents !== null ? `${f.signedMoney(h.gainCents)}${gainPctSuffix}` : "-";
+          const targetStr = h.targetPct !== null ? f.pct(h.targetPct) : "-";
           const currencySuffix = h.currency !== "EUR" ? ` · ${h.currency}` : "";
           const nameStr = `${h.name ?? h.ticker}${currencySuffix}`;
           lines.push(
-            `| ${nameStr} | ${h.ticker} | ${h.quantity} | ${fmt(h.lastPriceCents, 2)} | ${fmt(h.valueCents)} | ${h.pct}% | ${gainStr} | ${targetStr} |`
+            `| ${nameStr} | ${h.ticker} | ${f.quantity(h.quantity)} | ${f.money(h.lastPriceCents, 2)} | ${f.money(h.valueCents)} | ${f.pct(h.pct)} | ${gainStr} | ${targetStr} |`
           );
         }
         lines.push("");
@@ -140,12 +140,12 @@ export function buildMarkdown(
     lines.push(`## ${s.realEstate}`, "");
     for (const p of realEstate) {
       lines.push(`### ${p.name}`);
-      lines.push(`- **${s.institution}** : ${p.institutionName}`);
-      lines.push(`- **${s.value}** : ${fmt(p.valueCents)}`);
+      lines.push(item(s.institution, p.institutionName));
+      lines.push(item(s.value, f.money(p.valueCents)));
       if (p.liabilityCents > 0) {
-        lines.push(`- **${s.liability}** : ${fmt(p.liabilityCents)}`);
-        lines.push(`- **${s.equity}** : ${fmt(p.equityCents)}`);
-        lines.push(`- **LTV** : ${p.ltv}%`);
+        lines.push(item(s.liability, f.money(p.liabilityCents)));
+        lines.push(item(s.equity, f.money(p.equityCents)));
+        lines.push(item("LTV", f.pct(p.ltv)));
       }
       lines.push("");
     }
@@ -155,19 +155,19 @@ export function buildMarkdown(
     lines.push(`## ${s.autos}`, "");
     for (const a of automobiles) {
       lines.push(`### ${a.name}`);
-      lines.push(`- **${s.institution}** : ${a.institutionName}`);
+      lines.push(item(s.institution, a.institutionName));
       if (a.purchasePriceCents > 0) {
-        lines.push(`- **${s.purchasePrice}** : ${fmt(a.purchasePriceCents)}`);
+        lines.push(item(s.purchasePrice, f.money(a.purchasePriceCents)));
       }
       const depStr =
-        a.depreciationCents !== null
-          ? ` (${sign(a.depreciationCents)}${fmt(a.depreciationCents)}, ${a.depreciationPct}%)`
+        a.depreciationCents !== null && a.depreciationPct !== null
+          ? ` (${f.signedMoney(a.depreciationCents)}, ${f.pct(a.depreciationPct)})`
           : "";
-      lines.push(`- **${s.currentValue}** : ${fmt(a.valueCents)}${depStr}`);
+      lines.push(item(s.currentValue, `${f.money(a.valueCents)}${depStr}`));
       if (a.liabilityCents > 0) {
-        lines.push(`- **${s.loanDue}** : ${fmt(a.liabilityCents)}`);
+        lines.push(item(s.loanDue, f.money(a.liabilityCents)));
       }
-      lines.push(`- **${s.netValue}** : ${fmt(a.equityCents)}`);
+      lines.push(item(s.netValue, f.money(a.equityCents)));
       lines.push("");
     }
   }
@@ -177,14 +177,14 @@ export function buildMarkdown(
     for (const l of loans) {
       const institutionPrefix = l.institutionName ? `${l.institutionName} · ` : "";
       lines.push(`### ${institutionPrefix}${l.name}`);
-      lines.push(`- **${s.amountBorrowed}** : ${fmt(l.amountBorrowedCents)}`);
-      lines.push(`- **${s.remaining}** : ${fmt(l.remainingCapitalCents)}`);
-      lines.push(`- **${s.taeg}** : ${l.taeg.toFixed(2)}%`);
-      lines.push(`- **${s.duration}** : ${l.durationMonths} ${s.months}`);
-      lines.push(`- **${s.currentPayment}** : ${fmt(l.currentPaymentCents)}`);
-      lines.push(`- **${s.totalCost}** : ${fmt(l.totalCostCents)}`);
-      lines.push(`- **${s.projectedEnd}** : ${l.projectedEnd}`);
-      lines.push(`- **${s.progress}** : ${l.progressPct}%`);
+      lines.push(item(s.amountBorrowed, f.money(l.amountBorrowedCents)));
+      lines.push(item(s.remaining, f.money(l.remainingCapitalCents)));
+      lines.push(item(s.taeg, f.pct(l.taeg, 2)));
+      lines.push(item(s.duration, `${l.durationMonths} ${s.months}`));
+      lines.push(item(s.currentPayment, f.money(l.currentPaymentCents)));
+      lines.push(item(s.totalCost, f.money(l.totalCostCents)));
+      lines.push(item(s.projectedEnd, l.projectedEnd));
+      lines.push(item(s.progress, f.pct(l.progressPct)));
       lines.push("");
     }
   }
