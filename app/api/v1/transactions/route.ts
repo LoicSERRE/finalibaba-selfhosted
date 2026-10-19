@@ -50,6 +50,9 @@ export async function GET(req: NextRequest) {
       amountCents: tx.amountCents.toString(),
       account: { id: tx.account.id, name: tx.account.name },
       category: tx.category,
+      // No note or tags (v2.14), on purpose: free text the user wrote is a
+      // bigger blast radius for a leaked key than a glanceable widget needs
+      // (dev-docs/multi-user-and-security.md, "Scope deliberately stops").
     })),
   });
 }

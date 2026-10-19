@@ -8,6 +8,9 @@ import { TransactionCategoryCell } from "@/components/shared/transaction-categor
 import { TransactionList, TransactionListItem } from "@/components/shared/transaction-list";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
 import { BulkSelectionProvider, BulkToolbar, RowSelectCheckbox } from "@/components/transactions/bulk-selection";
+import { TransactionNoteDetails } from "@/components/transactions/transaction-note-details";
+import { TransactionNoteButton } from "@/components/transactions/transaction-note-button";
+import { listTags } from "@/lib/services/transaction-tags";
 import { localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
@@ -37,7 +40,17 @@ import {
 function buildTransactionWhere(filters: TransactionLedgerFilters) {
   const amountRanges = amountMagnitudeRanges(filters.amountMin, filters.amountMax);
   const conditions: object[] = [{ isInternalTransfer: false }];
-  if (filters.q) conditions.push({ label: { contains: filters.q, mode: "insensitive" as const } });
+  // The search box reads notes too (v2.14): a note is exactly where someone
+  // writes the word they will later search for.
+  if (filters.q) {
+    conditions.push({
+      OR: [
+        { label: { contains: filters.q, mode: "insensitive" as const } },
+        { note: { contains: filters.q, mode: "insensitive" as const } },
+      ],
+    });
+  }
+  if (filters.tag) conditions.push({ tags: { has: filters.tag } });
   if (filters.accountId) conditions.push({ accountId: filters.accountId });
   if (filters.categoryId === UNCATEGORIZED_SENTINEL) {
     // Genuinely uncategorized (no category, no splits at all) OR a split
@@ -81,7 +94,7 @@ export default async function TransactionsPage({
   const { ownerId, accountIds, readOnly } = await getViewContext();
   const where = { AND: [buildTransactionWhere(filters), { accountId: { in: accountIds } }] };
 
-  const [accounts, categories, totalCount, transactions] = await Promise.all([
+  const [accounts, categories, totalCount, transactions, tags] = await Promise.all([
     prisma.account.findMany({
       where: { id: { in: accountIds }, transactions: { some: {} } },
       select: { id: true, name: true },
@@ -96,6 +109,7 @@ export default async function TransactionsPage({
       take: TRANSACTIONS_PAGE_SIZE,
       include: { account: { select: { name: true } }, splits: { select: { categoryId: true, amountCents: true } } },
     }),
+    listTags(accountIds),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / TRANSACTIONS_PAGE_SIZE));
@@ -108,6 +122,7 @@ export default async function TransactionsPage({
     if (rawParams.to) params.set("to", rawParams.to);
     if (rawParams.amountMin) params.set("amountMin", rawParams.amountMin);
     if (rawParams.amountMax) params.set("amountMax", rawParams.amountMax);
+    if (rawParams.tag) params.set("tag", rawParams.tag);
     if (page > 1) params.set("page", String(page));
     return params.toString() ? `/transactions?${params.toString()}` : "/transactions";
   };
@@ -128,7 +143,7 @@ export default async function TransactionsPage({
         <p className="text-sm text-[var(--muted)] mt-1">{t("subtitle", { count: totalCount, suffix: totalCount !== 1 ? "s" : "" })}</p>
       </div>
 
-      <TransactionFilters accounts={accounts} categories={categories} />
+      <TransactionFilters accounts={accounts} categories={categories} tags={tags} />
 
       {transactions.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">{t("noResults")}</p>
@@ -148,6 +163,7 @@ export default async function TransactionsPage({
                 amount: td("tableHeaders.amount"),
                 category: td("tableHeaders.category"),
                 selectable: !readOnly,
+                actions: readOnly ? [] : [t("noteColumn")],
               }}
             >
               {transactions.map((tx) => (
@@ -157,6 +173,12 @@ export default async function TransactionsPage({
                   date={dateFormat.format(tx.date)}
                   account={tx.account.name}
                   label={tx.label}
+                  details={<TransactionNoteDetails note={tx.note} tags={tx.tags} />}
+                  actions={
+                    readOnly
+                      ? []
+                      : [<TransactionNoteButton key="note" transactionId={tx.id} label={tx.label} note={tx.note} tags={tx.tags} suggestions={tags} />]
+                  }
                   amountCents={tx.amountCents}
                   category={
                     <TransactionCategoryCell

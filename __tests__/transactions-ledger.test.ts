@@ -11,8 +11,14 @@ describe("parseTransactionLedgerFilters", () => {
       to: null,
       amountMin: null,
       amountMax: null,
+      tag: null,
       page: 1,
     });
+  });
+
+  it("reads a tag the way tags are stored, and drops one that normalizes to nothing", () => {
+    expect(parseTransactionLedgerFilters({ tag: "  #Vacances  " }).tag).toBe("Vacances");
+    expect(parseTransactionLedgerFilters({ tag: "###" }).tag).toBeNull();
   });
 
   it("trims and nulls out a blank search query", () => {

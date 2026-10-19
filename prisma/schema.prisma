@@ -727,10 +727,16 @@ model Transaction {
   // "categoryId: null" query elsewhere in the app that means "genuinely
   // uncategorized" also needs a "splits: { none: {} }" guard alongside it.
   splits               TransactionSplit[]
+  // v2.14: the user's own words about a transaction, and free tags - never
+  // written by the sync service, whose INSERT names its columns and whose one
+  // UPDATE only touches the label (sync/db.py).
+  note                 String?
+  tags                 String[]           @default([])
 
   @@index([accountId, date])
   @@index([categoryId])
   @@index([isInternalTransfer])
+  @@index([tags], type: Gin)
 }
 
 // One category's portion of a split transaction - see CLAUDE.md's "Split

@@ -4,11 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { TagFilter } from "@/components/transactions/tag-filter";
 import { UNCATEGORIZED_SENTINEL } from "@/lib/domain/transactions-ledger";
 
 interface Props {
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string }[];
+  /** Tags in use (v2.14); the filter only appears once there is one. */
+  tags: string[];
 }
 
 // The search box and the min/max amount fields are debounced (400ms) since
@@ -16,7 +19,7 @@ interface Props {
 // need debouncing, a <select> or date picker change is already a single
 // deliberate action. Any filter change resets `page` back to the first
 // page, same as changing a filter mid-scroll on any paginated list should.
-export function TransactionFilters({ accounts, categories }: Readonly<Props>) {
+export function TransactionFilters({ accounts, categories, tags }: Readonly<Props>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -100,6 +103,8 @@ export function TransactionFilters({ accounts, categories }: Readonly<Props>) {
           </option>
         ))}
       </select>
+
+      <TagFilter tags={tags} onChange={(e) => updateParams({ tag: e.target.value })} />
 
       <div className="flex gap-3">
         <input

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { getViewContext, isAuthEnabled } from "@/lib/auth-context";
+import { listTags } from "@/lib/services/transaction-tags";
 import { localeToIntl } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -271,6 +272,7 @@ export default async function AccountDetailPage({
           categories={categories}
           canImportCsv={canImportCsv}
           existingFingerprints={result.existingFingerprints}
+          tagSuggestions={readOnly ? [] : await listTags(accountIds)}
         />
       )}
 

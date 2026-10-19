@@ -1,3 +1,5 @@
+import { normalizeTag } from "@/lib/domain/transaction-notes";
+
 // Pure filter-parsing for /transactions - the global cross-account ledger
 // (search/filter across every account, not just per-account or the
 // /budgets/[categoryId] drill-down). Kept separate from the page's own
@@ -39,6 +41,8 @@ export interface TransactionLedgerFilters {
   // (a big debit or a big credit), not just credits. See amountMagnitudeRanges.
   amountMin: bigint | null;
   amountMax: bigint | null;
+  /** Exact tag (v2.14), as normalizeTag stores it. */
+  tag: string | null;
   page: number;
 }
 
@@ -50,6 +54,7 @@ export interface TransactionLedgerSearchParams {
   to?: string;
   amountMin?: string;
   amountMax?: string;
+  tag?: string;
   page?: string;
 }
 
@@ -88,6 +93,7 @@ export function parseTransactionLedgerFilters(
     to: parseDateParam(searchParams.to),
     amountMin: parseAmountParam(searchParams.amountMin),
     amountMax: parseAmountParam(searchParams.amountMax),
+    tag: searchParams.tag ? normalizeTag(searchParams.tag) || null : null,
     page,
   };
 }

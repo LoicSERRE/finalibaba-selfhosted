@@ -61,6 +61,9 @@ export interface AccountDetailTransaction {
   // see CLAUDE.md's "Split transactions". Drives whether the category cell
   // renders the plain <select> or the split badge/dialog.
   splits: { categoryId: string | null; amountCents: bigint }[];
+  // The user's own note and tags (v2.14).
+  note: string | null;
+  tags: string[];
 }
 
 export interface AccountDetailAccount {

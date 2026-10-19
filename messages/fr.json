@@ -216,7 +216,8 @@
       "balance": "Solde",
       "change": "Variation",
       "income": "Revenu",
-      "actions": "Actions"
+      "actions": "Actions",
+      "note": "Note"
     },
     "fiscalTip": "Renseignez le prix de revient sur chaque position pour voir les plus-values et l'impôt latent.",
     "fiscalSubtype": "Définissez le type de compte (PEA/CTO) pour activer le calcul fiscal.",
@@ -337,8 +338,8 @@
     "subtitle": "{count} transaction{suffix} au total",
     "account": "Compte",
     "noResults": "Aucune transaction ne correspond à ces filtres",
-    "searchPlaceholder": "Rechercher un libellé…",
-    "searchAriaLabel": "Rechercher une transaction par libellé",
+    "searchPlaceholder": "Rechercher un libellé ou une note…",
+    "searchAriaLabel": "Rechercher une transaction par libellé ou par note",
     "accountFilterLabel": "Filtrer par compte",
     "allAccounts": "Tous les comptes",
     "categoryFilterLabel": "Filtrer par catégorie",
@@ -366,7 +367,32 @@
       "skippedSplit": "{count} ventilée{suffix} laissée{suffix} telle{suffix} quelle{suffix}",
       "marked": "{count} transaction{suffix} marquée{suffix} comme virement interne",
       "failed": "La modification a échoué."
-    }
+    },
+    "note": {
+      "title": "Note et étiquettes",
+      "add": "Ajouter une note",
+      "edit": "Modifier la note",
+      "addFor": "Ajouter une note : {label}",
+      "editFor": "Modifier la note : {label}",
+      "noteLabel": "Note",
+      "notePlaceholder": "Remboursement de Marie, frais déductible…",
+      "tagsLabel": "Étiquettes",
+      "tagsPlaceholder": "Tapez une étiquette puis Entrée",
+      "tagsHint": "Jusqu'à {max} étiquettes. Entrée ou virgule pour ajouter.",
+      "removeTag": "Retirer #{tag}",
+      "save": "Enregistrer",
+      "saving": "Enregistrement…",
+      "cancel": "Annuler",
+      "saved": "Note enregistrée",
+      "errors": {
+        "note_too_long": "La note dépasse {max} caractères.",
+        "too_many_tags": "{max} étiquettes au plus.",
+        "tag_too_long": "Une étiquette fait au plus 32 caractères."
+      }
+    },
+    "noteColumn": "Note",
+    "tagFilterLabel": "Filtrer par étiquette",
+    "allTags": "Toutes les étiquettes"
   },
   "categories": {
     "create": "Nouvelle catégorie",

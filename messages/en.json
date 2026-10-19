@@ -216,7 +216,8 @@
       "balance": "Balance",
       "change": "Change",
       "income": "Income",
-      "actions": "Actions"
+      "actions": "Actions",
+      "note": "Note"
     },
     "fiscalTip": "Enter the cost basis for each position to see gains and latent tax.",
     "fiscalSubtype": "Set the account type (PEA/CTO) to enable tax computation.",
@@ -337,8 +338,8 @@
     "subtitle": "{count} transaction{suffix} total",
     "account": "Account",
     "noResults": "No transaction matches these filters",
-    "searchPlaceholder": "Search a label…",
-    "searchAriaLabel": "Search a transaction by label",
+    "searchPlaceholder": "Search a label or a note…",
+    "searchAriaLabel": "Search a transaction by label or note",
     "accountFilterLabel": "Filter by account",
     "allAccounts": "All accounts",
     "categoryFilterLabel": "Filter by category",
@@ -366,7 +367,32 @@
       "skippedSplit": "{count} split transaction{suffix} left unchanged",
       "marked": "{count} transaction{suffix} marked as internal transfer",
       "failed": "The change failed."
-    }
+    },
+    "note": {
+      "title": "Note and tags",
+      "add": "Add a note",
+      "edit": "Edit the note",
+      "addFor": "Add a note: {label}",
+      "editFor": "Edit the note: {label}",
+      "noteLabel": "Note",
+      "notePlaceholder": "Paid back by Mary, deductible expense…",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "Type a tag, then Enter",
+      "tagsHint": "Up to {max} tags. Enter or comma to add.",
+      "removeTag": "Remove #{tag}",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "saved": "Note saved",
+      "errors": {
+        "note_too_long": "The note is longer than {max} characters.",
+        "too_many_tags": "At most {max} tags.",
+        "tag_too_long": "A tag is at most 32 characters."
+      }
+    },
+    "noteColumn": "Note",
+    "tagFilterLabel": "Filter by tag",
+    "allTags": "All tags"
   },
   "categories": {
     "create": "New category",
