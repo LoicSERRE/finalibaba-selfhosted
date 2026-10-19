@@ -331,7 +331,18 @@
     "account": "Account",
     "noTransactions": "No transactions in this category",
     "splitBadge": "Split",
-    "splitBadgeHint": "Part of a transaction split across multiple categories - edit the split from the account's transactions table or the global ledger."
+    "splitBadgeHint": "Part of a transaction split across multiple categories - edit the split from the account's transactions table or the global ledger.",
+    "flow": {
+      "title": "This month's flow",
+      "income": "Income",
+      "savings": "Savings",
+      "drawn": "Drawn from savings",
+      "other": "Other",
+      "uncategorizedIncome": "Uncategorized income",
+      "uncategorizedSpend": "Uncategorized",
+      "in": "In",
+      "out": "Out"
+    }
   },
   "transactions": {
     "title": "Transactions",

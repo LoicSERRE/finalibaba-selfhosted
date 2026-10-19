@@ -331,7 +331,18 @@
     "account": "Compte",
     "noTransactions": "Aucune transaction dans cette catégorie",
     "splitBadge": "Divisée",
-    "splitBadgeHint": "Fait partie d'une transaction divisée entre plusieurs catégories - modifiez la répartition depuis le tableau des transactions du compte ou le grand livre."
+    "splitBadgeHint": "Fait partie d'une transaction divisée entre plusieurs catégories - modifiez la répartition depuis le tableau des transactions du compte ou le grand livre.",
+    "flow": {
+      "title": "Flux du mois",
+      "income": "Revenus",
+      "savings": "Épargne",
+      "drawn": "Pris sur l'épargne",
+      "other": "Autres",
+      "uncategorizedIncome": "Revenus non catégorisés",
+      "uncategorizedSpend": "Non catégorisé",
+      "in": "Entrée",
+      "out": "Sortie"
+    }
   },
   "transactions": {
     "title": "Transactions",
