@@ -34,7 +34,7 @@ const S = new Proxy({} as AnalyticsExportStrings, {
     // both that it was called and what it was handed.
     if (prop === "summaryLine") return (p: Record<string, string>) => `SUMMARYLINE:${JSON.stringify(p)}`;
     if (prop === "passiveLine") return (p: Record<string, string>) => `PASSIVELINE:${JSON.stringify(p)}`;
-    if (prop === "goalFmt") return (amount: string, pct: number) => `GOALFMT:${amount}:${pct}`;
+    if (prop === "goalFmt") return (amount: string, pct: string) => `GOALFMT:${amount}:${pct}`;
     if (prop === "cagrSuffix") return (cagr: string) => `CAGRSUFFIX:${cagr}`;
     if (prop === "passiveMissingRates") return (p: { count: number }) => `MISSINGRATES:${p.count}`;
     if (prop === "passiveWeightedRate") return (p: { rate: string }) => `WEIGHTEDRATE:${p.rate}`;

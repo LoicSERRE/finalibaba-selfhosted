@@ -12,23 +12,23 @@ exports[`the whole document, pinned (characterization) > every section together 
 | DEBTS | 0 € |
 | TAXES | 570 € |
 | NETWORTH | 2 000 € |
-| INVESTEDRATE | 100% |
-| GOAL - Patrimoine | GOALFMT:500 000 €:0 |
+| INVESTEDRATE | 100 % |
+| GOAL - Patrimoine | GOALFMT:500 000 €:0 % |
 | GOALREMAINING - Patrimoine | 498 570 € |
 
 ## ALLOCATION
 
 | CATEGORY | VALUE | PCT |
 |---|---|---|
-| Investissements | 2 000 € | 100% |
+| Investissements | 2 000 € | 100 % |
 
 ## PERFORMANCE
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| CTO | 2 000 € | 100 € | +1 900 € | -570 € | +1900.0% |
+| CTO | 2 000 € | 100 € | +1 900 € | -570 € | +1 900,0 % |
 
-SUMMARYLINE:{"invested":"100 €","value":"2 000 €","gain":"+1 900 €","netGain":"+1 330 €","perf":"+1900.0","cagr":"CAGRSUFFIX:+220.5"}
+SUMMARYLINE:{"invested":"100 €","value":"2 000 €","gain":"+1 900 €","netGain":"+1 330 €","perf":"+1 900,0 %","cagr":"CAGRSUFFIX:+220,5 %"}
 
 ## PASSIVE
 
@@ -36,7 +36,7 @@ PASSIVELINE:{"annual":"7 €","monthly":"1 €","dividends":"10 €","interes
 
 | COLASSET | COLENVELOPE | COLYIELD | COLANNUALGROSS | COLANNUALNET | COLEXDIV |
 |---|---|---|---|---|---|
-| Apple | CTO | 0.50% | 10 € | 7 € | - |
+| Apple | CTO | 0,50 % | 10 € | 7 € | - |
 
 ## REALINCOME
 
@@ -50,20 +50,20 @@ PASSIVELINE:{"annual":"7 €","monthly":"1 €","dividends":"10 €","interes
 
 | INDICATOR | CAGR |
 |---|---|
-| YOURPORTFOLIO | **+220.5%** |
-| MSCIWORLD | +7.3% |
+| YOURPORTFOLIO | **+220,5 %** |
+| MSCIWORLD | +7,3 % |
 
 ## RADAR
 
 | INDICATOR | VALUE |
 |---|---|
-| SAFEVSRISKY | SAFE 0 € (0%) · RISKY 2 000 € (100%) |
+| SAFEVSRISKY | SAFE 0 € (0 %) · RISKY 2 000 € (100 %) |
 
 ## TOPASSETS
 
 | COLASSET | CATEGORY | COLVALUE | COLGAIN | COLTAX | PCT |
 |---|---|---|---|---|---|
-| CTO | Titres | 2 000 € | +1 900 € | -570 € | 100% |
+| CTO | Titres | 2 000 € | +1 900 € | -570 € | 100 % |
 "
 `;
 
@@ -79,37 +79,37 @@ exports[`the whole document, pinned (characterization) > every section together 
 | DEBTS | 332 337 € |
 | TAXES | 1 379 € |
 | NETWORTH | 12 047 € |
-| INVESTEDRATE | 4% |
-| SAVINGSRATE | +28.1% |
+| INVESTEDRATE | 4 % |
+| SAVINGSRATE | +28,1 % |
 | SALARY | 3 200 € |
 | MONTHLYSAVED | 900 € |
 | RUNWAY | 9 MONTHS |
 | SAVINGSAVAILABLE | 18 000 € |
 | MONTHLYEXPENSES | 1 850 € |
-| GOAL - Patrimoine | GOALFMT:500 000 €:2 |
+| GOAL - Patrimoine | GOALFMT:500 000 €:2 % |
 | GOALREMAINING - Patrimoine | 489 333 € |
-| GOAL - Fonds d'urgence | GOALFMT:20 000 €:75 |
+| GOAL - Fonds d'urgence | GOALFMT:20 000 €:75 % |
 | GOALREMAINING - Fonds d'urgence | 5 000 € |
 
 ## ALLOCATION
 
 | CATEGORY | VALUE | PCT |
 |---|---|---|
-| realEstate | 120 000 € | 73% |
-| savings | 18 000 € | 11% |
-| auto | 9 500 € | 6% |
-| crypto | 9 000 € | 5% |
-| Investissements | 5 538 € | 3% |
-| cash | 2 346 € | 1% |
+| realEstate | 120 000 € | 73 % |
+| savings | 18 000 € | 11 % |
+| auto | 9 500 € | 6 % |
+| crypto | 9 000 € | 5 % |
+| Investissements | 5 538 € | 3 % |
+| cash | 2 346 € | 1 % |
 
 ## PERFORMANCE
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| PEA | 2 235 € | 1 000 € | +235 € | -44 € | +23.4% |
-| CTO | 3 304 € | 3 050 € | +254 € | -80 € | +8.3% |
+| PEA | 2 235 € | 1 000 € | +235 € | -44 € | +23,4 % |
+| CTO | 3 304 € | 3 050 € | +254 € | -80 € | +8,3 % |
 
-SUMMARYLINE:{"invested":"4 050 €","value":"5 538 €","gain":"+488 €","netGain":"+365 €","perf":"+12.0","cagr":"CAGRSUFFIX:+10.1"}
+SUMMARYLINE:{"invested":"4 050 €","value":"5 538 €","gain":"+488 €","netGain":"+365 €","perf":"+12,0 %","cagr":"CAGRSUFFIX:+10,1 %"}
 
 ## PASSIVE
 
@@ -117,16 +117,16 @@ PASSIVELINE:{"annual":"279 €","monthly":"23 €","dividends":"36 €","inte
 
 > MISSINGRATES:1
 
-WEIGHTEDRATE:1.70
+WEIGHTEDRATE:1,70 %
 
 YEAREND:246 €
 
 | COLASSET | COLENVELOPE | COLYIELD | COLANNUALGROSS | COLANNUALNET | COLEXDIV |
 |---|---|---|---|---|---|
-| Ferrari | CTO | 0.71% | 6 € | 4 € | 22 avr. 2026 |
-| Apple | CTO | 0.44% | 2 € | 1 € | 10 août 2026 |
-| Meta | CTO | 0.39% | 3 € | 2 € | 14 déc. 2026 |
-| Air Liquide | CTO | 2.00% | 25 € | 17 € | - |
+| Ferrari | CTO | 0,71 % | 6 € | 4 € | 22 avr. 2026 |
+| Apple | CTO | 0,44 % | 2 € | 1 € | 10 août 2026 |
+| Meta | CTO | 0,39 % | 3 € | 2 € | 14 déc. 2026 |
+| Air Liquide | CTO | 2,00 % | 25 € | 17 € | - |
 
 ## REALINCOME
 
@@ -140,49 +140,49 @@ YEAREND:246 €
 
 | INDICATOR | CAGR |
 |---|---|
-| YOURPORTFOLIO | **+10.1%** |
-| MSCIWORLD | +11.2% |
-| SP500 | +7.7% |
-| CAC40 | +5.4% |
+| YOURPORTFOLIO | **+10,1 %** |
+| MSCIWORLD | +11,2 % |
+| SP500 | +7,7 % |
+| CAC40 | +5,4 % |
 
 ## RADAR
 
 | INDICATOR | VALUE |
 |---|---|
-| SAFEVSRISKY | SAFE 20 346 € (58%) · RISKY 14 538 € (42%) |
+| SAFEVSRISKY | SAFE 20 346 € (58 %) · RISKY 14 538 € (42 %) |
 
 ## TOPASSETS
 
 | COLASSET | CATEGORY | COLVALUE | COLGAIN | COLTAX | PCT |
 |---|---|---|---|---|---|
-| Appartement | REAL_ESTATE | 300 000 € | - | - | 87% |
-| Livret A | SAVINGS | 15 000 € | - | - | 4% |
-| Voiture | AUTOMOBILE | 9 500 € | - | - | 3% |
-| Crypto | CRYPTO | 9 000 € | +4 000 € | -1 256 € | 3% |
-| CTO | Titres | 3 304 € | +254 € | -80 € | 1% |
-| LEP | SAVINGS | 3 000 € | - | - | 1% |
-| Courant | CHECKING | 2 346 € | - | - | 1% |
-| PEA | Titres | 2 235 € | +235 € | -44 € | 1% |
+| Appartement | REAL_ESTATE | 300 000 € | - | - | 87 % |
+| Livret A | SAVINGS | 15 000 € | - | - | 4 % |
+| Voiture | AUTOMOBILE | 9 500 € | - | - | 3 % |
+| Crypto | CRYPTO | 9 000 € | +4 000 € | -1 256 € | 3 % |
+| CTO | Titres | 3 304 € | +254 € | -80 € | 1 % |
+| LEP | SAVINGS | 3 000 € | - | - | 1 % |
+| Courant | CHECKING | 2 346 € | - | - | 1 % |
+| PEA | Titres | 2 235 € | +235 € | -44 € | 1 % |
 
 ## FINANCING
 
 | INDICATOR | VALUE |
 |---|---|
 | TOTALLIABILITIES | 332 337 € |
-| DEBTRATIO | 97% |
+| DEBTRATIO | 97 % |
 | EQUITY | 12 047 € |
 
 | COLASSET | COLVALUE | COLLOAN | COLEQUITY | COLLTV |
 |---|---|---|---|---|
-| Appartement | 300 000 € | 180 000 € | 120 000 € | 60% |
+| Appartement | 300 000 € | 180 000 € | 120 000 € | 60 % |
 
 ## HISTORY
 
 | COLMONTH | COLNETWORTH | COLCHANGE | PCT |
 |---|---|---|---|
 | mai 26 | 16 000 € | - | - |
-| juin 26 | 16 500 € | +500 € | +3.1% |
-| juil. 26 | 17 346 € | +846 € | +5.1% |
+| juin 26 | 16 500 € | +500 € | +3,1 % |
+| juil. 26 | 17 346 € | +846 € | +5,1 % |
 "
 `;
 
@@ -198,29 +198,29 @@ exports[`the whole document, pinned (characterization) > every section together 
 | DEBTS | 0 € |
 | TAXES | 570 € |
 | NETWORTH | 2 000 € |
-| INVESTEDRATE | 100% |
-| SAVINGSRATE | +16.7% |
+| INVESTEDRATE | 100 % |
+| SAVINGSRATE | +16,7 % |
 | SALARY | 3 000 € |
 | MONTHLYSAVED | 500 € |
 | RUNWAY | 0 MONTHS |
 | SAVINGSAVAILABLE | 0 € |
 | MONTHLYEXPENSES | 1 500 € |
-| GOAL - Patrimoine | GOALFMT:500 000 €:0 |
+| GOAL - Patrimoine | GOALFMT:500 000 €:0 % |
 | GOALREMAINING - Patrimoine | 498 570 € |
 
 ## ALLOCATION
 
 | CATEGORY | VALUE | PCT |
 |---|---|---|
-| Investissements | 2 000 € | 100% |
+| Investissements | 2 000 € | 100 % |
 
 ## PERFORMANCE
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| CTO | 2 000 € | 100 € | +1 900 € | -570 € | +1900.0% |
+| CTO | 2 000 € | 100 € | +1 900 € | -570 € | +1 900,0 % |
 
-SUMMARYLINE:{"invested":"100 €","value":"2 000 €","gain":"+1 900 €","netGain":"+1 330 €","perf":"+1900.0","cagr":"CAGRSUFFIX:+220.5"}
+SUMMARYLINE:{"invested":"100 €","value":"2 000 €","gain":"+1 900 €","netGain":"+1 330 €","perf":"+1 900,0 %","cagr":"CAGRSUFFIX:+220,5 %"}
 
 ## PASSIVE
 
@@ -228,7 +228,7 @@ PASSIVELINE:{"annual":"7 €","monthly":"1 €","dividends":"10 €","interes
 
 | COLASSET | COLENVELOPE | COLYIELD | COLANNUALGROSS | COLANNUALNET | COLEXDIV |
 |---|---|---|---|---|---|
-| Apple | CTO | 0.50% | 10 € | 7 € | - |
+| Apple | CTO | 0,50 % | 10 € | 7 € | - |
 
 ## REALINCOME
 
@@ -242,20 +242,20 @@ PASSIVELINE:{"annual":"7 €","monthly":"1 €","dividends":"10 €","interes
 
 | INDICATOR | CAGR |
 |---|---|
-| YOURPORTFOLIO | **+220.5%** |
-| MSCIWORLD | +7.3% |
+| YOURPORTFOLIO | **+220,5 %** |
+| MSCIWORLD | +7,3 % |
 
 ## RADAR
 
 | INDICATOR | VALUE |
 |---|---|
-| SAFEVSRISKY | SAFE 0 € (0%) · RISKY 2 000 € (100%) |
+| SAFEVSRISKY | SAFE 0 € (0 %) · RISKY 2 000 € (100 %) |
 
 ## TOPASSETS
 
 | COLASSET | CATEGORY | COLVALUE | COLGAIN | COLTAX | PCT |
 |---|---|---|---|---|---|
-| CTO | Titres | 2 000 € | +1 900 € | -570 € | 100% |
+| CTO | Titres | 2 000 € | +1 900 € | -570 € | 100 % |
 "
 `;
 
@@ -266,12 +266,12 @@ exports[`the whole document, pinned (characterization) > section allocation on i
 
 | CATEGORY | VALUE | PCT |
 |---|---|---|
-| realEstate | 120 000 € | 73% |
-| savings | 18 000 € | 11% |
-| auto | 9 500 € | 6% |
-| crypto | 9 000 € | 5% |
-| Investissements | 5 538 € | 3% |
-| cash | 2 346 € | 1% |
+| realEstate | 120 000 € | 73 % |
+| savings | 18 000 € | 11 % |
+| auto | 9 500 € | 6 % |
+| crypto | 9 000 € | 5 % |
+| Investissements | 5 538 € | 3 % |
+| cash | 2 346 € | 1 % |
 "
 `;
 
@@ -282,10 +282,10 @@ exports[`the whole document, pinned (characterization) > section benchmark on it
 
 | INDICATOR | CAGR |
 |---|---|
-| YOURPORTFOLIO | **+10.1%** |
-| MSCIWORLD | +11.2% |
-| SP500 | +7.7% |
-| CAC40 | +5.4% |
+| YOURPORTFOLIO | **+10,1 %** |
+| MSCIWORLD | +11,2 % |
+| SP500 | +7,7 % |
+| CAC40 | +5,4 % |
 "
 `;
 
@@ -298,16 +298,16 @@ PASSIVELINE:{"annual":"279 €","monthly":"23 €","dividends":"36 €","inte
 
 > MISSINGRATES:1
 
-WEIGHTEDRATE:1.70
+WEIGHTEDRATE:1,70 %
 
 YEAREND:246 €
 
 | COLASSET | COLENVELOPE | COLYIELD | COLANNUALGROSS | COLANNUALNET | COLEXDIV |
 |---|---|---|---|---|---|
-| Ferrari | CTO | 0.71% | 6 € | 4 € | 22 avr. 2026 |
-| Apple | CTO | 0.44% | 2 € | 1 € | 10 août 2026 |
-| Meta | CTO | 0.39% | 3 € | 2 € | 14 déc. 2026 |
-| Air Liquide | CTO | 2.00% | 25 € | 17 € | - |
+| Ferrari | CTO | 0,71 % | 6 € | 4 € | 22 avr. 2026 |
+| Apple | CTO | 0,44 % | 2 € | 1 € | 10 août 2026 |
+| Meta | CTO | 0,39 % | 3 € | 2 € | 14 déc. 2026 |
+| Air Liquide | CTO | 2,00 % | 25 € | 17 € | - |
 "
 `;
 
@@ -319,12 +319,12 @@ exports[`the whole document, pinned (characterization) > section financement on 
 | INDICATOR | VALUE |
 |---|---|
 | TOTALLIABILITIES | 332 337 € |
-| DEBTRATIO | 97% |
+| DEBTRATIO | 97 % |
 | EQUITY | 12 047 € |
 
 | COLASSET | COLVALUE | COLLOAN | COLEQUITY | COLLTV |
 |---|---|---|---|---|
-| Appartement | 300 000 € | 180 000 € | 120 000 € | 60% |
+| Appartement | 300 000 € | 180 000 € | 120 000 € | 60 % |
 "
 `;
 
@@ -336,8 +336,8 @@ exports[`the whole document, pinned (characterization) > section historique on i
 | COLMONTH | COLNETWORTH | COLCHANGE | PCT |
 |---|---|---|---|
 | mai 26 | 16 000 € | - | - |
-| juin 26 | 16 500 € | +500 € | +3.1% |
-| juil. 26 | 17 346 € | +846 € | +5.1% |
+| juin 26 | 16 500 € | +500 € | +3,1 % |
+| juil. 26 | 17 346 € | +846 € | +5,1 % |
 "
 `;
 
@@ -348,10 +348,10 @@ exports[`the whole document, pinned (characterization) > section performance on 
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| PEA | 2 235 € | 1 000 € | +235 € | -44 € | +23.4% |
-| CTO | 3 304 € | 3 050 € | +254 € | -80 € | +8.3% |
+| PEA | 2 235 € | 1 000 € | +235 € | -44 € | +23,4 % |
+| CTO | 3 304 € | 3 050 € | +254 € | -80 € | +8,3 % |
 
-SUMMARYLINE:{"invested":"4 050 €","value":"5 538 €","gain":"+488 €","netGain":"+365 €","perf":"+12.0","cagr":"CAGRSUFFIX:+10.1"}
+SUMMARYLINE:{"invested":"4 050 €","value":"5 538 €","gain":"+488 €","netGain":"+365 €","perf":"+12,0 %","cagr":"CAGRSUFFIX:+10,1 %"}
 "
 `;
 
@@ -362,7 +362,7 @@ exports[`the whole document, pinned (characterization) > section radar on its ow
 
 | INDICATOR | VALUE |
 |---|---|
-| SAFEVSRISKY | SAFE 20 346 € (58%) · RISKY 14 538 € (42%) |
+| SAFEVSRISKY | SAFE 20 346 € (58 %) · RISKY 14 538 € (42 %) |
 "
 `;
 
@@ -378,16 +378,16 @@ exports[`the whole document, pinned (characterization) > section resume on its o
 | DEBTS | 332 337 € |
 | TAXES | 1 379 € |
 | NETWORTH | 12 047 € |
-| INVESTEDRATE | 4% |
-| SAVINGSRATE | +28.1% |
+| INVESTEDRATE | 4 % |
+| SAVINGSRATE | +28,1 % |
 | SALARY | 3 200 € |
 | MONTHLYSAVED | 900 € |
 | RUNWAY | 9 MONTHS |
 | SAVINGSAVAILABLE | 18 000 € |
 | MONTHLYEXPENSES | 1 850 € |
-| GOAL - Patrimoine | GOALFMT:500 000 €:2 |
+| GOAL - Patrimoine | GOALFMT:500 000 €:2 % |
 | GOALREMAINING - Patrimoine | 489 333 € |
-| GOAL - Fonds d'urgence | GOALFMT:20 000 €:75 |
+| GOAL - Fonds d'urgence | GOALFMT:20 000 €:75 % |
 | GOALREMAINING - Fonds d'urgence | 5 000 € |
 "
 `;
@@ -412,13 +412,13 @@ exports[`the whole document, pinned (characterization) > section topActifs on it
 
 | COLASSET | CATEGORY | COLVALUE | COLGAIN | COLTAX | PCT |
 |---|---|---|---|---|---|
-| Appartement | REAL_ESTATE | 300 000 € | - | - | 87% |
-| Livret A | SAVINGS | 15 000 € | - | - | 4% |
-| Voiture | AUTOMOBILE | 9 500 € | - | - | 3% |
-| Crypto | CRYPTO | 9 000 € | +4 000 € | -1 256 € | 3% |
-| CTO | Titres | 3 304 € | +254 € | -80 € | 1% |
-| LEP | SAVINGS | 3 000 € | - | - | 1% |
-| Courant | CHECKING | 2 346 € | - | - | 1% |
-| PEA | Titres | 2 235 € | +235 € | -44 € | 1% |
+| Appartement | REAL_ESTATE | 300 000 € | - | - | 87 % |
+| Livret A | SAVINGS | 15 000 € | - | - | 4 % |
+| Voiture | AUTOMOBILE | 9 500 € | - | - | 3 % |
+| Crypto | CRYPTO | 9 000 € | +4 000 € | -1 256 € | 3 % |
+| CTO | Titres | 3 304 € | +254 € | -80 € | 1 % |
+| LEP | SAVINGS | 3 000 € | - | - | 1 % |
+| Courant | CHECKING | 2 346 € | - | - | 1 % |
+| PEA | Titres | 2 235 € | +235 € | -44 € | 1 % |
 "
 `;

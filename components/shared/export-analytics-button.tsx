@@ -126,7 +126,7 @@ export function ExportAnalyticsButton({ data }: Readonly<{ data: AnalyticsExport
       passiveYearEndEstimate: (params) => t("mdPassiveYearEndEstimate", params),
     };
     const md = buildMarkdown(data, selected, s, intlLocale);
-    downloadFile(md, "analytique");
+    downloadFile(md, t("mdFileName"));
     setOpen(false);
   }
 
