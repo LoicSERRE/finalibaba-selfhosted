@@ -8,6 +8,20 @@
 
 export const TRANSACTIONS_PAGE_SIZE = 50;
 
+/**
+ * Upper bound on one bulk edit (v2.14). The ledger only ever selects within a
+ * page, so this is a guard on the Server Action - a public endpoint - rather
+ * than a limit anyone meets in the UI.
+ */
+export const BULK_EDIT_MAX = 200;
+
+/** A caller-supplied id list, deduplicated, or null if it is not one. */
+export function parseBulkIds(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > BULK_EDIT_MAX) return null;
+  if (!value.every((id) => typeof id === "string" && id.length > 0 && id.length <= 64)) return null;
+  return [...new Set(value as string[])];
+}
+
 // categoryId uses this sentinel for "uncategorized only", since Prisma's
 // own `categoryId: null` can't be expressed as a plain query-string value -
 // mirrors the same "uncategorized" concept already used in

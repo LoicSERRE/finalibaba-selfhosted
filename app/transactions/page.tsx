@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { TransactionCategoryCell } from "@/components/shared/transaction-category-cell";
 import { TransactionList, TransactionListItem } from "@/components/shared/transaction-list";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
+import { BulkSelectionProvider, BulkToolbar, RowSelectCheckbox } from "@/components/transactions/bulk-selection";
 import { localeToIntl } from "@/lib/utils/format";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
@@ -133,7 +134,12 @@ export default async function TransactionsPage({
         <p className="text-sm text-[var(--muted)]">{t("noResults")}</p>
       ) : (
         <>
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+          {/* Keyed on the query: a new page or filter starts with nothing
+              selected. Read-only (a granted portfolio) gets no selection. */}
+          <BulkSelectionProvider key={pageHref(filters.page)} pageIds={readOnly ? [] : transactions.map((tx) => tx.id)}>
+          {/* No overflow-hidden: it would stop the bulk toolbar sticking. */}
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl">
+            {!readOnly && <BulkToolbar pageIds={transactions.map((tx) => tx.id)} categories={categories} />}
             <TransactionList
               headers={{
                 date: td("tableHeaders.date"),
@@ -141,11 +147,13 @@ export default async function TransactionsPage({
                 label: td("tableHeaders.label"),
                 amount: td("tableHeaders.amount"),
                 category: td("tableHeaders.category"),
+                selectable: !readOnly,
               }}
             >
               {transactions.map((tx) => (
                 <TransactionListItem
                   key={tx.id}
+                  select={readOnly ? undefined : <RowSelectCheckbox id={tx.id} label={tx.label} />}
                   date={dateFormat.format(tx.date)}
                   account={tx.account.name}
                   label={tx.label}
@@ -165,6 +173,7 @@ export default async function TransactionsPage({
               ))}
             </TransactionList>
           </div>
+          </BulkSelectionProvider>
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between gap-3">

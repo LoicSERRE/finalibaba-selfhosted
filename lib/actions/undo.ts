@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getViewer, assertAccountWritable } from "@/lib/auth-context";
+import { getViewer, assertAccountWritable, baseAccountIds } from "@/lib/auth-context";
 import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
-import { revalidateCategory, revalidateIncome } from "@/lib/actions/revalidate";
+import { revalidateCategory, revalidateIncome, revalidateTransactions } from "@/lib/actions/revalidate";
 import { takeUndo } from "@/lib/services/undo-store";
 import {
   isRestoreConflict,
@@ -11,13 +11,16 @@ import {
   restoreGoal,
   restoreIncomeEvent,
   restoreRecurring,
-  type DeletionSnapshot,
+  restoreTransactionsCategory,
+  restoreTransactionsTransfer,
+  type UndoSnapshot,
 } from "@/lib/services/undo-deletion";
 
 export type UndoError = "undo_expired" | "undo_conflict";
 
 /**
- * Put back what a deletion took, from the token it returned (v2.13).
+ * Put back what a deletion (v2.13) or a ledger bulk edit (v2.14) changed,
+ * from the token it returned.
  *
  * Takes nothing but the token: the snapshot never left the server, and a
  * token only resolves for the user it was issued to. Account-scoped rows are
@@ -25,7 +28,7 @@ export type UndoError = "undo_expired" | "undo_conflict";
  */
 export async function undoDeletion(token: string): Promise<ActionResult<void, UndoError>> {
   const viewer = await getViewer();
-  const snapshot = typeof token === "string" ? (takeUndo(viewer.id, token) as DeletionSnapshot | null) : null;
+  const snapshot = typeof token === "string" ? (takeUndo(viewer.id, token) as UndoSnapshot | null) : null;
   if (!snapshot) return actionError("undo_expired");
 
   try {
@@ -48,6 +51,16 @@ export async function undoDeletion(token: string): Promise<ActionResult<void, Un
         await assertAccountWritable(viewer.id, snapshot.accountId);
         await restoreRecurring(snapshot);
         revalidatePath("/recurring");
+        break;
+      case "transactionsCategory": {
+        await restoreTransactionsCategory(snapshot, await baseAccountIds(viewer.id));
+        const categoryIds = [snapshot.assignedCategoryId, ...snapshot.previous.map((row) => row.categoryId)];
+        for (const accountId of snapshot.accountIds) revalidateTransactions(accountId, categoryIds);
+        break;
+      }
+      case "transactionsTransfer":
+        await restoreTransactionsTransfer(snapshot, await baseAccountIds(viewer.id));
+        for (const accountId of snapshot.accountIds) revalidateTransactions(accountId);
         break;
     }
   } catch (error) {

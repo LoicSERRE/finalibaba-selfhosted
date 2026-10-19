@@ -237,3 +237,10 @@ select option {
 [data-discreet] .recharts-pie-labels {
   filter: blur(0.4em);
 }
+
+/* Ledger bulk selection (v2.14): a checked row stays visibly picked. Keyed
+   on the row checkbox itself - `:has(:checked)` alone would also match the
+   category <select>'s selected <option>. */
+.tx-row:has(input[data-row-select]:checked) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}

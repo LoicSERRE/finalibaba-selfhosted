@@ -6,7 +6,7 @@ import { Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
-import { undoDeletion } from "@/lib/actions/undo";
+import { offerUndo } from "@/components/shared/offer-undo";
 import type { ActionResult } from "@/lib/domain/action-result";
 import { useTranslations } from "next-intl";
 
@@ -49,16 +49,6 @@ export function DeleteButton({
   const t = useTranslations("common");
   const resolvedLabel = label ?? t("delete");
 
-  async function undo(token: string) {
-    const result = await undoDeletion(token);
-    if (result.ok) {
-      toast({ message: t("restored") });
-      router.refresh();
-    } else {
-      toast({ tone: "error", message: t(result.error === "undo_conflict" ? "undoConflict" : "undoExpired") });
-    }
-  }
-
   const handleDelete = () => {
     startTransition(async () => {
       const result = await onDelete();
@@ -68,11 +58,7 @@ export function DeleteButton({
         toast({ tone: "error", message: t("deleteFailed") });
         return;
       }
-      const token = result.data.undoToken;
-      toast({
-        message: deletedMessage ?? t("deleted"),
-        action: { label: t("undo"), onClick: () => undo(token) },
-      });
+      offerUndo(deletedMessage ?? t("deleted"), result.data.undoToken, t, router.refresh);
     });
   };
 

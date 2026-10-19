@@ -34,6 +34,8 @@ const AMOUNT_COL = "8rem";
 // buttons at 44px each, with their gaps.
 const CATEGORY_COL = "15.5rem";
 const ACTION_COL = "3rem";
+// The bulk-selection checkbox on /transactions (v2.14).
+const SELECT_COL = "1.5rem";
 
 // A plain object type with per-field readonly, not `Readonly<{...}>`: a
 // top-level `type X = Readonly<{...}>` alias blinds lizard to every function
@@ -46,10 +48,13 @@ export type TransactionListHeaders = {
   readonly amount: string;
   readonly category: string;
   readonly actions?: readonly string[];
+  /** Rows carry a selection checkbox first (v2.14); the column has no heading. */
+  readonly selectable?: boolean;
 };
 
-function gridTemplate(showAccount: boolean, actionCount: number): string {
+function gridTemplate(showAccount: boolean, actionCount: number, selectable: boolean): string {
   return [
+    selectable ? SELECT_COL : null,
     DATE_COL,
     showAccount ? ACCOUNT_COL : null,
     "minmax(8rem, 1fr)",
@@ -67,7 +72,8 @@ export function TransactionList({
 }: Readonly<{ headers: TransactionListHeaders; children: React.ReactNode }>) {
   const showAccount = headers.account !== undefined;
   const actions = headers.actions ?? [];
-  const style = { "--tx-cols": gridTemplate(showAccount, actions.length) } as React.CSSProperties;
+  const selectable = headers.selectable === true;
+  const style = { "--tx-cols": gridTemplate(showAccount, actions.length, selectable) } as React.CSSProperties;
   const headerCell = "text-xs font-medium text-[var(--muted)] uppercase tracking-wider";
 
   return (
@@ -79,6 +85,7 @@ export function TransactionList({
         aria-hidden="true"
         className="hidden xl:grid xl:[grid-template-columns:var(--tx-cols)] gap-4 px-6 py-3 border-b border-[var(--border)]"
       >
+        {selectable && <span />}
         <span className={headerCell}>{headers.date}</span>
         {showAccount && <span className={headerCell}>{headers.account}</span>}
         <span className={headerCell}>{headers.label}</span>
@@ -111,6 +118,7 @@ export function TransactionListItem({
   amountCents,
   category,
   actions = [],
+  select,
 }: Readonly<{
   /** Already formatted for the viewer's locale. */
   date: string;
@@ -121,10 +129,14 @@ export function TransactionListItem({
   category: React.ReactNode;
   /** One node per action column, in header order; null leaves the cell empty. */
   actions?: React.ReactNode[];
+  /** The row's selection checkbox, when the list is `selectable`. */
+  select?: React.ReactNode;
 }>) {
   const meta = account ? `${date} · ${account}` : date;
-  return (
-    <li className="px-4 py-3 xl:px-6 xl:grid xl:[grid-template-columns:var(--tx-cols)] xl:items-center xl:gap-4 hover:bg-[var(--surface-elevated)] transition-colors">
+  // With a checkbox, a phone row is [checkbox | card] side by side; from xl
+  // the card wrapper dissolves (xl:contents) and every cell is a grid column.
+  const body = (
+    <>
       <span className="hidden xl:block text-sm text-[var(--muted)] tabular-nums whitespace-nowrap">{date}</span>
       {account !== undefined && (
         <span className="hidden xl:block text-sm text-[var(--muted)] truncate" title={account}>
@@ -157,6 +169,14 @@ export function TransactionListItem({
           </div>
         ))}
       </div>
+    </>
+  );
+  const row = "tx-row last:rounded-b-xl px-4 py-3 xl:px-6 xl:grid xl:[grid-template-columns:var(--tx-cols)] xl:items-center xl:gap-4 hover:bg-[var(--surface-elevated)] transition-colors";
+  if (select === undefined) return <li className={row}>{body}</li>;
+  return (
+    <li className={`${row} flex items-start gap-3`}>
+      <div className="shrink-0 flex xl:justify-center">{select}</div>
+      <div className="flex-1 min-w-0 xl:contents">{body}</div>
     </li>
   );
 }
