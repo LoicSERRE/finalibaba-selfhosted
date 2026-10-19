@@ -6,7 +6,7 @@
  * buildMarkdown at 30 cyclomatic complexity, and it was sitting inside a
  * component where nothing could test it.
  */
-import { fmt, sign } from "@/lib/utils/markdown-export";
+import { fmt, nameMentions, sign } from "@/lib/utils/markdown-export";
 import type {
   FiatAccountExport,
   InvestAccountExport,
@@ -59,6 +59,16 @@ export type ExportStrings = {
 
 // ── Markdown generation ───────────────────────────────────────────────────────
 
+// "<institution> · <qualifiers> - <name>", dropping any qualifier the name
+// already says: a Trade Republic account is named "PEA" with subtype "PEA".
+function accountHeading(institution: string, qualifiers: Array<string | null>, name: string): string {
+  const parts = [institution];
+  for (const q of qualifiers) {
+    if (q && !nameMentions(name, q)) parts.push(q);
+  }
+  return `### ${parts.join(" · ")} - ${name}`;
+}
+
 // Single-pass markdown builder covering every account-type section - see
 // __tests__/export-completeness.test.ts, which specifically depends on every
 // field being wired into this one function so a completeness check can find
@@ -82,9 +92,7 @@ export function buildMarkdown(
   if (fiat.length > 0) {
     lines.push(`## ${s.cash}`, "");
     for (const a of fiat) {
-      lines.push(
-        `### ${a.institutionName} · ${s.typeLabels[a.type] ?? a.type} - ${a.name}`
-      );
+      lines.push(accountHeading(a.institutionName, [s.typeLabels[a.type] ?? a.type], a.name));
       lines.push(`- **${s.balance}** : ${fmt(a.balanceCents)}`);
       if (a.deltaCents !== 0) {
         lines.push(`- **${s.delta}** : ${sign(a.deltaCents)}${fmt(a.deltaCents)}`);
@@ -96,12 +104,8 @@ export function buildMarkdown(
   if (invest.length > 0) {
     lines.push(`## ${s.investments}`, "");
     for (const a of invest) {
-      const subtypeSuffix = a.investmentSubtype ? ` · ${a.investmentSubtype}` : "";
-      const typeLabel =
-        a.type === "CRYPTO"
-          ? s.typeLabels["CRYPTO"] ?? a.type
-          : `${s.typeLabels[a.type] ?? a.type}${subtypeSuffix}`;
-      lines.push(`### ${a.institutionName} · ${typeLabel} - ${a.name}`);
+      const subtype = a.type === "CRYPTO" ? null : a.investmentSubtype;
+      lines.push(accountHeading(a.institutionName, [s.typeLabels[a.type] ?? a.type, subtype], a.name));
 
       const parts: string[] = [`**${s.total}** : ${fmt(a.totalCents)}`];
       if (a.gainCents !== null) {

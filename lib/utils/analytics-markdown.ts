@@ -6,7 +6,7 @@
  * Those types moved to lib/domain/analytics-export.ts, which returns them -
  * lib/ was importing them back out of a component, the wrong way round.
  */
-import { fmt, sign } from "@/lib/utils/markdown-export";
+import { fmt, nameMentions, sign } from "@/lib/utils/markdown-export";
 import type { AnalyticsExportData } from "@/lib/domain/analytics-export";
 
 // ── Sections ──────────────────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ const renderAllocation: Renderer = (data, s) => {
 };
 
 function labelWithSubtype(name: string, subtype: string | null): string {
-  return subtype ? `${name} (${subtype})` : name;
+  return subtype && !nameMentions(name, subtype) ? `${name} (${subtype})` : name;
 }
 
 function performanceSummaryLine(data: AnalyticsExportData, s: AnalyticsExportStrings): string {
