@@ -49,10 +49,16 @@ SKIP_DIRS = ("app/generated/", "node_modules/", ".next/")
 
 
 def tracked_sources() -> list[Path]:
+    # --others --exclude-standard: new files that are not staged yet count
+    # too. Tracked-only made a local run read "57, same as main" while the
+    # commit about to be pushed carried two new blind spots that CI then
+    # reported as 59 (v2.13). CI's checkout has no untracked files, so this
+    # changes nothing there.
     out = subprocess.run(
-        ["git", "ls-files", "*.ts", "*.tsx"], capture_output=True, text=True, check=True
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.ts", "*.tsx"],
+        capture_output=True, text=True, check=True,
     ).stdout.split()
-    return [Path(p) for p in out if not p.startswith(SKIP_DIRS)]
+    return [Path(p) for p in sorted(set(out)) if not p.startswith(SKIP_DIRS)]
 
 
 def measured_names(path: Path) -> set[str]:
