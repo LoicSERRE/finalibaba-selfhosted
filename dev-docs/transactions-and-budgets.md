@@ -36,6 +36,14 @@ Shared design across both importers:
 - Month-stepping (`addMonthsClamped` in `lib/domain/recurring.ts`) clamps to the last day of shorter months (anchor on the 31st → lands on Feb 28/29) - `lib/domain/loan.ts`'s `endDate.setMonth(...)` pattern does NOT do this (native `Date` overflows instead of clamping, e.g. Jan 31 + 1 month rolls to Mar 3) and must not be copied here.
 - Dates use the noon-UTC convention (`${dateStr}T12:00:00.000Z`) throughout, same as CSV import - `anchorDate` must line up day-for-day against real `Transaction.date` values for missed-payment matching to work.
 
+### Coming up on the dashboard (v2.16)
+
+The dashboard's "À venir · 30 jours" card (`components/dashboard/upcoming-card.tsx`) lists the next six expected occurrences of the active recurring series, soonest first, with the money in and out over the window and a link to `/recurring`; `upcomingOccurrences` (`lib/domain/upcoming.ts`) reuses `getOccurrencesInRange`, the same projection the Récurrent page's own list uses, so the two never disagree.
+
+- **Recurring series only, by decision.** A loan instalment is almost always already a recurring debit on the current account, with nothing reliably linking the two, so adding loan schedules would show the same payment twice. Dividends are out because the only date available is the ex-dividend date - not when the money arrives - and fetching it would put an external call on the dashboard.
+- **Not on share links**: `DashboardView` takes the card as a slot that only `app/page.tsx` fills; it is spending detail a share link was never scoped to show (checked in a browser against a real share link).
+- Amounts carry the `amount` class (the discretion scan covers the card: 2296 amounts, 0 readable).
+
 ### Page order, and dismissing a recurring suggestion
 
 `v2.4`, from a report about `/recurring` that turned out to contain a real bug alongside the layout complaint.

@@ -40,6 +40,7 @@ export function DashboardView({
   allocationHistory,
   institutions,
   interactive = true,
+  upcoming = null,
 }: Readonly<{
   t: T;
   netWorth: bigint;
@@ -54,6 +55,12 @@ export function DashboardView({
   allocationHistory: DashboardAllocationHistoryPoint[];
   institutions: DashboardInstitutionGroup[];
   interactive?: boolean;
+  /**
+   * The month ahead (v2.16), already rendered: the dashboard passes an
+   * UpcomingCard, a share link nothing. A slot rather than data keeps this
+   * component - at lizard's CCN limit - free of another branch.
+   */
+  upcoming?: React.ReactNode;
 }>) {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -127,6 +134,8 @@ export function DashboardView({
           </div>
         </div>
       </div>
+
+      {upcoming}
 
       {/* Charts */}
       {hasData && (
