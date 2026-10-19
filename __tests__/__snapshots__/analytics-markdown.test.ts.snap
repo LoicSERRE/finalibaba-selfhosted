@@ -26,7 +26,7 @@ exports[`the whole document, pinned (characterization) > every section together 
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| CTO (CTO) | 2 000 € | 100 € | +1 900 € | -570 € | +1900.0% |
+| CTO | 2 000 € | 100 € | +1 900 € | -570 € | +1900.0% |
 
 SUMMARYLINE:{"invested":"100 €","value":"2 000 €","gain":"+1 900 €","netGain":"+1 330 €","perf":"+1900.0","cagr":"CAGRSUFFIX:+220.5"}
 
@@ -63,7 +63,7 @@ PASSIVELINE:{"annual":"7 €","monthly":"1 €","dividends":"10 €","interes
 
 | COLASSET | CATEGORY | COLVALUE | COLGAIN | COLTAX | PCT |
 |---|---|---|---|---|---|
-| CTO (CTO) | Titres | 2 000 € | +1 900 € | -570 € | 100% |
+| CTO | Titres | 2 000 € | +1 900 € | -570 € | 100% |
 "
 `;
 
@@ -106,8 +106,8 @@ exports[`the whole document, pinned (characterization) > every section together 
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| PEA (PEA) | 2 235 € | 1 000 € | +235 € | -44 € | +23.4% |
-| CTO (CTO) | 3 304 € | 3 050 € | +254 € | -80 € | +8.3% |
+| PEA | 2 235 € | 1 000 € | +235 € | -44 € | +23.4% |
+| CTO | 3 304 € | 3 050 € | +254 € | -80 € | +8.3% |
 
 SUMMARYLINE:{"invested":"4 050 €","value":"5 538 €","gain":"+488 €","netGain":"+365 €","perf":"+12.0","cagr":"CAGRSUFFIX:+10.1"}
 
@@ -159,10 +159,10 @@ YEAREND:246 €
 | Livret A | SAVINGS | 15 000 € | - | - | 4% |
 | Voiture | AUTOMOBILE | 9 500 € | - | - | 3% |
 | Crypto | CRYPTO | 9 000 € | +4 000 € | -1 256 € | 3% |
-| CTO (CTO) | Titres | 3 304 € | +254 € | -80 € | 1% |
+| CTO | Titres | 3 304 € | +254 € | -80 € | 1% |
 | LEP | SAVINGS | 3 000 € | - | - | 1% |
 | Courant | CHECKING | 2 346 € | - | - | 1% |
-| PEA (PEA) | Titres | 2 235 € | +235 € | -44 € | 1% |
+| PEA | Titres | 2 235 € | +235 € | -44 € | 1% |
 
 ## FINANCING
 
@@ -218,7 +218,7 @@ exports[`the whole document, pinned (characterization) > every section together 
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| CTO (CTO) | 2 000 € | 100 € | +1 900 € | -570 € | +1900.0% |
+| CTO | 2 000 € | 100 € | +1 900 € | -570 € | +1900.0% |
 
 SUMMARYLINE:{"invested":"100 €","value":"2 000 €","gain":"+1 900 €","netGain":"+1 330 €","perf":"+1900.0","cagr":"CAGRSUFFIX:+220.5"}
 
@@ -255,7 +255,7 @@ PASSIVELINE:{"annual":"7 €","monthly":"1 €","dividends":"10 €","interes
 
 | COLASSET | CATEGORY | COLVALUE | COLGAIN | COLTAX | PCT |
 |---|---|---|---|---|---|
-| CTO (CTO) | Titres | 2 000 € | +1 900 € | -570 € | 100% |
+| CTO | Titres | 2 000 € | +1 900 € | -570 € | 100% |
 "
 `;
 
@@ -348,8 +348,8 @@ exports[`the whole document, pinned (characterization) > section performance on 
 
 | COLACCOUNT | COLVALUE | COLINVESTED | COLGROSSGAIN | COLTAX | COLPERF |
 |---|---|---|---|---|---|
-| PEA (PEA) | 2 235 € | 1 000 € | +235 € | -44 € | +23.4% |
-| CTO (CTO) | 3 304 € | 3 050 € | +254 € | -80 € | +8.3% |
+| PEA | 2 235 € | 1 000 € | +235 € | -44 € | +23.4% |
+| CTO | 3 304 € | 3 050 € | +254 € | -80 € | +8.3% |
 
 SUMMARYLINE:{"invested":"4 050 €","value":"5 538 €","gain":"+488 €","netGain":"+365 €","perf":"+12.0","cagr":"CAGRSUFFIX:+10.1"}
 "
@@ -416,9 +416,9 @@ exports[`the whole document, pinned (characterization) > section topActifs on it
 | Livret A | SAVINGS | 15 000 € | - | - | 4% |
 | Voiture | AUTOMOBILE | 9 500 € | - | - | 3% |
 | Crypto | CRYPTO | 9 000 € | +4 000 € | -1 256 € | 3% |
-| CTO (CTO) | Titres | 3 304 € | +254 € | -80 € | 1% |
+| CTO | Titres | 3 304 € | +254 € | -80 € | 1% |
 | LEP | SAVINGS | 3 000 € | - | - | 1% |
 | Courant | CHECKING | 2 346 € | - | - | 1% |
-| PEA (PEA) | Titres | 2 235 € | +235 € | -44 € | 1% |
+| PEA | Titres | 2 235 € | +235 € | -44 € | 1% |
 "
 `;

@@ -168,12 +168,28 @@ describe("labels and fallbacks", () => {
   });
 
   it("appends the wrapper subtype for securities but never for crypto", () => {
-    expect(build({ invest: [INVEST] })).toContain("Titres · PEA");
+    expect(build({ invest: [{ ...INVEST, name: "Mon portefeuille" }] })).toContain(
+      "### Bourso · Titres · PEA - Mon portefeuille"
+    );
     const crypto = build({
-      invest: [{ ...INVEST, type: "CRYPTO", investmentSubtype: "PEA" }],
+      invest: [{ ...INVEST, name: "Wallet", type: "CRYPTO", investmentSubtype: "PEA" }],
     });
-    expect(crypto).toContain("Crypto");
-    expect(crypto).not.toContain("Crypto · PEA");
+    expect(crypto).toContain("### Bourso · Crypto - Wallet");
+  });
+
+  // The Trade Republic sync names its accounts "PEA", "CTO" and "Crypto" -
+  // the very qualifiers the heading appends - which printed "PEA - PEA".
+  it("does not repeat a type or subtype the account name already says", () => {
+    expect(build({ invest: [INVEST] })).toContain("### Bourso · Titres - PEA\n");
+    expect(build({ invest: [{ ...INVEST, name: "Mon pea" }] })).toContain("### Bourso · Titres - Mon pea\n");
+    const crypto = build({ invest: [{ ...INVEST, name: "Crypto", type: "CRYPTO", investmentSubtype: null }] });
+    expect(crypto).toContain("### Bourso - Crypto\n");
+    expect(build({ fiat: [{ ...FIAT, name: "Compte courant" }] })).toContain("### LCL - Compte courant\n");
+  });
+
+  it("only drops a qualifier the name says as a whole word", () => {
+    // "PEA" inside "PEAGE" is not the wrapper.
+    expect(build({ invest: [{ ...INVEST, name: "PEAGE" }] })).toContain("### Bourso · Titres · PEA - PEAGE\n");
   });
 });
 

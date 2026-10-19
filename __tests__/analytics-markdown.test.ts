@@ -148,6 +148,31 @@ describe("a selected section with nothing to say prints nothing", () => {
   });
 });
 
+// The Trade Republic sync names its accounts "PEA" / "CTO" after the subtype
+// the export appends, which printed "PEA (PEA)" in two tables.
+describe("an account name is never followed by the subtype it already says", () => {
+  const rowsOf = (md: string) => md.split("\n").filter((l) => l.startsWith("| "));
+
+  it("drops the subtype suffix when the name is the subtype", () => {
+    const base = payload();
+    const data = {
+      ...base,
+      investPerfRows: [{ ...base.investPerfRows[0], name: "PEA", subtype: "PEA" }],
+      topAssets: [{ ...base.topAssets[0], name: "Mon pea", subtype: "PEA" }],
+    };
+    const md = build(["performance", "topActifs"], data);
+    expect(rowsOf(md).some((r) => r.startsWith("| PEA | "))).toBe(true);
+    expect(rowsOf(md).some((r) => r.startsWith("| Mon pea | "))).toBe(true);
+    expect(md).not.toContain("(PEA)");
+  });
+
+  it("keeps it when the name does not say which wrapper the account is", () => {
+    const base = payload();
+    const data = { ...base, investPerfRows: [{ ...base.investPerfRows[0], name: "Bourso", subtype: "PEA" }] };
+    expect(build(["performance"], data)).toContain("| Bourso (PEA) | ");
+  });
+});
+
 describe("an absent value is never rendered as zero", () => {
   it("prints a dash for a top asset whose gain and tax are unknown", () => {
     const base = payload();
