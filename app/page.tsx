@@ -8,6 +8,8 @@ import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { computeDashboard } from "@/lib/domain/dashboard";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { getTranslations, getLocale } from "next-intl/server";
+import { upcomingOccurrences } from "@/lib/domain/upcoming";
+import { UpcomingCard } from "@/components/dashboard/upcoming-card";
 
 export default async function DashboardPage() {
   // Every query on this page is scoped to the accounts this viewer may see
@@ -32,6 +34,11 @@ export default async function DashboardPage() {
     getTranslations(),
     getLocale(),
   ]);
+  const series = await prisma.recurringTransaction.findMany({
+    where: { accountId: { in: accountIds }, active: true, dismissedAt: null },
+    select: { id: true, label: true, amountCents: true, amountVaries: true, frequency: true, intervalCount: true, anchorDate: true },
+  });
+  const upcoming = upcomingOccurrences(series, new Date());
 
   const {
     hasAccounts,
@@ -77,6 +84,7 @@ export default async function DashboardPage() {
       allocationSlices={allocationSlices}
       allocationHistory={allocationHistory}
       institutions={institutions}
+      upcoming={<UpcomingCard t={t} upcoming={upcoming} intlLocale={localeToIntl(locale)} />}
       // The per-account links into /accounts/[id] stay live for a granted
       // portfolio - that page is scoped by the same view context and renders
       // read-only too. interactive=false is for the anonymous /shared/[token]

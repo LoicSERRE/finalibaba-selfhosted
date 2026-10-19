@@ -128,7 +128,16 @@
     "emptyStateIntro": "Commencez par ajouter vos institutions dans",
     "emptyStateSettings": "Paramètres",
     "emptyStateConnector": ", puis vos comptes dans",
-    "emptyStateAccounts": "Comptes."
+    "emptyStateAccounts": "Comptes.",
+    "upcoming": {
+      "title": "À venir · {days} jours",
+      "seeAll": "Tout voir",
+      "empty": "Aucune échéance prévue dans les 30 prochains jours.",
+      "add": "Ajouter une transaction récurrente",
+      "in": "Entrées",
+      "out": "Sorties",
+      "more": "et {count} autre(s)"
+    }
   },
   "accounts": {
     "title": "Comptes",
