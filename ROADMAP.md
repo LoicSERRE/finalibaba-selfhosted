@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.13.0**
+Current release: **v2.14.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -14,14 +14,11 @@ Before tagging a `vX.Y`, run the release-boundary health audit in `CLAUDE.md`.
 
 Scheduled, in this order. Each step is small enough to ship on its own, and the order is chosen so later steps build on earlier ones: toasts before bulk actions (a bulk change needs an undo), notes and tags before the CSV export and the command palette (both should carry them), onboarding last (it points at everything above).
 
-1. **v2.14 - Bulk actions in the ledger.** Multi-select on `/transactions` to set a category or flag/unflag an internal transfer; `bulkAssignCategory` already exists but only backs the budgets' uncategorized card.
-2. **v2.14 - Notes and tags on transactions.** `Transaction` has no free-text field: a note ("remboursement", "frais déductible") and user tags, both filterable in the ledger. Schema change.
-3. **v2.14 - CSV export of the filtered ledger.** Same filters as the URL, including notes and tags; today CSV is import-only and exports are Markdown or the full JSON dump.
-4. **v2.15 - Command palette (Ctrl+K) and keyboard shortcuts.** Jump to a page, find an account or a transaction (label, note, tag), trigger a sync, toggle discretion mode; the app has no keyboard shortcut today.
-5. **v2.16 - Upcoming payments on the dashboard.** The month ahead in one list: recurring debits and credits, loan instalments, expected dividends (the dividend calendar already exists on `/analytics`).
-6. **v2.16 - Money-flow diagram.** A Sankey of income → spending categories → savings for a period, on `/budgets` or `/analytics`.
-7. **v2.17 - First-run checklist.** Replaces the bare dashboard empty state with guided steps: add an account, connect a bank, set the tax profile, set a goal - each ticking itself off from real data.
-8. **Later - Configurable base currency.** Everything is converted to and stored as EUR, which shuts out non-euro users of the public edition. The largest item here (every `*Cents` aggregate, FX history, tax presets); needs a design pass before it gets a version number.
+1. **v2.15 - Command palette (Ctrl+K) and keyboard shortcuts.** Jump to a page, find an account or a transaction (label, note, tag), trigger a sync, toggle discretion mode; the app has no keyboard shortcut today.
+2. **v2.16 - Upcoming payments on the dashboard.** The month ahead in one list: recurring debits and credits, loan instalments, expected dividends (the dividend calendar already exists on `/analytics`).
+3. **v2.16 - Money-flow diagram.** A Sankey of income → spending categories → savings for a period, on `/budgets` or `/analytics`.
+4. **v2.17 - First-run checklist.** Replaces the bare dashboard empty state with guided steps: add an account, connect a bank, set the tax profile, set a goal - each ticking itself off from real data.
+5. **Later - Configurable base currency.** Everything is converted to and stored as EUR, which shuts out non-euro users of the public edition. The largest item here (every `*Cents` aggregate, FX history, tax presets); needs a design pass before it gets a version number.
 
 ## Next
 
@@ -39,6 +36,16 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.14.0 - A ledger you can work in
+
+- **Bulk actions on `/transactions`**: per-row checkboxes, "select the page", a toolbar that sticks to the top of the list - one category for the selection, or mark it as internal transfers; undoable. `bulkCategorizeTransactions` leaves split transactions alone (unlike the budgets' `bulkAssignCategory`, which replaces them on purpose); undo only touches rows still as the edit left them, on accounts still writable.
+- **Notes and tags**: `Transaction.note` / `Transaction.tags` (GIN-indexed), one normalization in `lib/domain/transaction-notes.ts`; tags link to the filtered ledger, a tag filter, search reads notes. In the my-data export; deliberately not in the REST API v1 or share links. Never written by a sync.
+- **CSV export of the filtered ledger** at `/api/export/transactions` - not under the auth-exempt `/api/transactions/` - scoped to `baseAccountIds`, dialect per language, formula injection defused, audited.
+- **Every `sticky` under `<main>` had never stuck** (offline banner, Settings tab menu): `<main>`'s `overflow-y-auto` scrolled nothing but captured them. Now `min-w-0`, guarded by a test.
+- Release audit in `dev-docs/release-audit.md`: lizard lost functions three more ways this cycle (all undone); the rule is now one component per file.
 
 ---
 
