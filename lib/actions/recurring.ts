@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
+import { rememberUndo } from "@/lib/services/undo-store";
+import { actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { RecurringFrequency } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { parseIntervalCount } from "@/lib/domain/recurring";
@@ -115,13 +117,21 @@ export async function updateRecurringTransaction(id: string, formData: FormData)
  *
  * Restorable from the "hidden" section, so this is not a one-way door.
  */
-export async function deleteRecurringTransaction(id: string) {
+/** Undoable for a minute: the token goes to undoDeletion (lib/actions/undo.ts). */
+export async function deleteRecurringTransaction(id: string): Promise<ActionResult<{ undoToken: string }>> {
   await assertRecurringWritable(id);
+  const viewer = await getViewer();
+  // Read before writing: undo restores the exact prior state, paused or not.
+  const prior = await prisma.recurringTransaction.findUniqueOrThrow({
+    where: { id },
+    select: { accountId: true, active: true, dismissedAt: true },
+  });
   await prisma.recurringTransaction.update({
     where: { id },
     data: { active: false, dismissedAt: new Date() },
   });
   revalidateAll();
+  return actionOk({ undoToken: rememberUndo(viewer.id, { kind: "recurring" as const, id, ...prior }) });
 }
 
 /** Bring a dismissed pattern back as a paused template the user can resume. */

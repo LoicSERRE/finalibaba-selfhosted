@@ -3,6 +3,8 @@
 import { revalidateIncome } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
+import { rememberUndo } from "@/lib/services/undo-store";
+import { actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { IncomeType } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
@@ -101,7 +103,8 @@ export async function updateIncomeEvent(id: string, formData: FormData) {
   revalidateIncome(accountId);
 }
 
-export async function deleteIncomeEvent(id: string) {
+/** Undoable for a minute: the token goes to undoDeletion (lib/actions/undo.ts). */
+export async function deleteIncomeEvent(id: string): Promise<ActionResult<{ undoToken: string }>> {
   // The only income action that doesn't route through
   // assertIncomeEventEligible (there's no account/type pair to validate),
   // so it carries its own ownership check.
@@ -110,8 +113,9 @@ export async function deleteIncomeEvent(id: string) {
   const viewer = await getViewer();
   await assertAccountWritable(viewer.id, event.accountId);
 
-  await prisma.incomeEvent.delete({ where: { id } });
+  const deleted = await prisma.incomeEvent.delete({ where: { id } });
   revalidateIncome(event.accountId);
+  return actionOk({ undoToken: rememberUndo(viewer.id, { kind: "incomeEvent" as const, event: deleted }) });
 }
 
 // Creates an IncomeEvent from an existing Transaction rather than making the

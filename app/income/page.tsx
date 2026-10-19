@@ -235,7 +235,7 @@ export default async function IncomePage({
                       }}
                       accounts={accounts}
                     />
-                    <DeleteButton iconOnly label={tc("delete")} description={tc("irreversible")} onDelete={deleteIncomeEvent.bind(null, e.id)} />
+                    <DeleteButton iconOnly undoable label={tc("delete")} onDelete={deleteIncomeEvent.bind(null, e.id)} />
                   </div>
                 </div>
                 <p className="text-sm tabular-nums font-medium">

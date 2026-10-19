@@ -26,7 +26,16 @@
     "notFoundTitle": "Page not found",
     "backToDashboard": "Back to dashboard",
     "unexpectedError": "An unexpected error occurred.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "deleted": "Deleted",
+    "deletedNamed": "Deleted: {name}",
+    "undo": "Undo",
+    "restored": "Restored",
+    "undoExpired": "Too late to undo: the deletion is final.",
+    "undoConflict": "Could not restore: something with the same name already exists, or what it depended on was deleted in the meantime.",
+    "deleteFailed": "Deletion failed.",
+    "dismiss": "Dismiss",
+    "notifications": "Notifications"
   },
   "nav": {
     "dashboard": "Dashboard",
