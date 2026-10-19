@@ -14,6 +14,8 @@ import { normalizeLabel } from "@/lib/domain/recurring";
 import { monthsBetween, computeRolloverCarryInCents, mergeCentsMaps } from "@/lib/domain/budgets";
 import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
+import { moneyFlowFromMaps } from "@/lib/domain/money-flow";
+import { MoneyFlowChart } from "@/components/budgets/money-flow-chart";
 
 // "YYYY-MM" - same simple, unvalidated-beyond-shape convention as
 // /tax-report's own ?year= param. An invalid or out-of-range value falls
@@ -161,6 +163,17 @@ export default async function BudgetsPage({
   const totalExpenseCents = [...spendMap.values()].reduce((a, b) => a + b, 0);
   const resteAVivreCents = totalIncomeCents - totalExpenseCents;
 
+  // The same two maps, drawn as a flow (v2.16): the diagram and the figures
+  // above it are the same numbers by construction.
+  const moneyFlow = moneyFlowFromMaps(incomeMap, spendMap, categories, {
+    income: t("flow.income"),
+    savings: t("flow.savings"),
+    drawn: t("flow.drawn"),
+    other: t("flow.other"),
+    uncategorizedIncome: t("flow.uncategorizedIncome"),
+    uncategorizedSpend: t("flow.uncategorizedSpend"),
+  });
+
   const groupsByLabel = new Map<string, { label: string; totalCents: number; ids: string[] }>();
   for (const tx of uncategorizedTx) {
     const key = normalizeLabel(tx.label);
@@ -286,6 +299,8 @@ export default async function BudgetsPage({
               </p>
             </div>
           )}
+
+          <MoneyFlowChart flow={moneyFlow} />
 
           <div className="space-y-3">
             {expenseCategories.map((cat) => (

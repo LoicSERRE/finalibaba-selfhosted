@@ -183,6 +183,13 @@ Verified in a browser against a real database: a note plus "#vacances" (Enter) a
 
 Verified in a browser against a real database: the unfiltered file has exactly the 112 non-transfer rows the SQL count gives, the `q=carrefour` file exactly its 9; French and English headers and dialects; a label `=HYPERLINK("http://evil","x")` comes out as `'=HYPERLINK(...)`; note and tags present; three exports, three audit rows.
 
+### Money flow on /budgets (v2.16)
+
+"Flux du mois" draws the displayed month as a Sankey (`components/budgets/money-flow-chart.tsx`): income categories into one "Revenus" node, out to spending categories and "Épargne" for what is left - or, in a month that spent more than it earned, with "Pris sur l'épargne" flowing in so the middle node balances. It is built (`moneyFlowFromMaps`, `lib/domain/money-flow.ts`) from the page's own `incomeMap`/`spendMap`, so the diagram and the "reste à vivre" figures beside it are the same numbers: internal transfers excluded, splits included. More than eight categories on a side fold into "Autres", biggest kept.
+
+- The chart carries names only; **every amount is in the list under it**, which is the chart's text alternative and what discretion blurs. On a phone the chart scrolls inside its card (`ScrollRegion`), never the page.
+- Verified in a browser against a real database: the list's sources equal the page's income figure and its spending the expenses figure to the cent; in = out; an injected large expense makes "Pris sur l'épargne" exactly expenses - income and removes "Épargne"; an empty month shows no diagram; no sideways page scroll on a phone.
+
 ### Budget rollover
 
 Opt-in per category (`Category.budgetRolloverEnabled`, off by default so every existing budget keeps today's behavior) - unused envelope carries into next month instead of resetting to zero, matching YNAB's "give every dollar a job" model. `lib/domain/budgets.ts` holds the pure math (`monthsBetween`, `computeRolloverCarryInCents`); the actual `Transaction` query and per-month bucketing stay in `app/budgets/page.tsx`, same lib/domain-has-no-DB-calls split as `lib/domain/transactions-ledger.ts`.
