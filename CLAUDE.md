@@ -74,7 +74,7 @@ SEED_MULTIUSER_PASSWORD=<8+ chars> pnpm run db:seed:multiuser   # optional, addi
 
 Prisma: `pnpm run db:migrate -- --name <name>` (create + apply), `pnpm exec prisma generate` (after schema edits; also runs on `postinstall`), `db:seed` (reference institutions), `db:push`, `db:studio`. Never squash migrations - it breaks every existing install with P3018 (see `dev-docs/platform.md`).
 
-Production: `cp .env.example .env && docker compose up -d`. `pnpm run docker:dev` actually runs the default `docker-compose.yml`; `docker:prod`/`docker:prod:stop` are BROKEN (no `docker-compose.prod.yml` here).
+Production: `cp .env.example .env && docker compose up -d`. `pnpm run docker:dev` actually runs the default `docker-compose.yml`; `docker:prod`/`docker:prod:stop` are BROKEN (no `docker-compose.prod.yml` here). Isolated demo instance: `docker-compose.demo.yml` + `.env.demo.example` (usage in the file header).
 
 Python sync service (`sync/`):
 ```bash
@@ -108,9 +108,11 @@ At each version boundary also run the 7-point release audit in `dev-docs/release
 app/                  Next.js App Router pages and Server Actions - routing is tied to this
                       folder by framework convention, so it's the one place that can't be
                       reorganized by technical concern (DB/API/front) without breaking routes
-  api/                Route Handlers - sync/alerts webhooks, set-locale/set-theme, backup,
-                      GoCardless OAuth callback, and the versioned public REST API (v1/*,
-                      see `dev-docs/multi-user-and-security.md`) - everything else in this tree is a page
+  api/                Route Handlers - sync->app callbacks (alerts/check, investments/snapshot-balances,
+                      transactions/auto-categorize, realtime/notify), realtime/stream (SSE), health,
+                      set-locale/set-theme, backup, my-data export, GoCardless connect/callback, and
+                      the versioned public REST API (v1/*, see `dev-docs/multi-user-and-security.md`)
+                      - everything else in this tree is a page (plus icon/manifest routes)
   generated/prisma/   Prisma client (generated - do not edit)
   globals.css         Design tokens + Tailwind base (dark palette + opt-in light override)
   global-error.tsx    Global error boundary (client component, force-dynamic)
@@ -134,13 +136,15 @@ components/          Grouped by feature domain, mirroring the app/ route it belo
 lib/
   actions/            Server Actions (all DB mutations go here)
   db/                 prisma.ts - singleton PrismaClient via @prisma/adapter-pg + pg Pool
-  services/           External API clients: gocardless.ts, exchange-rate.ts, yahoo-finance.ts;
-                      realtime-bus.ts is the one exception (in-process pub/sub, no external API)
+  services/           Server-only modules with I/O: external API clients (gocardless.ts,
+                      exchange-rate.ts, yahoo-finance.ts) plus DB-backed services (audit-log,
+                      rate-limit, api-auth, internal-auth, alerts/, notifications, realtime-bus).
+                      Logic that needs a `userId` parameter lives here, not in a "use server" file
   domain/             Pure business logic (no I/O): tax.ts, loan.ts, recurring.ts, csv-import.ts,
                       analytics.ts, dashboard.ts, account-detail.ts, accounts-page.ts,
                       institutions.ts (bank/broker name → favicon domain mapping)
   utils/              Generic helpers: format.ts, palette.ts, markdown-export.ts
-  auth.ts             NextAuth config + in-memory rate limiter
+  auth.ts             NextAuth config (login throttling via lib/services/rate-limit.ts)
 messages/
   fr.json             French UI strings (default locale)
   en.json             English UI strings
@@ -165,7 +169,7 @@ public/               Static assets - sw.js (service worker, see `dev-docs/platf
 proxy.ts              Next.js middleware (root) - auth bypass + demo POST-blocking
 ```
 
-Also in `sync/`: `setup_woob.py` / `setup_tr_institution.py` (per-institution interactive setup), `woob_errors.py` (ordered Woob exception classification), `crypto_at_rest.py` (Python mirror of `lib/domain/crypto-at-rest.ts`), `setup_locks.py`, `realtime_supervisor.py`. `scripts/` holds operator tools (backup/restore, dry-run-by-default data fixes, `audit-bank-modules.py`, `sync-from-upstream.sh`).
+Also in `sync/`: `setup_woob.py` / `setup_tr_institution.py` (per-institution interactive setup), `woob_errors.py` (ordered Woob exception classification), `crypto_at_rest.py` (Python mirror of `lib/domain/crypto-at-rest.ts`), `setup_locks.py`, `realtime_supervisor.py`, `workers.py` (shared worker pool for every blocking job), `sync_activity.py` (in-process "sync running" tracking behind the badge), `sync_tr_timeline.py` / `tr_positions.py` (split out of `sync_tr.py`). `scripts/` holds operator tools (backup/restore, dry-run-by-default data fixes, `audit-bank-modules.py`, `sync-from-upstream.sh`).
 
 ### Rules that span many files
 
