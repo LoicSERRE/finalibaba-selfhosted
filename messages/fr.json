@@ -385,7 +385,11 @@
       "uncategorizedIncome": "Revenus non catégorisés",
       "uncategorizedSpend": "Non catégorisé",
       "in": "Entrée",
-      "out": "Sortie"
+      "out": "Sortie",
+      "zoomIn": "Zoomer",
+      "zoomOut": "Dézoomer",
+      "zoomReset": "Afficher tout le graphique",
+      "zoomHint": "Pincez ou touchez deux fois pour zoomer, glissez pour vous déplacer."
     }
   },
   "transactions": {

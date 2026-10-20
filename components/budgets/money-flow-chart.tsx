@@ -3,7 +3,7 @@
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { useTranslations } from "next-intl";
 import { formatCurrency } from "@/lib/utils/format";
-import { ScrollRegion } from "@/components/ui/scroll-region";
+import { PanZoom } from "@/components/ui/pan-zoom";
 import { MoneyFlowNode } from "@/components/budgets/money-flow-node";
 import type { MoneyFlow } from "@/lib/domain/money-flow";
 
@@ -13,7 +13,13 @@ type Props = { readonly flow: MoneyFlow | null };
  * Where the month's money went (v2.16), as a Sankey: income sources, then
  * spending categories and savings. The list under it carries every amount -
  * the chart's text alternative, and what discretion blurs.
+ *
+ * Drawn at CHART_WIDTH, below which its labels collide. On a phone it used to
+ * scroll sideways inside that width; it is now fitted whole and navigated
+ * like a map (PanZoom, v2.18.1).
  */
+const CHART_WIDTH = 520;
+
 export function MoneyFlowChart({ flow }: Props) {
   const t = useTranslations("budgets.flow");
   if (!flow) return null;
@@ -23,8 +29,12 @@ export function MoneyFlowChart({ flow }: Props) {
       <h2 id="money-flow-title" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
         {t("title")}
       </h2>
-      <ScrollRegion label={t("title")}>
-        <div className="min-w-[520px]" style={{ height }} aria-hidden="true">
+      <PanZoom
+        width={CHART_WIDTH}
+        height={height}
+        labels={{ zoomIn: t("zoomIn"), zoomOut: t("zoomOut"), reset: t("zoomReset"), hint: t("zoomHint") }}
+      >
+        <div className="h-full" aria-hidden="true">
           <ResponsiveContainer width="100%" height="100%">
             <Sankey
               data={flow}
@@ -38,7 +48,7 @@ export function MoneyFlowChart({ flow }: Props) {
             </Sankey>
           </ResponsiveContainer>
         </div>
-      </ScrollRegion>
+      </PanZoom>
       <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
         {flow.nodes
           .filter((node) => node.kind !== "hub")

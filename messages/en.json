@@ -385,7 +385,11 @@
       "uncategorizedIncome": "Uncategorized income",
       "uncategorizedSpend": "Uncategorized",
       "in": "In",
-      "out": "Out"
+      "out": "Out",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Show the whole chart",
+      "zoomHint": "Pinch or double-tap to zoom, drag to move around."
     }
   },
   "transactions": {

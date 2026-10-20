@@ -2,8 +2,10 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { readDiscreet, setDiscreet } from "@/components/layout/discretion";
+import { hapticFor } from "@/components/layout/haptics";
 import {
   DISCRETION_SHAKE_COOKIE,
+  createGravityFilter,
   createShakeDetector,
   shakeCookie,
   shakeListening,
@@ -14,7 +16,7 @@ import {
 // Shake to hide and show (v2.18): three quick shakes of the phone toggle
 // discretion mode, the way Trade Republic does it - the same gesture hides
 // and shows, with no dialog or toast on screen, only a short vibration where
-// the phone has one.
+// the phone has one (components/layout/haptics.ts).
 
 const SHAKE_EVENT = "finalibaba:discretionshakechange";
 
@@ -86,15 +88,21 @@ export function DiscretionShake() {
     if (!shakeListening(preference)) return;
 
     const isShake = createShakeDetector();
+    const withoutGravity = createGravityFilter();
     function onMotion(event: DeviceMotionEvent) {
-      const motion = event.accelerationIncludingGravity;
-      if (!motionSeen && motion?.x != null) {
+      const raw = event.accelerationIncludingGravity;
+      if (!motionSeen && raw?.x != null) {
         motionSeen = true;
         globalThis.dispatchEvent(new Event(SHAKE_EVENT));
       }
+      // The hand's own acceleration: the phone's, when it reports one, else
+      // gravity filtered out of the raw reading.
+      const own = event.acceleration;
+      const motion = own?.x != null ? own : raw && withoutGravity(raw);
       if (!motion || !isShake(motion, event.timeStamp)) return;
-      setDiscreet(!readDiscreet());
-      navigator.vibrate?.(40);
+      const hidden = !readDiscreet();
+      setDiscreet(hidden);
+      hapticFor(hidden);
     }
     // Once turned on explicitly: the iOS grant may not outlive the app, so the
     // first tap asks again, which resolves without a prompt while it holds.
