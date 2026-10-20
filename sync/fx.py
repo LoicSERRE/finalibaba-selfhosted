@@ -13,10 +13,10 @@ is None - callers skip the write, never guess.
 """
 
 import datetime
-import json
 import logging
-import urllib.request
 from decimal import ROUND_HALF_UP, Decimal
+
+import requests
 
 log = logging.getLogger(__name__)
 
@@ -76,14 +76,20 @@ def _fetch_daily_rates(currency: str, start: datetime.date, end: datetime.date) 
     def epoch(day):
         return int(datetime.datetime.combine(day, datetime.time(), tzinfo=datetime.UTC).timestamp())
 
-    url = (
-        f"https://query2.finance.yahoo.com/v8/finance/chart/EUR{currency}=X"
-        f"?interval=1d&period1={epoch(start)}&period2={epoch(end)}"
-    )
-    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+    # requests rather than urllib: urllib also opens file:// URLs, and this
+    # URL carries a bank-reported value. The host and path are fixed here;
+    # the currency only ever reaches the path as three letters (parse_currency).
+    if not (len(currency) == 3 and currency.isalpha()):
+        return {}
     try:
-        with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_S) as response:
-            return parse_yahoo_daily_rates(json.loads(response.read()))
+        response = requests.get(
+            f"https://query2.finance.yahoo.com/v8/finance/chart/EUR{currency.upper()}=X",
+            params={"interval": "1d", "period1": epoch(start), "period2": epoch(end)},
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=FETCH_TIMEOUT_S,
+        )
+        response.raise_for_status()
+        return parse_yahoo_daily_rates(response.json())
     except Exception:  # any failure means "no rate", which callers handle
         log.warning("exchange rate fetch failed for %s", currency, exc_info=True)
         return {}
