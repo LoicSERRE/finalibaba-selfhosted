@@ -1232,8 +1232,8 @@
     "discretion": {
       "title": "Discretion",
       "description": "Replaces every amount in the app with random digits and letters on this device, for opening it in public or sharing your screen. Percentages stay visible. Shortcut: the H key.",
-      "shake": "Shake the phone to hide",
-      "shakeHint": "A shake hides the amounts; the eye button shows them again.",
+      "shake": "Shake the phone to hide or show",
+      "shakeHint": "Three quick shakes hide the amounts, three more show them again.",
       "shakeDenied": "Motion sensor access was denied. Allow it in your browser settings to use this gesture."
     }
   },
@@ -1753,8 +1753,7 @@
   },
   "discretion": {
     "hide": "Hide amounts",
-    "show": "Show amounts",
-    "shaken": "Amounts hidden"
+    "show": "Show amounts"
   },
   "palette": {
     "open": "Search…",

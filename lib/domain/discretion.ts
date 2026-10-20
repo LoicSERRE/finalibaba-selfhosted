@@ -166,7 +166,7 @@ export function scrambleText(text: string, salt: string, context: { before?: str
   });
 }
 
-// ── Shake to hide (v2.18) ───────────────────────────────────────────────
+// ── Shake to hide and show (v2.18) ──────────────────────────────────────
 
 export const DISCRETION_SHAKE_COOKIE = "DISCREET_SHAKE";
 
@@ -209,47 +209,56 @@ export function shakeShownOn(preference: ShakePreference, needsPermission: boole
 type Motion = { x: number | null; y: number | null; z: number | null };
 
 type ShakeOptions = {
-  /** Acceleration, gravity included, above which a sample counts as shaking (m/s²; rest is 9.8). */
+  /** Acceleration, gravity included, a swing must exceed (m/s²; rest is 9.8). */
   threshold?: number;
-  /** Shaking samples needed among the window's samples. */
-  ratio?: number;
-  /** Samples older than this are forgotten. */
+  /** ...and fall back under before the next one counts: one swing, one peak. */
+  release?: number;
+  /** Shakes that make the gesture - three, like Trade Republic. */
+  shakes?: number;
+  /** All of them within this window. */
   windowMs?: number;
-  /** The window must span at least this long - one bump is shorter. */
-  minWindowMs?: number;
-  /** Quiet period after a shake, so one shake fires once. */
+  /** Peaks closer than this are one: a single bump rebounds within a few samples. */
+  minGapMs?: number;
+  /** Quiet period after the gesture, so one gesture toggles once. */
   cooldownMs?: number;
 };
 
-const MIN_SAMPLES = 4;
-
 /**
- * A shake detector over `devicemotion` samples (acceleration including
- * gravity - the one every phone reports). The heuristic of Square's
- * `seismic` Android library, proven on real phones: a shake is at least
- * three quarters of the samples over a quarter to half a second clearly
- * above gravity. Walking stays near 9.8; a bump, a phone set down on a
- * table, is over before the window fills.
+ * Three quick shakes of the phone toggle discretion, the gesture Trade
+ * Republic uses. Fed `devicemotion` samples (acceleration including gravity,
+ * the one every phone reports, ~60 a second), it counts swings: the
+ * magnitude rising past `threshold`, counted once until it falls back under
+ * `release`. Walking stays near 9.8; a bump or a phone set down on a table
+ * makes one peak and its rebound, which `minGapMs` merges.
  */
 export function createShakeDetector({
-  threshold = 13,
-  ratio = 0.75,
-  windowMs = 500,
-  minWindowMs = 250,
-  cooldownMs = 1500,
+  threshold = 15,
+  release = 12,
+  shakes = 3,
+  windowMs = 1200,
+  minGapMs = 120,
+  cooldownMs = 1000,
 }: ShakeOptions = {}): (motion: Motion, timestampMs: number) => boolean {
-  let samples: Array<{ at: number; shaking: boolean }> = [];
+  let above = false;
+  let peaks: number[] = [];
   let quietUntil = 0;
 
   return (motion, now) => {
-    if (motion.x === null || motion.y === null || motion.z === null || now < quietUntil) return false;
-    const shaking = Math.hypot(motion.x, motion.y, motion.z) > threshold;
-    samples = [...samples.filter((sample) => now - sample.at < windowMs), { at: now, shaking }];
+    if (motion.x === null || motion.y === null || motion.z === null) return false;
+    const magnitude = Math.hypot(motion.x, motion.y, motion.z);
+    if (above) {
+      if (magnitude < release) above = false;
+      return false;
+    }
+    if (magnitude <= threshold) return false;
+    above = true;
+    if (now < quietUntil) return false;
 
-    const span = now - samples[0].at;
-    const count = samples.filter((sample) => sample.shaking).length;
-    if (samples.length < MIN_SAMPLES || span < minWindowMs || count < ratio * samples.length) return false;
-    samples = [];
+    const latest = peaks.at(-1);
+    if (latest !== undefined && now - latest < minGapMs) return false;
+    peaks = [...peaks.filter((at) => now - at < windowMs), now];
+    if (peaks.length < shakes) return false;
+    peaks = [];
     quietUntil = now + cooldownMs;
     return true;
   };

@@ -210,39 +210,55 @@ describe("shake to hide", () => {
     for (const value of [undefined, "", "true", "2"]) expect(shakePreference(value)).toBe("unset");
   });
 
-  // A phone at rest reads 9.8 m/s² (gravity); shaking it swings well past
-  // 13. `trace` plays one sample per character, 60 a second like a phone.
+  // A phone at rest reads 9.8 m/s² (gravity); each swing of a shake peaks
+  // well past 15. `trace` plays one sample per character, 60 a second like a
+  // phone: "s" a swing, "r" at rest.
   const REST = { x: 0, y: 0, z: 9.8 };
-  const SHAKING = { x: 18, y: 6, z: 9.8 };
+  const SWING = { x: 18, y: 6, z: 9.8 };
   const STEP_MS = 16;
   function trace(detect: ReturnType<typeof createShakeDetector>, pattern: string, startMs = 0) {
-    return [...pattern].map((c, i) => detect(c === "s" ? SHAKING : REST, startMs + i * STEP_MS));
+    return [...pattern].map((c, i) => detect(c === "s" ? SWING : REST, startMs + i * STEP_MS));
   }
+  // One swing every ~200ms: three of them is the gesture.
+  const swing = "ss" + "r".repeat(10);
+  const THREE_SHAKES = swing.repeat(3);
 
-  it("fires once on a quarter of a second of shaking", () => {
-    const detect = createShakeDetector();
-    const fired = trace(detect, "rr" + "s".repeat(20));
+  it("fires once on three quick shakes", () => {
+    const fired = trace(createShakeDetector(), "rr" + THREE_SHAKES);
     expect(fired.filter(Boolean)).toHaveLength(1);
-    // Not before the window spans 250ms.
-    expect(fired.indexOf(true) * STEP_MS).toBeGreaterThanOrEqual(250);
   });
 
-  it("tolerates the odd quiet sample mid-shake", () => {
-    expect(trace(createShakeDetector(), "ssssrsssssrssssssrsssss").some(Boolean)).toBe(true);
+  it("does not fire on two", () => {
+    expect(trace(createShakeDetector(), "rr" + swing.repeat(2) + "r".repeat(80)).some(Boolean)).toBe(false);
   });
 
-  it("ignores a bump, gentle motion and a rest", () => {
-    expect(trace(createShakeDetector(), "rrrrsssrrrrrrrrrrrrrrrrrrrr").some(Boolean)).toBe(false);
-    expect(trace(createShakeDetector(), "srsrsrsrsrsrsrsrsrsrsrsrsr").some(Boolean)).toBe(false);
-    expect(trace(createShakeDetector(), "r".repeat(60)).some(Boolean)).toBe(false);
-  });
-
-  it("stays quiet during the cooldown, then fires again", () => {
+  // The same gesture toggles both ways (v2.18, like Trade Republic): a second
+  // set of three, once the cooldown is over, fires again.
+  it("fires again for the next three, after the cooldown", () => {
     const detect = createShakeDetector();
-    const shake = "s".repeat(30);
-    expect(trace(detect, shake, 0).some(Boolean)).toBe(true);
-    expect(trace(detect, shake, 600).some(Boolean)).toBe(false);
-    expect(trace(detect, shake, 3000).some(Boolean)).toBe(true);
+    expect(trace(detect, THREE_SHAKES, 0).some(Boolean)).toBe(true);
+    expect(trace(detect, THREE_SHAKES, 700).some(Boolean)).toBe(false);
+    expect(trace(detect, THREE_SHAKES, 3000).some(Boolean)).toBe(true);
+  });
+
+  it("ignores a bump and its rebound, walking, and shakes too far apart", () => {
+    // A phone set down hard: one peak, a rebound 30ms later.
+    expect(trace(createShakeDetector(), "rrsrsrrrrrrrrrrrrrrrrrrr").some(Boolean)).toBe(false);
+    // Walking: magnitude wobbles around gravity, never near the threshold.
+    const walk = createShakeDetector();
+    const steps = Array.from({ length: 300 }, (_, i) => walk({ x: 1, y: 2, z: 9.8 + 3 * Math.sin(i / 5) }, i * STEP_MS));
+    expect(steps.some(Boolean)).toBe(false);
+    // Three swings over two seconds is not a shake.
+    const slow = "ss" + "r".repeat(45);
+    expect(trace(createShakeDetector(), slow.repeat(3)).some(Boolean)).toBe(false);
+  });
+
+  it("counts a swing held across several samples once", () => {
+    // A slow, wide swing stays past the threshold for ~200ms - longer than
+    // minGapMs - and still counts once.
+    const longSwing = "s".repeat(12) + "r".repeat(8);
+    expect(trace(createShakeDetector(), longSwing.repeat(2) + "r".repeat(80)).some(Boolean)).toBe(false);
+    expect(trace(createShakeDetector(), longSwing.repeat(3)).some(Boolean)).toBe(true);
   });
 
   it("ignores samples without readings", () => {

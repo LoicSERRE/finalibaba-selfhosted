@@ -1232,8 +1232,8 @@
     "discretion": {
       "title": "Discrétion",
       "description": "Remplace tous les montants de l'application par des chiffres et lettres aléatoires sur cet appareil, pour l'ouvrir en public ou partager votre écran. Les pourcentages restent visibles. Raccourci : touche H.",
-      "shake": "Secouer le téléphone pour masquer",
-      "shakeHint": "Une secousse masque les montants ; le bouton œil les réaffiche.",
+      "shake": "Secouer le téléphone pour masquer ou afficher",
+      "shakeHint": "Trois secousses rapides masquent les montants, trois de plus les réaffichent.",
       "shakeDenied": "Accès aux capteurs de mouvement refusé. Autorisez-le dans les réglages du navigateur pour utiliser ce geste."
     }
   },
@@ -1753,8 +1753,7 @@
   },
   "discretion": {
     "hide": "Masquer les montants",
-    "show": "Afficher les montants",
-    "shaken": "Montants masqués"
+    "show": "Afficher les montants"
   },
   "palette": {
     "open": "Rechercher…",

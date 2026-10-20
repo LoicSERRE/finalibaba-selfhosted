@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { useTranslations } from "next-intl";
-import { toast } from "@/components/ui/toast";
 import { readDiscreet, setDiscreet } from "@/components/layout/discretion";
 import {
   DISCRETION_SHAKE_COOKIE,
@@ -13,9 +11,10 @@ import {
   type ShakePreference,
 } from "@/lib/domain/discretion";
 
-// Shake to hide (v2.18): shaking the phone turns discretion mode on. Only on,
-// never off - it is the gesture for someone walking up behind you, and a
-// second shake must not undo it. The toast it raises offers the way back.
+// Shake to hide and show (v2.18): three quick shakes of the phone toggle
+// discretion mode, the way Trade Republic does it - the same gesture hides
+// and shows, with no dialog or toast on screen, only a short vibration where
+// the phone has one.
 
 const SHAKE_EVENT = "finalibaba:discretionshakechange";
 
@@ -80,7 +79,6 @@ export function setShakePreference(on: boolean) {
 
 /** Listens for the gesture, mounted once in the root layout. */
 export function DiscretionShake() {
-  const t = useTranslations("discretion");
   const preference = useShakePreference();
 
   useEffect(() => {
@@ -94,10 +92,9 @@ export function DiscretionShake() {
         motionSeen = true;
         globalThis.dispatchEvent(new Event(SHAKE_EVENT));
       }
-      if (!motion || !isShake(motion, event.timeStamp) || readDiscreet()) return;
-      setDiscreet(true);
+      if (!motion || !isShake(motion, event.timeStamp)) return;
+      setDiscreet(!readDiscreet());
       navigator.vibrate?.(40);
-      toast({ message: t("shaken"), action: { label: t("show"), onClick: () => setDiscreet(false) } });
     }
     // Once turned on explicitly: the iOS grant may not outlive the app, so the
     // first tap asks again, which resolves without a prompt while it holds.
@@ -111,7 +108,7 @@ export function DiscretionShake() {
       globalThis.removeEventListener("devicemotion", onMotion);
       globalThis.removeEventListener("pointerup", onFirstTap);
     };
-  }, [preference, t]);
+  }, [preference]);
 
   return null;
 }
