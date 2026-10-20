@@ -2,6 +2,8 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/utils/format";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import type { ReportedLoan } from "@/lib/domain/accounts-page";
+import type { LoanTermsValues } from "@/lib/domain/loan-terms";
+import { EditLoanTermsDialog } from "@/components/accounts/edit-loan-terms-dialog";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
@@ -18,7 +20,10 @@ type Props = {
     readonly institutionName: string | null;
     readonly institutionLogoUrl: string | null;
     readonly reported: ReportedLoan;
+    readonly termsValues: LoanTermsValues;
   };
+  /** A granted (read-only) portfolio: no edit button. */
+  readonly readOnly?: boolean;
 };
 
 /**
@@ -27,8 +32,9 @@ type Props = {
  * re-amortised from parameters nobody typed in. Anything the bank does not
  * give is left out, never estimated.
  */
-export function ReportedLoanCard({ t, td, intlLocale, loan }: Props) {
+export function ReportedLoanCard({ t, td, intlLocale, loan, readOnly }: Props) {
   const { reported } = loan;
+  const estimates = reported.estimates;
   const monthYear = new Intl.DateTimeFormat(intlLocale, { month: "short", year: "numeric" });
   const day = new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short", year: "numeric" });
   return (
@@ -51,6 +57,13 @@ export function ReportedLoanCard({ t, td, intlLocale, loan }: Props) {
             {reported.ratePct !== null && `${td("loanDetail.taeg")} ${reported.ratePct.toFixed(2)}% · `}
             {t("loan.reportedByBank")}
           </p>
+          {reported.inDeferral && (
+            <span className="inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--foreground)]">
+              {estimates?.deferralEnd
+                ? t("loan.inDeferralUntil", { date: monthYear.format(estimates.deferralEnd) })
+                : t("loan.inDeferral")}
+            </span>
+          )}
         </div>
         <div className="text-right shrink-0">
           <p className="text-lg font-semibold tabular-nums text-[var(--negative)] amount">
@@ -85,6 +98,37 @@ export function ReportedLoanCard({ t, td, intlLocale, loan }: Props) {
           </div>
         )}
       </div>
+
+      {estimates && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 text-sm border-t border-[var(--border)] pt-3">
+          <div>
+            <p className="text-[var(--muted)] text-xs mb-1">
+              {estimates.deferralMonths > 0 ? t("loan.estimatedMonthlyAfterDeferral") : t("loan.estimatedMonthly")}
+            </p>
+            <p className="tabular-nums font-medium text-[var(--foreground)] amount">{formatCurrency(estimates.monthlyAfterDeferralCents)}</p>
+          </div>
+          <div>
+            <p className="text-[var(--muted)] text-xs mb-1">{t("loan.estimatedTotalCost")}</p>
+            <p className="tabular-nums font-medium text-[var(--negative)] amount">{formatCurrency(estimates.totalCostCents, 0)}</p>
+          </div>
+          <div>
+            <p className="text-[var(--muted)] text-xs mb-1">{t("loan.duration")}</p>
+            <p className="tabular-nums font-medium text-[var(--foreground)]">
+              {t("loan.durationValue", { months: estimates.durationMonths })}
+              {estimates.deferralMonths > 0 && (
+                <span className="text-xs text-[var(--muted)] font-normal"> · {t("loan.deferred", { months: estimates.deferralMonths })}</span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!readOnly && (
+        <div className="relative z-10 flex items-center justify-between gap-2">
+          <p className="text-xs text-[var(--muted)]">{estimates ? t("loan.estimatesNote") : t("loan.completeTermsHint")}</p>
+          <EditLoanTermsDialog accountId={loan.id} values={loan.termsValues} bankReported />
+        </div>
+      )}
 
       {reported.repaidPct !== null && (
         <div>

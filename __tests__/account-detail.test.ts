@@ -384,3 +384,27 @@ describe("computeAccountDetail - an account in another currency", () => {
     expect(result.latestDeltaNative).toBeNull();
   });
 });
+
+// v2.19.2: completed terms on a bank-reported loan feed the estimates only;
+// what is owed stays the bank's figure.
+describe("computeAccountDetail - a bank-reported loan with completed terms", () => {
+  it("shows the bank's remaining capital, not the schedule's", () => {
+    const result = computeAccountDetail({
+      account: account({
+        type: "LOAN",
+        syncId: "woob:inst:pret1",
+        liabilityCents: BigInt(5099_00),
+        loanAmountCents: BigInt(5000_00),
+        loanTaeg: 0.99,
+        loanDurationMonths: 72,
+        loanDeferralMonths: 24,
+        loanStartDate: new Date("2026-10-01T12:00:00Z"),
+      }),
+      intlLocale: "fr-FR",
+      now: NOW,
+    });
+    expect(result.currentValue).toBe(BigInt(5099_00));
+    expect(result.loanStats?.currentCapitalCents).toBe(BigInt(5099_00));
+    expect(result.loanStats?.amortPaymentCents).toBeGreaterThan(BigInt(100_00));
+  });
+});

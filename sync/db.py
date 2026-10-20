@@ -154,19 +154,28 @@ def promote_account_to_loan(cur, account_db_id: str) -> bool:
 
 
 def record_loan(cur, account_db_id: str, *, owed_cents: int, facts: dict):
-    """Store what the bank says about a loan: what is owed (liabilityCents,
-    refreshed every sync - the figure net worth subtracts) and, when given,
-    the amount borrowed, rate, next instalment and end date. A field the
-    bank does not fill keeps its previous value rather than being erased."""
+    """Store what the bank says about a loan, in two kinds (v2.19.2).
+
+    What changes every month is the bank's, always: what is owed
+    (liabilityCents, the figure net worth subtracts) and the next instalment
+    - a field the bank leaves empty this time keeps its last value.
+
+    The contract's terms - amount borrowed, rate, end date - are the user's
+    once set: the bank only fills a term that is still empty. The loan's
+    edit dialog lets the user complete what the bank never sends (start date,
+    duration, deferral, insurance) or correct what it gets wrong, and a sync
+    every 30 minutes silently putting the old figure back would make that
+    edit pointless. Clearing a term in the dialog hands it back to the bank.
+    """
     cur.execute(
         """
         UPDATE "Account" SET
             "liabilityCents" = %s,
-            "loanAmountCents" = COALESCE(%s, "loanAmountCents"),
-            "loanTaeg" = COALESCE(%s, "loanTaeg"),
+            "loanAmountCents" = COALESCE("loanAmountCents", %s),
+            "loanTaeg" = COALESCE("loanTaeg", %s),
             "loanNextPaymentCents" = COALESCE(%s, "loanNextPaymentCents"),
             "loanNextPaymentDate" = COALESCE(%s, "loanNextPaymentDate"),
-            "loanEndDate" = COALESCE(%s, "loanEndDate"),
+            "loanEndDate" = COALESCE("loanEndDate", %s),
             "updatedAt" = NOW()
         WHERE id = %s AND type = 'LOAN'
         """,

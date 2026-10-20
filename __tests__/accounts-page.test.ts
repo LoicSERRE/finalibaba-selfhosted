@@ -325,6 +325,9 @@ describe("computeLoanRow - a loan the bank reports", () => {
       nextPaymentDate: new Date("2026-11-05"),
       endDate: new Date("2033-09-30"),
       repaidPct: 20,
+      // 87,43 € is far above the ~3,30 € of monthly interest: repaying.
+      inDeferral: false,
+      estimates: null,
     });
   });
 
@@ -339,5 +342,42 @@ describe("computeLoanRow - a loan the bank reports", () => {
   it("leaves a manual loan without parameters as it was", () => {
     const manual = computeLoanRow({ ...base, syncId: null, loanAmountCents: null, liabilityCents: BigInt(1) }, new Date());
     expect(!manual.hasParams && manual.reported).toBeUndefined();
+  });
+});
+
+// v2.19.2: the bank never says "deferred", but its instalment does.
+describe("computeLoanRow - deferral and estimates on a bank-reported loan", () => {
+  const loan = {
+    id: "l", name: "Crédit étudiant", institution: null, type: "LOAN", syncId: "woob:inst:pret1",
+    loanAmountCents: BigInt(5000_00), loanTaeg: 0.99, liabilityCents: BigInt(5099_00),
+    loanDurationMonths: null, loanDeferralMonths: null, loanStartDate: null, insuranceMonthlyCents: null,
+    loanNextPaymentCents: BigInt(4_21), loanNextPaymentDate: null, loanEndDate: null,
+  };
+  const NOW = new Date("2026-10-20T12:00:00Z");
+
+  it("reads a deferral off an interest-only instalment", () => {
+    const row = computeLoanRow(loan, NOW);
+    expect(!row.hasParams && row.reported?.inDeferral).toBe(true);
+    expect(!row.hasParams && row.reported?.estimates).toBeNull();
+  });
+
+  it("says nothing when the rate or the instalment is unknown", () => {
+    const row = computeLoanRow({ ...loan, loanNextPaymentCents: null }, NOW);
+    expect(!row.hasParams && row.reported?.inDeferral).toBeNull();
+  });
+
+  it("projects from completed terms while keeping the bank's remaining capital", () => {
+    const row = computeLoanRow(
+      { ...loan, loanStartDate: new Date("2026-10-01T12:00:00Z"), loanDurationMonths: 72, loanDeferralMonths: 24 },
+      NOW,
+    );
+    if (row.hasParams || !row.reported?.estimates) throw new Error("expected estimates");
+    expect(row.reported.remainingCents).toBe(BigInt(5099_00));
+    expect(row.reported.inDeferral).toBe(true);
+    expect(row.reported.estimates.deferralEnd).toEqual(new Date(Date.UTC(2028, 9, 1)));
+    // 5 000 € over 48 amortising months at 0,99%: ~106 € a month.
+    expect(Number(row.reported.estimates.monthlyAfterDeferralCents)).toBeGreaterThan(105_00);
+    expect(Number(row.reported.estimates.monthlyAfterDeferralCents)).toBeLessThan(107_00);
+    expect(row.termsValues).toMatchObject({ amount: "5000.00", rate: "0.99", durationMonths: "72", deferralMonths: "24", startDate: "2026-10-01" });
   });
 });

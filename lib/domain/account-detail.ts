@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/domain/loan";
+import { calcLoanStats, hasLoanParams, isBankReportedLoan, type LoanStats } from "@/lib/domain/loan";
 import { FR_PFU_TOTAL_RATE } from "@/lib/domain/tax-locale";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import { baseCurrency } from "@/lib/utils/base-currency";
@@ -211,6 +211,27 @@ function holdingMarketValue(h: { quantity: Decimal; lastPriceCents: bigint }): b
   );
 }
 
+/**
+ * A loan's schedule stats, or null without complete terms. For a loan its
+ * bank reports (v2.19.2: terms the user completed), the schedule only feeds
+ * the estimates - the remaining capital is the bank's figure.
+ */
+function accountLoanStats(account: AccountDetailAccount, now: Date): LoanStats | null {
+  if (!hasLoanParams(account)) return null;
+  const stats = calcLoanStats(
+    {
+      loanAmountCents: account.loanAmountCents,
+      loanTaeg: account.loanTaeg,
+      loanDurationMonths: account.loanDurationMonths,
+      loanDeferralMonths: account.loanDeferralMonths ?? 0,
+      loanStartDate: account.loanStartDate,
+    },
+    account.insuranceMonthlyCents ?? BigInt(0),
+    now
+  );
+  return isBankReportedLoan(account) ? { ...stats, currentCapitalCents: account.liabilityCents ?? stats.currentCapitalCents } : stats;
+}
+
 // NOSONAR (typescript:S3776) - complexity 17, under this project's own
 // deliberately-raised threshold of 20 (see eslint.config.mjs's
 // sonarjs/cognitive-complexity rule and lib/domain/dashboard.ts's identical
@@ -235,21 +256,7 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
 
   const taxRate = getAccountTaxRate(account);
 
-  // Loan stats (calculated once)
-  const loanStats =
-    isLoan && hasLoanParams(account)
-      ? calcLoanStats(
-          {
-            loanAmountCents: account.loanAmountCents,
-            loanTaeg: account.loanTaeg,
-            loanDurationMonths: account.loanDurationMonths,
-            loanDeferralMonths: account.loanDeferralMonths ?? 0,
-            loanStartDate: account.loanStartDate,
-          },
-          account.insuranceMonthlyCents ?? BigInt(0),
-          now
-        )
-      : null;
+  const loanStats = isLoan ? accountLoanStats(account, now) : null;
 
   // Current value
   let currentValue = BigInt(0);

@@ -165,3 +165,34 @@ def test_a_non_loan_account_is_never_retyped(cur):
     overdrawn = Account(id="cc", label="COMPTE CREDIT MUTUEL", balance=Decimal("-120.00"))
     summary = sync_woob._sync_account(cur, institution_id, "Bank", overdrawn)
     assert _account(cur, summary["account_db_id"])["type"] == "CHECKING"
+
+
+def test_terms_the_user_set_survive_the_next_sync_and_live_figures_do_not(cur):
+    # v2.19.2: the bank fills the contract's terms only while they are empty;
+    # what is owed and the next instalment are always the bank's.
+    import sync_woob
+
+    institution_id = f"test-inst-{uuid.uuid4().hex[:8]}"
+    cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (institution_id, "LCL test"))
+
+    def loan(balance, rate, next_payment):
+        return Loan(id="pret1", label="PRÊT", type=AccountType.LOAN, balance=Decimal(balance), total_amount=Decimal(5000),
+                    rate=Decimal(rate), next_payment_amount=Decimal(next_payment), next_payment_date=NA,
+                    maturity_date=datetime.date(2032, 10, 31))
+
+    summary = sync_woob._sync_account(cur, institution_id, "LCL", loan("-5099", "0.99", "4.13"))
+    account_id = summary["account_db_id"]
+    # The user corrects the rate and the end date, and completes a duration.
+    cur.execute(
+        'UPDATE "Account" SET "loanTaeg" = 1.2, "loanEndDate" = %s, "loanDurationMonths" = 72 WHERE id = %s',
+        (datetime.date(2032, 9, 30), account_id),
+    )
+    sync_woob._sync_account(cur, institution_id, "LCL", loan("-5100", "0.99", "4.20"))
+
+    row = _account(cur, account_id)
+    assert row["loanTaeg"] == pytest.approx(1.2)
+    assert row["loanEndDate"].date() == datetime.date(2032, 9, 30)
+    assert int(row["liabilityCents"]) == 510_000
+    assert int(row["loanNextPaymentCents"]) == 420
+    cur.execute('SELECT "loanDurationMonths" FROM "Account" WHERE id = %s', (account_id,))
+    assert cur.fetchone()["loanDurationMonths"] == 72
