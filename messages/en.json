@@ -137,6 +137,39 @@
       "in": "In",
       "out": "Out",
       "more": "and {count} more"
+    },
+    "firstRun": {
+      "title": "Getting started",
+      "titleFull": "Welcome! A few steps to get started",
+      "progress": "{done} of {total} step(s) done",
+      "progressLabel": "Setup progress",
+      "hide": "Hide",
+      "go": "Start",
+      "optional": "(optional)",
+      "doneSr": "done",
+      "todoSr": "to do",
+      "steps": {
+        "account": {
+          "title": "Add an account",
+          "description": "A current account, savings, a brokerage account, a property… entered by hand or synced."
+        },
+        "bank": {
+          "title": "Connect a bank",
+          "description": "So balances and transactions update on their own. Everything works without it too."
+        },
+        "profile": {
+          "title": "Complete your financial profile",
+          "description": "Tax country, income and expenses: they drive the savings rate and latent taxes."
+        },
+        "categories": {
+          "title": "Create your budget categories",
+          "description": "To follow where the money goes each month."
+        },
+        "goal": {
+          "title": "Set a goal",
+          "description": "An amount to reach, to see your progress."
+        }
+      }
     }
   },
   "accounts": {

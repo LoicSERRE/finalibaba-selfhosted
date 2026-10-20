@@ -137,6 +137,39 @@
       "in": "Entrées",
       "out": "Sorties",
       "more": "et {count} autre(s)"
+    },
+    "firstRun": {
+      "title": "Pour bien démarrer",
+      "titleFull": "Bienvenue ! Quelques étapes pour démarrer",
+      "progress": "{done} étape(s) sur {total}",
+      "progressLabel": "Progression de la mise en route",
+      "hide": "Masquer",
+      "go": "Commencer",
+      "optional": "(facultatif)",
+      "doneSr": "fait",
+      "todoSr": "à faire",
+      "steps": {
+        "account": {
+          "title": "Ajouter un compte",
+          "description": "Un compte courant, un livret, un PEA, un bien immobilier… saisi à la main ou synchronisé."
+        },
+        "bank": {
+          "title": "Connecter une banque",
+          "description": "Pour que soldes et transactions se mettent à jour tout seuls. Tout fonctionne aussi sans."
+        },
+        "profile": {
+          "title": "Compléter votre profil financier",
+          "description": "Pays fiscal, revenus et dépenses : ils servent au taux d'épargne et aux impôts latents."
+        },
+        "categories": {
+          "title": "Créer vos catégories de budget",
+          "description": "Pour suivre où va l'argent chaque mois."
+        },
+        "goal": {
+          "title": "Fixer un objectif",
+          "description": "Un montant à atteindre, pour voir votre progression."
+        }
+      }
     }
   },
   "accounts": {

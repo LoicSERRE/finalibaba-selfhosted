@@ -9,6 +9,7 @@ import { baseAccountIds } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
+import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { SharedHoldingsSection } from "@/components/shared/shared-holdings-section";
 import { SharedTransactionsSection } from "@/components/shared/shared-transactions-section";
 import { computeDashboard } from "@/lib/domain/dashboard";
@@ -119,6 +120,7 @@ export default async function SharedDashboardPage({
         allocationHistory={allocationHistory}
         institutions={institutions}
         interactive={false}
+        empty={<DashboardEmptyState />}
       />
       {link.includeHoldings && (
         <div className="mt-8">
