@@ -531,7 +531,11 @@
     "months": "months",
     "anchorDate": "Since",
     "intervalLabel": "Repeats every",
-    "intervalUnit": {"WEEKLY": "week(s)", "MONTHLY": "month(s)", "YEARLY": "year(s)"},
+    "intervalUnit": {
+      "WEEKLY": "week(s)",
+      "MONTHLY": "month(s)",
+      "YEARLY": "year(s)"
+    },
     "intervalHint": "1 = every month. This is not the payment day: that comes from the date below.",
     "intervalHintWeekly": "1 = every week.",
     "intervalHintYearly": "1 = every year.",
@@ -1227,7 +1231,10 @@
     },
     "discretion": {
       "title": "Discretion",
-      "description": "Blurs every amount in the app on this device, for opening it in public or sharing your screen. Shortcut: the H key."
+      "description": "Replaces every amount in the app with random digits and letters on this device, for opening it in public or sharing your screen. Percentages stay visible. Shortcut: the H key.",
+      "shake": "Shake the phone to hide",
+      "shakeHint": "A shake hides the amounts; the eye button shows them again.",
+      "shakeDenied": "Motion sensor access was denied. Allow it in your browser settings to use this gesture."
     }
   },
   "shared": {
@@ -1746,7 +1753,8 @@
   },
   "discretion": {
     "hide": "Hide amounts",
-    "show": "Show amounts"
+    "show": "Show amounts",
+    "shaken": "Amounts hidden"
   },
   "palette": {
     "open": "Search…",

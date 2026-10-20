@@ -17,7 +17,8 @@ import { prisma } from "@/lib/db/prisma";
 import { getPublicViewer, isEndedSession, isRevokedSession, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { DISCRETION_COOKIE, isDiscreet } from "@/lib/domain/discretion";
-import { DiscretionShortcut } from "@/components/layout/discretion";
+import { DiscretionScrambler, DiscretionShortcut } from "@/components/layout/discretion";
+import { DiscretionShake } from "@/components/layout/discretion-shake";
 import { Toaster } from "@/components/ui/toast";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { isBareRoute } from "@/lib/domain/bare-routes";
@@ -196,6 +197,8 @@ export default async function RootLayout({
       <body className="flex min-h-full bg-[var(--background)]">
         <NextIntlClientProvider messages={messages}>
           <DiscretionShortcut />
+          <DiscretionScrambler />
+          <DiscretionShake />
           <Toaster />
           <a
             href="#main-content"
