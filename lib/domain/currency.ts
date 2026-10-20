@@ -169,3 +169,23 @@ export function revaluation(
   if (balanceCents === latest.balanceCents) return null;
   return { recordedAt: todayNoon, balanceCents, nativeBalanceCents: latest.nativeBalanceCents, fxRate: rate };
 }
+
+/**
+ * What re-denominating a history stored as EUR writes (dev-docs/currencies.md,
+ * step 1b): before v2.18 a synced account was EUR whatever its bank held, so
+ * every stored figure is the bank's own number. Native = that number, EUR =
+ * it converted at its own day's rate. Null when any day cannot be priced -
+ * then nothing is rewritten and the next sync tries again.
+ */
+export function redenominate<T extends { id: string; cents: bigint; day: string }>(
+  rows: readonly T[],
+  rates: ReadonlyMap<string, number | null>,
+): { id: string; native: bigint; base: bigint; rate: number }[] | null {
+  const out: { id: string; native: bigint; base: bigint; rate: number }[] = [];
+  for (const row of rows) {
+    const rate = rates.get(row.day);
+    if (rate === null || rate === undefined) return null;
+    out.push({ id: row.id, native: row.cents, base: toBaseCents(row.cents, rate), rate });
+  }
+  return out;
+}

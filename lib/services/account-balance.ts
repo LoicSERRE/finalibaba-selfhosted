@@ -42,15 +42,17 @@ export async function refreshAccountBalance(accountId: string) {
 }
 
 /**
- * Records today's EUR value of every manual account kept in another
- * currency (v2.18, dev-docs/currencies.md): its native balance does not
- * move, the rate does. Synced accounts are revalued by their own sync. Run
- * by the same 4h cron as the investment snapshots; at most one row per
- * account per day, since rates are daily.
+ * Records today's EUR value of every account kept in another currency that
+ * nothing else revalues (v2.18, dev-docs/currencies.md): its native balance
+ * does not move, the rate does. Manual accounts, and GoCardless ones, which
+ * only sync when someone presses the button; Woob accounts are revalued by
+ * their own 4h sync (sync/db.py's record_balance). Run by the same cron as
+ * the investment snapshots; at most one row per account per day, since rates
+ * are daily.
  */
 export async function revalueForeignBalances(now: Date = new Date()): Promise<number> {
   const accounts = await prisma.account.findMany({
-    where: { currency: { not: BASE_CURRENCY }, syncId: null, gocardlessAccountId: null },
+    where: { currency: { not: BASE_CURRENCY }, syncId: null },
     select: {
       id: true,
       currency: true,

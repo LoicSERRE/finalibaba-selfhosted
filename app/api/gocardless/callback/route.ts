@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { getRequisition, getAccountDetails, getAccountBalances, pickBalance, toAccountType } from "@/lib/services/gocardless";
+import { getRequisition, getAccountDetails, getAccountBalances, pickBalance, pickBalanceCurrency, toAccountType } from "@/lib/services/gocardless";
+import { balanceColumns } from "@/lib/domain/currency";
+import { rateToEurOn } from "@/lib/services/exchange-rate";
+import { resolveSyncedAccountCurrency } from "@/lib/services/account-currency";
 import { settingsTabHref } from "@/lib/domain/settings-tabs";
 
 export async function GET(req: NextRequest) {
@@ -52,7 +55,6 @@ export async function GET(req: NextRequest) {
 
     const name = details.name ?? details.product ?? details.iban ?? "Compte";
     const type = toAccountType(details.cashAccountType);
-    const balanceCents = pickBalance(balances);
 
     const account = await prisma.account.upsert({
       where: { gocardlessAccountId: gcAccountId },
@@ -66,9 +68,17 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    await prisma.historicalBalance.create({
-      data: { accountId: account.id, balanceCents },
-    });
+    // The account's own currency (v2.18): the details' if the bank gives
+    // one, else the balance's. A new account starts EUR and takes it here;
+    // a rate that cannot be fetched only delays the first balance to the
+    // next sync, it never stores a guess.
+    const currency = await resolveSyncedAccountCurrency(account.id, details.currency ?? pickBalanceCurrency(balances));
+    const rate = currency === null ? null : await rateToEurOn(currency);
+    if (currency !== null && rate !== null) {
+      await prisma.historicalBalance.create({
+        data: { accountId: account.id, ...balanceColumns(currency, pickBalance(balances), rate) },
+      });
+    }
   }
 
   if (conflicted > 0) {

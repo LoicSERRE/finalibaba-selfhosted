@@ -7,6 +7,7 @@ table (woobModule / woobLogin / woobPassword), not in env vars.
 For banks that require 2FA on first use, the sync will fail with auth_required.
 Interactive setup (if needed) must be done manually in the container for now.
 """
+import datetime
 import logging
 import subprocess
 import time
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import psycopg2.extras
 
+import fx
 import setup_locks
 import woob_errors
 from crypto_at_rest import decrypt_institution_row
@@ -28,6 +30,7 @@ from db import (
     promote_account_to_investment,
     record_balance,
     replace_holdings,
+    resolve_account_currency,
     to_cents,
     upsert_account,
     upsert_transaction,
@@ -258,46 +261,65 @@ def _sync_account_investments(w, backend_name, institution_name, account, accoun
         return 0
 
 
-def _sync_account_transactions(w, backend_name, institution_id, institution_name, account, account_db_id, cur):
+def _day_of(value) -> datetime.date:
+    return value.date() if isinstance(value, datetime.datetime) else value
+
+
+def _sync_account_transactions(w, backend_name, institution_id, institution_name, account, account_db_id, cur, currency=fx.BASE_CURRENCY):
     """Fetch and upsert transaction history for one account. Errors here are
     non-fatal to the overall sync - the account balance above was already
     recorded, so a transactions-fetch failure just means that account's
     history stays stale until the next run, not that the whole sync aborts."""
     try:
         from woob.core.bcall import CallErrors
-        tx_count = 0
+        # Collected first, written after: an account kept in another currency
+        # needs every day's rate, fetched in one batch (sync/fx.py). A
+        # mid-history CallErrors still keeps what was gathered before it.
+        history = []
         try:
-            # Counts (date, amount, label) repeats within THIS pass so a bank
-            # with no transaction ids can still store two identical-looking
-            # movements - see composite_sync_id().
-            seen_composites: dict[tuple, int] = {}
             for tx in w.do("iter_history", account, backends=backend_name):
                 if tx.amount is None or tx.date is None:
                     continue
-                amount_cents = to_cents(tx.amount)
-                label = (tx.label or tx.raw or "").strip() or "-"
-                base = f"woob:{institution_id}:{account.id}"
-                legacy_sync_id = None
-                if tx.id:
-                    tx_sync_id = f"{base}:{tx.id}"
-                else:
-                    key = (tx.date, amount_cents, label)
-                    seen_composites[key] = seen_composites.get(key, 0) + 1
-                    tx_sync_id = composite_sync_id(base, tx.date, amount_cents, label, seen_composites[key])
-                    legacy_sync_id = legacy_composite_sync_id(base, tx.date, amount_cents)
-                upsert_transaction(
-                    cur,
-                    account_id=account_db_id,
-                    sync_id=tx_sync_id,
-                    date=tx.date,
-                    label=label,
-                    amount_cents=amount_cents,
-                    legacy_sync_id=legacy_sync_id,
-                    near_duplicate="label" if not tx.id else "amount",
-                )
-                tx_count += 1
+                history.append(tx)
         except CallErrors as e:
             log.warning("%s iter_history errors (ignored): %s", institution_name, str(e)[:120])
+
+        rates = fx.rates_for_days(cur, currency, [_day_of(tx.date) for tx in history])
+        tx_count = 0
+        # Counts (date, amount, label) repeats within THIS pass so a bank
+        # with no transaction ids can still store two identical-looking
+        # movements - see composite_sync_id().
+        seen_composites: dict[tuple, int] = {}
+        for tx in history:
+            rate = rates.get(_day_of(tx.date))
+            if rate is None:
+                # No rate within a week of that day: left for a later sync
+                # rather than stored at a guessed value.
+                continue
+            amount_cents = to_cents(tx.amount)
+            label = (tx.label or tx.raw or "").strip() or "-"
+            base = f"woob:{institution_id}:{account.id}"
+            legacy_sync_id = None
+            if tx.id:
+                tx_sync_id = f"{base}:{tx.id}"
+            else:
+                key = (tx.date, amount_cents, label)
+                seen_composites[key] = seen_composites.get(key, 0) + 1
+                tx_sync_id = composite_sync_id(base, tx.date, amount_cents, label, seen_composites[key])
+                legacy_sync_id = legacy_composite_sync_id(base, tx.date, amount_cents)
+            upsert_transaction(
+                cur,
+                account_id=account_db_id,
+                sync_id=tx_sync_id,
+                date=tx.date,
+                label=label,
+                amount_cents=amount_cents,
+                legacy_sync_id=legacy_sync_id,
+                near_duplicate="label" if not tx.id else "amount",
+                currency=currency,
+                rate=None if fx.is_base(currency) else rate,
+            )
+            tx_count += 1
         log.info("%s - %s: %d transaction(s) imported", institution_name, account.label, tx_count)
     except Exception:
         log.warning("%s transactions skipped for %s", institution_name, account.label, exc_info=True)
@@ -432,7 +454,10 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
     """Upsert one account's balance row. Returns the synced summary (with
     the DB id, needed by the caller to then sync transactions), or None if
     the account has no balance to record (some Woob sub-accounts surface
-    with balance=None)."""
+    with balance=None), or its currency cannot be priced today.
+
+    The balance is in the currency the bank reports for the account (v2.18,
+    dev-docs/currencies.md); stored as EUR with the native figure beside it."""
     if account.balance is None:
         return None
     balance_cents = to_cents(account.balance)
@@ -445,9 +470,18 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
         account_type=account_type,
         institution_id=institution_id,
     )
-    record_balance(cur, account_db_id, balance_cents)
-    log.info("%s - %s: %d cents", institution_name, account.label, balance_cents)
-    return {"label": account.label, "balance_cents": balance_cents, "account_db_id": account_db_id}
+    currency = resolve_account_currency(cur, account_db_id, fx.parse_currency(getattr(account, "currency", None)))
+    if currency is None:
+        return None
+    rate = None
+    if not fx.is_base(currency):
+        rate = fx.rate_for_day(cur, currency, datetime.datetime.now(datetime.UTC).date())
+        if rate is None:
+            log.warning("%s - %s: no %s rate today, skipped until the next sync", institution_name, account.label, currency)
+            return None
+    record_balance(cur, account_db_id, balance_cents, currency=currency, rate=rate)
+    log.info("%s - %s: %d cents %s", institution_name, account.label, balance_cents, currency)
+    return {"label": account.label, "balance_cents": balance_cents, "account_db_id": account_db_id, "currency": currency}
 
 
 def run(institution_id: str, institution_name: str, module: str, login: str, password: str) -> dict:
@@ -538,7 +572,9 @@ def persist_accounts(
             continue
         synced.append({"label": summary["label"], "balance_cents": summary["balance_cents"]})
         _sync_account_investments(w, backend_name, institution_name, account, summary["account_db_id"], cur)
-        _sync_account_transactions(w, backend_name, institution_id, institution_name, account, summary["account_db_id"], cur)
+        _sync_account_transactions(
+            w, backend_name, institution_id, institution_name, account, summary["account_db_id"], cur, summary["currency"]
+        )
 
     write_sync_log(cur, sync_source, "success", f"{len(synced)} account(s) synced")
     conn.commit()

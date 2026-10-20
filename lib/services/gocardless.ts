@@ -162,10 +162,19 @@ export async function getTransactions(gcAccountId: string): Promise<GCTransactio
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Pick the most relevant balance (closingBooked preferred, fallback to first) */
+function preferredBalance(balances: GCBalance[]): GCBalance | undefined {
+  return balances.find((b) => b.balanceType === "closingBooked") ?? balances[0];
+}
+
 export function pickBalance(balances: GCBalance[]): bigint {
-  const preferred = balances.find((b) => b.balanceType === "closingBooked") ?? balances[0];
+  const preferred = preferredBalance(balances);
   if (!preferred) return BigInt(0);
   return BigInt(Math.round(Number.parseFloat(preferred.balanceAmount.amount) * 100));
+}
+
+/** The currency of the balance pickBalance reads (v2.18), when the bank gives one. */
+export function pickBalanceCurrency(balances: GCBalance[]): string | null {
+  return preferredBalance(balances)?.balanceAmount.currency?.toUpperCase() ?? null;
 }
 
 /** Map GoCardless cashAccountType to our AccountType */

@@ -5,6 +5,7 @@ import {
   parseAccountCurrency,
   parseYahooDailyRates,
   pickRate,
+  redenominate,
   revaluation,
   shiftSnapshots,
   toBaseCents,
@@ -137,5 +138,27 @@ describe("revaluing a foreign account the rate has moved under", () => {
   it("leaves EUR accounts and rows without a native figure alone", () => {
     expect(revaluation(yesterday, "EUR", 0.85, TODAY)).toBeNull();
     expect(revaluation({ ...yesterday, nativeBalanceCents: null }, "USD", 0.85, TODAY)).toBeNull();
+  });
+});
+
+// Step 1b: a synced account created before v2.18 was EUR whatever its bank
+// held, so its stored figures are the bank's own numbers.
+describe("re-denominating a history stored as EUR", () => {
+  const rows = [
+    { id: "a", cents: BigInt(10_000), day: "2026-03-05" },
+    { id: "b", cents: BigInt(-500), day: "2026-03-06" },
+  ];
+
+  it("keeps each figure as the native one and converts it at its own day's rate", () => {
+    const rates = new Map([["2026-03-05", 0.8], ["2026-03-06", 0.9]]);
+    expect(redenominate(rows, rates)).toEqual([
+      { id: "a", native: BigInt(10_000), base: BigInt(8_000), rate: 0.8 },
+      { id: "b", native: BigInt(-500), base: BigInt(-450), rate: 0.9 },
+    ]);
+  });
+
+  it("rewrites nothing when any day cannot be priced", () => {
+    expect(redenominate(rows, new Map([["2026-03-05", 0.8], ["2026-03-06", null]]))).toBeNull();
+    expect(redenominate(rows, new Map([["2026-03-05", 0.8]]))).toBeNull();
   });
 });

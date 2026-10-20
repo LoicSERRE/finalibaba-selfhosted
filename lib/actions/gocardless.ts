@@ -2,7 +2,10 @@
 
 import { revalidateAccount, revalidateTransactions } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
-import { getAccountBalances, getTransactions, pickBalance, type GCTransaction } from "@/lib/services/gocardless";
+import { getAccountBalances, getTransactions, pickBalance, pickBalanceCurrency, type GCTransaction } from "@/lib/services/gocardless";
+import { amountColumns, balanceColumns } from "@/lib/domain/currency";
+import { rateToEurOn, ratesToEurForDays } from "@/lib/services/exchange-rate";
+import { resolveSyncedAccountCurrency } from "@/lib/services/account-currency";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { getViewer, assertOwned } from "@/lib/auth-context";
 
@@ -19,9 +22,14 @@ export async function syncGocardlessBalances(institutionId: string) {
   await Promise.all(
     accounts.map(async (account) => {
       const { balances } = await getAccountBalances(account.gocardlessAccountId!);
-      const balanceCents = pickBalance(balances);
+      // In the currency the bank reports (v2.18): stored as EUR, the native
+      // figure beside it. No currency or no rate today: skipped, never guessed.
+      const currency = await resolveSyncedAccountCurrency(account.id, pickBalanceCurrency(balances));
+      if (currency === null) return;
+      const rate = await rateToEurOn(currency);
+      if (rate === null) return;
       await prisma.historicalBalance.create({
-        data: { accountId: account.id, balanceCents },
+        data: { accountId: account.id, ...balanceColumns(currency, pickBalance(balances), rate) },
       });
     })
   );
@@ -34,10 +42,18 @@ export async function syncGocardlessBalances(institutionId: string) {
 // this dedup scheme needs. A pending transaction becomes syncable once the
 // bank moves it to `booked` on a later sync, same as it would show up late
 // in the bank's own app.
-function gcTransactionToRow(accountId: string, tx: GCTransaction) {
+function gcTransactionDay(tx: GCTransaction): string | null {
+  return tx.bookingDate ?? tx.valueDate ?? null;
+}
+
+function gcTransactionToRow(accountId: string, tx: GCTransaction, currency: string, rates: ReadonlyMap<string, number | null>) {
   if (!tx.transactionId) return null;
-  const dateStr = tx.bookingDate ?? tx.valueDate;
+  const dateStr = gcTransactionDay(tx);
   if (!dateStr) return null;
+  // A day nobody can price is left for a later sync: syncId-keyed, so it is
+  // simply inserted then.
+  const rate = rates.get(dateStr) ?? null;
+  if (rate === null) return null;
 
   const label = tx.remittanceInformationUnstructured || tx.creditorName || tx.debtorName || "-";
   return {
@@ -48,7 +64,7 @@ function gcTransactionToRow(accountId: string, tx: GCTransaction) {
     // negative-offset timezones.
     date: new Date(`${dateStr}T12:00:00.000Z`),
     label: label.slice(0, 500),
-    amountCents: BigInt(Math.round(Number.parseFloat(tx.transactionAmount.amount) * 100)),
+    ...amountColumns(currency, BigInt(Math.round(Number.parseFloat(tx.transactionAmount.amount) * 100)), rate),
     merchantCategoryCode: tx.merchantCategoryCode ?? null,
   };
 }
@@ -79,8 +95,15 @@ export async function syncGocardlessTransactions(institutionId: string) {
   let imported = 0;
   for (const account of accounts) {
     const { transactions } = await getTransactions(account.gocardlessAccountId!);
-    const rows = transactions.booked
-      .map((tx) => gcTransactionToRow(account.id, tx))
+    // The balance sync settles the account's currency; a transaction in
+    // another one than its account (a card payment abroad, reported in the
+    // original currency by some banks) is not this account's figure and is
+    // skipped rather than mis-converted.
+    const currency = account.currency;
+    const booked = transactions.booked.filter((tx) => (tx.transactionAmount.currency?.toUpperCase() ?? currency) === currency);
+    const rates = await ratesToEurForDays(currency, booked.map(gcTransactionDay).filter((day) => day !== null));
+    const rows = booked
+      .map((tx) => gcTransactionToRow(account.id, tx, currency, rates))
       .filter((row) => row !== null);
     if (rows.length === 0) continue;
     const result = await prisma.transaction.createMany({ data: rows, skipDuplicates: true });
