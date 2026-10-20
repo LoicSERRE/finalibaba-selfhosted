@@ -126,7 +126,7 @@ def test_a_history_stored_as_euros_is_re_denominated_at_each_days_rate(cur, acco
     # Before v2.18 a dollar account's figures were written as if euros.
     cur.execute(
         'INSERT INTO "HistoricalBalance" (id, "accountId", "balanceCents", "recordedAt") VALUES (%s, %s, %s, %s), (%s, %s, %s, %s)',
-        (str(uuid.uuid4()), account, 100_00, datetime.datetime(2026, 3, 5, 9), str(uuid.uuid4()), account, 200_00, datetime.datetime(2026, 3, 6, 9)),
+        (str(uuid.uuid4()), account, 100_00, datetime.datetime(2026, 3, 5, 9, tzinfo=datetime.UTC), str(uuid.uuid4()), account, 200_00, datetime.datetime(2026, 3, 6, 9, tzinfo=datetime.UTC)),
     )
     upsert_transaction(cur, account_id=account, sync_id="woob:x:old", date=D1, label="Old", amount_cents=-10_00)
 
@@ -142,7 +142,7 @@ def test_no_switch_while_any_of_the_history_cannot_be_priced(cur, account, monke
     monkeypatch.setattr(fx, "_fetch_daily_rates", lambda *a: {})  # Yahoo has nothing for 2020 either
     cur.execute(
         'INSERT INTO "HistoricalBalance" (id, "accountId", "balanceCents", "recordedAt") VALUES (%s, %s, %s, %s)',
-        (str(uuid.uuid4()), account, 100_00, datetime.datetime(2020, 1, 1, 9)),
+        (str(uuid.uuid4()), account, 100_00, datetime.datetime(2020, 1, 1, 9, tzinfo=datetime.UTC)),
     )
     assert resolve_account_currency(cur, account, "USD") is None
     cur.execute('SELECT currency FROM "Account" WHERE id = %s', (account,))
