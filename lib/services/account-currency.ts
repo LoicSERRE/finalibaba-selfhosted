@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
-import { BASE_CURRENCY, dayKey, isCurrencyCode, redenominate } from "@/lib/domain/currency";
-import { ratesToEurForDays } from "@/lib/services/exchange-rate";
+import { dayKey, isBaseCurrency, isCurrencyCode, redenominate } from "@/lib/domain/currency";
+import { ratesToBaseForDays } from "@/lib/services/exchange-rate";
 
 /**
  * The currency to store a synced account's figures in, or null to skip
@@ -17,7 +17,7 @@ import { ratesToEurForDays } from "@/lib/services/exchange-rate";
 export async function resolveSyncedAccountCurrency(accountId: string, reported: string | null | undefined): Promise<string | null> {
   const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId }, select: { currency: true } });
   if (!isCurrencyCode(reported) || reported === account.currency) return account.currency;
-  if (account.currency !== BASE_CURRENCY) return null;
+  if (!isBaseCurrency(account.currency)) return null;
 
   const [balances, transactions] = await Promise.all([
     prisma.historicalBalance.findMany({
@@ -31,7 +31,7 @@ export async function resolveSyncedAccountCurrency(accountId: string, reported: 
   ]);
   const balanceRows = balances.map((b) => ({ id: b.id, cents: b.balanceCents, day: dayKey(b.recordedAt) }));
   const transactionRows = transactions.map((t) => ({ id: t.id, cents: t.amountCents, day: dayKey(t.date) }));
-  const rates = await ratesToEurForDays(reported, [...balanceRows, ...transactionRows].map((r) => r.day));
+  const rates = await ratesToBaseForDays(reported, [...balanceRows, ...transactionRows].map((r) => r.day));
   const newBalances = redenominate(balanceRows, rates);
   const newTransactions = redenominate(transactionRows, rates);
   if (!newBalances || !newTransactions) return null;

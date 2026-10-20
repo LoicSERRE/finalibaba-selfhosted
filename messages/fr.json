@@ -1419,7 +1419,7 @@
     "addFirst": "Ajoutez d'abord une institution dans Paramètres.",
     "currency": "Devise",
     "balanceIn": "Solde initial ({currency})",
-    "rateUnavailable": "Impossible d'obtenir le taux {currency} → EUR pour le moment. Réessayez dans quelques minutes."
+    "rateUnavailable": "Impossible d'obtenir le taux {currency} → {base} pour le moment. Réessayez dans quelques minutes."
   },
   "addHolding": {
     "editTitle": "Modifier : {ticker}",

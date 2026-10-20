@@ -1,14 +1,14 @@
 import { Decimal } from "decimal.js";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 /**
  * Accounts kept in another currency (v2.18, dev-docs/currencies.md step 1).
- * Every *Cents column stays EUR, so everything that sums them is untouched;
+ * Every *Cents column is in the instance's base currency (EUR unless set
+ * otherwise at install, v2.19 - lib/utils/base-currency.ts), so everything
+ * that sums them is untouched;
  * the native figure and the rate it was converted with sit beside it. Pure
  * logic only - rates are fetched and cached in lib/services/exchange-rate.ts.
  */
-
-/** What every *Cents column means. Configurable later (step 2). */
-export const BASE_CURRENCY = "EUR";
 
 /**
  * Offered when creating an account. All have a Yahoo `EUR{XXX}=X` pair; the
@@ -26,7 +26,7 @@ export function isCurrencyCode(value: unknown): value is string {
 }
 
 export function isBaseCurrency(currency: string): boolean {
-  return currency === BASE_CURRENCY;
+  return currency === baseCurrency();
 }
 
 export function currencyAllowedFor(accountType: string): boolean {
@@ -35,8 +35,8 @@ export function currencyAllowedFor(accountType: string): boolean {
 
 /** A form's currency field, falling back to the base for anything unexpected or a type that has none. */
 export function parseAccountCurrency(raw: unknown, accountType: string): string {
-  if (!currencyAllowedFor(accountType)) return BASE_CURRENCY;
-  return (ACCOUNT_CURRENCIES as readonly string[]).includes(raw as string) ? (raw as string) : BASE_CURRENCY;
+  if (!currencyAllowedFor(accountType)) return baseCurrency();
+  return (ACCOUNT_CURRENCIES as readonly string[]).includes(raw as string) ? (raw as string) : baseCurrency();
 }
 
 /**

@@ -15,7 +15,7 @@ import {
   type ManualEntryError,
 } from "@/lib/domain/manual-entries";
 import { amountColumns, balanceColumns, isBaseCurrency, nativeOf, shiftSnapshots } from "@/lib/domain/currency";
-import { rateToEurOn } from "@/lib/services/exchange-rate";
+import { rateToBaseOn } from "@/lib/services/exchange-rate";
 
 /**
  * Editing an account nobody else writes to. Every write is guarded by
@@ -81,7 +81,7 @@ export async function recordManualMovement(
   const at = atNoonUtc(input.date);
   const delta = BigInt(Math.round(input.amountCents));
   // The amount is in the account's currency, converted at its own day's rate.
-  const rate = await rateToEurOn(currency, at);
+  const rate = await rateToBaseOn(currency, at);
   if (rate === null) return { ok: false, error: "rate_unavailable" };
 
   const refusal = await prisma.$transaction(async (tx) => {
@@ -150,7 +150,7 @@ export async function setManualBalance(accountId: string, balanceCents: number):
   if (!Number.isFinite(balanceCents)) return { ok: false, error: "amount_required" };
 
   const at = atNoonUtc(new Date().toISOString().slice(0, 10));
-  const rate = await rateToEurOn(currency, at);
+  const rate = await rateToBaseOn(currency, at);
   if (rate === null) return { ok: false, error: "rate_unavailable" };
   const value = balanceColumns(currency, BigInt(Math.round(balanceCents)), rate);
 

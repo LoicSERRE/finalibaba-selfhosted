@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/input";
 import { createRecurringTransaction, updateRecurringTransaction } from "@/lib/actions/recurring";
 import { useTranslations } from "next-intl";
 import { MAX_INTERVAL_COUNT } from "@/lib/domain/recurring";
+import { baseSymbol } from "@/lib/utils/base-currency";
 
 type Frequency = "WEEKLY" | "MONTHLY" | "YEARLY";
 
@@ -135,7 +136,7 @@ export function AddRecurringDialog({
           </div>
           <Input
             id="rec-amount"
-            label="€"
+            label={baseSymbol()}
             type="text"
             inputMode="decimal"
             name="amount"

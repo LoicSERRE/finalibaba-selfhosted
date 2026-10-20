@@ -1,3 +1,4 @@
+import { baseCurrency } from "@/lib/utils/base-currency";
 // Shared by the three Markdown exports (accounts, analytics, tax report): the
 // number/date formatting every one of them prints through, and the
 // client-side download that hands the document over.
@@ -47,7 +48,7 @@ export function exportFormat(intlLocale: string): ExportFormat {
   const money = (cents: number, decimals: number, signed: boolean) =>
     numberFormat(`money:${decimals}:${signed}`, {
       style: "currency",
-      currency: "EUR",
+      currency: baseCurrency(),
       maximumFractionDigits: decimals,
       minimumFractionDigits: decimals,
       signDisplay: signed ? "always" : "auto",

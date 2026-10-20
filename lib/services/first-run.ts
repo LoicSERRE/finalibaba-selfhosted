@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import type { FirstRunFacts } from "@/lib/domain/first-run";
+import { UNTOUCHED_LEGACY_GOAL, type FirstRunFacts } from "@/lib/domain/first-run";
 
 /**
  * What the first-run checklist is ticked from (v2.17), for one user: their
@@ -14,7 +14,7 @@ export async function loadFirstRunFacts(userId: string, accountIds: string[]): P
     }),
     prisma.userSettings.findUnique({ where: { userId }, select: { country: true, salaryNetCents: true } }),
     prisma.category.count({ where: { userId } }),
-    prisma.goal.count({ where: { userId } }),
+    prisma.goal.count({ where: { userId, NOT: UNTOUCHED_LEGACY_GOAL } }),
   ]);
   const profileSet = Boolean(settings && (settings.country !== null || settings.salaryNetCents > BigInt(0)));
   return { accounts, syncedAccounts, profileSet, categories, goals };

@@ -11,7 +11,7 @@ export function BalanceHistoryTable({
   td,
   intlLocale,
   accountId,
-  currency = "EUR",
+  currency,
   historyRows,
   canImportCsv,
   categories,

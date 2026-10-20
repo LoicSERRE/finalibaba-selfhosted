@@ -67,6 +67,8 @@ docker compose exec app pnpm exec prisma db seed  # optional - pre-populates com
 
 Open [http://localhost:3000](http://localhost:3000). First boot takes a few minutes while the image builds.
 
+**Not in euros?** Set `BASE_CURRENCY` in `.env` **before the first start** - `EUR` (default), `USD`, `GBP` or `CHF`. Every amount is kept and shown in it; accounts and positions in other currencies are converted at each day's rate. It is settled at the first boot and changing it later does not convert existing figures, so pick it once.
+
 ---
 
 ## Account types

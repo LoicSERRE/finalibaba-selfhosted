@@ -26,7 +26,7 @@ export function TransactionsTable({
   intlLocale,
   accountId,
   accountType,
-  currency = "EUR",
+  currency,
   transactions,
   categories,
   canImportCsv,

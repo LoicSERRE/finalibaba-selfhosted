@@ -11,6 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useTranslations } from "next-intl";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 type DataPoint = {
   date: string; // display label, e.g. "15 août"
@@ -20,7 +21,7 @@ type DataPoint = {
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "EUR",
+    currency: baseCurrency(),
     maximumFractionDigits: 0,
   }).format(cents / 100);
 }

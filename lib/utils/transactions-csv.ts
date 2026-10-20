@@ -1,3 +1,4 @@
+import { baseCurrency } from "@/lib/utils/base-currency";
 /**
  * The ledger as CSV (v2.14). Pure: rows in, one string out.
  *
@@ -78,7 +79,7 @@ export function buildTransactionsCsv(rows: CsvTransaction[], s: CsvStrings, intl
       text(row.account),
       text(row.label),
       csvAmount(row.amountCents, decimal),
-      "EUR",
+      baseCurrency(),
       text(categoryCell(row, s, decimal)),
       text(row.note ?? ""),
       text(row.tags.join(", ")),

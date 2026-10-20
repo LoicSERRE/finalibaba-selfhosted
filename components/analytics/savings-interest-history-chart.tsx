@@ -2,6 +2,7 @@
 
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useLocale, useTranslations } from "next-intl";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 type DataPoint = {
   date: string; // pre-formatted, day+month only - display only, see isoDate below
@@ -10,7 +11,7 @@ type DataPoint = {
 };
 
 function formatCurrency(cents: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(cents / 100);
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: baseCurrency(), maximumFractionDigits: 0 }).format(cents / 100);
 }
 
 // How the year-end interest estimate (savings-interest-estimate-section.tsx)

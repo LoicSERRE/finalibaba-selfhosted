@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { parseCents } from "@/lib/utils/format";
 import { recordManualMovement, setManualBalance } from "@/lib/actions/manual-entries";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 /**
  * Recording what happened on an account nobody else writes to - a meal-voucher
@@ -66,7 +67,7 @@ function ModeToggle({ mode, setMode, t }: Readonly<{ mode: Mode; setMode: (m: Mo
 export function ManualEntryDialog({
   accountId,
   categories,
-  currency = "EUR",
+  currency,
 }: Readonly<{
   accountId: string;
   categories: { id: string; name: string; color: string }[];
@@ -79,6 +80,9 @@ export function ManualEntryDialog({
   const [pending, startTransition] = useTransition();
   const t = useTranslations("accountDetail.manualEntry");
   const tc = useTranslations("common");
+  // Not a `= baseCurrency()` default: a defaulted parameter that calls
+  // something hides the component from lizard (scripts/lizard-blind-spots.py).
+  const unit = currency ?? baseCurrency();
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -141,7 +145,7 @@ export function ManualEntryDialog({
         {mode === "correct" ? (
           <Input
             name="balance"
-            label={currency === "EUR" ? t("newBalance") : `${t("newBalance")} (${currency})`}
+            label={unit === baseCurrency() ? t("newBalance") : `${t("newBalance")} (${unit})`}
             hint={t("correctHint")}
             type="text"
             inputMode="decimal"
@@ -153,7 +157,7 @@ export function ManualEntryDialog({
           <>
             <Input
               name="amount"
-              label={currency === "EUR" ? t("amount") : `${t("amount")} (${currency})`}
+              label={unit === baseCurrency() ? t("amount") : `${t("amount")} (${unit})`}
               hint={t("movementHint")}
               type="text"
               inputMode="decimal"

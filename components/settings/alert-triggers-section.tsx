@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { updateAlertTriggers } from "@/lib/actions/alerts";
 import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { baseSymbol } from "@/lib/utils/base-currency";
 
 const inputClass =
   "w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30";
@@ -46,7 +47,7 @@ export async function AlertTriggersSection({
               placeholder={t("netWorthThresholdPlaceholder")}
               className={`${inputClass} pr-8 tabular-nums`}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">{baseSymbol()}</span>
           </div>
         </div>
 

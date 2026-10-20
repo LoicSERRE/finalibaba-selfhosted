@@ -11,7 +11,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: { exchangeRate: { findMany: findManyMock, createMany: createManyMock } },
 }));
 
-import { rateToEurOn, ratesToEurForDays } from "@/lib/services/exchange-rate";
+import { rateToBaseOn, ratesToBaseForDays } from "@/lib/services/exchange-rate";
 
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`);
 const stamp = (day: string) => Date.parse(`${day}T22:00:00Z`) / 1000;
@@ -31,11 +31,11 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("ratesToEurForDays", () => {
+describe("ratesToBaseForDays", () => {
   it("answers EUR without asking anyone", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    expect(await rateToEurOn("EUR")).toBe(1);
+    expect(await rateToBaseOn("EUR")).toBe(1);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(findManyMock).not.toHaveBeenCalled();
   });
@@ -44,7 +44,7 @@ describe("ratesToEurForDays", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     findManyMock.mockResolvedValue([{ day: utc("2026-03-05"), rate: 0.9 }]);
-    expect(await rateToEurOn("USD", new Date("2026-03-05T12:00:00Z"))).toBeCloseTo(0.9, 10);
+    expect(await rateToBaseOn("USD", new Date("2026-03-05T12:00:00Z"))).toBeCloseTo(0.9, 10);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -53,7 +53,7 @@ describe("ratesToEurForDays", () => {
     const fetchMock = vi.fn().mockResolvedValue(yahoo({ "2026-03-05": 1.25, "2026-03-06": 1.0 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const rates = await ratesToEurForDays("USD", ["2026-03-07", "2026-03-05", "2026-03-05"]);
+    const rates = await ratesToBaseForDays("USD", ["2026-03-07", "2026-03-05", "2026-03-05"]);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toContain("EURUSD=X");
@@ -65,12 +65,12 @@ describe("ratesToEurForDays", () => {
 
   it("returns null for a day nobody can price, and stores nothing invented", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
-    expect(await rateToEurOn("USD", new Date("2026-03-05T12:00:00Z"))).toBeNull();
+    expect(await rateToBaseOn("USD", new Date("2026-03-05T12:00:00Z"))).toBeNull();
     expect(createManyMock).not.toHaveBeenCalled();
   });
 
   it("treats a network failure as no rate", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    expect(await rateToEurOn("USD", new Date("2026-03-05T12:00:00Z"))).toBeNull();
+    expect(await rateToBaseOn("USD", new Date("2026-03-05T12:00:00Z"))).toBeNull();
   });
 });

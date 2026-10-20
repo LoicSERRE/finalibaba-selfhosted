@@ -4,7 +4,7 @@ import { revalidateAccount, revalidateTransactions } from "@/lib/actions/revalid
 import { prisma } from "@/lib/db/prisma";
 import { getAccountBalances, getTransactions, pickBalance, pickBalanceCurrency, type GCTransaction } from "@/lib/services/gocardless";
 import { amountColumns, balanceColumns } from "@/lib/domain/currency";
-import { rateToEurOn, ratesToEurForDays } from "@/lib/services/exchange-rate";
+import { rateToBaseOn, ratesToBaseForDays } from "@/lib/services/exchange-rate";
 import { resolveSyncedAccountCurrency } from "@/lib/services/account-currency";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { getViewer, assertOwned } from "@/lib/auth-context";
@@ -26,7 +26,7 @@ export async function syncGocardlessBalances(institutionId: string) {
       // figure beside it. No currency or no rate today: skipped, never guessed.
       const currency = await resolveSyncedAccountCurrency(account.id, pickBalanceCurrency(balances));
       if (currency === null) return;
-      const rate = await rateToEurOn(currency);
+      const rate = await rateToBaseOn(currency);
       if (rate === null) return;
       await prisma.historicalBalance.create({
         data: { accountId: account.id, ...balanceColumns(currency, pickBalance(balances), rate) },
@@ -101,7 +101,7 @@ export async function syncGocardlessTransactions(institutionId: string) {
     // skipped rather than mis-converted.
     const currency = account.currency;
     const booked = transactions.booked.filter((tx) => (tx.transactionAmount.currency?.toUpperCase() ?? currency) === currency);
-    const rates = await ratesToEurForDays(currency, booked.map(gcTransactionDay).filter((day) => day !== null));
+    const rates = await ratesToBaseForDays(currency, booked.map(gcTransactionDay).filter((day) => day !== null));
     const rows = booked
       .map((tx) => gcTransactionToRow(account.id, tx, currency, rates))
       .filter((row) => row !== null);

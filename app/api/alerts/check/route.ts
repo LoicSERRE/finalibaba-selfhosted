@@ -10,6 +10,7 @@ import { evaluateNetWorthAlert, isLoanNearlyPaidOff } from "@/lib/domain/alerts"
 import { dispatchAlert } from "@/lib/services/notifications";
 import { checkSyncFailures, checkSectorDataHealth } from "@/lib/services/alerts/sync-failures";
 import { checkCustomAlertRules } from "@/lib/services/alerts/custom-rules";
+import { baseSymbol } from "@/lib/utils/base-currency";
 
 /**
  * Called by sync/main.py at the end of every automatic 4h run, never on a
@@ -51,7 +52,7 @@ async function checkNetWorthAlert(settings: UserSettingsModel, accountIds: strin
     await dispatchAlert(
       settings,
       isAbove ? "Patrimoine net : seuil dépassé" : "Patrimoine net : passé sous le seuil",
-      `Ton patrimoine net est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${netWorthEuros.toLocaleString("fr-FR")} €).`
+      `Ton patrimoine net est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} ${baseSymbol()} (actuellement ${netWorthEuros.toLocaleString("fr-FR")} ${baseSymbol()}).`
     );
   }
 
@@ -81,7 +82,7 @@ async function checkLoanAlerts(settings: UserSettingsModel, accountIds: string[]
     await dispatchAlert(
       settings,
       "Prêt bientôt remboursé",
-      `Le prêt "${account.name}" est presque remboursé (${(Number(remaining) / 100).toLocaleString("fr-FR")} € restants).`
+      `Le prêt "${account.name}" est presque remboursé (${(Number(remaining) / 100).toLocaleString("fr-FR")} ${baseSymbol()} restants).`
     );
     await prisma.account.update({
       where: { id: account.id },

@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { baseSymbol } from "@/lib/utils/base-currency";
 
 // Loan is "nearly paid off" once its remaining capital drops to 5% or less
 // of the original borrowed amount - a fixed constant rather than a
@@ -142,14 +143,14 @@ export function evaluateNewTransactionAlert(
     const amount = (Number(t.amountCents) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return {
       title: "Nouvelle transaction",
-      body: `${t.label} · ${t.amountCents >= BigInt(0) ? "+" : ""}${amount} €`,
+      body: `${t.label} · ${t.amountCents >= BigInt(0) ? "+" : ""}${amount} ${baseSymbol()}`,
     };
   }
 
   const shown = transactions.slice(0, MAX_TRANSACTIONS_IN_DIGEST);
   const lines = shown.map((t) => {
     const amount = (Number(t.amountCents) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return `${t.label} · ${t.amountCents >= BigInt(0) ? "+" : ""}${amount} €`;
+    return `${t.label} · ${t.amountCents >= BigInt(0) ? "+" : ""}${amount} ${baseSymbol()}`;
   });
   if (totalCount > shown.length) {
     lines.push(`+ ${totalCount - shown.length} autre(s)`);

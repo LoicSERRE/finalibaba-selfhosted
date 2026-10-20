@@ -11,7 +11,7 @@ import { normalizeNote, parseTags, validateNoteAndTags, type NoteError } from "@
 import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { amountColumns } from "@/lib/domain/currency";
-import { ratesToEurForDays } from "@/lib/services/exchange-rate";
+import { ratesToBaseForDays } from "@/lib/services/exchange-rate";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
 
 type ImportRow = { date: string; label: string; amountCents: number };
@@ -28,7 +28,7 @@ export async function importTransactions(
 
   // Amounts are in the account's currency, each converted at its own day's
   // rate - all or nothing, like the balance import.
-  const rates = await ratesToEurForDays(currency, rows.map((r) => r.date));
+  const rates = await ratesToBaseForDays(currency, rows.map((r) => r.date));
   if ([...rates.values()].some((rate) => rate === null)) return { imported: 0, error: "rate_unavailable" };
 
   const data = rows.map((r) => ({

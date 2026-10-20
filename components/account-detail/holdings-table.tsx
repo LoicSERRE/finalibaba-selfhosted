@@ -5,6 +5,7 @@ import { SellHoldingDialog } from "@/components/account-detail/sell-holding-dial
 import { RefreshHoldingFxButton } from "@/components/account-detail/refresh-holding-fx-button";
 import type { HoldingWithTax } from "@/lib/domain/account-detail";
 import type { getTranslations } from "next-intl/server";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -88,7 +89,7 @@ export function HoldingsTable({
                   <p className="font-medium text-[var(--foreground)]">{h.name || h.ticker}</p>
                   <p className="text-xs text-[var(--muted)] mt-0.5">
                     {h.ticker}
-                    {h.currency !== "EUR" && ` · ${h.currency}`}
+                    {h.currency !== baseCurrency() && ` · ${h.currency}`}
                   </p>
                 </td>
                 {/* A quantity times a public price is the value: blurred too. */}
@@ -137,7 +138,7 @@ export function HoldingsTable({
                   {h.taxCents === null ? (
                     <span className="text-[var(--muted)] text-xs">-</span>
                   ) : h.taxCents === BigInt(0) ? (
-                    <span className="text-[var(--muted)] text-xs amount">0,00 €</span>
+                    <span className="text-[var(--muted)] text-xs amount">{formatCurrency(0)}</span>
                   ) : (
                     <p className="text-[var(--negative)] font-medium amount">
                       -{formatCurrency(h.taxCents)}
@@ -170,7 +171,7 @@ export function HoldingsTable({
                         accountName={accountName}
                         existing={{ ...h, quantity: h.quantity.toString() }}
                       />
-                      {h.currency !== "EUR" && <RefreshHoldingFxButton holdingId={h.id} />}
+                      {h.currency !== baseCurrency() && <RefreshHoldingFxButton holdingId={h.id} />}
                     </div>
                   </td>
                 )}

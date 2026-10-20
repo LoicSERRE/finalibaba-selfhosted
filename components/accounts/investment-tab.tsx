@@ -142,7 +142,7 @@ export function InvestmentTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: Inv
                           {h.taxCents === null ? (
                             <span className="text-[var(--muted)] text-xs">-</span>
                           ) : h.taxCents === BigInt(0) ? (
-                            <span className="text-[var(--muted)] text-xs amount">0,00 €</span>
+                            <span className="text-[var(--muted)] text-xs amount">{formatCurrency(0)}</span>
                           ) : (
                             <p className="text-[var(--negative)] font-medium amount">-{formatCurrency(h.taxCents)}</p>
                           )}

@@ -71,7 +71,7 @@ export function TopAssetsSection({
                 {asset.tax === null ? (
                   <span className="text-[var(--muted)] text-xs">-</span>
                 ) : asset.tax === BigInt(0) ? (
-                  <span className="text-[var(--muted)] text-xs amount">0 €</span>
+                  <span className="text-[var(--muted)] text-xs amount">{formatCurrency(0, 0)}</span>
                 ) : (
                   <span className="text-[var(--negative)] amount">-{formatCurrency(asset.tax, 0)}</span>
                 )}

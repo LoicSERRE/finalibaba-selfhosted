@@ -7,6 +7,7 @@ import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 import { GoalsSection } from "@/components/settings/goals-section";
 import { TaxSettingsSection } from "@/components/settings/tax-settings-section";
 import type { SettingsTabProps } from "./context";
+import { baseSymbol } from "@/lib/utils/base-currency";
 
 /** Income and spending figures, savings goals, and tax defaults. */
 export async function ProfileTab({ viewer }: SettingsTabProps) {
@@ -54,7 +55,7 @@ export async function ProfileTab({ viewer }: SettingsTabProps) {
                   placeholder="2000"
                   className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">{baseSymbol()}</span>
               </div>
             </div>
             <div className="space-y-1.5">
@@ -74,7 +75,7 @@ export async function ProfileTab({ viewer }: SettingsTabProps) {
                   placeholder="900"
                   className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">{baseSymbol()}</span>
               </div>
             </div>
           </div>
@@ -96,7 +97,7 @@ export async function ProfileTab({ viewer }: SettingsTabProps) {
                   placeholder="1100"
                   className="w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 tabular-nums"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">€</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">{baseSymbol()}</span>
               </div>
               <p className="text-xs text-[var(--muted)]">{t("settings.profile.savedHint")}</p>
             </div>
