@@ -196,3 +196,28 @@ export function hasLoanParams(account: {
     account.loanStartDate !== null
   );
 }
+
+/**
+ * A LOAN whose bank reports it (v2.19.1): synced through Woob or GoCardless.
+ * Its remaining capital is the bank's own figure, written to liabilityCents
+ * on every sync, and its HistoricalBalance rows are that figure as the bank
+ * states it - negative, what is still owed on each day. So it is never
+ * re-amortised from a schedule (a student loan's deferral, an early
+ * repayment, the bank's real interest - none of it is in a closed form), and
+ * the net-worth history reads its debt from those rows rather than
+ * subtracting liabilityCents a second time.
+ */
+export function isBankReportedLoan(account: {
+  type: string;
+  syncId?: string | null;
+  gocardlessAccountId?: string | null;
+}): boolean {
+  return account.type === "LOAN" && Boolean(account.syncId || account.gocardlessAccountId);
+}
+
+/** How far a bank-reported loan has been repaid, 0-100, when the amount borrowed is known. */
+export function repaidPct(borrowedCents: bigint | null, remainingCents: bigint): number | null {
+  if (borrowedCents === null || borrowedCents <= BigInt(0)) return null;
+  const pct = (Number(borrowedCents - remainingCents) / Number(borrowedCents)) * 100;
+  return Math.min(100, Math.max(0, Math.round(pct)));
+}

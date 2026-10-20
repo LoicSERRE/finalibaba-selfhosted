@@ -14,7 +14,7 @@
  * stopped the chart subtracting the original borrowed capital from every day
  * of its life (v2.10.0).
  */
-import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
+import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
 import { clampedEquity } from "@/lib/domain/dashboard";
 import type {
   DashboardAccount,
@@ -146,7 +146,7 @@ export function buildDashboardHistory(
   // evaluate at, so the correct figure is derivable for every past day.
   const loanParamsMap = new Map<string, Parameters<typeof calcCurrentCapital>[0]>();
   for (const account of accounts) {
-    if (account.type === "LOAN" && hasLoanParams(account)) {
+    if (account.type === "LOAN" && hasLoanParams(account) && !isBankReportedLoan(account)) {
       loanParamsMap.set(account.id, {
         loanAmountCents: account.loanAmountCents,
         loanTaeg: account.loanTaeg,

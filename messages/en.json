@@ -229,7 +229,10 @@
       "monthlyDuring": "Monthly payment during deferral ({months} months)",
       "interestOnly": "interest only",
       "plusInsurance": " + insurance",
-      "repaymentProgress": "Repayment · {elapsed} months elapsed of {total}"
+      "repaymentProgress": "Repayment · {elapsed} months elapsed of {total}",
+      "reportedByBank": "figures reported by the bank",
+      "nextPayment": "Next payment",
+      "repaidShare": "Repaid so far"
     },
     "auto": {
       "value": "Current value",

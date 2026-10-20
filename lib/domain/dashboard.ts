@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
+import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
 import { buildDashboardHistory } from "@/lib/domain/dashboard-history";
 import { holdingMarketValue } from "@/lib/domain/analytics";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
@@ -29,6 +29,9 @@ export interface DashboardAccount {
   id: string;
   name: string;
   type: string; // AccountType
+  /** Set for an account a bank syncs - a LOAN with one is bank-reported (lib/domain/loan.ts). */
+  syncId?: string | null;
+  gocardlessAccountId?: string | null;
   institutionId: string | null;
   institution: { name: string; logoUrl: string | null } | null;
   taxTreatment: TaxTreatment;
@@ -146,7 +149,10 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
   const typeMap = new Map<string, string>();
 
   for (const account of accounts) {
-    liabMap.set(account.id, account.liabilityCents ?? BigInt(0));
+    // A bank-reported loan's history rows already carry what was owed each
+    // day (negative balances); subtracting liabilityCents on top of them
+    // would count the debt twice in the net-worth series.
+    liabMap.set(account.id, isBankReportedLoan(account) ? BigInt(0) : (account.liabilityCents ?? BigInt(0)));
     typeMap.set(account.id, account.type);
 
     // Every branch below assigns a real value before use - the initializer
@@ -184,7 +190,9 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
       grossAssets += value;
     } else if (account.type === "LOAN") {
       // Loan: pure liability - no asset counterpart
-      const loanBalance = hasLoanParams(account)
+      // The bank's own figure when the bank reports the loan, never a
+      // re-amortised estimate (isBankReportedLoan).
+      const loanBalance = hasLoanParams(account) && !isBankReportedLoan(account)
         ? calcCurrentCapital(
             {
               loanAmountCents: account.loanAmountCents,

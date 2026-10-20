@@ -294,3 +294,50 @@ describe("export mappers", () => {
     expect(toLoanExport(row, "fr-FR")).toBeNull();
   });
 });
+
+// v2.19.1: a loan the bank reports is shown from the bank's own figures
+// rather than as "Paramètres incomplets".
+describe("computeLoanRow - a loan the bank reports", () => {
+  const base = {
+    id: "l", name: "PRÊT PERSONNEL ETUDES", institution: { name: "LCL", logoUrl: null },
+    loanTaeg: 0.99, loanDurationMonths: null, loanDeferralMonths: null, loanStartDate: null, insuranceMonthlyCents: null,
+    type: "LOAN", syncId: "woob:inst:pret1",
+  };
+
+  it("carries the remaining capital, borrowed amount, rate, next payment and end date", () => {
+    const row = computeLoanRow(
+      {
+        ...base,
+        loanAmountCents: BigInt(5000_00),
+        liabilityCents: BigInt(4000_00),
+        loanNextPaymentCents: BigInt(87_43),
+        loanNextPaymentDate: new Date("2026-11-05"),
+        loanEndDate: new Date("2033-09-30"),
+      },
+      new Date("2026-10-20"),
+    );
+    expect(row.hasParams).toBe(false);
+    expect(!row.hasParams && row.reported).toEqual({
+      remainingCents: BigInt(4000_00),
+      borrowedCents: BigInt(5000_00),
+      ratePct: 0.99,
+      nextPaymentCents: BigInt(87_43),
+      nextPaymentDate: new Date("2026-11-05"),
+      endDate: new Date("2033-09-30"),
+      repaidPct: 20,
+    });
+  });
+
+  // Interest accrued during a deferral can put the debt above what was borrowed.
+  it("never shows a negative or unknown progress as a number", () => {
+    const over = computeLoanRow({ ...base, loanAmountCents: BigInt(5000_00), liabilityCents: BigInt(5099_00) }, new Date());
+    expect(!over.hasParams && over.reported?.repaidPct).toBe(0);
+    const unknown = computeLoanRow({ ...base, loanAmountCents: null, liabilityCents: BigInt(5099_00) }, new Date());
+    expect(!unknown.hasParams && unknown.reported?.repaidPct).toBeNull();
+  });
+
+  it("leaves a manual loan without parameters as it was", () => {
+    const manual = computeLoanRow({ ...base, syncId: null, loanAmountCents: null, liabilityCents: BigInt(1) }, new Date());
+    expect(!manual.hasParams && manual.reported).toBeUndefined();
+  });
+});

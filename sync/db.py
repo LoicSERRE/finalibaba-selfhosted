@@ -137,6 +137,51 @@ def promote_account_to_investment(cur, account_db_id: str) -> bool:
     return cur.rowcount > 0
 
 
+def promote_account_to_loan(cur, account_db_id: str) -> bool:
+    """Retype an account as LOAN once its bank reports it as one (v2.19.1).
+
+    Only from CHECKING - infer_account_type's "nothing matched" fallback, which
+    is where every loan synced before v2.19.1 landed - so a guess is corrected
+    and a decision is not. Its balance rows stay: they are what was owed on
+    each day, which is exactly how a bank-reported loan's history is read
+    (lib/domain/loan.ts, isBankReportedLoan).
+    """
+    cur.execute(
+        'UPDATE "Account" SET type = \'LOAN\' WHERE id = %s AND type = \'CHECKING\'',
+        (account_db_id,),
+    )
+    return cur.rowcount > 0
+
+
+def record_loan(cur, account_db_id: str, *, owed_cents: int, facts: dict):
+    """Store what the bank says about a loan: what is owed (liabilityCents,
+    refreshed every sync - the figure net worth subtracts) and, when given,
+    the amount borrowed, rate, next instalment and end date. A field the
+    bank does not fill keeps its previous value rather than being erased."""
+    cur.execute(
+        """
+        UPDATE "Account" SET
+            "liabilityCents" = %s,
+            "loanAmountCents" = COALESCE(%s, "loanAmountCents"),
+            "loanTaeg" = COALESCE(%s, "loanTaeg"),
+            "loanNextPaymentCents" = COALESCE(%s, "loanNextPaymentCents"),
+            "loanNextPaymentDate" = COALESCE(%s, "loanNextPaymentDate"),
+            "loanEndDate" = COALESCE(%s, "loanEndDate"),
+            "updatedAt" = NOW()
+        WHERE id = %s AND type = 'LOAN'
+        """,
+        (
+            owed_cents,
+            facts.get("borrowed_cents"),
+            facts.get("rate_pct"),
+            facts.get("next_payment_cents"),
+            facts.get("next_payment_date"),
+            facts.get("end_date"),
+            account_db_id,
+        ),
+    )
+
+
 def get_woob_institutions(cur) -> list[dict]:
     """Return all institutions with Woob credentials configured."""
     cur.execute(

@@ -10,7 +10,7 @@
  * fifteen call sites keep importing from one module.
  */
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
+import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import {
   computeSavingsInterestProjection,
@@ -166,7 +166,8 @@ function addInvestmentAccount(t: AccountTotals, account: Account, yfData: Analyt
 
 /** A loan is a pure liability: it reduces net worth and has no asset row. */
 function loanOutstanding(account: Account, now: Date): bigint {
-  if (!hasLoanParams(account)) return account.liabilityCents ?? BigInt(0);
+  // The bank's own figure when the bank reports it (isBankReportedLoan).
+  if (!hasLoanParams(account) || isBankReportedLoan(account)) return account.liabilityCents ?? BigInt(0);
   return calcCurrentCapital(
     {
       loanAmountCents: account.loanAmountCents,

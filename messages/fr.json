@@ -229,7 +229,10 @@
       "monthlyDuring": "Mensualité pendant le différé ({months} mois)",
       "interestOnly": "intérêts seuls",
       "plusInsurance": " + assurance",
-      "repaymentProgress": "Remboursement · {elapsed} mois écoulés sur {total}"
+      "repaymentProgress": "Remboursement · {elapsed} mois écoulés sur {total}",
+      "reportedByBank": "chiffres communiqués par la banque",
+      "nextPayment": "Prochaine échéance",
+      "repaidShare": "Déjà remboursé"
     },
     "auto": {
       "value": "Valeur actuelle",

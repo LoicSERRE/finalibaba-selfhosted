@@ -312,6 +312,13 @@ model Account {
   loanDurationMonths    Int? // LOAN: total duration in months
   loanDeferralMonths    Int? // LOAN: deferral period in months (0 = none)
   loanStartDate         DateTime? // LOAN: repayment start date
+  // LOAN accounts a bank reports (v2.19.1): what the schedule above cannot
+  // know - the next instalment and the contractual end. For such a loan the
+  // bank's remaining capital (liabilityCents, refreshed every sync) is the
+  // figure, never a re-amortised estimate (lib/domain/loan.ts).
+  loanNextPaymentCents  BigInt?
+  loanNextPaymentDate   DateTime?
+  loanEndDate           DateTime?
   // LOAN: dedup flag for the "nearly paid off" alert - one-way, a loan only
   // crosses the threshold once. See lib/domain/alerts.ts.
   loanPaidOffAlertSent  Boolean                @default(false)

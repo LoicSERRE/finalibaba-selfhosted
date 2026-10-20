@@ -154,6 +154,19 @@ perfectly and every position was being dropped by the mapping. Every field now
 goes through `empty()`, and the test fakes default to `NotAvailable` rather than
 `None` so this cannot regress.
 
+### Loans the bank reports (v2.19.1)
+
+Reported by the owner: a student loan just taken out at LCL showed as **"Courant - PRÊT PERSONNEL ETUDES", -5 099 €, in Liquidités**, and nothing on the Crédits tab. The account type had only ever been guessed from the label (`infer_account_type`), and "PRÊT PERSONNEL ETUDES" matches no keyword, so it fell to CHECKING - while LCL's Woob module had returned a `Loan` object, typed `LOAN`, with the amount borrowed, the effective rate (`eir`), the next instalment and the maturity date.
+
+- **A loan is what Woob says is one** (`sync/woob_loans.py`: a `Loan` instance, or an account typed LOAN / MORTGAGE / CONSUMER_CREDIT / REVOLVING_CREDIT), never a label: "Crédit Mutuel" in an account name proves nothing. Both `sync_woob.py` and `sync_lcl.py` use it. A new loan is created as LOAN; one already stored as CHECKING - every loan synced before v2.19.1 - is retyped by `promote_account_to_loan`, only from CHECKING, like `promote_account_to_investment`.
+- **The bank's figures are the loan's** (`record_loan`): `liabilityCents` = what is owed, refreshed on every sync, converted into the base like the balance; `loanAmountCents`, `loanTaeg`, and the new `loanNextPaymentCents` / `loanNextPaymentDate` / `loanEndDate` when the module fills them, a field it leaves empty keeping its previous value. Duration and start date are deliberately never written: with all four schedule parameters set, the app would re-amortise the loan from a closed form, and a student loan's deferral, an early repayment or the bank's real interest are not in it.
+- **Balances stay what was owed, negative**, whatever sign a module uses. That is how the app reads a bank-reported loan (`isBankReportedLoan`, `lib/domain/loan.ts`): its remaining capital is `liabilityCents`, never a schedule, and the net-worth history takes its debt from those balance rows - so `liabMap` holds 0 for it, or the debt would count twice on every day. The rows stored before the retype are kept for exactly that reason: they are the real history of the debt.
+- **The Crédits tab** shows it from the bank's figures (`ReportedLoanCard`): remaining capital, amount borrowed, rate, next instalment, end date, and the share repaid when the amount borrowed is known (floored at 0: interest accrued during a deferral can put the debt above it). Anything the bank does not give is left out, never estimated.
+
+Verified against PostgreSQL by replaying the incident: an account stored as CHECKING at -5 099 €, synced again as a Woob `Loan`, becomes LOAN with 5 099 € owed and its balance rows intact; a positive balance on a loan is still stored as owed; an overdrawn "COMPTE CREDIT MUTUEL" stays a checking account.
+
+The disbursement itself (+5 000 € on the checking account) is ordinary money in as far as budgets know; the internal-transfer detector pairs it with the loan account only if the bank also reports the matching movement on the loan, which LCL does not. Marking it as an internal transfer by hand keeps it out of the month's income.
+
 ### Classifying what a bank login can fail with
 
 `sync/woob_errors.py`. Built after **measuring** the catalogue rather than after

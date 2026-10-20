@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/domain/loan";
+import { calcLoanStats, hasLoanParams, isBankReportedLoan, repaidPct, type LoanStats } from "@/lib/domain/loan";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type {
@@ -293,6 +293,24 @@ export interface LoanInput {
   loanStartDate: Date | null;
   insuranceMonthlyCents: bigint | null;
   liabilityCents: bigint | null;
+  /** v2.19.1: a loan the bank reports (isBankReportedLoan) and what it says about it. */
+  type?: string;
+  syncId?: string | null;
+  gocardlessAccountId?: string | null;
+  loanNextPaymentCents?: bigint | null;
+  loanNextPaymentDate?: Date | null;
+  loanEndDate?: Date | null;
+}
+
+/** What a bank says about a loan it reports - its own figures, no schedule. */
+export interface ReportedLoan {
+  remainingCents: bigint;
+  borrowedCents: bigint | null;
+  ratePct: number | null;
+  nextPaymentCents: bigint | null;
+  nextPaymentDate: Date | null;
+  endDate: Date | null;
+  repaidPct: number | null;
 }
 
 export type LoanRow =
@@ -302,6 +320,8 @@ export type LoanRow =
       institutionName: string | null;
       institutionLogoUrl: string | null;
       hasParams: false;
+      /** Present for a bank-reported loan: shown from the bank's figures instead of "incomplete". */
+      reported?: ReportedLoan;
     }
   | {
       id: string;
@@ -317,8 +337,26 @@ export type LoanRow =
       stats: LoanStats;
     };
 
+/** What the bank says about a loan it reports (v2.19.1) - its figures, no schedule. */
+function reportedLoan(loan: LoanInput): ReportedLoan {
+  const remainingCents = loan.liabilityCents ?? BigInt(0);
+  return {
+    remainingCents,
+    borrowedCents: loan.loanAmountCents,
+    ratePct: loan.loanTaeg,
+    nextPaymentCents: loan.loanNextPaymentCents ?? null,
+    nextPaymentDate: loan.loanNextPaymentDate ?? null,
+    endDate: loan.loanEndDate ?? null,
+    repaidPct: repaidPct(loan.loanAmountCents, remainingCents),
+  };
+}
+
 export function computeLoanRow(loan: LoanInput, now: Date): LoanRow {
   const inst = institutionView(loan.institution);
+  const head = { id: loan.id, name: loan.name, institutionName: inst.name, institutionLogoUrl: inst.logoUrl };
+  if (isBankReportedLoan({ type: loan.type ?? "LOAN", syncId: loan.syncId, gocardlessAccountId: loan.gocardlessAccountId })) {
+    return { ...head, hasParams: false, reported: reportedLoan(loan) };
+  }
   if (!hasLoanParams(loan)) {
     return { id: loan.id, name: loan.name, institutionName: inst.name, institutionLogoUrl: inst.logoUrl, hasParams: false };
   }
