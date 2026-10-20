@@ -207,98 +207,73 @@ export function shakeShownOn(preference: ShakePreference, needsPermission: boole
 }
 
 type Motion = { x: number | null; y: number | null; z: number | null };
-type Vector = [number, number, number];
 
-function vectorOf(motion: Motion): Vector | null {
-  return motion.x === null || motion.y === null || motion.z === null ? null : [motion.x, motion.y, motion.z];
-}
-
-/**
- * Gravity taken out of `accelerationIncludingGravity`, for the phones that
- * report no `acceleration` of their own: a slow running estimate of gravity
- * (a low-pass filter), subtracted from each sample. What is left is the
- * motion of the hand.
- */
-export function createGravityFilter(smoothing = 0.1): (motion: Motion) => Motion {
-  let gravity: Vector | null = null;
-  return (motion) => {
-    const v = vectorOf(motion);
-    if (!v) return motion;
-    if (!gravity) {
-      gravity = v;
-      return { x: 0, y: 0, z: 0 };
-    }
-    const g = gravity.map((gi, i) => gi + smoothing * (v[i] - gi)) as Vector;
-    gravity = g;
-    return { x: v[0] - g[0], y: v[1] - g[1], z: v[2] - g[2] };
-  };
-}
+/** Standard gravity: what a phone at rest reads, whatever its orientation. */
+const GRAVITY = 9.81;
 
 type ShakeOptions = {
-  /** Hand acceleration, gravity removed, a swing must reach (m/s²). */
+  /** How far the reading must swing from gravity, either way, to be a swing (m/s²). */
   threshold?: number;
-  /** ...and fall back under before the next one counts: one swing, one peak. */
+  /** ...and come back within this of it before the next swing counts: one swing, one peak. */
   release?: number;
   /**
-   * Alternating swings that make the gesture. A shake - out and back - is
-   * two, so five fire on the third shake, never on the second (four).
+   * Swings that make the gesture. A shake - out and back - is two, so five
+   * fire on the third shake and never on the second (four).
    */
   swings?: number;
-  /** Two swings of one gesture are never further apart than this. */
-  maxGapMs?: number;
+  /** All of them within this window. */
+  windowMs?: number;
+  /** Swings closer than this are one: a single bump rebounds within a few samples. */
+  minGapMs?: number;
   /** Quiet period after the gesture, so one gesture toggles once. */
   cooldownMs?: number;
 };
 
-/** Cosine below which two swings point in opposite directions (within ~70°). */
-const OPPOSITE = -0.35;
-
 /**
- * Three real shakes of the phone toggle discretion, the gesture Trade
- * Republic uses. Fed the hand's acceleration (gravity removed, ~60 samples a
- * second), it counts swings - peaks past `threshold`, counted once until the
- * motion falls back under `release` - and only swings that reverse the
- * previous one's direction extend the gesture. That is what a shake is, and
- * what a bump, a walk or a phone set down on a table is not; a few
- * centimetres of wobble stays well under the threshold.
+ * Three quick shakes of the phone toggle discretion, the gesture Trade
+ * Republic uses. Fed the raw `accelerationIncludingGravity` (~60 samples a
+ * second), it counts swings: the reading's magnitude moving more than
+ * `threshold` away from gravity - above it at one end of a sideways swing,
+ * above or below it for an up-and-down one - counted once until it comes
+ * back within `release` of gravity. Five within 1.5s fire.
  *
- * Direction is compared as a vector, not per axis, so a diagonal shake
- * counts like a sideways one.
+ * Calibrated on the user's phone, in two directions: v2.18.0 (this
+ * measure, 15 m/s² of magnitude, three swings) worked and felt right but
+ * fired on the second shake as often as the third, three swings being a
+ * shake and a half; v2.18.1 removed gravity and demanded each swing reverse
+ * the previous one, which in simulation was precise and on a real phone
+ * never fired at all, the hand's motion between swings never dropping
+ * under its release. This keeps v2.18.0's measure and threshold and only
+ * asks for five swings.
  */
 export function createShakeDetector({
-  threshold = 14,
-  release = 5,
+  threshold = 6,
+  release = 3,
   swings = 5,
-  maxGapMs = 500,
+  windowMs = 1500,
+  minGapMs = 80,
   cooldownMs = 1200,
-}: ShakeOptions = {}): (linearMotion: Motion, timestampMs: number) => boolean {
+}: ShakeOptions = {}): (motion: Motion, timestampMs: number) => boolean {
   let above = false;
-  let last: { direction: Vector; at: number } | null = null;
-  let count = 0;
+  let peaks: number[] = [];
   let quietUntil = 0;
 
   return (motion, now) => {
-    const v = vectorOf(motion);
-    if (!v) return false;
-    const magnitude = Math.hypot(...v);
+    if (motion.x === null || motion.y === null || motion.z === null) return false;
+    const deviation = Math.abs(Math.hypot(motion.x, motion.y, motion.z) - GRAVITY);
     if (above) {
-      if (magnitude < release) above = false;
+      if (deviation < release) above = false;
       return false;
     }
-    if (magnitude < threshold) return false;
+    if (deviation <= threshold) return false;
     above = true;
     if (now < quietUntil) return false;
 
-    const direction = v.map((c) => c / magnitude) as Vector;
-    const reverses =
-      last !== null &&
-      now - last.at <= maxGapMs &&
-      direction[0] * last.direction[0] + direction[1] * last.direction[1] + direction[2] * last.direction[2] < OPPOSITE;
-    count = reverses ? count + 1 : 1;
-    last = { direction, at: now };
-    if (count < swings) return false;
-    count = 0;
-    last = null;
+    const latest = peaks.at(-1);
+    if (latest !== undefined && now - latest < minGapMs) return false;
+    peaks = [...peaks.filter((at) => now - at < windowMs), now];
+    if (peaks.length < swings) return false;
+    peaks = [];
     quietUntil = now + cooldownMs;
     return true;
   };

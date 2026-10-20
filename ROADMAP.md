@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.19.1**
+Current release: **v2.19.2**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -32,6 +32,13 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.19.2 - Your loan's terms, and a shake that works again
+
+- **Loan terms**: a bank-reported loan's contract terms - start, duration, deferral, insurance, and the amount, rate and end date when the bank gets them wrong - are editable from its card and page, and the sync never overwrites them (it only fills empty terms); remaining capital and next instalment stay the bank's. With complete terms the card adds estimates (payment after the deferral, total cost); without them, a deferral is read off the bank's interest-only instalment. Manual loans get the same dialog; the paid-off alert works for bank-reported loans.
+- **Shake**: v2.18.1's detector never fired on a real phone. Back to v2.18.0's measure and threshold - which felt right - with five swings so it fires on the third shake, never the second, and up-and-down shakes counting too.
 
 ---
 

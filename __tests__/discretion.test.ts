@@ -5,7 +5,6 @@ import {
   DISCRETION_SHAKE_COOKIE,
   DISCRETION_TARGETS,
   SCRAMBLED_ATTRIBUTE,
-  createGravityFilter,
   createShakeDetector,
   discretionCookie,
   isDiscreet,
@@ -212,9 +211,10 @@ describe("shake to hide", () => {
     for (const value of [undefined, "", "true", "2"]) expect(shakePreference(value)).toBe("unset");
   });
 
-  // The hand's acceleration (gravity removed) while shaking: a sine along
-  // one direction. A real shake is ~2-4 per second with peaks of 15-40 m/s²;
-  // a few centimetres of wobble stays under 10. 60 samples a second.
+  // What a phone reads while shaken (accelerationIncludingGravity): gravity
+  // on one axis plus the hand's swing, a sine along some direction. A real
+  // shake is ~2-4 a second with swings of 12-30 m/s²; a few centimetres of
+  // wobble stays under ~9. 60 samples a second.
   const HZ = 60;
   type Shake = { amplitude: number; perSecond: number; cycles: number; direction?: [number, number, number] };
   function shake({ amplitude, perSecond, cycles, direction = [1, 0, 0] }: Shake, startMs = 0) {
@@ -222,14 +222,15 @@ describe("shake to hide", () => {
     return Array.from({ length: n }, (_, i) => {
       const t = i / HZ;
       const a = amplitude * Math.sin(2 * Math.PI * perSecond * t);
-      return { motion: { x: a * direction[0], y: a * direction[1], z: a * direction[2] }, at: startMs + t * 1000 };
+      // Gravity on z: a phone held flat-ish in the hand.
+      return { motion: { x: a * direction[0], y: a * direction[1], z: 9.81 + a * direction[2] }, at: startMs + t * 1000 };
     });
   }
   type Detector = ReturnType<typeof createShakeDetector>;
   function play(detect: Detector, samples: ReadonlyArray<{ motion: Parameters<Detector>[0]; at: number }>) {
     return samples.map(({ motion, at }) => detect(motion, at));
   }
-  const GOOD = { amplitude: 22, perSecond: 3 };
+  const GOOD = { amplitude: 20, perSecond: 3 };
 
   it("fires once, on the third shake", () => {
     const fired = play(createShakeDetector(), shake({ ...GOOD, cycles: 3 }));
@@ -242,29 +243,30 @@ describe("shake to hide", () => {
     expect(play(createShakeDetector(), shake({ ...GOOD, cycles: 2 })).some(Boolean)).toBe(false);
   });
 
+  // v2.18.1 demanded a drop under 5 m/s² of hand motion between swings and a
+  // reversal at each one, and fired on nothing on a real phone: a vigorous,
+  // fast, irregular shake must still count.
+  it("fires on a fast, strong shake, and on a fairly gentle one", () => {
+    expect(play(createShakeDetector(), shake({ amplitude: 30, perSecond: 4.5, cycles: 3 })).some(Boolean)).toBe(true);
+    expect(play(createShakeDetector(), shake({ amplitude: 13, perSecond: 2.5, cycles: 3 })).some(Boolean)).toBe(true);
+  });
+
+  it("counts an up-and-down shake as well as a sideways one", () => {
+    expect(play(createShakeDetector(), shake({ ...GOOD, cycles: 3, direction: [0, 0, 1] })).some(Boolean)).toBe(true);
+  });
+
   it("ignores a few centimetres of wobble, however long", () => {
     expect(play(createShakeDetector(), shake({ amplitude: 9, perSecond: 3, cycles: 10 })).some(Boolean)).toBe(false);
   });
 
-  it("ignores a bump, walking, and a shake too slow to be one", () => {
+  it("ignores a bump, walking, and swings too slow to be a shake", () => {
     // A phone set down hard: one sharp peak and its rebound.
-    const bump = [0, 25, -12, 4, 0, 0].map((x, i) => ({ motion: { x, y: 0, z: 0 }, at: i * 16 }));
+    const bump = [0, 25, -12, 4, 0, 0].map((x, i) => ({ motion: { x, y: 0, z: 9.81 }, at: i * 16 }));
     expect(play(createShakeDetector(), bump).some(Boolean)).toBe(false);
     // Walking: the hand bobs a few m/s² twice a second.
     expect(play(createShakeDetector(), shake({ amplitude: 4, perSecond: 2, cycles: 20, direction: [0, 0, 1] })).some(Boolean)).toBe(false);
-    // Strong swings over a second apart are not one gesture.
-    expect(play(createShakeDetector(), shake({ amplitude: 22, perSecond: 0.6, cycles: 4 })).some(Boolean)).toBe(false);
-  });
-
-  it("counts a diagonal shake like a sideways one", () => {
-    const diagonal: [number, number, number] = [Math.SQRT1_2, Math.SQRT1_2, 0];
-    expect(play(createShakeDetector(), shake({ ...GOOD, cycles: 3, direction: diagonal })).some(Boolean)).toBe(true);
-  });
-
-  it("does not count swings in the same direction as shakes", () => {
-    // Repeated pushes the same way: big peaks, no reversal.
-    const pushes = Array.from({ length: 6 }, (_, k) => [0, 24, 0, 0, 0, 0, 0, 0, 0, 0].map((x, i) => ({ motion: { x, y: 0, z: 0 }, at: (k * 10 + i) * 16 }))).flat();
-    expect(play(createShakeDetector(), pushes).some(Boolean)).toBe(false);
+    // Strong swings far apart are not one gesture.
+    expect(play(createShakeDetector(), shake({ amplitude: 20, perSecond: 0.6, cycles: 4 })).some(Boolean)).toBe(false);
   });
 
   // The same gesture toggles both ways (like Trade Republic): a second set of
@@ -274,20 +276,6 @@ describe("shake to hide", () => {
     expect(play(detect, shake({ ...GOOD, cycles: 3 }, 0)).some(Boolean)).toBe(true);
     expect(play(detect, shake({ ...GOOD, cycles: 1 }, 1050)).some(Boolean)).toBe(false);
     expect(play(detect, shake({ ...GOOD, cycles: 3 }, 4000)).some(Boolean)).toBe(true);
-  });
-
-  it("detects a shake through the gravity filter, and not gravity itself", () => {
-    const filter = createGravityFilter();
-    const detect = createShakeDetector();
-    // A phone held still in portrait reads gravity on y.
-    const still = Array.from({ length: 120 }, (_, i) => ({ motion: filter({ x: 0, y: 9.8, z: 0 }), at: i * 16 }));
-    expect(play(detect, still).some(Boolean)).toBe(false);
-    expect(Math.abs(still.at(-1)!.motion.y!)).toBeLessThan(0.01);
-    const shaken = shake({ ...GOOD, cycles: 3 }, 2000).map(({ motion, at }) => ({
-      motion: filter({ x: motion.x, y: 9.8 + motion.y, z: motion.z }),
-      at,
-    }));
-    expect(play(detect, shaken).some(Boolean)).toBe(true);
   });
 
   it("ignores samples without readings", () => {
