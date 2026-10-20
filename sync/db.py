@@ -1,5 +1,7 @@
 """PostgreSQL helpers shared across sync scripts."""
+import datetime
 import hashlib
+import logging
 import os
 import uuid
 from decimal import Decimal
@@ -7,7 +9,10 @@ from decimal import Decimal
 import psycopg2
 import psycopg2.extras
 
+import fx
 from crypto_at_rest import decrypt_institution_row
+
+log = logging.getLogger(__name__)
 
 
 def get_conn():
@@ -349,26 +354,99 @@ def to_cents(amount) -> int:
     return int((Decimal(str(amount)) * 100).to_integral_value())
 
 
-def record_balance(cur, account_id: str, balance_cents: int):
-    # Only insert a new entry if the balance actually changed
+def record_balance(cur, account_id: str, balance_cents: int, *, currency: str = fx.BASE_CURRENCY, rate: float | None = None):
+    """Record the bank's balance, in `currency`, unless it says nothing new.
+
+    For an account kept in another currency (v2.18) the comparison is on the
+    NATIVE figure: comparing EUR values would write a row on every sync for
+    dollars that never moved, since the rate does. An unchanged native
+    balance still gets one row a day when the rate moved it in EUR - that is
+    its revaluation, and what net worth needs.
+    """
     # id breaks the tie, same as every app-side read of this table: recordedAt
     # is not unique, so two rows on one instant otherwise left "the latest
     # balance" up to whatever order the database happened to return.
     cur.execute(
-        'SELECT "balanceCents" FROM "HistoricalBalance" WHERE "accountId" = %s'
-        ' ORDER BY "recordedAt" DESC, id DESC LIMIT 1',
+        'SELECT "balanceCents", "nativeBalanceCents", "recordedAt"::date AS day FROM "HistoricalBalance"'
+        ' WHERE "accountId" = %s ORDER BY "recordedAt" DESC, id DESC LIMIT 1',
         (account_id,),
     )
     row = cur.fetchone()
-    if row and int(row["balanceCents"]) == balance_cents:
-        return
+    if fx.is_base(currency):
+        if row and int(row["balanceCents"]) == balance_cents:
+            return
+        base_cents, native_cents, rate = balance_cents, None, None
+    else:
+        if rate is None:
+            raise ValueError(f"no {currency} rate")  # callers check first; never store a guess
+        base_cents, native_cents = fx.to_base_cents(balance_cents, rate), balance_cents
+        if row and row["nativeBalanceCents"] is not None and int(row["nativeBalanceCents"]) == balance_cents:
+            today = datetime.datetime.now(datetime.UTC).date()
+            if row["day"] == today or int(row["balanceCents"]) == base_cents:
+                return
     cur.execute(
         """
-        INSERT INTO "HistoricalBalance" (id, "accountId", "balanceCents", "recordedAt")
-        VALUES (%s, %s, %s, NOW())
+        INSERT INTO "HistoricalBalance" (id, "accountId", "balanceCents", "nativeBalanceCents", "fxRate", "recordedAt")
+        VALUES (%s, %s, %s, %s, %s, NOW())
         """,
-        (str(uuid.uuid4()), account_id, balance_cents),
+        (str(uuid.uuid4()), account_id, base_cents, native_cents, rate),
     )
+
+
+def resolve_account_currency(cur, account_id: str, reported: str | None) -> str | None:
+    """The currency to store this sync's figures in, or None to skip them.
+
+    `reported` is what the bank said (fx.parse_currency), None when it said
+    nothing usable - then the account keeps its own. An account created
+    before v2.18 is EUR whatever the bank holds: every figure stored for it
+    so far was the bank's own number taken as euros. The first sync that
+    reports another currency re-denominates that history - native = what
+    was stored, EUR = converted at each row's own day - and only switches
+    the account once every row could be priced; otherwise the account is
+    skipped and the next sync tries again. Any other change (USD to GBP,
+    USD back to EUR) is not something a bank does to an account: logged and
+    skipped rather than rewritten.
+    """
+    cur.execute('SELECT currency FROM "Account" WHERE id = %s', (account_id,))
+    current = cur.fetchone()["currency"]
+    if reported is None or reported == current:
+        return current
+    if current != fx.BASE_CURRENCY:
+        log.warning("account %s is kept in %s but the bank now reports %s; skipped", account_id, current, reported)
+        return None
+
+    cur.execute(
+        'SELECT id, "balanceCents" AS cents, "recordedAt"::date AS day FROM "HistoricalBalance"'
+        ' WHERE "accountId" = %s AND "nativeBalanceCents" IS NULL',
+        (account_id,),
+    )
+    balances = cur.fetchall()
+    cur.execute(
+        'SELECT id, "amountCents" AS cents, date::date AS day FROM "Transaction"'
+        ' WHERE "accountId" = %s AND "nativeAmountCents" IS NULL',
+        (account_id,),
+    )
+    transactions = cur.fetchall()
+    rates = fx.rates_for_days(cur, reported, [r["day"] for r in balances + transactions])
+    if any(rates.get(r["day"]) is None for r in balances + transactions):
+        log.warning("account %s: %s history cannot be priced yet; skipped until the next sync", account_id, reported)
+        return None
+
+    for r in balances:
+        rate = rates[r["day"]]
+        cur.execute(
+            'UPDATE "HistoricalBalance" SET "nativeBalanceCents" = %s, "balanceCents" = %s, "fxRate" = %s WHERE id = %s',
+            (int(r["cents"]), fx.to_base_cents(int(r["cents"]), rate), rate, r["id"]),
+        )
+    for r in transactions:
+        rate = rates[r["day"]]
+        cur.execute(
+            'UPDATE "Transaction" SET "nativeAmountCents" = %s, "amountCents" = %s, "fxRate" = %s WHERE id = %s',
+            (int(r["cents"]), fx.to_base_cents(int(r["cents"]), rate), rate, r["id"]),
+        )
+    cur.execute('UPDATE "Account" SET currency = %s WHERE id = %s', (reported, account_id))
+    log.info("account %s re-denominated to %s (%d balances, %d transactions)", account_id, reported, len(balances), len(transactions))
+    return reported
 
 
 def upsert_holding(cur, *, account_id: str, ticker: str, name: str, quantity: str, last_price_cents: int, cost_basis_cents: int | None = None):
@@ -516,7 +594,7 @@ def _absorbed_by_nearby(cur, *, account_id, amount_cents, date, label, near_dupl
         """
         SELECT id, label FROM "Transaction"
         WHERE "accountId" = %s
-          AND "amountCents" = %s
+          AND COALESCE("nativeAmountCents", "amountCents") = %s
           AND date BETWEEN (%s::timestamptz - INTERVAL '3 days') AND (%s::timestamptz + INTERVAL '3 days')
         ORDER BY date
         """,
@@ -560,6 +638,8 @@ def upsert_transaction(
     near_duplicate: str = "amount",
     is_securities_movement: bool = False,
     source_event_type: str | None = None,
+    currency: str = fx.BASE_CURRENCY,
+    rate: float | None = None,
 ):
     """Insert a transaction unless it is already stored.
 
@@ -593,6 +673,12 @@ def upsert_transaction(
     within three days on an id-less source still merge, as does a genuine
     second movement arriving while the first still shows a placeholder label.
     Telling those apart needs an identity the bank does not give us.
+
+    `amount_cents` is in `currency`, the account's own (v2.18): every dedup
+    key and the same-amount window work on that native figure, and only the
+    stored "amountCents" is converted, at `rate`. Keyed on the converted
+    amount, each rate move between two syncs would mint a new id for every
+    id-less row and duplicate the whole history.
     """
     if _already_stored(cur, sync_id, legacy_sync_id, label):
         return
@@ -606,14 +692,22 @@ def upsert_transaction(
     ):
         return
 
+    if fx.is_base(currency):
+        base_cents, native_cents, rate = amount_cents, None, None
+    elif rate is None:
+        raise ValueError(f"no {currency} rate")  # callers check first; never store a guess
+    else:
+        base_cents, native_cents = fx.to_base_cents(amount_cents, rate), amount_cents
+
     cur.execute(
         """
         INSERT INTO "Transaction" (id, "accountId", "syncId", date, label, "amountCents",
+                                   "nativeAmountCents", "fxRate",
                                    "isSecuritiesMovement", "sourceEventType", "createdAt")
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """,
-        (str(uuid.uuid4()), account_id, sync_id, date, label, amount_cents, is_securities_movement,
-         source_event_type),
+        (str(uuid.uuid4()), account_id, sync_id, date, label, base_cents, native_cents, rate,
+         is_securities_movement, source_event_type),
     )
 
 

@@ -1,5 +1,5 @@
 import { Users } from "lucide-react";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrency, formatMoney } from "@/lib/utils/format";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import { UpdateRealEstateDialog } from "@/components/accounts/update-real-estate-dialog";
@@ -26,6 +26,7 @@ export function AccountHeader({
   isSynced,
   currentValue,
   latestDelta,
+  native = null,
   hasCostBasis,
   taxRate,
   netAfterTax,
@@ -60,6 +61,9 @@ export function AccountHeader({
   isSynced: boolean;
   currentValue: bigint;
   latestDelta: bigint | null;
+  /** An account kept in another currency (v2.18): its own figures, shown
+   *  first, with the EUR value that counts towards net worth beside them. */
+  native?: { currency: string; balance: bigint; delta: bigint | null } | null;
   hasCostBasis: boolean;
   taxRate: number | null;
   netAfterTax: bigint;
@@ -70,6 +74,7 @@ export function AccountHeader({
    *  Server Actions guards ownership itself), just no dead buttons. */
   readOnly?: boolean;
 }>) {
+  const delta = native ? native.delta : latestDelta;
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6">
       {/* flex-wrap + min-w-0: on a 360px phone a long account name, its two
@@ -109,20 +114,27 @@ export function AccountHeader({
                 to never discover. */}
             {coOwners && <CoOwnersDialog accountId={account.id} coOwners={coOwners} />}
           </div>
-          {isFiat && latestDelta !== null && latestDelta !== BigInt(0) && (
+          {isFiat && delta !== null && delta !== BigInt(0) && (
             <p
               className={`amount text-sm tabular-nums mt-2 ${
-                latestDelta > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"
+                delta > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"
               }`}
             >
-              {td("syncChanged", { delta: `${latestDelta > BigInt(0) ? "+" : ""}${formatCurrency(latestDelta)}` })}
+              {td("syncChanged", {
+                delta: `${delta > BigInt(0) ? "+" : ""}${native ? formatMoney(delta, native.currency) : formatCurrency(delta)}`,
+              })}
             </p>
           )}
         </div>
         <div className="text-right shrink-0">
           <p className={`text-2xl sm:text-3xl font-semibold tabular-nums ${isLoan ? "text-[var(--negative)]" : "text-[var(--accent)]"} amount`}>
-            {formatCurrency(currentValue, 0)}
+            {native ? formatMoney(native.balance, native.currency, 0) : formatCurrency(currentValue, 0)}
           </p>
+          {native && (
+            <p className="text-xs text-[var(--muted)] mt-1 tabular-nums amount">
+              {td("inBaseCurrency", { amount: formatCurrency(currentValue, 0) })}
+            </p>
+          )}
           {isInvestment && hasCostBasis && taxRate !== null && (
             <p className="text-xs text-[var(--muted)] mt-1 amount">
               {td("afterTax", { amount: formatCurrency(netAfterTax, 0) })}

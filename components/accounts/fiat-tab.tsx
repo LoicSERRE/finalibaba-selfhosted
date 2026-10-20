@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrency, formatMoney } from "@/lib/utils/format";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { Sparkline } from "@/components/accounts/sparkline";
 import type { FiatAccountRow } from "@/lib/domain/accounts-page";
@@ -47,6 +47,11 @@ export function FiatTab({ t, ta, rows }: Readonly<{ t: T; ta: T; rows: FiatAccou
                 <p className="text-lg font-semibold tabular-nums text-[var(--foreground)] amount">
                   {formatCurrency(account.currentCents)}
                 </p>
+                {account.native && (
+                  <p className="text-xs tabular-nums text-[var(--muted)] amount">
+                    {formatMoney(account.native.cents, account.native.currency)}
+                  </p>
+                )}
                 {account.deltaCents !== BigInt(0) && (
                   <p
                     className={`amount text-xs tabular-nums ${

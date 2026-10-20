@@ -43,6 +43,7 @@ describe("every column is either exported or explicitly not", () => {
     const exported = new Set([
       "name",
       "type",
+      "currency",
       "manualValueCents",
       "liabilityCents",
       "purchasePriceCents",

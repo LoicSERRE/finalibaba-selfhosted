@@ -11,6 +11,7 @@ export function BalanceHistoryTable({
   td,
   intlLocale,
   accountId,
+  currency = "EUR",
   historyRows,
   canImportCsv,
   categories,
@@ -20,6 +21,8 @@ export function BalanceHistoryTable({
   td: T;
   intlLocale: string;
   accountId: string;
+  /** The account's currency, for the manual entry form (v2.18). */
+  currency?: string;
   historyRows: HistoryRow[];
   canImportCsv: boolean;
   /** Offered in the manual-entry dialog; empty is fine, the picker just
@@ -46,7 +49,7 @@ export function BalanceHistoryTable({
         </h2>
         {canImportCsv && (
           <div className="flex items-center gap-2 flex-wrap">
-            <ManualEntryDialog accountId={accountId} categories={categories} />
+            <ManualEntryDialog accountId={accountId} categories={categories} currency={currency} />
             <ImportBalanceHistoryDialog accountId={accountId} existingDates={existingBalanceDates} />
             <ImportTransactionsDialog accountId={accountId} existingFingerprints={existingFingerprints} />
           </div>

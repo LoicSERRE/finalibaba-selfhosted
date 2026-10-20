@@ -37,7 +37,9 @@ export interface FiatAccountInput {
   name: string;
   type: string;
   institution: InstitutionInput | null;
-  history: { balanceCents: bigint }[]; // most recent first
+  /** ISO 4217, "EUR" when absent (v2.18). */
+  currency?: string;
+  history: { balanceCents: bigint; nativeBalanceCents?: bigint | null }[]; // most recent first
 }
 
 export interface FiatAccountRow {
@@ -49,6 +51,8 @@ export interface FiatAccountRow {
   currentCents: bigint;
   deltaCents: bigint;
   sparkValues: number[];
+  /** The balance in the account's own currency, when that is not EUR. */
+  native: { currency: string; cents: bigint } | null;
 }
 
 export function computeFiatRow(account: FiatAccountInput): FiatAccountRow {
@@ -64,6 +68,10 @@ export function computeFiatRow(account: FiatAccountInput): FiatAccountRow {
     currentCents: current,
     deltaCents: current - previous,
     sparkValues: account.history.slice().reverse().map((h) => Number(h.balanceCents)),
+    native:
+      account.history[0]?.nativeBalanceCents == null
+        ? null
+        : { currency: account.currency ?? "EUR", cents: account.history[0].nativeBalanceCents },
   };
 }
 

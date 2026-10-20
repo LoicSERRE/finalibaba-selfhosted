@@ -4,12 +4,17 @@ import { revalidateHolding } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { isFutureDate, parseCsvDate } from "@/lib/domain/csv-import";
+import { balanceColumns } from "@/lib/domain/currency";
+import { ratesToEurForDays } from "@/lib/services/exchange-rate";
 
 type BalanceRow = { date: string; balanceCents: number };
 
-export async function importBalanceHistory(accountId: string, rows: BalanceRow[]) {
+export async function importBalanceHistory(
+  accountId: string,
+  rows: BalanceRow[],
+): Promise<{ imported: number; error?: "rate_unavailable" }> {
   if (rows.length === 0) return { imported: 0 };
-  await assertManualAccountEligible(accountId);
+  const { currency } = await assertManualAccountEligible(accountId);
 
   // The dialog checks both of these before offering a row, and neither check
   // existed here - a Server Action is reachable whatever the UI renders, and
@@ -34,6 +39,11 @@ export async function importBalanceHistory(accountId: string, rows: BalanceRow[]
   // across timezones instead of risking a midnight-UTC day shift.
   const stamps = [...byDate.keys()].map((d) => new Date(`${d}T12:00:00.000Z`));
 
+  // Figures are in the account's currency, each converted at its own day's
+  // rate. All or nothing: half a file converted is a history nobody can trust.
+  const rates = await ratesToEurForDays(currency, [...byDate.keys()]);
+  if ([...rates.values()].some((rate) => rate === null)) return { imported: 0, error: "rate_unavailable" };
+
   // Replaces rather than appends. Re-importing a corrected balance used to
   // leave BOTH rows at the identical instant, and which one the account showed
   // was then down to the database's own row order - there is no delete UI to
@@ -44,7 +54,7 @@ export async function importBalanceHistory(accountId: string, rows: BalanceRow[]
     const result = await tx.historicalBalance.createMany({
       data: [...byDate].map(([date, balanceCents]) => ({
         accountId,
-        balanceCents,
+        ...balanceColumns(currency, balanceCents, rates.get(date) ?? null),
         recordedAt: new Date(`${date}T12:00:00.000Z`),
       })),
     });

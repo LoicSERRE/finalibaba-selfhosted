@@ -69,6 +69,9 @@ export type TransactionExport = {
   date: string;
   label: string;
   amountCents: string;
+  /** In the account's currency, null on an EUR account (v2.18). */
+  nativeAmountCents: string | null;
+  fxRate: number | null;
   categoryRef: string | null;
   merchantCategoryCode: string | null;
   isInternalTransfer: boolean;
@@ -98,6 +101,7 @@ export type AccountExport = {
   ref: string;
   name: string;
   type: string;
+  currency: string;
   institutionRef: string | null;
   manualValueCents: string | null;
   liabilityCents: string | null;
@@ -114,7 +118,7 @@ export type AccountExport = {
   loanDurationMonths: number | null;
   loanDeferralMonths: number | null;
   loanStartDate: string | null;
-  balances: { recordedAt: string; balanceCents: string }[];
+  balances: { recordedAt: string; balanceCents: string; nativeBalanceCents: string | null; fxRate: number | null }[];
   transactions: TransactionExport[];
   holdings: HoldingExport[];
   sales: {
@@ -278,6 +282,7 @@ export function buildUserExport(input: UserExportInput): UserExport {
       ref: a.id as string,
       name: a.name as string,
       type: a.type as string,
+      currency: (a.currency as string) ?? "EUR",
       institutionRef: (a.institutionId as string) ?? null,
       manualValueCents: cents(a.manualValueCents as bigint),
       liabilityCents: cents(a.liabilityCents as bigint),
@@ -297,12 +302,16 @@ export function buildUserExport(input: UserExportInput): UserExport {
       balances: ((a.history as Row[]) ?? []).map((b) => ({
         recordedAt: iso(b.recordedAt as Date)!,
         balanceCents: cents(b.balanceCents as bigint)!,
+        nativeBalanceCents: cents(b.nativeBalanceCents as bigint),
+        fxRate: (b.fxRate as number) ?? null,
       })),
       transactions: ((a.transactions as Row[]) ?? []).map((t) => ({
         ref: t.id as string,
         date: iso(t.date as Date)!,
         label: t.label as string,
         amountCents: cents(t.amountCents as bigint)!,
+        nativeAmountCents: cents(t.nativeAmountCents as bigint),
+        fxRate: (t.fxRate as number) ?? null,
         categoryRef: (t.categoryId as string) ?? null,
         merchantCategoryCode: (t.merchantCategoryCode as string) ?? null,
         isInternalTransfer: Boolean(t.isInternalTransfer),

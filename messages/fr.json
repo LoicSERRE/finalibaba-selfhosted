@@ -350,8 +350,10 @@
       "errorInvalidDate": "Date invalide.",
       "errorNoPriorBalance": "Aucun solde connu avant cette date : corrige d'abord le solde du compte.",
       "errorNotFound": "Cette opération n'existe plus.",
-      "errorNotManual": "Seule une saisie manuelle peut être supprimée ici."
-    }
+      "errorNotManual": "Seule une saisie manuelle peut être supprimée ici.",
+      "errorRateUnavailable": "Impossible d'obtenir le taux de change pour cette date. Réessaie dans quelques minutes."
+    },
+    "inBaseCurrency": "≈ {amount}"
   },
   "budgets": {
     "title": "Budgets",
@@ -1363,7 +1365,8 @@
     "selectedCount": "{count} sur {total} ligne(s) sélectionnée(s)",
     "importing": "Import…",
     "importSelected": "Importer {count} transaction(s)",
-    "success": "{count} transaction(s) importée(s)."
+    "success": "{count} transaction(s) importée(s).",
+    "rateUnavailable": "Impossible d'obtenir les taux de change pour ces dates. Rien n'a été importé ; réessayez dans quelques minutes."
   },
   "importBalanceHistory": {
     "trigger": "Importer un historique",
@@ -1378,7 +1381,8 @@
     "selectedCount": "{count} sur {total} ligne(s) sélectionnée(s)",
     "importing": "Import…",
     "importSelected": "Importer {count} entrée(s)",
-    "success": "{count} entrée(s) importée(s)."
+    "success": "{count} entrée(s) importée(s).",
+    "rateUnavailable": "Impossible d'obtenir les taux de change pour ces dates. Rien n'a été importé ; réessayez dans quelques minutes."
   },
   "addAccount": {
     "trigger": "Ajouter un compte",
@@ -1387,7 +1391,6 @@
     "name": "Nom du compte",
     "type": "Type",
     "subtype": "Sous-type",
-    "balance": "Solde initial (€)",
     "estimatedValue": "Valeur estimée (€)",
     "autoLiability": "Crédit auto restant dû (€)",
     "mortgage": "Capital restant dû / emprunt (€)",
@@ -1409,7 +1412,10 @@
     "taxRatePct": "Taux d'imposition (%)",
     "creating": "Création…",
     "submit": "Créer",
-    "addFirst": "Ajoutez d'abord une institution dans Paramètres."
+    "addFirst": "Ajoutez d'abord une institution dans Paramètres.",
+    "currency": "Devise",
+    "balanceIn": "Solde initial ({currency})",
+    "rateUnavailable": "Impossible d'obtenir le taux {currency} → EUR pour le moment. Réessayez dans quelques minutes."
   },
   "addHolding": {
     "editTitle": "Modifier : {ticker}",

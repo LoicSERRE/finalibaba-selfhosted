@@ -103,7 +103,11 @@ export function ImportBalanceHistoryDialog({
       .map((r) => ({ date: r.date, balanceCents: r.balanceCents }));
     if (toImport.length === 0) return;
     startTransition(async () => {
-      const { imported } = await importBalanceHistory(accountId, toImport);
+      const { imported, error } = await importBalanceHistory(accountId, toImport);
+      if (error) {
+        setParseError(t("rateUnavailable"));
+        return;
+      }
       setResult(imported);
       setRows([]);
       setSelected(new Set());

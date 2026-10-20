@@ -34,6 +34,19 @@ export function formatCurrency(cents: number | bigint, decimals = 2): string {
   }).format(amount / 100);
 }
 
+/**
+ * An amount in a given currency (v2.18 - an account kept in another one).
+ * Without `decimals`, the currency's own minor units decide (none for JPY).
+ */
+export function formatMoney(cents: number | bigint, currency: string, decimals?: number): string {
+  const amount = typeof cents === "bigint" ? Number(cents) : cents;
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency,
+    ...(decimals === undefined ? {} : { maximumFractionDigits: decimals, minimumFractionDigits: decimals }),
+  }).format(amount / 100);
+}
+
 export function formatPercent(ratio: number, decimals = 1): string {
   return new Intl.NumberFormat("fr-FR", {
     style: "percent",
