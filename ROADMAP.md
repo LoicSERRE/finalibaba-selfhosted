@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.17.0**
+Current release: **v2.18.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -14,7 +14,7 @@ Before tagging a `vX.Y`, run the release-boundary health audit in `CLAUDE.md`.
 
 Scheduled, in this order. Each step is small enough to ship on its own, and the order is chosen so later steps build on earlier ones: toasts before bulk actions (a bulk change needs an undo), notes and tags before the CSV export and the command palette (both should carry them), onboarding last (it points at everything above).
 
-1. **Later - Configurable base currency.** Everything is converted to and stored as EUR, which shuts out non-euro users of the public edition. The largest item here (every `*Cents` aggregate, FX history, tax presets); needs a design pass before it gets a version number.
+1. **Later - Configurable base currency (step 2 of `dev-docs/currencies.md`).** v2.18 shipped step 1 - accounts kept in another currency, stored as EUR with the native figure beside it - so a euro user's USD account now counts right. A non-euro user still sees every figure in EUR. Step 2 is designed: a per-instance `BASE_CURRENCY` (not per user - a co-owned account has one stored base value), `formatCurrency` taking it from a module-level value set server- and client-side, the literal "€" in labels gone, `Holding.fxRateToEur` generalised, and changing the base with data in place a reconversion script rather than a setting. Also left from step 1: Woob investment holdings in another currency, and splits / "mark as income" in a foreign account's own currency.
 
 ## Next
 
@@ -32,6 +32,16 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Give every Settings section an `id`.** The v2.12 tab check asserts on section ids rather than translated headings, and only the sections v2.12 moved or edited carry one - the Sharing and Notifications tabs have none, so their isolation is checked by panel, not per section.
 - **`braces` GHSA-vfj7-8cjw-p6xm** names 3.0.4 as the fix, which has never been published (3.0.3 is the latest). Lint-time only and outside the `--prod` gate; add the override the day 3.0.4 exists.
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
+
+---
+
+## v2.18.0 - Figures nobody can read, and accounts in any currency
+
+- **Discretion, scrambled**: amounts become 4-7 random digits and letters (length unrelated to the figure's), percentages, dates and times stay readable. Text nodes React owns are edited only once React has claimed them (hydration compares text), re-scrambled on re-render, restored when turned off; the blur stays as the pre-hydration fallback. Browser scan: 0 readable amounts on 26 pages, identical percentages with the mode on and off.
+- **Three shakes to hide, three to show**, Trade Republic's gesture, no toast; Settings → Affichage switch on phones. The first draft hid only and raised a toast, corrected after the user pointed at Trade Republic.
+- **Accounts in another currency**: checking and savings accounts in 12 currencies, manual entries and CSV imports in that currency, native figures on the account page and list, `ExchangeRate` daily cache, 4h revaluation. Every `*Cents` column stays EUR, so nothing that sums them changed.
+- **Synced accounts in another currency**: Woob and GoCardless store what the bank reports in its own currency - a 1 000 USD balance used to count as 1 000 EUR, silently. Dedup on native amounts; history synced before v2.18 re-denominated at each day's rate, all rows or none.
+- **Fixed**: a spend typed the same afternoon an account was created was refused ("no balance before this date") - the initial balance was stamped with the creation instant, manual entries at noon UTC.
 
 ---
 
