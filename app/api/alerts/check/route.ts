@@ -5,7 +5,7 @@ import { baseAccountIds } from "@/lib/auth-context";
 import type { UserSettingsModel } from "@/app/generated/prisma/models";
 import { localeToIntl } from "@/lib/utils/format";
 import { computeDashboard } from "@/lib/domain/dashboard";
-import { calcCurrentCapital, hasLoanParams } from "@/lib/domain/loan";
+import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
 import { evaluateNetWorthAlert, isLoanNearlyPaidOff } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
 import { checkSyncFailures, checkSectorDataHealth } from "@/lib/services/alerts/sync-failures";
@@ -75,9 +75,17 @@ async function checkLoanAlerts(settings: UserSettingsModel, accountIds: string[]
   });
 
   for (const account of loanAccounts) {
-    if (!hasLoanParams(account)) continue;
-    const remaining = calcCurrentCapital({ ...account, loanDeferralMonths: account.loanDeferralMonths ?? 0 });
-    if (!isLoanNearlyPaidOff(remaining, account.loanAmountCents)) continue;
+    // A loan its bank reports: the bank's remaining capital against the
+    // amount borrowed, never a schedule (v2.19.2). Otherwise the schedule.
+    let remaining: bigint;
+    if (isBankReportedLoan(account)) {
+      if (account.liabilityCents === null || account.loanAmountCents === null) continue;
+      remaining = account.liabilityCents;
+    } else {
+      if (!hasLoanParams(account)) continue;
+      remaining = calcCurrentCapital({ ...account, loanDeferralMonths: account.loanDeferralMonths ?? 0 });
+    }
+    if (account.loanAmountCents === null || !isLoanNearlyPaidOff(remaining, account.loanAmountCents)) continue;
 
     await dispatchAlert(
       settings,

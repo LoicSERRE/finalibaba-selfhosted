@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { calcLoanStats, hasLoanParams, isBankReportedLoan, repaidPct, type LoanStats } from "@/lib/domain/loan";
+import { loanTermsValues, type LoanTermsValues } from "@/lib/domain/loan-terms";
+import { calcLoanStats, deferralEndDate, hasLoanParams, isBankReportedLoan, looksInterestOnly, repaidPct, type LoanStats } from "@/lib/domain/loan";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type {
@@ -311,6 +312,47 @@ export interface ReportedLoan {
   nextPaymentDate: Date | null;
   endDate: Date | null;
   repaidPct: number | null;
+  /**
+   * In its deferral (v2.19.2): from the terms the user completed when they
+   * give a deferral, else read off the instalment (looksInterestOnly); null
+   * when neither can tell.
+   */
+  inDeferral: boolean | null;
+  /** Projections from the completed terms - estimates, beside the bank's figures, never instead of them. */
+  estimates: LoanEstimates | null;
+}
+
+export interface LoanEstimates {
+  monthlyAfterDeferralCents: bigint;
+  totalCostCents: bigint;
+  deferralEnd: Date | null;
+  durationMonths: number;
+  deferralMonths: number;
+}
+
+/** The completed terms' projections for a bank-reported loan, or null while any term is missing. */
+function loanEstimates(loan: LoanInput, now: Date): LoanEstimates | null {
+  if (!hasLoanParams(loan)) return null;
+  const deferralMonths = loan.loanDeferralMonths ?? 0;
+  const insurance = loan.insuranceMonthlyCents ?? BigInt(0);
+  const stats = calcLoanStats(
+    {
+      loanAmountCents: loan.loanAmountCents,
+      loanTaeg: loan.loanTaeg,
+      loanDurationMonths: loan.loanDurationMonths,
+      loanDeferralMonths: deferralMonths,
+      loanStartDate: loan.loanStartDate,
+    },
+    insurance,
+    now,
+  );
+  return {
+    monthlyAfterDeferralCents: stats.amortPaymentCents + insurance,
+    totalCostCents: stats.totalCostCents,
+    deferralEnd: deferralMonths > 0 ? deferralEndDate(loan.loanStartDate, deferralMonths) : null,
+    durationMonths: loan.loanDurationMonths,
+    deferralMonths,
+  };
 }
 
 export type LoanRow =
@@ -319,6 +361,8 @@ export type LoanRow =
       name: string;
       institutionName: string | null;
       institutionLogoUrl: string | null;
+      /** What the edit dialog pre-fills (v2.19.2). */
+      termsValues: LoanTermsValues;
       hasParams: false;
       /** Present for a bank-reported loan: shown from the bank's figures instead of "incomplete". */
       reported?: ReportedLoan;
@@ -328,6 +372,7 @@ export type LoanRow =
       name: string;
       institutionName: string | null;
       institutionLogoUrl: string | null;
+      termsValues: LoanTermsValues;
       hasParams: true;
       taeg: number;
       durationMonths: number;
@@ -338,13 +383,22 @@ export type LoanRow =
     };
 
 /** What the bank says about a loan it reports (v2.19.1) - its figures, no schedule. */
-function reportedLoan(loan: LoanInput): ReportedLoan {
+function reportedLoan(loan: LoanInput, now: Date): ReportedLoan {
   const remainingCents = loan.liabilityCents ?? BigInt(0);
+  const estimates = loanEstimates(loan, now);
+  const nextPaymentCents = loan.loanNextPaymentCents ?? null;
+  // The completed terms decide when they name a deferral; otherwise the
+  // instalment the bank sends does.
+  const inDeferral = estimates?.deferralEnd
+    ? now < estimates.deferralEnd
+    : looksInterestOnly(nextPaymentCents, remainingCents, loan.loanTaeg);
   return {
+    inDeferral,
+    estimates,
     remainingCents,
     borrowedCents: loan.loanAmountCents,
     ratePct: loan.loanTaeg,
-    nextPaymentCents: loan.loanNextPaymentCents ?? null,
+    nextPaymentCents,
     nextPaymentDate: loan.loanNextPaymentDate ?? null,
     endDate: loan.loanEndDate ?? null,
     repaidPct: repaidPct(loan.loanAmountCents, remainingCents),
@@ -353,12 +407,18 @@ function reportedLoan(loan: LoanInput): ReportedLoan {
 
 export function computeLoanRow(loan: LoanInput, now: Date): LoanRow {
   const inst = institutionView(loan.institution);
-  const head = { id: loan.id, name: loan.name, institutionName: inst.name, institutionLogoUrl: inst.logoUrl };
+  const head = {
+    id: loan.id,
+    name: loan.name,
+    institutionName: inst.name,
+    institutionLogoUrl: inst.logoUrl,
+    termsValues: loanTermsValues(loan),
+  };
   if (isBankReportedLoan({ type: loan.type ?? "LOAN", syncId: loan.syncId, gocardlessAccountId: loan.gocardlessAccountId })) {
-    return { ...head, hasParams: false, reported: reportedLoan(loan) };
+    return { ...head, hasParams: false, reported: reportedLoan(loan, now) };
   }
   if (!hasLoanParams(loan)) {
-    return { id: loan.id, name: loan.name, institutionName: inst.name, institutionLogoUrl: inst.logoUrl, hasParams: false };
+    return { ...head, hasParams: false };
   }
   const loanParams = {
     loanAmountCents: loan.loanAmountCents,
@@ -370,10 +430,7 @@ export function computeLoanRow(loan: LoanInput, now: Date): LoanRow {
   const insuranceMonthlyCents = loan.insuranceMonthlyCents ?? BigInt(0);
   const stats = calcLoanStats(loanParams, insuranceMonthlyCents, now);
   return {
-    id: loan.id,
-    name: loan.name,
-    institutionName: inst.name,
-    institutionLogoUrl: inst.logoUrl,
+    ...head,
     hasParams: true,
     taeg: loan.loanTaeg,
     durationMonths: loan.loanDurationMonths,

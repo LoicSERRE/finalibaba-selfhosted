@@ -232,7 +232,15 @@
       "repaymentProgress": "Repayment · {elapsed} months elapsed of {total}",
       "reportedByBank": "figures reported by the bank",
       "nextPayment": "Next payment",
-      "repaidShare": "Repaid so far"
+      "repaidShare": "Repaid so far",
+      "inDeferral": "Deferred · interest only",
+      "inDeferralUntil": "Deferred until {date}",
+      "estimatedMonthlyAfterDeferral": "Payment after deferral (estimate)",
+      "estimatedMonthly": "Monthly payment (estimate)",
+      "estimatedTotalCost": "Total cost (estimate)",
+      "durationValue": "{months} months",
+      "estimatesNote": "Estimates from the terms you entered.",
+      "completeTermsHint": "Duration, deferral and insurance are not provided by the bank."
     },
     "auto": {
       "value": "Current value",
@@ -1828,5 +1836,25 @@
       "help": "Show this list",
       "discretion": "Hide or show amounts"
     }
+  },
+  "loanTerms": {
+    "trigger": "Edit terms",
+    "title": "Loan terms",
+    "introBank": "The remaining capital and the next payment come from the bank on every sync. Complete or correct the contract's terms here: a sync will never replace what you enter. A field you empty is filled again by the bank if it provides it.",
+    "introManual": "Correct or complete this loan's terms. Every field is optional.",
+    "amount": "Amount borrowed (€)",
+    "rate": "Annual rate (APR, %)",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "durationMonths": "Total duration (months, deferral included)",
+    "deferralMonths": "Deferral (months)",
+    "insurance": "Monthly insurance (€)",
+    "errorAmount": "Invalid amount.",
+    "errorRate": "Invalid rate (between 0 and 100%).",
+    "errorDuration": "Invalid duration (months, 1 to 600).",
+    "errorDeferral": "The deferral must be shorter than the total duration.",
+    "errorInsurance": "Invalid insurance amount.",
+    "errorDate": "Invalid date, or an end date before the start date.",
+    "errorUnexpected": "Could not save, try again."
   }
 }

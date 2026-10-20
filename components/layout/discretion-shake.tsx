@@ -5,7 +5,6 @@ import { readDiscreet, setDiscreet } from "@/components/layout/discretion";
 import { hapticFor } from "@/components/layout/haptics";
 import {
   DISCRETION_SHAKE_COOKIE,
-  createGravityFilter,
   createShakeDetector,
   shakeCookie,
   shakeListening,
@@ -88,18 +87,15 @@ export function DiscretionShake() {
     if (!shakeListening(preference)) return;
 
     const isShake = createShakeDetector();
-    const withoutGravity = createGravityFilter();
     function onMotion(event: DeviceMotionEvent) {
       const raw = event.accelerationIncludingGravity;
       if (!motionSeen && raw?.x != null) {
         motionSeen = true;
         globalThis.dispatchEvent(new Event(SHAKE_EVENT));
       }
-      // The hand's own acceleration: the phone's, when it reports one, else
-      // gravity filtered out of the raw reading.
-      const own = event.acceleration;
-      const motion = own?.x != null ? own : raw && withoutGravity(raw);
-      if (!motion || !isShake(motion, event.timeStamp)) return;
+      // The raw reading, gravity included - what v2.18.0 measured on the
+      // user's phone, and what works there (lib/domain/discretion.ts).
+      if (!raw || !isShake(raw, event.timeStamp)) return;
       const hidden = !readDiscreet();
       setDiscreet(hidden);
       hapticFor(hidden);

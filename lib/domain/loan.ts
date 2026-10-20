@@ -221,3 +221,24 @@ export function repaidPct(borrowedCents: bigint | null, remainingCents: bigint):
   const pct = (Number(borrowedCents - remainingCents) / Number(borrowedCents)) * 100;
   return Math.min(100, Math.max(0, Math.round(pct)));
 }
+
+/**
+ * Whether a bank-reported loan is in its deferral, read from what the bank
+ * does send (v2.19.2): during a deferral the instalment is the interest alone
+ * (plus any insurance), so it sits at about remaining capital × rate / 12;
+ * once repayment starts it also carries capital and is several times that.
+ * A student loan at 0.99% on 5 000 € pays ~4.13 € a month in deferral and
+ * ~106 € over 48 months after it - nowhere near each other. 25% plus a euro
+ * of slack absorbs insurance and rounding. Null when the rate or the
+ * instalment is unknown: no guess.
+ */
+export function looksInterestOnly(nextPaymentCents: bigint | null, remainingCents: bigint, ratePct: number | null): boolean | null {
+  if (nextPaymentCents === null || ratePct === null || ratePct <= 0 || remainingCents <= BigInt(0)) return null;
+  const interest = (Number(remainingCents) * ratePct) / 100 / 12;
+  return Number(nextPaymentCents) > 0 && Number(nextPaymentCents) <= interest * 1.25 + 100;
+}
+
+/** When a deferral of `months` from `start` ends - the first instalment that repays capital. */
+export function deferralEndDate(start: Date, months: number): Date {
+  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months, start.getUTCDate()));
+}

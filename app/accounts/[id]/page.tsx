@@ -25,7 +25,9 @@ import { AutomobileSection } from "@/components/account-detail/automobile-sectio
 import { LoanSection } from "@/components/account-detail/loan-section";
 import { TransactionsTable } from "@/components/account-detail/transactions-table";
 import { BalanceHistoryTable } from "@/components/account-detail/balance-history-table";
-import { hasLoanParams } from "@/lib/domain/loan";
+import { hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
+import { loanTermsValues } from "@/lib/domain/loan-terms";
+import { EditLoanTermsDialog } from "@/components/accounts/edit-loan-terms-dialog";
 
 export default async function AccountDetailPage({
   params,
@@ -250,6 +252,14 @@ export default async function AccountDetailPage({
           ltv={result.ltv}
           purchasePrice={result.purchasePrice}
         />
+      )}
+
+      {/* The contract's terms, editable (v2.19.2): what a bank never sends,
+          or a manual loan's figures to correct. */}
+      {result.isLoan && !readOnly && (
+        <div className="flex justify-end">
+          <EditLoanTermsDialog accountId={account.id} values={loanTermsValues(account)} bankReported={isBankReportedLoan(account)} />
+        </div>
       )}
 
       {result.isLoan && result.loanStats && hasLoanParams(account) && (

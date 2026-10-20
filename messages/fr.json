@@ -232,7 +232,15 @@
       "repaymentProgress": "Remboursement · {elapsed} mois écoulés sur {total}",
       "reportedByBank": "chiffres communiqués par la banque",
       "nextPayment": "Prochaine échéance",
-      "repaidShare": "Déjà remboursé"
+      "repaidShare": "Déjà remboursé",
+      "inDeferral": "En différé · intérêts seuls",
+      "inDeferralUntil": "En différé jusqu'en {date}",
+      "estimatedMonthlyAfterDeferral": "Mensualité après différé (estimée)",
+      "estimatedMonthly": "Mensualité (estimée)",
+      "estimatedTotalCost": "Coût total (estimé)",
+      "durationValue": "{months} mois",
+      "estimatesNote": "Estimations calculées à partir des conditions saisies.",
+      "completeTermsHint": "Durée, différé et assurance ne sont pas fournis par la banque."
     },
     "auto": {
       "value": "Valeur actuelle",
@@ -1828,5 +1836,25 @@
       "help": "Afficher cette liste",
       "discretion": "Masquer ou afficher les montants"
     }
+  },
+  "loanTerms": {
+    "trigger": "Modifier les conditions",
+    "title": "Conditions du prêt",
+    "introBank": "Le capital restant dû et la prochaine échéance viennent de la banque à chaque synchronisation. Complétez ou corrigez ici les conditions du contrat : la synchronisation ne remplacera jamais ce que vous saisissez. Un champ vidé sera à nouveau rempli par la banque si elle le fournit.",
+    "introManual": "Corrigez ou complétez les conditions de ce crédit. Tous les champs sont facultatifs.",
+    "amount": "Montant emprunté (€)",
+    "rate": "Taux annuel (TAEG, %)",
+    "startDate": "Date de début",
+    "endDate": "Date de fin",
+    "durationMonths": "Durée totale (mois, différé compris)",
+    "deferralMonths": "Différé (mois)",
+    "insurance": "Assurance mensuelle (€)",
+    "errorAmount": "Montant invalide.",
+    "errorRate": "Taux invalide (entre 0 et 100 %).",
+    "errorDuration": "Durée invalide (en mois, entre 1 et 600).",
+    "errorDeferral": "Le différé doit être plus court que la durée totale.",
+    "errorInsurance": "Assurance invalide.",
+    "errorDate": "Date invalide, ou date de fin avant la date de début.",
+    "errorUnexpected": "Impossible d'enregistrer, réessayez."
   }
 }

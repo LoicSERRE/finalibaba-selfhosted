@@ -4,6 +4,7 @@ import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { AddLoanDialog } from "@/components/accounts/add-loan-dialog";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 import { ReportedLoanCard } from "@/components/accounts/reported-loan-card";
+import { EditLoanTermsDialog } from "@/components/accounts/edit-loan-terms-dialog";
 import type { LoanRow } from "@/lib/domain/accounts-page";
 import type { getTranslations } from "next-intl/server";
 
@@ -42,7 +43,9 @@ export function LoanTab({
       ) : (
         rows.map((loan) => {
           if (!loan.hasParams && loan.reported) {
-            return <ReportedLoanCard key={loan.id} t={t} td={td} intlLocale={intlLocale} loan={{ ...loan, reported: loan.reported }} />;
+            return (
+              <ReportedLoanCard key={loan.id} t={t} td={td} intlLocale={intlLocale} readOnly={readOnly} loan={{ ...loan, reported: loan.reported }} />
+            );
           }
           if (!loan.hasParams) {
             return (
@@ -51,7 +54,10 @@ export function LoanTab({
                   <p className="font-medium text-[var(--foreground)]">{loan.name}</p>
                   <p className="text-xs text-[var(--muted)] mt-1">{t("loan.incompleteParams")}</p>
                 </div>
-                <DeleteAccountButton id={loan.id} name={loan.name} backHref="/accounts?tab=credits" iconOnly />
+                <div className="flex items-center gap-2">
+                  {!readOnly && <EditLoanTermsDialog accountId={loan.id} values={loan.termsValues} bankReported={false} />}
+                  <DeleteAccountButton id={loan.id} name={loan.name} backHref="/accounts?tab=credits" iconOnly />
+                </div>
               </div>
             );
           }
@@ -91,6 +97,7 @@ export function LoanTab({
                     </p>
                     <p className="text-xs text-[var(--muted)]">{t("loan.remaining")}</p>
                   </div>
+                  {!readOnly && <EditLoanTermsDialog accountId={loan.id} values={loan.termsValues} bankReported={false} />}
                   <DeleteAccountButton id={loan.id} name={loan.name} backHref="/accounts?tab=credits" iconOnly />
                 </div>
               </div>
