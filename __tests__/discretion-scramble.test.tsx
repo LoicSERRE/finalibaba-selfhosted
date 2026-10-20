@@ -27,7 +27,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function Row({ cents }: Readonly<{ cents: number }>) {
+// Per-field readonly: a Readonly<{...}> parameter type hides this function
+// from lizard (scripts/lizard-blind-spots.py).
+function Row({ cents }: { readonly cents: number }) {
   return (
     <p data-testid="row" className="amount">
       Solde : {formatCurrency(cents)} ({PERCENT})
