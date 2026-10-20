@@ -583,3 +583,28 @@ describe("computeAnalytics - goals (v1.14)", () => {
     expect(result.goals[0].accountName).toBe("Livret A");
   });
 });
+
+// v2.19.3: a loan its bank reports already counts through its own negative
+// balance rows - the monthly series subtracted its liabilityCents on top,
+// so taking out a 5 000 € loan showed as a ~10 000 € drop.
+describe("computeAnalytics - monthly history with a bank-reported loan", () => {
+  it("counts the loan once", () => {
+    const savings = account({ id: "livret", type: "SAVINGS", history: [{ balanceCents: BigInt(16812_00) }] });
+    const loan = account({ id: "pret", type: "LOAN", syncId: "woob:lcl:pret1", liabilityCents: BigInt(5099_00), loanAmountCents: BigInt(5000_00) });
+    const result = computeAnalytics(
+      baseInput({
+        accounts: [savings, loan],
+        allBalances: [
+          { accountId: "livret", recordedAt: new Date("2026-09-15T12:00:00.000Z"), balanceCents: BigInt(11812_00) },
+          { accountId: "livret", recordedAt: new Date("2026-10-15T12:00:00.000Z"), balanceCents: BigInt(16812_00) },
+          { accountId: "pret", recordedAt: new Date("2026-10-15T12:00:00.000Z"), balanceCents: BigInt(-5099_00) },
+        ],
+      }),
+    );
+    const [september, october] = result.performanceRows;
+    expect(september.netWorth).toBe(11812_00);
+    expect(october.netWorth).toBe(16812_00 - 5099_00);
+    // The loan's effect on net worth: +5 000 € in, 5 099 € owed.
+    expect(october.delta).toBe(-99_00);
+  });
+});

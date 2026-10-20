@@ -333,7 +333,9 @@ function buildDividendCalendar(
 /**
  * Month-end net worth, carrying each account's last known balance forward
  * through months where it has no row. Liabilities count only once their
- * account has appeared.
+ * account has appeared. A loan its bank reports already counts through its
+ * own (negative) balance rows, so its liabilityCents is not subtracted again
+ * - the dashboard's series does the same (lib/domain/dashboard.ts).
  */
 function computeMonthlyHistory(
   accounts: Account[],
@@ -341,7 +343,7 @@ function computeMonthlyHistory(
   intlLocale: string
 ): MonthlyHistoryPoint[] {
   const liabMap = new Map<string, bigint>();
-  for (const a of accounts) liabMap.set(a.id, a.liabilityCents ?? BigInt(0));
+  for (const a of accounts) liabMap.set(a.id, isBankReportedLoan(a) ? BigInt(0) : (a.liabilityCents ?? BigInt(0)));
 
   const monthMap = new Map<string, Map<string, bigint>>();
   for (const b of allBalances) {
