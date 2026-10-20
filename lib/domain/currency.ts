@@ -177,11 +177,13 @@ export function revaluation(
  * it converted at its own day's rate. Null when any day cannot be priced -
  * then nothing is rewritten and the next sync tries again.
  */
-export function redenominate<T extends { id: string; cents: bigint; day: string }>(
-  rows: readonly T[],
-  rates: ReadonlyMap<string, number | null>,
-): { id: string; native: bigint; base: bigint; rate: number }[] | null {
-  const out: { id: string; native: bigint; base: bigint; rate: number }[] = [];
+// Named types rather than an inline generic bound: that form hides the
+// function from lizard (scripts/lizard-blind-spots.py).
+type DatedCents = { id: string; cents: bigint; day: string };
+type Redenominated = { id: string; native: bigint; base: bigint; rate: number };
+
+export function redenominate(rows: readonly DatedCents[], rates: ReadonlyMap<string, number | null>): Redenominated[] | null {
+  const out: Redenominated[] = [];
   for (const row of rows) {
     const rate = rates.get(row.day);
     if (rate === null || rate === undefined) return null;

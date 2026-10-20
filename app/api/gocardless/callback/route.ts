@@ -1,10 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { getRequisition, getAccountDetails, getAccountBalances, pickBalance, pickBalanceCurrency, toAccountType } from "@/lib/services/gocardless";
+import {
+  getRequisition,
+  getAccountDetails,
+  getAccountBalances,
+  pickBalance,
+  pickBalanceCurrency,
+  toAccountType,
+  type GCBalance,
+} from "@/lib/services/gocardless";
 import { balanceColumns } from "@/lib/domain/currency";
 import { rateToEurOn } from "@/lib/services/exchange-rate";
 import { resolveSyncedAccountCurrency } from "@/lib/services/account-currency";
 import { settingsTabHref } from "@/lib/domain/settings-tabs";
+
+/**
+ * The connected account's first balance, in its own currency (v2.18): the
+ * details' currency if the bank gives one, else the balance's. A new account
+ * starts EUR and takes it here; a rate that cannot be fetched only delays the
+ * first balance to the next sync, it never stores a guess.
+ */
+async function recordConnectedBalance(accountId: string, reported: string | undefined, balances: GCBalance[]) {
+  const currency = await resolveSyncedAccountCurrency(accountId, reported ?? pickBalanceCurrency(balances));
+  if (currency === null) return;
+  const rate = await rateToEurOn(currency);
+  if (rate === null) return;
+  await prisma.historicalBalance.create({
+    data: { accountId, ...balanceColumns(currency, pickBalance(balances), rate) },
+  });
+}
 
 export async function GET(req: NextRequest) {
   // GoCardless appends ?ref={reference} - we set reference = our institution DB id
@@ -68,17 +92,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // The account's own currency (v2.18): the details' if the bank gives
-    // one, else the balance's. A new account starts EUR and takes it here;
-    // a rate that cannot be fetched only delays the first balance to the
-    // next sync, it never stores a guess.
-    const currency = await resolveSyncedAccountCurrency(account.id, details.currency ?? pickBalanceCurrency(balances));
-    const rate = currency === null ? null : await rateToEurOn(currency);
-    if (currency !== null && rate !== null) {
-      await prisma.historicalBalance.create({
-        data: { accountId: account.id, ...balanceColumns(currency, pickBalance(balances), rate) },
-      });
-    }
+    await recordConnectedBalance(account.id, details.currency, balances);
   }
 
   if (conflicted > 0) {

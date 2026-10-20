@@ -50,7 +50,10 @@ export async function refreshAccountBalance(accountId: string) {
  * the investment snapshots; at most one row per account per day, since rates
  * are daily.
  */
-export async function revalueForeignBalances(now: Date = new Date()): Promise<number> {
+export async function revalueForeignBalances(at?: Date): Promise<number> {
+  // Optional rather than defaulted: `= new Date()` hides the function from
+  // lizard (scripts/lizard-blind-spots.py).
+  const now = at ?? new Date();
   const accounts = await prisma.account.findMany({
     where: { currency: { not: BASE_CURRENCY }, syncId: null },
     select: {

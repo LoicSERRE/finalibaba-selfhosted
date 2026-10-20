@@ -89,6 +89,24 @@ def _fetch_daily_rates(currency: str, start: datetime.date, end: datetime.date) 
         return {}
 
 
+def _cached_rates(cur, currency: str, start: datetime.date, end: datetime.date) -> dict[datetime.date, float]:
+    cur.execute(
+        'SELECT day, rate FROM "ExchangeRate" WHERE base = %s AND currency = %s AND day BETWEEN %s AND %s',
+        (BASE_CURRENCY, currency, start, end),
+    )
+    return {_stored(row, "day", 0): float(_stored(row, "rate", 1)) for row in cur.fetchall()}
+
+
+def _rows_to_store(cached, fetched, result) -> dict[datetime.date, float]:
+    """What a fetch adds to the table: the closes it brought, plus each asked
+    day that had none (a weekend) under the rate it was given."""
+    to_store = {day: rate for day, rate in fetched.items() if day not in cached}
+    for day, rate in result.items():
+        if rate is not None and day not in cached and day not in fetched:
+            to_store[day] = rate
+    return to_store
+
+
 def rates_for_days(cur, currency: str, days) -> dict[datetime.date, float | None]:
     """EUR per 1 unit of `currency` for each day in `days`."""
     wanted = sorted(set(days))
@@ -98,23 +116,14 @@ def rates_for_days(cur, currency: str, days) -> dict[datetime.date, float | None
         return {}
 
     start = wanted[0] - datetime.timedelta(days=LOOKBACK_DAYS)
-    cur.execute(
-        'SELECT day, rate FROM "ExchangeRate" WHERE base = %s AND currency = %s AND day BETWEEN %s AND %s',
-        (BASE_CURRENCY, currency, start, wanted[-1]),
-    )
-    cached = {_stored(row, "day", 0): float(_stored(row, "rate", 1)) for row in cur.fetchall()}
+    cached = _cached_rates(cur, currency, start, wanted[-1])
     if all(day in cached for day in wanted):
         return {day: pick_rate(cached, day) for day in wanted}
 
     fetched = _fetch_daily_rates(currency, start, wanted[-1] + datetime.timedelta(days=1))
     known = {**cached, **fetched}
     result = {day: pick_rate(known, day) for day in wanted}
-
-    to_store = {day: rate for day, rate in fetched.items() if day not in cached}
-    for day, rate in result.items():
-        if rate is not None and day not in cached and day not in fetched:
-            to_store[day] = rate
-    for day, rate in to_store.items():
+    for day, rate in _rows_to_store(cached, fetched, result).items():
         cur.execute(
             'INSERT INTO "ExchangeRate" (base, currency, day, rate) VALUES (%s, %s, %s, %s)'
             " ON CONFLICT DO NOTHING",

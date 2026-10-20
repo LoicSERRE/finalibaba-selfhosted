@@ -122,8 +122,10 @@ export async function ratesToEurForDays(currency: string, days: readonly string[
   return result;
 }
 
-/** One day's rate (today by default); see ratesToEurForDays. */
-export async function rateToEurOn(currency: string, date: Date = new Date()): Promise<number | null> {
-  const day = dayKey(date);
+/** One day's rate (today by default); see ratesToEurForDays. Optional
+ *  rather than `= new Date()`: a defaulted parameter hides the function
+ *  from lizard (scripts/lizard-blind-spots.py). */
+export async function rateToEurOn(currency: string, date?: Date): Promise<number | null> {
+  const day = dayKey(date ?? new Date());
   return (await ratesToEurForDays(currency, [day])).get(day) ?? null;
 }
