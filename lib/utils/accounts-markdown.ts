@@ -14,6 +14,7 @@ import type {
   AutomobileAccountExport,
   LoanAccountExport,
 } from "@/lib/domain/accounts-export";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 // ── ExportStrings ─────────────────────────────────────────────────────────────
 
@@ -125,7 +126,7 @@ export function buildMarkdown(
           const gainPctSuffix = h.gainPct !== null ? ` (${f.signedPct(h.gainPct, 1)})` : "";
           const gainStr = h.gainCents !== null ? `${f.signedMoney(h.gainCents)}${gainPctSuffix}` : "-";
           const targetStr = h.targetPct !== null ? f.pct(h.targetPct) : "-";
-          const currencySuffix = h.currency !== "EUR" ? ` · ${h.currency}` : "";
+          const currencySuffix = h.currency !== baseCurrency() ? ` · ${h.currency}` : "";
           const nameStr = `${h.name ?? h.ticker}${currencySuffix}`;
           lines.push(
             `| ${nameStr} | ${h.ticker} | ${f.quantity(h.quantity)} | ${f.money(h.lastPriceCents, 2)} | ${f.money(h.valueCents)} | ${f.pct(h.pct)} | ${gainStr} | ${targetStr} |`

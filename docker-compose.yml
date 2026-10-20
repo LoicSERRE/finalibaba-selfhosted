@@ -37,6 +37,9 @@ services:
       # sync service reads them, so a key reaching only one breaks every sync.
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      # The currency every amount is kept in - EUR, USD, GBP or CHF. Read at the
+      # FIRST start only; see .env.example before ever changing it.
+      BASE_CURRENCY: ${BASE_CURRENCY:-EUR}
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
@@ -85,6 +88,9 @@ services:
     build: ./sync
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finalibaba}
+      # Read from the database once the app has settled it; this is only the
+      # fallback before the app's first start (sync/fx.py base_currency).
+      BASE_CURRENCY: ${BASE_CURRENCY:-EUR}
       LCL_LOGIN: ${LCL_LOGIN:-}
       LCL_PASSWORD: ${LCL_PASSWORD:-}
       TR_PHONE: ${TR_PHONE:-}

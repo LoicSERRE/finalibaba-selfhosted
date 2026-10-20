@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useTranslations, useLocale } from "next-intl";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 type DataPoint = {
   date: string;
@@ -31,7 +32,7 @@ const CATEGORIES = ["cash", "savings", "investments", "crypto", "realEstate", "a
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "EUR",
+    currency: baseCurrency(),
     maximumFractionDigits: 0,
   }).format(cents / 100);
 }

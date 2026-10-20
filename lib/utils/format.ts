@@ -1,3 +1,4 @@
+import { baseCurrency } from "@/lib/utils/base-currency";
 // next-intl locale ("en" | "fr") -> Intl.DateTimeFormat/toLocaleDateString locale tag.
 // Used for date formatting only - formatCurrency/formatPercent below stay on
 // fr-FR regardless of UI locale (amounts are always EUR-denominated here, and
@@ -24,11 +25,12 @@ export function formatDateShort(date: Date, intlLocale: string): string {
   return new Intl.DateTimeFormat(intlLocale).format(date);
 }
 
+/** An amount in the instance's base currency (v2.19: EUR unless set otherwise at install). */
 export function formatCurrency(cents: number | bigint, decimals = 2): string {
   const amount = typeof cents === "bigint" ? Number(cents) : cents;
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "EUR",
+    currency: baseCurrency(),
     maximumFractionDigits: decimals,
     minimumFractionDigits: decimals,
   }).format(amount / 100);

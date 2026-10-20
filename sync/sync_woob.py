@@ -265,7 +265,7 @@ def _day_of(value) -> datetime.date:
     return value.date() if isinstance(value, datetime.datetime) else value
 
 
-def _sync_account_transactions(w, backend_name, institution_id, institution_name, account, account_db_id, cur, currency=fx.BASE_CURRENCY):
+def _sync_account_transactions(w, backend_name, institution_id, institution_name, account, account_db_id, cur, currency=None):
     """Fetch and upsert transaction history for one account. Errors here are
     non-fatal to the overall sync - the account balance above was already
     recorded, so a transactions-fetch failure just means that account's
@@ -317,7 +317,7 @@ def _sync_account_transactions(w, backend_name, institution_id, institution_name
                 legacy_sync_id=legacy_sync_id,
                 near_duplicate="label" if not tx.id else "amount",
                 currency=currency,
-                rate=None if fx.is_base(currency) else rate,
+                rate=None if fx.is_base(cur, currency) else rate,
             )
             tx_count += 1
         log.info("%s - %s: %d transaction(s) imported", institution_name, account.label, tx_count)
@@ -474,7 +474,7 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
     if currency is None:
         return None
     rate = None
-    if not fx.is_base(currency):
+    if not fx.is_base(cur, currency):
         rate = fx.rate_for_day(cur, currency, datetime.datetime.now(datetime.UTC).date())
         if rate is None:
             log.warning("%s - %s: no %s rate today, skipped until the next sync", institution_name, account.label, currency)

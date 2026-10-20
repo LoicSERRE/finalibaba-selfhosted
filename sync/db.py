@@ -328,10 +328,12 @@ def upsert_account(cur, *, sync_id: str, name: str, account_type: str, instituti
     account_id = str(uuid.uuid4())
     cur.execute(
         """
-        INSERT INTO "Account" (id, name, type, "institutionId", "userId", "syncId", "createdAt", "updatedAt")
-        VALUES (%s, %s, %s, %s, COALESCE(%s, 'user-owner'), %s, NOW(), NOW())
+        INSERT INTO "Account" (id, name, type, "institutionId", "userId", "syncId", currency, "createdAt", "updatedAt")
+        VALUES (%s, %s, %s, %s, COALESCE(%s, 'user-owner'), %s, %s, NOW(), NOW())
         """,
-        (account_id, name, account_type, institution_id, owner_id, sync_id),
+        # Born in the base (v2.19), not the column's EUR default: a bank
+        # reporting another currency then re-denominates from the base.
+        (account_id, name, account_type, institution_id, owner_id, sync_id, fx.base_currency(cur)),
     )
     return account_id
 
@@ -354,7 +356,7 @@ def to_cents(amount) -> int:
     return int((Decimal(str(amount)) * 100).to_integral_value())
 
 
-def record_balance(cur, account_id: str, balance_cents: int, *, currency: str = fx.BASE_CURRENCY, rate: float | None = None):
+def record_balance(cur, account_id: str, balance_cents: int, *, currency: str | None = None, rate: float | None = None):
     """Record the bank's balance, in `currency`, unless it says nothing new.
 
     For an account kept in another currency (v2.18) the comparison is on the
@@ -372,7 +374,7 @@ def record_balance(cur, account_id: str, balance_cents: int, *, currency: str = 
         (account_id,),
     )
     row = cur.fetchone()
-    if fx.is_base(currency):
+    if fx.is_base(cur, currency):
         if row and int(row["balanceCents"]) == balance_cents:
             return
         base_cents, native_cents, rate = balance_cents, None, None
@@ -411,7 +413,7 @@ def resolve_account_currency(cur, account_id: str, reported: str | None) -> str 
     current = cur.fetchone()["currency"]
     if reported is None or reported == current:
         return current
-    if current != fx.BASE_CURRENCY:
+    if current != fx.base_currency(cur):
         log.warning("account %s is kept in %s but the bank now reports %s; skipped", account_id, current, reported)
         return None
 
@@ -638,7 +640,7 @@ def upsert_transaction(
     near_duplicate: str = "amount",
     is_securities_movement: bool = False,
     source_event_type: str | None = None,
-    currency: str = fx.BASE_CURRENCY,
+    currency: str | None = None,
     rate: float | None = None,
 ):
     """Insert a transaction unless it is already stored.
@@ -692,7 +694,7 @@ def upsert_transaction(
     ):
         return
 
-    if fx.is_base(currency):
+    if fx.is_base(cur, currency):
         base_cents, native_cents, rate = amount_cents, None, None
     elif rate is None:
         raise ValueError(f"no {currency} rate")  # callers check first; never store a guess

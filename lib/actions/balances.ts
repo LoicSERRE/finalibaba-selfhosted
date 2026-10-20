@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { isFutureDate, parseCsvDate } from "@/lib/domain/csv-import";
 import { balanceColumns } from "@/lib/domain/currency";
-import { ratesToEurForDays } from "@/lib/services/exchange-rate";
+import { ratesToBaseForDays } from "@/lib/services/exchange-rate";
 
 type BalanceRow = { date: string; balanceCents: number };
 
@@ -41,7 +41,7 @@ export async function importBalanceHistory(
 
   // Figures are in the account's currency, each converted at its own day's
   // rate. All or nothing: half a file converted is a history nobody can trust.
-  const rates = await ratesToEurForDays(currency, [...byDate.keys()]);
+  const rates = await ratesToBaseForDays(currency, [...byDate.keys()]);
   if ([...rates.values()].some((rate) => rate === null)) return { imported: 0, error: "rate_unavailable" };
 
   // Replaces rather than appends. Re-importing a corrected balance used to

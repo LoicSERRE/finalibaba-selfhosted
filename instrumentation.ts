@@ -1,7 +1,9 @@
 /**
  * Runs once per server start, before the first request is served.
  *
- * The only thing here is the encryption backfill, and it lives at startup
+ * First the base currency (v2.19): every figure is formatted in it from the
+ * first request on, so it is settled before anything else. Then the
+ * encryption backfill, and it lives at startup
  * rather than in a script an operator has to remember: "deploy, then run this
  * command" is a migration that eventually does not get run, and until it does
  * the credentials it was meant to protect are still in clear in every backup.
@@ -15,6 +17,22 @@
 export async function register() {
   // instrumentation also runs on the Edge runtime, where Prisma cannot.
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+  const { settleBaseCurrency } = await import("@/lib/services/instance-config");
+  try {
+    const { base, requested } = await settleBaseCurrency();
+    if (base !== requested) {
+      console.error(
+        `[currency] BASE_CURRENCY asks for ${requested}, but this instance's figures are stored in ${base}; ` +
+          `keeping ${base}. The base is settled at the first boot and changing the variable does not convert ` +
+          `existing data - see dev-docs/currencies.md.`
+      );
+    }
+  } catch (e) {
+    // Not fatal: without the table (a database not migrated yet) every
+    // figure falls back to EUR, which is what all of them were before v2.19.
+    console.error("[currency] Could not settle the base currency; using BASE_CURRENCY or EUR. Cause:", e);
+  }
 
   const { backfillEncryptedSecrets } = await import("@/lib/services/secret-backfill");
 

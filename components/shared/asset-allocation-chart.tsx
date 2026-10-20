@@ -4,6 +4,7 @@ import { PieChart, Pie, Tooltip, ResponsiveContainer } from "recharts";
 import { useTranslations } from "next-intl";
 import { CHART_COLORS } from "@/lib/utils/palette";
 import { TruncatedText } from "@/components/ui/truncated-text";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 export type AllocationSlice = {
   name: string;
@@ -15,7 +16,7 @@ export type AllocationSlice = {
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "EUR",
+    currency: baseCurrency(),
     maximumFractionDigits: 0,
   }).format(cents / 100);
 }

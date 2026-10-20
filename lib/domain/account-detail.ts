@@ -3,6 +3,7 @@ import { getAccountTaxRate } from "@/lib/domain/tax";
 import { calcLoanStats, hasLoanParams, type LoanStats } from "@/lib/domain/loan";
 import { FR_PFU_TOTAL_RATE } from "@/lib/domain/tax-locale";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 export const TYPE_TO_TAB: Record<string, string> = {
   CHECKING: "liquidites",
@@ -268,7 +269,7 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
       ? account.history[0].balanceCents - account.history[1].balanceCents
       : null;
 
-  const currency = account.currency ?? "EUR";
+  const currency = account.currency ?? baseCurrency();
   const nativeAt = (i: number) => account.history[i]?.nativeBalanceCents ?? null;
   const currentNative = isFiat ? nativeAt(0) : null;
   const previousNative = nativeAt(1);

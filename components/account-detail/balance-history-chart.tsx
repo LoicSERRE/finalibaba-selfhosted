@@ -10,6 +10,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { useTranslations, useLocale } from "next-intl";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 interface BalancePoint {
   date: string; // pre-formatted, day+month only (no year) - display only, see isoDate below
@@ -20,7 +21,7 @@ interface BalancePoint {
 const fmt = (cents: number) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "EUR",
+    currency: baseCurrency(),
     maximumFractionDigits: 0,
   }).format(cents / 100);
 

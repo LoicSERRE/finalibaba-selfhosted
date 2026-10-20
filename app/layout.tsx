@@ -17,6 +17,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getPublicViewer, isEndedSession, isRevokedSession, isDemoMode } from "@/lib/auth-context";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { DISCRETION_COOKIE, isDiscreet } from "@/lib/domain/discretion";
+import { BASE_CURRENCY_ATTRIBUTE, baseCurrency } from "@/lib/utils/base-currency";
 import { DiscretionScrambler, DiscretionShortcut } from "@/components/layout/discretion";
 import { DiscretionShake } from "@/components/layout/discretion-shake";
 import { Toaster } from "@/components/ui/toast";
@@ -175,6 +176,9 @@ export default async function RootLayout({
       // full reasoning.
       {...(theme === "auto" ? {} : { "data-theme": theme })}
       {...(discreet ? { "data-discreet": "" } : {})}
+      // What formatCurrency reads in the browser - the same value the server
+      // formats with, so hydration agrees (lib/utils/base-currency.ts).
+      {...{ [BASE_CURRENCY_ATTRIBUTE]: baseCurrency() }}
       className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased h-full`}
     >
       <head>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { upsertHolding } from "@/lib/actions/holdings";
 import { useTranslations } from "next-intl";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 const CURRENCIES = ["EUR", "USD", "GBP", "CHF"];
 
@@ -94,7 +95,7 @@ export function AddHoldingDialog({
         <Select
           label={t("currency")}
           name="currency"
-          defaultValue={existing?.currency ?? "EUR"}
+          defaultValue={existing?.currency ?? baseCurrency()}
           options={CURRENCIES.map((c) => ({ value: c, label: c }))}
         />
         <Input

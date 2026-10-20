@@ -10,9 +10,10 @@ import {
   type GCBalance,
 } from "@/lib/services/gocardless";
 import { balanceColumns } from "@/lib/domain/currency";
-import { rateToEurOn } from "@/lib/services/exchange-rate";
+import { rateToBaseOn } from "@/lib/services/exchange-rate";
 import { resolveSyncedAccountCurrency } from "@/lib/services/account-currency";
 import { settingsTabHref } from "@/lib/domain/settings-tabs";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 /**
  * The connected account's first balance, in its own currency (v2.18): the
@@ -23,7 +24,7 @@ import { settingsTabHref } from "@/lib/domain/settings-tabs";
 async function recordConnectedBalance(accountId: string, reported: string | undefined, balances: GCBalance[]) {
   const currency = await resolveSyncedAccountCurrency(accountId, reported ?? pickBalanceCurrency(balances));
   if (currency === null) return;
-  const rate = await rateToEurOn(currency);
+  const rate = await rateToBaseOn(currency);
   if (rate === null) return;
   await prisma.historicalBalance.create({
     data: { accountId, ...balanceColumns(currency, pickBalance(balances), rate) },
@@ -89,6 +90,9 @@ export async function GET(req: NextRequest) {
         type,
         institutionId,
         gocardlessAccountId: gcAccountId,
+        // Born in the base, like every account: the bank's own currency is
+        // settled just below, re-denominating from the base if it differs.
+        currency: baseCurrency(),
       },
     });
 

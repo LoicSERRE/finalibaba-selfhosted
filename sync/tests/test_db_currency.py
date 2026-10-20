@@ -48,6 +48,12 @@ def cur():
         conn.close()
 
 
+@pytest.fixture(autouse=True)
+def _fresh_base(monkeypatch):
+    monkeypatch.setattr(fx, "_settled_base", None)
+    monkeypatch.delenv("BASE_CURRENCY", raising=False)
+
+
 @pytest.fixture
 def account(cur, monkeypatch):
     monkeypatch.setattr(fx, "_fetch_daily_rates", lambda *a: pytest.fail("Yahoo was asked"))
@@ -148,3 +154,23 @@ def test_no_switch_while_any_of_the_history_cannot_be_priced(cur, account, monke
     cur.execute('SELECT currency FROM "Account" WHERE id = %s', (account,))
     assert cur.fetchone()["currency"] == "EUR"
     assert _balances(cur, account) == [(100_00, None, None)]
+
+
+def test_on_a_usd_instance_accounts_are_born_in_usd_and_eur_is_the_foreign_one(cur, monkeypatch):
+    # v2.19: the base is the instance's, settled in InstanceConfig.
+    monkeypatch.setattr(fx, "_fetch_daily_rates", lambda *a: pytest.fail("Yahoo was asked"))
+    cur.execute('INSERT INTO "InstanceConfig" (id, "baseCurrency") VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET "baseCurrency" = EXCLUDED."baseCurrency"', ("singleton", "USD"))
+    cur.execute('INSERT INTO "ExchangeRate" (base, currency, day, rate) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING', ("USD", "EUR", TODAY, 1.12))
+    institution_id = f"test-inst-{uuid.uuid4().hex[:8]}"
+    cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (institution_id, f"Chase {institution_id}"))
+    usd = upsert_account(cur, sync_id=f"woob:{institution_id}:a", name="Checking", account_type="CHECKING", institution_id=institution_id)
+    cur.execute('SELECT currency FROM "Account" WHERE id = %s', (usd,))
+    assert cur.fetchone()["currency"] == "USD"
+    assert resolve_account_currency(cur, usd, "USD") == "USD"
+    record_balance(cur, usd, 500_00, currency="USD")
+    assert _balances(cur, usd) == [(500_00, None, None)]
+
+    eur = upsert_account(cur, sync_id=f"woob:{institution_id}:b", name="Euro account", account_type="CHECKING", institution_id=institution_id)
+    assert resolve_account_currency(cur, eur, "EUR") == "EUR"
+    record_balance(cur, eur, 100_00, currency="EUR", rate=fx.rate_for_day(cur, "EUR", TODAY))
+    assert _balances(cur, eur) == [(112_00, 100_00, 1.12)]

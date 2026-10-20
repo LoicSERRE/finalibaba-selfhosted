@@ -8,7 +8,7 @@ import { AccountType, TaxTreatment } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { balanceColumns, isBaseCurrency, parseAccountCurrency } from "@/lib/domain/currency";
-import { rateToEurOn } from "@/lib/services/exchange-rate";
+import { rateToBaseOn } from "@/lib/services/exchange-rate";
 import { atNoonUtc } from "@/lib/domain/manual-entries";
 
 const TAX_TREATMENTS = new Set(Object.values(TaxTreatment));
@@ -92,7 +92,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult<vo
   // first, before anything is written: no rate, no account - never a
   // half-created one, never a guessed conversion.
   const currency = parseAccountCurrency(formData.get("currency"), type);
-  const rate = isBaseCurrency(currency) || balanceCents === null ? 1 : await rateToEurOn(currency);
+  const rate = isBaseCurrency(currency) || balanceCents === null ? 1 : await rateToBaseOn(currency);
   if (rate === null) return actionError("rate_unavailable");
   const isInterestBearing = type === "SAVINGS" || type === "CHECKING";
 

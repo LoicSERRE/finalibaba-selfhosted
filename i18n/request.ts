@@ -1,5 +1,7 @@
 import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
+import { baseCurrency, currencySymbol } from "@/lib/utils/base-currency";
+import { withCurrencySymbol } from "@/lib/domain/currency-labels";
 
 const DEFAULT_LOCALE = process.env.DEFAULT_LOCALE ?? "fr";
 const SUPPORTED = new Set(["en", "fr"]);
@@ -23,5 +25,7 @@ export default getRequestConfig(async () => {
     messages = (await import(`../messages/${DEFAULT_LOCALE}.json`)).default;
   }
 
-  return { locale, messages };
+  // Unit labels say "Montant (€)": on an instance kept in another base the
+  // symbol is swapped once here, for every page and both locales (v2.19).
+  return { locale, messages: withCurrencySymbol(messages, currencySymbol(baseCurrency())) };
 });

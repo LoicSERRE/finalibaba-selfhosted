@@ -38,7 +38,7 @@ vi.mock("@/lib/services/gocardless", async (importOriginal) => ({
   getTransactions: m.getTransactions,
 }));
 vi.mock("@/lib/services/account-currency", () => ({ resolveSyncedAccountCurrency: m.resolveCurrency }));
-vi.mock("@/lib/services/exchange-rate", () => ({ rateToEurOn: m.rate, ratesToEurForDays: m.rates }));
+vi.mock("@/lib/services/exchange-rate", () => ({ rateToBaseOn: m.rate, ratesToBaseForDays: m.rates }));
 
 import { syncGocardlessBalances, syncGocardlessTransactions } from "@/lib/actions/gocardless";
 

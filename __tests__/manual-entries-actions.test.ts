@@ -71,7 +71,7 @@ vi.mock("@/lib/actions/auto-categorize", () => ({ autoCategorizeTransactions: au
 // currency gets whatever the test sets.
 const { rateMock } = vi.hoisted(() => ({ rateMock: vi.fn() }));
 vi.mock("@/lib/services/exchange-rate", () => ({
-  rateToEurOn: async (currency: string, date?: Date) => (currency === "EUR" ? 1 : rateMock(currency, date)),
+  rateToBaseOn: async (currency: string, date?: Date) => (currency === "EUR" ? 1 : rateMock(currency, date)),
 }));
 
 import { recordManualMovement, setManualBalance, deleteManualEntry } from "@/lib/actions/manual-entries";

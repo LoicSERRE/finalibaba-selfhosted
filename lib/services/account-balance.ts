@@ -1,7 +1,8 @@
 import { Decimal } from "decimal.js";
 import { prisma } from "@/lib/db/prisma";
-import { BASE_CURRENCY, dayKey, revaluation } from "@/lib/domain/currency";
-import { rateToEurOn } from "@/lib/services/exchange-rate";
+import { dayKey, revaluation } from "@/lib/domain/currency";
+import { baseCurrency } from "@/lib/utils/base-currency";
+import { rateToBaseOn } from "@/lib/services/exchange-rate";
 
 /**
  * Records an investment or crypto account's current value as a
@@ -55,7 +56,7 @@ export async function revalueForeignBalances(at?: Date): Promise<number> {
   // lizard (scripts/lizard-blind-spots.py).
   const now = at ?? new Date();
   const accounts = await prisma.account.findMany({
-    where: { currency: { not: BASE_CURRENCY }, syncId: null },
+    where: { currency: { not: baseCurrency() }, syncId: null },
     select: {
       id: true,
       currency: true,
@@ -71,7 +72,7 @@ export async function revalueForeignBalances(at?: Date): Promise<number> {
   for (const account of accounts) {
     const latest = account.history[0];
     if (!latest) continue;
-    const rate = await rateToEurOn(account.currency, now);
+    const rate = await rateToBaseOn(account.currency, now);
     // No rate today: keep yesterday's value rather than invent one.
     if (rate === null) continue;
     const row = revaluation(latest, account.currency, rate, todayNoon);

@@ -1419,7 +1419,7 @@
     "addFirst": "Add an institution in Settings first.",
     "currency": "Currency",
     "balanceIn": "Initial balance ({currency})",
-    "rateUnavailable": "The {currency} → EUR rate cannot be fetched right now. Try again in a few minutes."
+    "rateUnavailable": "The {currency} → {base} rate cannot be fetched right now. Try again in a few minutes."
   },
   "addHolding": {
     "editTitle": "Edit: {ticker}",

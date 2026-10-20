@@ -5,11 +5,16 @@ import { refreshAccountBalance } from "@/lib/services/account-balance";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
-import { fetchExchangeRateToEur } from "@/lib/services/exchange-rate";
+import { fetchExchangeRateToBase } from "@/lib/services/exchange-rate";
 import { HoldingCurrency } from "@/app/generated/prisma/enums";
+import { baseCurrency } from "@/lib/utils/base-currency";
 import Decimal from "decimal.js";
 
-const FOREIGN_CURRENCIES = new Set(["USD", "GBP", "CHF"]);
+// A holding can be priced in any HoldingCurrency; the one equal to the
+// instance's base (EUR unless set otherwise at install, v2.19) needs no
+// conversion. `fxRateToEur` kept its pre-v2.19 name: it holds the rate to
+// the base, which is EUR on every instance that predates the setting.
+const HOLDING_CURRENCIES = new Set<string>(Object.values(HoldingCurrency));
 
 // Shared by upsertHolding's entry-time conversion and
 // refreshHoldingExchangeRate's on-demand one below - same rounding, one
@@ -35,8 +40,9 @@ export async function upsertHolding(formData: FormData) {
   const targetPctStr = formData.get("targetPct") as string | null;
   const targetPct = targetPctStr && targetPctStr.trim() !== "" ? Math.min(1, Math.max(0, Number.parseFloat(targetPctStr) / 100)) : null;
 
-  const currencyRaw = (formData.get("currency") as string | null) || "EUR";
-  const currency = (FOREIGN_CURRENCIES.has(currencyRaw) ? currencyRaw : "EUR") as HoldingCurrency;
+  const base = baseCurrency();
+  const currencyRaw = (formData.get("currency") as string | null) || base;
+  const currency = (HOLDING_CURRENCIES.has(currencyRaw) ? currencyRaw : base) as HoldingCurrency;
 
   // Price/cost basis are always entered in `currency` - converted to EUR
   // cents below when foreign, so every other calculation in the app keeps
@@ -67,7 +73,7 @@ export async function upsertHolding(formData: FormData) {
   let costBasisCents = nativeCostBasisCents;
   let fxRateToEur: number | null = null;
 
-  if (currency !== "EUR") {
+  if (currency !== base) {
     // fxRateToEur is meant to be captured at entry time, not re-rolled on
     // every edit - if the native price/cost basis/currency haven't actually
     // changed, reuse the stored conversion instead of re-fetching (which
@@ -84,9 +90,9 @@ export async function upsertHolding(formData: FormData) {
       lastPriceCents = existing.lastPriceCents;
       costBasisCents = existing.costBasisCents;
     } else {
-      fxRateToEur = await fetchExchangeRateToEur(currency as "USD" | "GBP" | "CHF");
+      fxRateToEur = await fetchExchangeRateToBase(currency);
       if (fxRateToEur === null) {
-        throw new Error(`Impossible de récupérer le taux de change ${currency}→EUR - réessaie ou utilise l'EUR.`);
+        throw new Error(`Impossible de récupérer le taux de change ${currency}→${base} - réessaie ou utilise le ${base}.`);
       }
       lastPriceCents = applyFxRate(nativePriceCents, fxRateToEur);
       costBasisCents =
@@ -105,8 +111,8 @@ export async function upsertHolding(formData: FormData) {
       costBasisCents: costBasisCents ?? undefined,
       targetPct: targetPct ?? undefined,
       currency,
-      nativePriceCents: currency !== "EUR" ? nativePriceCents : undefined,
-      nativeCostBasisCents: currency !== "EUR" ? (effectiveNativeCostBasisCents ?? undefined) : undefined,
+      nativePriceCents: currency !== base ? nativePriceCents : undefined,
+      nativeCostBasisCents: currency !== base ? (effectiveNativeCostBasisCents ?? undefined) : undefined,
       fxRateToEur: fxRateToEur ?? undefined,
     },
     update: {
@@ -118,9 +124,9 @@ export async function upsertHolding(formData: FormData) {
       // leaves a previously-set value untouched, same convention for both.
       ...(costBasisCents !== null ? { costBasisCents } : {}),
       ...(targetPct !== null ? { targetPct } : {}),
-      nativePriceCents: currency !== "EUR" ? nativePriceCents : null,
-      nativeCostBasisCents: currency !== "EUR" ? effectiveNativeCostBasisCents : null,
-      fxRateToEur: currency !== "EUR" ? fxRateToEur : null,
+      nativePriceCents: currency !== base ? nativePriceCents : null,
+      nativeCostBasisCents: currency !== base ? effectiveNativeCostBasisCents : null,
+      fxRateToEur: currency !== base ? fxRateToEur : null,
     },
   });
 
@@ -146,20 +152,20 @@ export async function deleteHolding(id: string, accountId: string) {
 // the edit dialog and retype the native price just to force upsertHolding's
 // own "only re-fetch when the native price actually changed" branch to run
 // (see that function's comment). bypassCache=true on the fetch itself (see
-// fetchExchangeRateToEur) - a user who explicitly clicks "refresh" expects
+// fetchExchangeRateToBase) - a user who explicitly clicks "refresh" expects
 // a genuinely current rate, not whatever was cached up to an hour ago.
 export async function refreshHoldingExchangeRate(holdingId: string) {
   const holding = await prisma.holding.findUnique({ where: { id: holdingId } });
   if (!holding) throw new Error("Position introuvable.");
   const viewer = await getViewer();
   await assertAccountWritable(viewer.id, holding.accountId);
-  if (holding.currency === "EUR" || holding.nativePriceCents === null) {
+  if (holding.currency === baseCurrency() || holding.nativePriceCents === null) {
     throw new Error("Cette position n'est pas dans une devise étrangère.");
   }
 
-  const fxRateToEur = await fetchExchangeRateToEur(holding.currency as "USD" | "GBP" | "CHF", true);
+  const fxRateToEur = await fetchExchangeRateToBase(holding.currency, true);
   if (fxRateToEur === null) {
-    throw new Error(`Impossible de récupérer le taux de change ${holding.currency}→EUR - réessaie plus tard.`);
+    throw new Error(`Impossible de récupérer le taux de change ${holding.currency}→${baseCurrency()} - réessaie plus tard.`);
   }
 
   await prisma.holding.update({

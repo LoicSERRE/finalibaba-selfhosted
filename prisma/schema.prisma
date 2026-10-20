@@ -636,6 +636,17 @@ model HistoricalBalance {
   @@index([accountId, recordedAt])
 }
 
+/// Instance-wide settings, one row (id "singleton"). `baseCurrency` is the
+/// unit every *Cents column is in (dev-docs/currencies.md, step 2): settled at
+/// the first boot by lib/services/instance-config.ts and never changed by a
+/// variable afterwards - changing it with data in place is a conversion, not
+/// a setting.
+model InstanceConfig {
+  id           String   @id @default("singleton")
+  baseCurrency String
+  createdAt    DateTime @default(now())
+}
+
 /// Daily exchange rates, shared by the app and the sync service: `rate` is
 /// `base` per 1 unit of `currency` on `day`. `base` is in the key so a
 /// configurable base currency (dev-docs/currencies.md, step 2) never has to

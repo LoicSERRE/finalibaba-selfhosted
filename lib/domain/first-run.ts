@@ -49,3 +49,22 @@ export function checklistVariant(steps: readonly FirstRunStep[] | null, hasAccou
   if (!hasAccounts) return "full";
   return firstRunComplete(steps) || hidden ? null : "compact";
 }
+
+/**
+ * The goal every install starts with, untouched: migration
+ * 20260823174545_add_goals backfills a "Patrimoine" net-worth goal on EVERY
+ * database - brand new ones included, at UserSettings' 5 000 000-cent
+ * default - to carry v1.13's single global goal forward. Counted as a goal,
+ * it ticked "Fixer un objectif" on a fresh install nobody had touched, which
+ * is the one thing this checklist promises never to do. The row is left
+ * alone (a migration already applied is never rewritten); only its
+ * untouched default stops counting. Renamed, retargeted or dated, it is the
+ * user's goal and counts.
+ */
+export const UNTOUCHED_LEGACY_GOAL = {
+  id: "goal-legacy-networth",
+  name: "Patrimoine",
+  targetCents: BigInt(5_000_000),
+  targetDate: null,
+  accountId: null,
+} as const;

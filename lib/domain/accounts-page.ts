@@ -11,6 +11,7 @@ import type {
   AutomobileAccountExport,
   LoanAccountExport,
 } from "@/lib/domain/accounts-export";
+import { baseCurrency } from "@/lib/utils/base-currency";
 
 export function holdingValue(h: { quantity: Decimal; lastPriceCents: bigint }): bigint {
   return BigInt(new Decimal(h.quantity.toString()).mul(h.lastPriceCents.toString()).round().toNumber());
@@ -71,7 +72,7 @@ export function computeFiatRow(account: FiatAccountInput): FiatAccountRow {
     native:
       account.history[0]?.nativeBalanceCents == null
         ? null
-        : { currency: account.currency ?? "EUR", cents: account.history[0].nativeBalanceCents },
+        : { currency: account.currency ?? baseCurrency(), cents: account.history[0].nativeBalanceCents },
   };
 }
 

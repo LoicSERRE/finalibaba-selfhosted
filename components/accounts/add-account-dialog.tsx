@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { createAccount } from "@/lib/actions/accounts";
 import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
-import { ACCOUNT_CURRENCIES, BASE_CURRENCY, currencyAllowedFor } from "@/lib/domain/currency";
+import { ACCOUNT_CURRENCIES, currencyAllowedFor } from "@/lib/domain/currency";
+import { baseCurrency } from "@/lib/utils/base-currency";
 import { useTranslations } from "next-intl";
 
 type Institution = { id: string; name: string };
@@ -31,7 +32,7 @@ export function AddAccountDialog({
   const [subtype, setSubtype] = useState("");
   const [taxTreatment, setTaxTreatment] = useState("TAXABLE");
   const [taxRatePct, setTaxRatePct] = useState(CTO_CRYPTO_SUGGESTED_RATE_PCT);
-  const [currency, setCurrency] = useState(BASE_CURRENCY);
+  const [currency, setCurrency] = useState<string>(baseCurrency);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("addAccount");
@@ -43,7 +44,7 @@ export function AddAccountDialog({
   const isInvestment = type === "INVESTMENT" || type === "CRYPTO";
   const isPEACTO = type === "INVESTMENT";
   const hasCurrency = currencyAllowedFor(type);
-  const shownCurrency = hasCurrency ? currency : BASE_CURRENCY;
+  const shownCurrency = hasCurrency ? currency : baseCurrency();
 
   function handleTypeChange(newType: string) {
     setType(newType);
@@ -72,7 +73,7 @@ export function AddAccountDialog({
     startTransition(async () => {
       const result = await createAccount(fd);
       if (!result.ok) {
-        setError(result.error === "rate_unavailable" ? t("rateUnavailable", { currency: shownCurrency }) : tc("unexpectedError"));
+        setError(result.error === "rate_unavailable" ? t("rateUnavailable", { currency: shownCurrency, base: baseCurrency() }) : tc("unexpectedError"));
         return;
       }
       setOpen(false);

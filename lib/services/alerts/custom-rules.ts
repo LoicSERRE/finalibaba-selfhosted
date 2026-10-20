@@ -21,6 +21,7 @@ import {
   excludeFromBudgetTotalsOnSplit,
 } from "@/lib/domain/transaction-filters";
 import { amountMagnitudeRanges, type AmountRange } from "@/lib/domain/transactions-ledger";
+import { baseSymbol } from "@/lib/utils/base-currency";
 
 type CustomAlertRule = Awaited<ReturnType<typeof findActiveAlertRules>>[number];
 
@@ -52,17 +53,17 @@ function buildAccountBalanceAlert(
   currentEuros: number
 ): { title: string; base: string } {
   if (rule.kind === "ACCOUNT_OVERDRAFT") {
-    const state = isAbove ? "repassé au-dessus de 0 €" : "passé à découvert";
+    const state = isAbove ? `repassé au-dessus de 0 ${baseSymbol()}` : "passé à découvert";
     return {
       title: "Alerte découvert",
-      base: `Le compte "${rule.account!.name}" est ${state} (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`,
+      base: `Le compte "${rule.account!.name}" est ${state} (actuellement ${currentEuros.toLocaleString("fr-FR")} ${baseSymbol()}).`,
     };
   }
   const direction = isAbove ? "passé au-dessus" : "passé en dessous";
   const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
   return {
     title: "Alerte solde de compte",
-    base: `Le solde de "${rule.account!.name}" est ${direction} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`,
+    base: `Le solde de "${rule.account!.name}" est ${direction} de ${thresholdEuros.toLocaleString("fr-FR")} ${baseSymbol()} (actuellement ${currentEuros.toLocaleString("fr-FR")} ${baseSymbol()}).`,
   };
 }
 
@@ -105,7 +106,7 @@ async function checkInvestmentValueRule(rule: CustomAlertRule, settings: UserSet
   if (shouldFire) {
     const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
     const currentEuros = Number(current) / 100;
-    const base = `La valeur du compte "${rule.account.name}" est ${isAbove ? "passée au-dessus" : "passée en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
+    const base = `La valeur du compte "${rule.account.name}" est ${isAbove ? "passée au-dessus" : "passée en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} ${baseSymbol()} (actuellement ${currentEuros.toLocaleString("fr-FR")} ${baseSymbol()}).`;
     await dispatchAlert(settings, "Alerte valeur d'investissement", rule.message ? `${base}\n\n${rule.message}` : base);
   }
   if (isAbove !== rule.balanceLastAbove) {
@@ -137,7 +138,7 @@ async function checkHoldingPriceRule(rule: CustomAlertRule, settings: UserSettin
     // was showing up in the actual dispatched ntfy/email notification
     // text, not just a display-only quirk.
     const holdingLabel = rule.holding.name ?? rule.holding.ticker;
-    const base = `Le prix de "${holdingLabel}" (${rule.holding.account.name}) est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${currentEuros.toLocaleString("fr-FR")} €).`;
+    const base = `Le prix de "${holdingLabel}" (${rule.holding.account.name}) est ${isAbove ? "passé au-dessus" : "passé en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} ${baseSymbol()} (actuellement ${currentEuros.toLocaleString("fr-FR")} ${baseSymbol()}).`;
     await dispatchAlert(settings, "Alerte prix d'une position", rule.message ? `${base}\n\n${rule.message}` : base);
   }
   if (isAbove !== rule.balanceLastAbove) {
@@ -208,7 +209,7 @@ async function checkUnrealizedGainAmount(
   if (shouldFire) {
     const thresholdEuros = Number(rule.balanceThresholdCents) / 100;
     const gainEuros = Number(gainCents) / 100;
-    const base = `La plus-value latente ${scopeLabel} est ${isAbove ? "passée au-dessus" : "passée en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} € (actuellement ${gainEuros.toLocaleString("fr-FR")} €).`;
+    const base = `La plus-value latente ${scopeLabel} est ${isAbove ? "passée au-dessus" : "passée en dessous"} de ${thresholdEuros.toLocaleString("fr-FR")} ${baseSymbol()} (actuellement ${gainEuros.toLocaleString("fr-FR")} ${baseSymbol()}).`;
     await dispatchAlert(settings, "Alerte plus-value latente", rule.message ? `${base}\n\n${rule.message}` : base);
   }
   if (isAbove !== rule.balanceLastAbove) {
@@ -289,7 +290,7 @@ async function checkBudgetOverrunRule(
   const { shouldFire } = evaluateBudgetOverrunAlert(spentCents, rule.category.budgetCents, period, rule.budgetOverrunLastFiredPeriod);
 
   if (shouldFire) {
-    const base = `Le budget de la catégorie "${rule.category.name}" est dépassé (${(Number(spentCents) / 100).toLocaleString("fr-FR")} € dépensés sur ${(Number(rule.category.budgetCents) / 100).toLocaleString("fr-FR")} € ce mois-ci).`;
+    const base = `Le budget de la catégorie "${rule.category.name}" est dépassé (${(Number(spentCents) / 100).toLocaleString("fr-FR")} ${baseSymbol()} dépensés sur ${(Number(rule.category.budgetCents) / 100).toLocaleString("fr-FR")} ${baseSymbol()} ce mois-ci).`;
     await dispatchAlert(settings, "Budget dépassé", rule.message ? `${base}\n\n${rule.message}` : base);
     await prisma.alertRule.update({ where: { id: rule.id }, data: { budgetOverrunLastFiredPeriod: period } });
     return `budget_overrun_rule:${rule.id}`;
