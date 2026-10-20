@@ -3,6 +3,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { AddLoanDialog } from "@/components/accounts/add-loan-dialog";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
+import { ReportedLoanCard } from "@/components/accounts/reported-loan-card";
 import type { LoanRow } from "@/lib/domain/accounts-page";
 import type { getTranslations } from "next-intl/server";
 
@@ -40,6 +41,9 @@ export function LoanTab({
         </div>
       ) : (
         rows.map((loan) => {
+          if (!loan.hasParams && loan.reported) {
+            return <ReportedLoanCard key={loan.id} t={t} td={td} intlLocale={intlLocale} loan={{ ...loan, reported: loan.reported }} />;
+          }
           if (!loan.hasParams) {
             return (
               <div key={loan.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 flex items-center justify-between">

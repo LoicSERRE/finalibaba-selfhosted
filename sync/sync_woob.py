@@ -19,6 +19,7 @@ import psycopg2.extras
 import fx
 import setup_locks
 import woob_errors
+import woob_loans
 from crypto_at_rest import decrypt_institution_row
 from db import (
     composite_sync_id,
@@ -28,7 +29,9 @@ from db import (
     mark_holdings_reported,
     mark_holdings_stale,
     promote_account_to_investment,
+    promote_account_to_loan,
     record_balance,
+    record_loan,
     replace_holdings,
     resolve_account_currency,
     to_cents,
@@ -450,6 +453,22 @@ def _fetch_accounts(w, backend_name, institution_id, institution_name, cur, conn
         raise RuntimeError(msg) from e
 
 
+def _record_loan(cur, account_db_id, balance_cents, loan, rate):
+    """A loan account's bank figures, converted into the base like its balance."""
+    def base(cents):
+        if cents is None or rate is None:
+            return cents
+        return fx.to_base_cents(cents, rate)
+
+    promote_account_to_loan(cur, account_db_id)
+    record_loan(
+        cur,
+        account_db_id,
+        owed_cents=base(-balance_cents),
+        facts={**loan, "borrowed_cents": base(loan["borrowed_cents"]), "next_payment_cents": base(loan["next_payment_cents"])},
+    )
+
+
 def _sync_account(cur, institution_id, institution_name, account) -> dict | None:
     """Upsert one account's balance row. Returns the synced summary (with
     the DB id, needed by the caller to then sync transactions), or None if
@@ -462,7 +481,12 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
         return None
     balance_cents = to_cents(account.balance)
     sync_id = f"woob:{institution_id}:{account.id}"
-    account_type = infer_account_type(account.label)
+    # A loan is whatever Woob classifies as one, never a label guess (v2.19.1).
+    loan = woob_loans.loan_facts(account)
+    if loan is not None:
+        # Stored as what is owed, negative, whatever sign the module uses.
+        balance_cents = -abs(balance_cents)
+    account_type = "LOAN" if loan is not None else infer_account_type(account.label)
     account_db_id = upsert_account(
         cur,
         sync_id=sync_id,
@@ -480,6 +504,9 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
             log.warning("%s - %s: no %s rate today, skipped until the next sync", institution_name, account.label, currency)
             return None
     record_balance(cur, account_db_id, balance_cents, currency=currency, rate=rate)
+    if loan is not None:
+        _record_loan(cur, account_db_id, balance_cents, loan, rate)
+        log.info("%s - %s: reported as a loan", institution_name, account.label)
     log.info("%s - %s: %d cents %s", institution_name, account.label, balance_cents, currency)
     return {"label": account.label, "balance_cents": balance_cents, "account_db_id": account_db_id, "currency": currency}
 

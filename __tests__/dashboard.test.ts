@@ -325,3 +325,46 @@ describe("computeDashboard - a loan amortizes across the history chart", () => {
     expect(Math.abs(result.history.at(-1)!.netWorth - Number(result.netWorth))).toBeLessThan(2_000_00);
   });
 });
+
+// v2.19.1: a loan the bank reports (a student loan synced from LCL showed up
+// as a -5 099 € checking account). Its debt must count exactly once - now,
+// and on every day of the history - and never as cash.
+describe("computeDashboard - a loan the bank reports", () => {
+  const checking = account({ id: "c", history: [{ balanceCents: BigInt(5922_00) }] });
+  const loan = account({
+    id: "l",
+    type: "LOAN",
+    syncId: "woob:inst:pret1",
+    liabilityCents: BigInt(5099_00),
+    history: [{ balanceCents: BigInt(-5099_00) }],
+  });
+  const result = computeDashboard(
+    baseInput({
+      accounts: [checking, loan],
+      allBalances: [
+        { accountId: "c", recordedAt: new Date("2026-07-01T00:00:00.000Z"), balanceCents: BigInt(922_00) },
+        { accountId: "c", recordedAt: new Date("2026-07-15T00:00:00.000Z"), balanceCents: BigInt(5922_00) },
+        { accountId: "l", recordedAt: new Date("2026-07-15T00:00:00.000Z"), balanceCents: BigInt(-5099_00) },
+      ],
+    }),
+  );
+
+  it("subtracts the bank's remaining capital once, as a liability, never from cash", () => {
+    expect(result.netWorth).toBe(BigInt(5922_00 - 5099_00));
+    expect(result.totalLiabilities).toBe(BigInt(5099_00));
+  });
+
+  it("draws the debt once on each day it existed, from its own balance rows", () => {
+    expect(result.history.map((p) => p.netWorth)).toEqual([922_00, 5922_00 - 5099_00]);
+  });
+
+  it("is re-amortised from parameters only when nobody reports it", () => {
+    const params = { loanAmountCents: BigInt(10_000_00), loanTaeg: 3, loanDurationMonths: 120, loanStartDate: new Date("2020-01-01") };
+    const manual = computeDashboard(baseInput({ accounts: [account({ id: "m", type: "LOAN", liabilityCents: BigInt(10_000_00), ...params })] }));
+    const synced = computeDashboard(
+      baseInput({ accounts: [account({ id: "s", type: "LOAN", syncId: "woob:x:1", liabilityCents: BigInt(4_321_00), ...params })] }),
+    );
+    expect(manual.totalLiabilities).toBeLessThan(BigInt(10_000_00)); // schedule
+    expect(synced.totalLiabilities).toBe(BigInt(4_321_00)); // the bank's figure
+  });
+});

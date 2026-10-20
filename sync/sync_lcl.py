@@ -13,13 +13,16 @@ from pathlib import Path
 
 import psycopg2.extras
 
+import woob_loans
 from db import (
     composite_sync_id,
     get_conn,
     get_institution_id,
     infer_account_type,
     legacy_composite_sync_id,
+    promote_account_to_loan,
     record_balance,
+    record_loan,
     upsert_account,
     upsert_transaction,
     write_sync_log,
@@ -148,7 +151,11 @@ def _sync_account(cur, institution_id, account) -> dict | None:
         return None
     balance_cents = int(Decimal(str(account.balance)) * 100)
     sync_id = f"lcl:{account.id}"
-    account_type = infer_account_type(account.label)
+    # Same rule as sync_woob.py (v2.19.1): a loan is what Woob says is one.
+    loan = woob_loans.loan_facts(account)
+    if loan is not None:
+        balance_cents = -abs(balance_cents)
+    account_type = "LOAN" if loan is not None else infer_account_type(account.label)
     account_db_id = upsert_account(
         cur,
         sync_id=sync_id,
@@ -157,6 +164,10 @@ def _sync_account(cur, institution_id, account) -> dict | None:
         institution_id=institution_id,
     )
     record_balance(cur, account_db_id, balance_cents)
+    if loan is not None:
+        # LCL accounts are EUR: the figures go in as reported.
+        promote_account_to_loan(cur, account_db_id)
+        record_loan(cur, account_db_id, owed_cents=-balance_cents, facts=loan)
     log.info("LCL - %s : %d cts", account.label, balance_cents)
     return {"label": account.label, "balance_cents": balance_cents, "account_db_id": account_db_id}
 

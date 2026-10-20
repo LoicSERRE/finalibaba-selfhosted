@@ -118,6 +118,10 @@ export type AccountExport = {
   loanDurationMonths: number | null;
   loanDeferralMonths: number | null;
   loanStartDate: string | null;
+  /** A loan its bank reports (v2.19.1). */
+  loanNextPaymentCents: string | null;
+  loanNextPaymentDate: string | null;
+  loanEndDate: string | null;
   balances: { recordedAt: string; balanceCents: string; nativeBalanceCents: string | null; fxRate: number | null }[];
   transactions: TransactionExport[];
   holdings: HoldingExport[];
@@ -299,6 +303,9 @@ export function buildUserExport(input: UserExportInput): UserExport {
       loanDurationMonths: (a.loanDurationMonths as number) ?? null,
       loanDeferralMonths: (a.loanDeferralMonths as number) ?? null,
       loanStartDate: iso(a.loanStartDate as Date),
+      loanNextPaymentCents: cents(a.loanNextPaymentCents as bigint),
+      loanNextPaymentDate: iso(a.loanNextPaymentDate as Date),
+      loanEndDate: iso(a.loanEndDate as Date),
       balances: ((a.history as Row[]) ?? []).map((b) => ({
         recordedAt: iso(b.recordedAt as Date)!,
         balanceCents: cents(b.balanceCents as bigint)!,
