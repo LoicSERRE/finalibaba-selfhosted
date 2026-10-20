@@ -4,7 +4,6 @@ import { formatCurrency } from "@/lib/utils/format";
 import { NetWorthChart } from "@/components/shared/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { AllocationHistoryChart } from "@/components/shared/allocation-history-chart";
-import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { DiscretionToggleServer } from "@/components/layout/discretion-toggle-server";
@@ -41,6 +40,7 @@ export function DashboardView({
   institutions,
   interactive = true,
   upcoming = null,
+  empty,
 }: Readonly<{
   t: T;
   netWorth: bigint;
@@ -61,6 +61,11 @@ export function DashboardView({
    * component - at lizard's CCN limit - free of another branch.
    */
   upcoming?: React.ReactNode;
+  /**
+   * What to show with no account at all: the dashboard passes the first-run
+   * checklist (v2.17), a share link the plain empty state.
+   */
+  empty: React.ReactNode;
 }>) {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -217,7 +222,7 @@ export function DashboardView({
           </div>
         </div>
       ) : (
-        <DashboardEmptyState />
+        empty
       )}
     </div>
   );
