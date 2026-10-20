@@ -142,6 +142,11 @@ export default async function AccountDetailPage({
         isSynced={result.isSynced}
         currentValue={result.currentValue}
         latestDelta={result.latestDelta}
+        native={
+          result.currentNative === null
+            ? null
+            : { currency: result.currency, balance: result.currentNative, delta: result.latestDeltaNative }
+        }
         hasCostBasis={result.hasCostBasis}
         taxRate={result.taxRate}
         netAfterTax={result.netAfterTax}
@@ -267,6 +272,7 @@ export default async function AccountDetailPage({
           td={td}
           intlLocale={intlLocale}
           accountId={account.id}
+          currency={result.currency}
           accountType={account.type}
           transactions={account.transactions}
           categories={categories}
@@ -278,6 +284,7 @@ export default async function AccountDetailPage({
 
       {result.isFiat && account.transactions.length === 0 && (
         <BalanceHistoryTable
+          currency={result.currency}
           td={td}
           intlLocale={intlLocale}
           accountId={account.id}
@@ -298,7 +305,7 @@ export default async function AccountDetailPage({
             description={td("importEmptyDescription")}
             action={
               <div className="flex items-center gap-2 flex-wrap justify-center">
-                <ManualEntryDialog accountId={account.id} categories={categories} />
+                <ManualEntryDialog accountId={account.id} categories={categories} currency={result.currency} />
                 <ImportBalanceHistoryDialog accountId={account.id} existingDates={result.existingBalanceDates} />
                 <ImportTransactionsDialog accountId={account.id} existingFingerprints={result.existingFingerprints} />
               </div>

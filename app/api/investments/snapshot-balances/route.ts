@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isInternalRequest } from "@/lib/services/internal-auth";
 import { prisma } from "@/lib/db/prisma";
-import { refreshAccountBalance } from "@/lib/services/account-balance";
+import { refreshAccountBalance, revalueForeignBalances } from "@/lib/services/account-balance";
 
 /**
  * Called by sync/main.py at the end of every automatic 4h sync run, same
@@ -43,5 +43,9 @@ export async function POST(req: NextRequest) {
   });
   await Promise.all(accounts.map((a) => refreshAccountBalance(a.id)));
 
-  return NextResponse.json({ ok: true, count: accounts.length });
+  // Same cadence, same "record a value already known" nature: a manual
+  // account kept in another currency gets today's EUR value (v2.18).
+  const revalued = await revalueForeignBalances();
+
+  return NextResponse.json({ ok: true, count: accounts.length, revalued });
 }

@@ -14,6 +14,8 @@ import {
   validateManualMovement,
   type ManualEntryError,
 } from "@/lib/domain/manual-entries";
+import { amountColumns, balanceColumns, isBaseCurrency, nativeOf, shiftSnapshots } from "@/lib/domain/currency";
+import { rateToEurOn } from "@/lib/services/exchange-rate";
 
 /**
  * Editing an account nobody else writes to. Every write is guarded by
@@ -25,7 +27,42 @@ import {
  * is an opaque digest in production. Authorization still throws: reaching for
  * someone else's account is not an expected error.
  */
-export type ManualEntryResult = { ok: true } | { ok: false; error: ManualEntryError | "not_found" | "not_manual" };
+export type ManualEntryResult =
+  | { ok: true }
+  | { ok: false; error: ManualEntryError | "not_found" | "not_manual" | "rate_unavailable" };
+
+/**
+ * Rows from `at` on, moved by a native amount. On an EUR account this is the
+ * single atomic increment it always was; on a foreign one each row's EUR
+ * value is recomputed from its shifted native figure and its own rate, one
+ * row at a time (dev-docs/currencies.md: shifting the EUR values by one
+ * converted amount would re-price every past day at today's rate).
+ */
+async function shiftFrom(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  accountId: string,
+  currency: string,
+  at: Date,
+  delta: bigint,
+) {
+  if (isBaseCurrency(currency)) {
+    await tx.historicalBalance.updateMany({
+      where: { accountId, recordedAt: { gte: at } },
+      data: { balanceCents: { increment: delta } },
+    });
+    return;
+  }
+  const rows = await tx.historicalBalance.findMany({
+    where: { accountId, recordedAt: { gte: at } },
+    select: { id: true, balanceCents: true, nativeBalanceCents: true, fxRate: true },
+  });
+  for (const row of shiftSnapshots(rows, delta)) {
+    await tx.historicalBalance.update({
+      where: { id: row.id },
+      data: { balanceCents: row.balanceCents, nativeBalanceCents: row.nativeBalanceCents },
+    });
+  }
+}
 
 /**
  * A spend or top-up: one Transaction plus the balance movement it implies, both
@@ -36,19 +73,25 @@ export async function recordManualMovement(
   accountId: string,
   input: { amountCents: number; label: string; date: string; categoryId?: string | null },
 ): Promise<ManualEntryResult> {
-  await assertManualAccountEligible(accountId);
+  const { currency } = await assertManualAccountEligible(accountId);
 
   const problem = validateManualMovement(input);
   if (problem) return { ok: false, error: problem };
 
   const at = atNoonUtc(input.date);
   const delta = BigInt(Math.round(input.amountCents));
+  // The amount is in the account's currency, converted at its own day's rate.
+  const rate = await rateToEurOn(currency, at);
+  if (rate === null) return { ok: false, error: "rate_unavailable" };
 
   const refusal = await prisma.$transaction(async (tx) => {
-    const snapshots = await tx.historicalBalance.findMany({
+    const stored = await tx.historicalBalance.findMany({
       where: { accountId },
-      select: { recordedAt: true, balanceCents: true },
+      select: { recordedAt: true, balanceCents: true, nativeBalanceCents: true },
     });
+    // The arithmetic below runs on native figures - identical to the EUR
+    // ones on an EUR account.
+    const snapshots = stored.map((s) => ({ recordedAt: s.recordedAt, balanceCents: nativeOf(s) }));
 
     // Nothing is written before this check, so returning here is a clean exit
     // rather than a rollback. An account with no balance on or before this day
@@ -63,13 +106,10 @@ export async function recordManualMovement(
 
     // Every belief held from this day onward was off by the amount, so they
     // all move together and the days before it do not.
-    await tx.historicalBalance.updateMany({
-      where: { accountId, recordedAt: { gte: at } },
-      data: { balanceCents: { increment: delta } },
-    });
+    await shiftFrom(tx, accountId, currency, at, delta);
 
     if (anchor !== null) {
-      await tx.historicalBalance.create({ data: { accountId, recordedAt: at, balanceCents: anchor } });
+      await tx.historicalBalance.create({ data: { accountId, recordedAt: at, ...balanceColumns(currency, anchor, rate) } });
     }
 
     await tx.transaction.create({
@@ -78,7 +118,7 @@ export async function recordManualMovement(
         syncId: `${MANUAL_SYNC_PREFIX}${randomUUID()}`,
         date: at,
         label: input.label.trim().slice(0, 500),
-        amountCents: delta,
+        ...amountColumns(currency, delta, rate),
         categoryId: input.categoryId || null,
       },
     });
@@ -105,12 +145,14 @@ export async function recordManualMovement(
  * recordManualMovement is for.
  */
 export async function setManualBalance(accountId: string, balanceCents: number): Promise<ManualEntryResult> {
-  await assertManualAccountEligible(accountId);
+  const { currency } = await assertManualAccountEligible(accountId);
 
   if (!Number.isFinite(balanceCents)) return { ok: false, error: "amount_required" };
 
   const at = atNoonUtc(new Date().toISOString().slice(0, 10));
-  const value = BigInt(Math.round(balanceCents));
+  const rate = await rateToEurOn(currency, at);
+  if (rate === null) return { ok: false, error: "rate_unavailable" };
+  const value = balanceColumns(currency, BigInt(Math.round(balanceCents)), rate);
 
   await prisma.$transaction(async (tx) => {
     // No unique constraint on (accountId, recordedAt), so this is a read then
@@ -121,9 +163,9 @@ export async function setManualBalance(accountId: string, balanceCents: number):
       select: { id: true },
     });
     if (existing) {
-      await tx.historicalBalance.update({ where: { id: existing.id }, data: { balanceCents: value } });
+      await tx.historicalBalance.update({ where: { id: existing.id }, data: value });
     } else {
-      await tx.historicalBalance.create({ data: { accountId, recordedAt: at, balanceCents: value } });
+      await tx.historicalBalance.create({ data: { accountId, recordedAt: at, ...value } });
     }
   });
 
@@ -143,21 +185,18 @@ export async function setManualBalance(accountId: string, balanceCents: number):
 export async function deleteManualEntry(transactionId: string): Promise<ManualEntryResult> {
   const row = await prisma.transaction.findUnique({
     where: { id: transactionId },
-    select: { id: true, accountId: true, amountCents: true, date: true, syncId: true, categoryId: true },
+    select: { id: true, accountId: true, amountCents: true, nativeAmountCents: true, date: true, syncId: true, categoryId: true },
   });
   if (!row) return { ok: false, error: "not_found" };
 
   // Ownership and eligibility, from the account the row actually belongs to
   // rather than anything the caller supplied.
-  await assertManualAccountEligible(row.accountId);
+  const { currency } = await assertManualAccountEligible(row.accountId);
 
   if (!isManualEntry(row.syncId)) return { ok: false, error: "not_manual" };
 
   await prisma.$transaction(async (tx) => {
-    await tx.historicalBalance.updateMany({
-      where: { accountId: row.accountId, recordedAt: { gte: row.date } },
-      data: { balanceCents: { decrement: row.amountCents } },
-    });
+    await shiftFrom(tx, row.accountId, currency, row.date, -(row.nativeAmountCents ?? row.amountCents));
     await tx.transaction.delete({ where: { id: row.id } });
   });
 

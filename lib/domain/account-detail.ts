@@ -33,6 +33,8 @@ export interface AccountDetailHolding {
 export interface AccountDetailBalance {
   id: string;
   balanceCents: bigint;
+  /** In the account's currency when it is not EUR (v2.18). */
+  nativeBalanceCents?: bigint | null;
   recordedAt: Date;
 }
 
@@ -45,6 +47,8 @@ export interface AccountDetailTransaction {
   date: Date;
   label: string;
   amountCents: bigint;
+  /** In the account's currency when it is not EUR (v2.18). */
+  nativeAmountCents?: bigint | null;
   categoryId: string | null;
   // Automatic detection (lib/domain/internal-transfers.ts) needs an exact
   // amount match on both sides within a few days, and a matching row on
@@ -70,6 +74,8 @@ export interface AccountDetailAccount {
   id: string;
   name: string;
   type: string; // AccountType
+  /** ISO 4217, "EUR" when absent (v2.18, dev-docs/currencies.md). */
+  currency?: string;
   syncId: string | null;
   gocardlessAccountId: string | null;
   investmentSubtype: string | null;
@@ -159,6 +165,11 @@ export interface AccountDetailResult {
   existingFingerprints: string[];
   existingBalanceDates: string[];
 
+  /** The account's own currency, and its balance and last change in it (null on EUR). */
+  currency: string;
+  currentNative: bigint | null;
+  latestDeltaNative: bigint | null;
+
   taxRate: number | null;
   loanStats: LoanStats | null;
 
@@ -214,8 +225,10 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
   const isLoan = account.type === "LOAN";
   const isSynced = !!account.syncId;
   const canImportCsv = isFiat && !isSynced && !account.gocardlessAccountId;
+  // Native amounts: a CSV for a foreign account is in its own currency, and
+  // so must be what it is compared against.
   const existingFingerprints = account.transactions.map(
-    (tx) => `${tx.date.toISOString().slice(0, 10)}|${tx.label.trim().toLowerCase()}|${tx.amountCents.toString()}`
+    (tx) => `${tx.date.toISOString().slice(0, 10)}|${tx.label.trim().toLowerCase()}|${(tx.nativeAmountCents ?? tx.amountCents).toString()}`
   );
   const existingBalanceDates = account.history.map((h) => h.recordedAt.toISOString().slice(0, 10));
 
@@ -254,6 +267,12 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
     account.history.length >= 2
       ? account.history[0].balanceCents - account.history[1].balanceCents
       : null;
+
+  const currency = account.currency ?? "EUR";
+  const nativeAt = (i: number) => account.history[i]?.nativeBalanceCents ?? null;
+  const currentNative = isFiat ? nativeAt(0) : null;
+  const previousNative = nativeAt(1);
+  const latestDeltaNative = currentNative !== null && previousNative !== null ? currentNative - previousNative : null;
 
   // Chart data - chronological, last 60 points
   const chartData: ChartPoint[] = [...account.history]
@@ -374,6 +393,9 @@ export function computeAccountDetail(input: AccountDetailInput): AccountDetailRe
     canImportCsv,
     existingFingerprints,
     existingBalanceDates,
+    currency,
+    currentNative,
+    latestDeltaNative,
     taxRate,
     loanStats,
     currentValue,

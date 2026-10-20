@@ -249,4 +249,5 @@ Selfhosted-only, excluded from `sync-from-upstream.sh`.
 | `dev-docs/alerts.md` | Alert channels (ntfy/email/Web Push), self-hosted ntfy/mail services, built-in triggers, custom alert rules |
 | `dev-docs/transactions-and-budgets.md` | CSV import, recurring, manual entries, ledger, rollover, splits, auto-categorization, internal transfers, income |
 | `dev-docs/investments-and-tax.md` | Tax treatment & country presets, realized gains, benchmarks, sector exposure, rebalancing, multi-currency, goals, projection, history charts |
+| `dev-docs/currencies.md` | Multi-currency design: accounts in another currency (native + EUR columns, `ExchangeRate`), the planned base-currency step |
 | `dev-docs/platform.md` | PWA/service worker, i18n, light theme, demo mode, GoCardless, revalidation, backup/restore, container hardening, CI gates, migrations |

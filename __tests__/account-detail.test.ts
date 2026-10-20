@@ -340,3 +340,47 @@ describe("computeAccountDetail - CSV import eligibility", () => {
     expect(investment.canImportCsv).toBe(false);
   });
 });
+
+// v2.18, dev-docs/currencies.md: an account kept in another currency shows
+// its own figures; currentValue stays the EUR value net worth counts.
+describe("computeAccountDetail - an account in another currency", () => {
+  const usd = account({
+    currency: "USD",
+    history: [
+      { id: "h2", balanceCents: BigInt(900_00), nativeBalanceCents: BigInt(1000_00), recordedAt: new Date("2026-07-02") },
+      { id: "h1", balanceCents: BigInt(880_00), nativeBalanceCents: BigInt(1000_00), recordedAt: new Date("2026-07-01") },
+    ],
+    transactions: [
+      {
+        id: "t1", syncId: "csv_1", date: new Date("2026-07-01T12:00:00Z"), label: "Coffee", amountCents: BigInt(-450),
+        nativeAmountCents: BigInt(-500), categoryId: null, isInternalTransfer: false, incomeEvent: null, splits: [], note: null, tags: [],
+      },
+    ],
+  });
+
+  it("reports the native balance and its own change, not the FX drift", () => {
+    const result = computeAccountDetail({ account: usd, intlLocale: "fr-FR", now: NOW });
+    expect(result.currency).toBe("USD");
+    expect(result.currentValue).toBe(BigInt(900_00));
+    expect(result.currentNative).toBe(BigInt(1000_00));
+    // The EUR value moved by 20 € with the rate; the dollars did not move.
+    expect(result.latestDelta).toBe(BigInt(20_00));
+    expect(result.latestDeltaNative).toBe(BigInt(0));
+  });
+
+  it("matches CSV duplicates on the native amount", () => {
+    const result = computeAccountDetail({ account: usd, intlLocale: "fr-FR", now: NOW });
+    expect(result.existingFingerprints).toEqual(["2026-07-01|coffee|-500"]);
+  });
+
+  it("has no native figures on an EUR account", () => {
+    const result = computeAccountDetail({
+      account: account({ history: [{ id: "h", balanceCents: BigInt(100), recordedAt: new Date("2026-07-01") }] }),
+      intlLocale: "fr-FR",
+      now: NOW,
+    });
+    expect(result.currency).toBe("EUR");
+    expect(result.currentNative).toBeNull();
+    expect(result.latestDeltaNative).toBeNull();
+  });
+});

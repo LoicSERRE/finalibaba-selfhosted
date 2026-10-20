@@ -10,16 +10,26 @@ import { parseBulkIds } from "@/lib/domain/transactions-ledger";
 import { normalizeNote, parseTags, validateNoteAndTags, type NoteError } from "@/lib/domain/transaction-notes";
 import { assertManualAccountEligible } from "@/lib/actions/manual-account-guard";
 import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
+import { amountColumns } from "@/lib/domain/currency";
+import { ratesToEurForDays } from "@/lib/services/exchange-rate";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
 
 type ImportRow = { date: string; label: string; amountCents: number };
 
-export async function importTransactions(accountId: string, rows: ImportRow[]) {
+export async function importTransactions(
+  accountId: string,
+  rows: ImportRow[],
+): Promise<{ imported: number; error?: "rate_unavailable" }> {
   // assertManualAccountEligible below now also checks ownership, but the guard
   // is repeated here so this entry point can't be re-wired later to a
   // different eligibility check and silently lose it.
   if (rows.length === 0) return { imported: 0 };
-  await assertManualAccountEligible(accountId);
+  const { currency } = await assertManualAccountEligible(accountId);
+
+  // Amounts are in the account's currency, each converted at its own day's
+  // rate - all or nothing, like the balance import.
+  const rates = await ratesToEurForDays(currency, rows.map((r) => r.date));
+  if ([...rates.values()].some((rate) => rate === null)) return { imported: 0, error: "rate_unavailable" };
 
   const data = rows.map((r) => ({
     accountId,
@@ -28,7 +38,7 @@ export async function importTransactions(accountId: string, rows: ImportRow[]) {
     // midnight-UTC day shift - same convention as importBalanceHistory.
     date: new Date(`${r.date}T12:00:00.000Z`),
     label: r.label.slice(0, 500),
-    amountCents: BigInt(Math.round(r.amountCents)),
+    ...amountColumns(currency, BigInt(Math.round(r.amountCents)), rates.get(r.date) ?? null),
   }));
 
   const result = await prisma.transaction.createMany({ data });

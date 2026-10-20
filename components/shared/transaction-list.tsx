@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrency, formatMoney } from "@/lib/utils/format";
 
 /**
  * The transaction list used by an account's page and by /transactions.
@@ -102,11 +102,11 @@ export function TransactionList({
   );
 }
 
-function Amount({ cents }: Readonly<{ cents: bigint }>) {
+function Amount({ cents, currency }: Readonly<{ cents: bigint; currency?: string }>) {
   return (
     <span className={`tabular-nums font-medium whitespace-nowrap ${cents > BigInt(0) ? "text-[var(--positive)]" : "text-[var(--negative)]"} amount`}>
       {cents > BigInt(0) ? "+" : ""}
-      {formatCurrency(cents)}
+      {currency ? formatMoney(cents, currency) : formatCurrency(cents)}
     </span>
   );
 }
@@ -116,6 +116,7 @@ export function TransactionListItem({
   account,
   label,
   amountCents,
+  currency,
   category,
   actions = [],
   select,
@@ -127,6 +128,8 @@ export function TransactionListItem({
   account?: string;
   label: string;
   amountCents: bigint;
+  /** Set when `amountCents` is in a currency other than EUR (v2.18). */
+  currency?: string;
   category: React.ReactNode;
   /** One node per action column, in header order; null leaves the cell empty. */
   actions?: React.ReactNode[];
@@ -156,11 +159,11 @@ export function TransactionListItem({
           <p className="xl:hidden text-xs text-[var(--muted)] mt-0.5 tabular-nums">{meta}</p>
         </div>
         <span className="xl:hidden shrink-0 text-sm">
-          <Amount cents={amountCents} />
+          <Amount cents={amountCents} currency={currency} />
         </span>
       </div>
       <span className="hidden xl:block text-sm text-right">
-        <Amount cents={amountCents} />
+        <Amount cents={amountCents} currency={currency} />
       </span>
 
       {/* On a phone the controls share one wrapping row; xl:contents

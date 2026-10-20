@@ -113,7 +113,11 @@ export function ImportTransactionsDialog({
       .map((r) => ({ date: r.date, label: r.label, amountCents: r.amountCents }));
     if (toImport.length === 0) return;
     startTransition(async () => {
-      const { imported } = await importTransactions(accountId, toImport);
+      const { imported, error } = await importTransactions(accountId, toImport);
+      if (error) {
+        setParseError(t("rateUnavailable"));
+        return;
+      }
       setResult(imported);
       setRows([]);
       setSelected(new Set());

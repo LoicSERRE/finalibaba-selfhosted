@@ -47,6 +47,21 @@ describe("computeFiatRow", () => {
   });
 });
 
+describe("computeFiatRow - an account in another currency (v2.18)", () => {
+  it("carries the native balance beside the EUR one", () => {
+    const row = computeFiatRow({
+      id: "1", name: "Wise", type: "CHECKING", institution: null, currency: "USD",
+      history: [{ balanceCents: BigInt(900_00), nativeBalanceCents: BigInt(1000_00) }],
+    });
+    expect(row.currentCents).toBe(BigInt(900_00));
+    expect(row.native).toEqual({ currency: "USD", cents: BigInt(1000_00) });
+  });
+
+  it("has none on an EUR account", () => {
+    expect(computeFiatRow({ id: "1", name: "A", type: "CHECKING", institution: null, history: [{ balanceCents: BigInt(1) }] }).native).toBeNull();
+  });
+});
+
 describe("computeInvestRow", () => {
   const holding = {
     id: "h1",

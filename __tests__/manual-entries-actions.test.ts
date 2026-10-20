@@ -67,10 +67,18 @@ vi.mock("@/lib/auth-context", () => ({
 
 vi.mock("@/lib/actions/auto-categorize", () => ({ autoCategorizeTransactions: autoCategorizeMock }));
 
+// EUR answers 1 without asking anything, like the real service; a foreign
+// currency gets whatever the test sets.
+const { rateMock } = vi.hoisted(() => ({ rateMock: vi.fn() }));
+vi.mock("@/lib/services/exchange-rate", () => ({
+  rateToEurOn: async (currency: string, date?: Date) => (currency === "EUR" ? 1 : rateMock(currency, date)),
+}));
+
 import { recordManualMovement, setManualBalance, deleteManualEntry } from "@/lib/actions/manual-entries";
 import { atNoonUtc } from "@/lib/domain/manual-entries";
 
-const ELIGIBLE = { type: "MEAL_VOUCHER", syncId: null, gocardlessAccountId: null };
+const ELIGIBLE = { type: "MEAL_VOUCHER", syncId: null, gocardlessAccountId: null, currency: "EUR" };
+const USD_ACCOUNT = { type: "CHECKING", syncId: null, gocardlessAccountId: null, currency: "USD" };
 
 beforeEach(() => {
   accountFindUniqueMock.mockReset().mockResolvedValue(ELIGIBLE);
@@ -83,6 +91,7 @@ beforeEach(() => {
   txFindUniqueMock.mockReset();
   txDeleteMock.mockReset().mockResolvedValue({});
   autoCategorizeMock.mockReset().mockResolvedValue(undefined);
+  rateMock.mockReset().mockResolvedValue(0.9);
 });
 
 describe("recordManualMovement", () => {
@@ -216,7 +225,7 @@ describe("setManualBalance", () => {
     expect(balanceCreateMock).not.toHaveBeenCalled();
     expect(balanceUpdateMock).toHaveBeenCalledWith({
       where: { id: "bal-1" },
-      data: { balanceCents: BigInt(9_000) },
+      data: { balanceCents: BigInt(9_000), nativeBalanceCents: null, fxRate: null },
     });
   });
 });
@@ -237,7 +246,7 @@ describe("deleteManualEntry", () => {
     expect(result).toEqual({ ok: true });
     expect(balanceUpdateManyMock).toHaveBeenCalledWith({
       where: { accountId: "acc-1", recordedAt: { gte: atNoonUtc("2026-01-05") } },
-      data: { balanceCents: { decrement: BigInt(-1_250) } },
+      data: { balanceCents: { increment: BigInt(1_250) } },
     });
     expect(txDeleteMock).toHaveBeenCalledWith({ where: { id: "tx-1" } });
   });
@@ -264,5 +273,98 @@ describe("deleteManualEntry", () => {
   it("reports a row that no longer exists instead of throwing", async () => {
     txFindUniqueMock.mockResolvedValue(null);
     expect(await deleteManualEntry("gone")).toEqual({ ok: false, error: "not_found" });
+  });
+});
+
+// dev-docs/currencies.md, step 1a: an account kept in another currency takes
+// every amount in that currency and stores the EUR value beside it.
+describe("an account in another currency", () => {
+  beforeEach(() => accountFindUniqueMock.mockResolvedValue(USD_ACCOUNT));
+
+  it("records the movement in dollars, its EUR value at that day's rate", async () => {
+    balanceFindManyMock.mockImplementation(async (args: { select: Record<string, boolean> }) =>
+      args.select.recordedAt
+        ? [{ recordedAt: atNoonUtc("2026-01-01"), balanceCents: BigInt(9_000), nativeBalanceCents: BigInt(10_000) }]
+        : []
+    );
+
+    const result = await recordManualMovement("acc-1", { amountCents: -1_000, label: "Diner", date: "2026-01-05" });
+
+    expect(result).toEqual({ ok: true });
+    expect(rateMock).toHaveBeenCalledWith("USD", atNoonUtc("2026-01-05"));
+    expect(txCreateMock.mock.calls[0][0].data).toMatchObject({
+      amountCents: BigInt(-900),
+      nativeAmountCents: BigInt(-1_000),
+      fxRate: 0.9,
+    });
+    // The anchor comes from the NATIVE balance before it: $100 - $10 = $90.
+    expect(balanceCreateMock.mock.calls[0][0].data).toMatchObject({
+      nativeBalanceCents: BigInt(9_000),
+      balanceCents: BigInt(8_100),
+      fxRate: 0.9,
+    });
+  });
+
+  // The trap: one converted amount subtracted from every later row would
+  // re-price each past day at today's rate.
+  it("shifts later rows in dollars and re-converts each at its own rate", async () => {
+    balanceFindManyMock.mockImplementation(async (args: { select: Record<string, boolean> }) =>
+      args.select.recordedAt
+        ? [
+            { recordedAt: atNoonUtc("2026-01-01"), balanceCents: BigInt(9_000), nativeBalanceCents: BigInt(10_000) },
+            { recordedAt: atNoonUtc("2026-01-10"), balanceCents: BigInt(16_000), nativeBalanceCents: BigInt(20_000) },
+          ]
+        : [{ id: "later", balanceCents: BigInt(16_000), nativeBalanceCents: BigInt(20_000), fxRate: 0.8 }]
+    );
+
+    await recordManualMovement("acc-1", { amountCents: -1_000, label: "Oubli", date: "2026-01-05" });
+
+    expect(balanceUpdateManyMock).not.toHaveBeenCalled();
+    expect(balanceUpdateMock).toHaveBeenCalledWith({
+      where: { id: "later" },
+      data: { nativeBalanceCents: BigInt(19_000), balanceCents: BigInt(15_200) },
+    });
+  });
+
+  it("refuses without a rate, before writing anything", async () => {
+    rateMock.mockResolvedValue(null);
+    balanceFindManyMock.mockResolvedValue([{ recordedAt: atNoonUtc("2026-01-01"), balanceCents: BigInt(9_000), nativeBalanceCents: BigInt(10_000) }]);
+
+    const result = await recordManualMovement("acc-1", { amountCents: -1_000, label: "x", date: "2026-01-05" });
+
+    expect(result).toEqual({ ok: false, error: "rate_unavailable" });
+    expect(txCreateMock).not.toHaveBeenCalled();
+    expect(balanceCreateMock).not.toHaveBeenCalled();
+    expect(balanceUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("corrects the balance in dollars", async () => {
+    await setManualBalance("acc-1", 5_000);
+    expect(balanceCreateMock.mock.calls[0][0].data).toMatchObject({
+      nativeBalanceCents: BigInt(5_000),
+      balanceCents: BigInt(4_500),
+      fxRate: 0.9,
+    });
+  });
+
+  it("undoes a deleted entry by its dollar amount", async () => {
+    txFindUniqueMock.mockResolvedValue({
+      id: "tx-1",
+      accountId: "acc-1",
+      amountCents: BigInt(-900),
+      nativeAmountCents: BigInt(-1_000),
+      date: atNoonUtc("2026-01-05"),
+      syncId: "manual_abc",
+      categoryId: null,
+    });
+    balanceFindManyMock.mockResolvedValue([{ id: "later", balanceCents: BigInt(7_200), nativeBalanceCents: BigInt(9_000), fxRate: 0.8 }]);
+
+    await deleteManualEntry("tx-1");
+
+    expect(balanceUpdateMock).toHaveBeenCalledWith({
+      where: { id: "later" },
+      data: { nativeBalanceCents: BigInt(10_000), balanceCents: BigInt(8_000) },
+    });
+    expect(txDeleteMock).toHaveBeenCalledWith({ where: { id: "tx-1" } });
   });
 });

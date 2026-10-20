@@ -258,6 +258,10 @@ model Account {
   id                    String                 @id @default(cuid())
   name                  String
   type                  AccountType
+  // ISO 4217 code the bank or the user keeps this account in. Every *Cents
+  // figure stays EUR; the native amount sits beside it on each
+  // HistoricalBalance/Transaction row - see dev-docs/currencies.md.
+  currency              String                 @default("EUR")
   institutionId         String? // nullable - cars and loans may have no associated bank
   // onDelete: Cascade - deleteInstitution's own confirmation dialog
   // (messages/*.json's deleteInstitution.description) explicitly promises
@@ -623,9 +627,27 @@ model HistoricalBalance {
   accountId    String
   account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   balanceCents BigInt
+  // In Account.currency, and the EUR per unit balanceCents was derived with.
+  // Both null on an EUR account (balanceCents IS the native figure).
+  nativeBalanceCents BigInt?
+  fxRate             Float?
   recordedAt   DateTime @default(now())
 
   @@index([accountId, recordedAt])
+}
+
+/// Daily exchange rates, shared by the app and the sync service: `rate` is
+/// `base` per 1 unit of `currency` on `day`. `base` is in the key so a
+/// configurable base currency (dev-docs/currencies.md, step 2) never has to
+/// invalidate the table.
+model ExchangeRate {
+  base      String   @default("EUR")
+  currency  String
+  day       DateTime @db.Date
+  rate      Float
+  fetchedAt DateTime @default(now())
+
+  @@id([base, currency, day])
 }
 
 model Transaction {
@@ -636,6 +658,10 @@ model Transaction {
   date                 DateTime
   label                String
   amountCents          BigInt // positive = credit, negative = debit
+  // In the account's currency, and the EUR per unit amountCents was derived
+  // with - same null convention as HistoricalBalance.
+  nativeAmountCents    BigInt?
+  fxRate               Float?
   categoryId           String?
   category             Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   // GoCardless-only (PSD2's Berlin Group schema) - the card network's own

@@ -66,9 +66,12 @@ function ModeToggle({ mode, setMode, t }: Readonly<{ mode: Mode; setMode: (m: Mo
 export function ManualEntryDialog({
   accountId,
   categories,
+  currency = "EUR",
 }: Readonly<{
   accountId: string;
   categories: { id: string; name: string; color: string }[];
+  /** What the amounts are typed in (v2.18): the account's own currency. */
+  currency?: string;
 }>) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("spend");
@@ -138,7 +141,7 @@ export function ManualEntryDialog({
         {mode === "correct" ? (
           <Input
             name="balance"
-            label={t("newBalance")}
+            label={currency === "EUR" ? t("newBalance") : `${t("newBalance")} (${currency})`}
             hint={t("correctHint")}
             type="text"
             inputMode="decimal"
@@ -150,7 +153,7 @@ export function ManualEntryDialog({
           <>
             <Input
               name="amount"
-              label={t("amount")}
+              label={currency === "EUR" ? t("amount") : `${t("amount")} (${currency})`}
               hint={t("movementHint")}
               type="text"
               inputMode="decimal"
@@ -220,4 +223,5 @@ const ERROR_KEY: Record<string, string> = {
   no_prior_balance: "errorNoPriorBalance",
   not_found: "errorNotFound",
   not_manual: "errorNotManual",
+  rate_unavailable: "errorRateUnavailable",
 };

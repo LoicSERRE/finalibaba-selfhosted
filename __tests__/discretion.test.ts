@@ -98,13 +98,14 @@ describe("what gets hidden", () => {
   // Same heuristic the markers were placed with: the nearest className at or
   // above the call must carry `amount`. Chart formatters are exempt - their
   // output lands in the axis/tooltip layers the selectors above cover.
-  it("marks every formatCurrency a page renders", () => {
+  it("marks every formatCurrency and formatMoney a page renders", () => {
     const files = globSync("{app,components}/**/*.tsx").filter((f) => !f.includes("generated"));
     const unmarked: string[] = [];
     for (const file of files) {
       const lines = readFileSync(file, "utf8").split("\n");
       lines.forEach((line, i) => {
-        if (!line.includes("formatCurrency(") || /function formatCurrency|=> formatCurrency\(/.test(line)) return;
+        // formatMoney (v2.18) prints an amount in an account's own currency.
+        if (!/formatCurrency\(|formatMoney\(/.test(line) || /function format(Currency|Money)|=> format(Currency|Money)\(/.test(line)) return;
         const before = lines.slice(Math.max(0, i - 4), i + 1).join("\n");
         if (/formatter|aria-label=|title=|placeholder=/.test(before)) return;
         const context = lines.slice(Math.max(0, i - 12), i + 1).join("\n");

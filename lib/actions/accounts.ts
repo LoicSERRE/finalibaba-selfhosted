@@ -6,6 +6,10 @@ import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable } from "@/lib/auth-context";
 import { AccountType, TaxTreatment } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
+import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
+import { balanceColumns, isBaseCurrency, parseAccountCurrency } from "@/lib/domain/currency";
+import { rateToEurOn } from "@/lib/services/exchange-rate";
+import { atNoonUtc } from "@/lib/domain/manual-entries";
 
 const TAX_TREATMENTS = new Set(Object.values(TaxTreatment));
 
@@ -54,7 +58,7 @@ function parseOptionalInt(val: FormDataEntryValue | null): number | undefined {
 // fields (fiat/investment/real estate/automobile/loan) - the branching is
 // inherent to the generic "Add account" form covering all of them at once.
 // eslint-disable-next-line sonarjs/cognitive-complexity
-export async function createAccount(formData: FormData) {
+export async function createAccount(formData: FormData): Promise<ActionResult<void, "rate_unavailable">> {
   const name = (formData.get("name") as string).trim();
   const type = formData.get("type") as AccountType;
   const rawInstitutionId = (formData.get("institutionId") as string | null)?.trim();
@@ -82,6 +86,14 @@ export async function createAccount(formData: FormData) {
 
   const isLoan = type === "LOAN";
   const isInvestment = type === "INVESTMENT" || type === "CRYPTO";
+  const isFiat = !isInvestment && !isManualType(type) && !isLoan;
+
+  // The initial balance is in the account's own currency. Its rate comes
+  // first, before anything is written: no rate, no account - never a
+  // half-created one, never a guessed conversion.
+  const currency = parseAccountCurrency(formData.get("currency"), type);
+  const rate = isBaseCurrency(currency) || balanceCents === null ? 1 : await rateToEurOn(currency);
+  if (rate === null) return actionError("rate_unavailable");
   const isInterestBearing = type === "SAVINGS" || type === "CHECKING";
 
   let initialLiabilityCents: bigint | undefined;
@@ -118,6 +130,7 @@ export async function createAccount(formData: FormData) {
       userId: viewer.id,
       name,
       type,
+      currency,
       institutionId,
       manualValueCents: isManualType(type) ? (balanceCents ?? undefined) : undefined,
       liabilityCents: initialLiabilityCents,
@@ -142,15 +155,18 @@ export async function createAccount(formData: FormData) {
   // (an emptied account, an overdraft - see ACCOUNT_OVERDRAFT). The old
   // condition silently dropped the snapshot for either, leaving the account
   // with no history at all and its balance reading as unknown everywhere.
-  if (
-    balanceCents !== null &&
-    type !== "INVESTMENT" &&
-    type !== "CRYPTO" &&
-    !isManualType(type) &&
-    !isLoan
-  ) {
+  //
+  // At noon UTC, like every manual write: stamped with the creation instant,
+  // an account created in the afternoon had its only balance AFTER a spend
+  // typed for the same day (manual entries land at noon), and that spend was
+  // refused as having no balance before it.
+  if (balanceCents !== null && isFiat) {
     await prisma.historicalBalance.create({
-      data: { accountId: account.id, balanceCents },
+      data: {
+        accountId: account.id,
+        recordedAt: atNoonUtc(new Date().toISOString().slice(0, 10)),
+        ...balanceColumns(currency, balanceCents, rate),
+      },
     });
   }
 
@@ -163,6 +179,7 @@ export async function createAccount(formData: FormData) {
   }
 
   revalidateAll();
+  return actionOk();
 }
 
 export async function deleteAccount(id: string) {

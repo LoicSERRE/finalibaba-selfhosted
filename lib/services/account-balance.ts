@@ -1,5 +1,7 @@
 import { Decimal } from "decimal.js";
 import { prisma } from "@/lib/db/prisma";
+import { BASE_CURRENCY, dayKey, revaluation } from "@/lib/domain/currency";
+import { rateToEurOn } from "@/lib/services/exchange-rate";
 
 /**
  * Records an investment or crypto account's current value as a
@@ -37,4 +39,40 @@ export async function refreshAccountBalance(accountId: string) {
   await prisma.historicalBalance.create({
     data: { accountId, balanceCents: totalCents },
   });
+}
+
+/**
+ * Records today's EUR value of every manual account kept in another
+ * currency (v2.18, dev-docs/currencies.md): its native balance does not
+ * move, the rate does. Synced accounts are revalued by their own sync. Run
+ * by the same 4h cron as the investment snapshots; at most one row per
+ * account per day, since rates are daily.
+ */
+export async function revalueForeignBalances(now: Date = new Date()): Promise<number> {
+  const accounts = await prisma.account.findMany({
+    where: { currency: { not: BASE_CURRENCY }, syncId: null, gocardlessAccountId: null },
+    select: {
+      id: true,
+      currency: true,
+      history: {
+        orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
+        take: 1,
+        select: { recordedAt: true, balanceCents: true, nativeBalanceCents: true },
+      },
+    },
+  });
+  const todayNoon = new Date(`${dayKey(now)}T12:00:00.000Z`);
+  let written = 0;
+  for (const account of accounts) {
+    const latest = account.history[0];
+    if (!latest) continue;
+    const rate = await rateToEurOn(account.currency, now);
+    // No rate today: keep yesterday's value rather than invent one.
+    if (rate === null) continue;
+    const row = revaluation(latest, account.currency, rate, todayNoon);
+    if (!row) continue;
+    await prisma.historicalBalance.create({ data: { accountId: account.id, ...row } });
+    written++;
+  }
+  return written;
 }

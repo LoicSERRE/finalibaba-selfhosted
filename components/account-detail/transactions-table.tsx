@@ -26,6 +26,7 @@ export function TransactionsTable({
   intlLocale,
   accountId,
   accountType,
+  currency = "EUR",
   transactions,
   categories,
   canImportCsv,
@@ -37,6 +38,8 @@ export function TransactionsTable({
   intlLocale: string;
   accountId: string;
   accountType: string;
+  /** The account's currency, for rows that carry a native amount (v2.18). */
+  currency?: string;
   transactions: AccountDetailTransaction[];
   categories: { id: string; name: string; color: string }[];
   canImportCsv: boolean;
@@ -78,7 +81,7 @@ export function TransactionsTable({
           >
             {td("viewAllTransactions")}
           </Link>
-          {canImportCsv && !readOnly && <ManualEntryDialog accountId={accountId} categories={categories} />}
+          {canImportCsv && !readOnly && <ManualEntryDialog accountId={accountId} categories={categories} currency={currency} />}
           {canImportCsv && (
             <ImportTransactionsDialog accountId={accountId} existingFingerprints={existingFingerprints} />
           )}
@@ -103,7 +106,10 @@ export function TransactionsTable({
             date={dateFormat.format(tx.date)}
             label={tx.label ?? ""}
             details={<TransactionNoteDetails note={tx.note} tags={tx.tags} />}
-            amountCents={tx.amountCents}
+            // The account's own currency on its own page; the EUR value is
+            // what budgets and the global ledger count.
+            amountCents={tx.nativeAmountCents ?? tx.amountCents}
+            currency={tx.nativeAmountCents == null ? undefined : currency}
             category={
               <TransactionCategoryCell
                 transactionId={tx.id}

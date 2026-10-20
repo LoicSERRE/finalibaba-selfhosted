@@ -350,8 +350,10 @@
       "errorInvalidDate": "Invalid date.",
       "errorNoPriorBalance": "No balance known before this date: correct the account balance first.",
       "errorNotFound": "This entry no longer exists.",
-      "errorNotManual": "Only a manual entry can be deleted here."
-    }
+      "errorNotManual": "Only a manual entry can be deleted here.",
+      "errorRateUnavailable": "The exchange rate for this date cannot be fetched. Try again in a few minutes."
+    },
+    "inBaseCurrency": "≈ {amount}"
   },
   "budgets": {
     "title": "Budgets",
@@ -1363,7 +1365,8 @@
     "selectedCount": "{count} of {total} row(s) selected",
     "importing": "Importing…",
     "importSelected": "Import {count} transaction(s)",
-    "success": "{count} transaction(s) imported."
+    "success": "{count} transaction(s) imported.",
+    "rateUnavailable": "Exchange rates for these dates cannot be fetched. Nothing was imported; try again in a few minutes."
   },
   "importBalanceHistory": {
     "trigger": "Import history",
@@ -1378,7 +1381,8 @@
     "selectedCount": "{count} of {total} row(s) selected",
     "importing": "Importing…",
     "importSelected": "Import {count} balance point(s)",
-    "success": "{count} balance point(s) imported."
+    "success": "{count} balance point(s) imported.",
+    "rateUnavailable": "Exchange rates for these dates cannot be fetched. Nothing was imported; try again in a few minutes."
   },
   "addAccount": {
     "trigger": "Add account",
@@ -1387,7 +1391,6 @@
     "name": "Account name",
     "type": "Type",
     "subtype": "Subtype",
-    "balance": "Initial balance (€)",
     "estimatedValue": "Estimated value (€)",
     "autoLiability": "Remaining auto loan (€)",
     "mortgage": "Remaining capital / mortgage (€)",
@@ -1409,7 +1412,10 @@
     "taxRatePct": "Tax rate (%)",
     "creating": "Creating…",
     "submit": "Create",
-    "addFirst": "Add an institution in Settings first."
+    "addFirst": "Add an institution in Settings first.",
+    "currency": "Currency",
+    "balanceIn": "Initial balance ({currency})",
+    "rateUnavailable": "The {currency} → EUR rate cannot be fetched right now. Try again in a few minutes."
   },
   "addHolding": {
     "editTitle": "Edit: {ticker}",

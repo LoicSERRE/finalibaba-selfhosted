@@ -24,6 +24,8 @@ const CURRENCY_PAIR_SYMBOLS: Record<"USD" | "GBP" | "CHF", string> = {
  * that hot path.
  */
 import { fetchExternal } from "@/lib/services/external-fetch";
+import { prisma } from "@/lib/db/prisma";
+import { BASE_CURRENCY, dayKey, isBaseCurrency, parseYahooDailyRates, pickRate } from "@/lib/domain/currency";
 
 export async function fetchExchangeRateToEur(
   currency: "USD" | "GBP" | "CHF",
@@ -48,4 +50,80 @@ export async function fetchExchangeRateToEur(
   } catch {
     return null;
   }
+}
+
+// ── Daily rates for accounts kept in another currency (v2.18) ───────────────
+// dev-docs/currencies.md. Unlike the holding rate above (one figure captured
+// at entry), an account converts every balance and transaction at the rate
+// of its own day, so rates are cached per day in ExchangeRate - shared with
+// the sync service (sync/fx.py), which converts what banks report.
+
+const DAY_MS = 86_400_000;
+const LOOKBACK_DAYS = 7;
+
+async function fetchDailyRates(currency: string, from: Date, to: Date): Promise<{ day: string; rate: number }[]> {
+  try {
+    const period1 = Math.floor(from.getTime() / 1000);
+    const period2 = Math.floor(to.getTime() / 1000);
+    const res = await fetchExternal(
+      `https://query2.finance.yahoo.com/v8/finance/chart/EUR${currency}=X?interval=1d&period1=${period1}&period2=${period2}`,
+      { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }, cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    return parseYahooDailyRates(await res.json());
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * EUR per 1 unit of `currency` for each of `days` (YYYY-MM-DD): one cache
+ * read and at most one Yahoo request for the whole span, so a year of CSV
+ * rows costs the same as one. A day maps to null when no close within a week
+ * before it exists - callers refuse the write then, never guess. A day
+ * without a close (a weekend) takes the previous one and is stored under its
+ * own day, so the next ask is a hit.
+ */
+export async function ratesToEurForDays(currency: string, days: readonly string[]): Promise<Map<string, number | null>> {
+  const unique = [...new Set(days)].sort();
+  if (isBaseCurrency(currency)) return new Map(unique.map((day) => [day, 1]));
+  if (unique.length === 0) return new Map();
+
+  const first = new Date(`${unique[0]}T00:00:00.000Z`);
+  const last = new Date(`${unique.at(-1)}T00:00:00.000Z`);
+  const from = new Date(first.getTime() - LOOKBACK_DAYS * DAY_MS);
+  const cached = (
+    await prisma.exchangeRate.findMany({
+      where: { base: BASE_CURRENCY, currency, day: { gte: from, lte: last } },
+      select: { day: true, rate: true },
+    })
+  ).map((row) => ({ day: dayKey(row.day), rate: row.rate }));
+  const known = new Set(cached.map((row) => row.day));
+  if (unique.every((day) => known.has(day))) return new Map(unique.map((day) => [day, pickRate(cached, day)]));
+
+  const fetched = await fetchDailyRates(currency, from, new Date(last.getTime() + DAY_MS));
+  const all = [...cached, ...fetched];
+  const result = new Map(unique.map((day) => [day, pickRate(all, day)]));
+
+  const fetchedDays = new Set(fetched.map((row) => row.day));
+  const filled = unique
+    .filter((day) => !known.has(day) && !fetchedDays.has(day))
+    .flatMap((day) => {
+      const rate = result.get(day);
+      return rate === null || rate === undefined ? [] : [{ day, rate }];
+    });
+  const toStore = [...fetched.filter((row) => !known.has(row.day)), ...filled];
+  if (toStore.length) {
+    await prisma.exchangeRate.createMany({
+      data: toStore.map((row) => ({ base: BASE_CURRENCY, currency, day: new Date(`${row.day}T00:00:00.000Z`), rate: row.rate })),
+      skipDuplicates: true,
+    });
+  }
+  return result;
+}
+
+/** One day's rate (today by default); see ratesToEurForDays. */
+export async function rateToEurOn(currency: string, date: Date = new Date()): Promise<number | null> {
+  const day = dayKey(date);
+  return (await ratesToEurForDays(currency, [day])).get(day) ?? null;
 }
