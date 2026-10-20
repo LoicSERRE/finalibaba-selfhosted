@@ -531,7 +531,11 @@
     "months": "mois",
     "anchorDate": "Depuis le",
     "intervalLabel": "Revient tous les",
-    "intervalUnit": {"WEEKLY": "semaine(s)", "MONTHLY": "mois", "YEARLY": "an(s)"},
+    "intervalUnit": {
+      "WEEKLY": "semaine(s)",
+      "MONTHLY": "mois",
+      "YEARLY": "an(s)"
+    },
     "intervalHint": "1 = chaque mois. Ce n'est pas le jour du paiement : il vient de la date ci-dessous.",
     "intervalHintWeekly": "1 = chaque semaine.",
     "intervalHintYearly": "1 = chaque année.",
@@ -1227,7 +1231,10 @@
     },
     "discretion": {
       "title": "Discrétion",
-      "description": "Floute tous les montants de l'application sur cet appareil, pour l'ouvrir en public ou partager votre écran. Raccourci : touche H."
+      "description": "Remplace tous les montants de l'application par des chiffres et lettres aléatoires sur cet appareil, pour l'ouvrir en public ou partager votre écran. Les pourcentages restent visibles. Raccourci : touche H.",
+      "shake": "Secouer le téléphone pour masquer ou afficher",
+      "shakeHint": "Trois secousses rapides masquent les montants, trois de plus les réaffichent.",
+      "shakeDenied": "Accès aux capteurs de mouvement refusé. Autorisez-le dans les réglages du navigateur pour utiliser ce geste."
     }
   },
   "shared": {

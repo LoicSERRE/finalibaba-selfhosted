@@ -4,6 +4,7 @@ import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { ThemeSwitcher } from "@/components/settings/theme-switcher";
 import { resolveThemePreference } from "@/lib/domain/theme";
 import { DiscretionToggleServer } from "@/components/layout/discretion-toggle-server";
+import { DiscretionShakeToggle } from "@/components/settings/discretion-shake-toggle";
 import { SECTION_CARD, SECTION_TITLE } from "./context";
 
 /** Language, theme and discretion mode. */
@@ -31,6 +32,7 @@ export async function DisplayTab() {
         <div className={`${SECTION_CARD} p-5 space-y-3`}>
           <p className="text-sm text-[var(--muted)]">{t("discretion.description")}</p>
           <DiscretionToggleServer className="w-full sm:w-auto border border-[var(--border)]" />
+          <DiscretionShakeToggle />
         </div>
       </section>
     </>

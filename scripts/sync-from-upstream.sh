@@ -4,12 +4,12 @@
 # Always review `git diff` after running - never commit blindly.
 #
 # Usage: ./scripts/sync-from-upstream.sh [path/to/upstream]
-# Default upstream path: /mnt/c/Projets/Finalibaba
+# Default upstream path: a Finalibaba/ directory next to this repo
 
 set -e
 
-UPSTREAM="${1:-/mnt/c/Projets/Finalibaba}"
 SELFHOSTED="$(dirname "$(dirname "$(realpath "$0")")")"
+UPSTREAM="${1:-$(dirname "$SELFHOSTED")/Finalibaba}"
 
 if [ ! -d "$UPSTREAM" ]; then
   echo "Error: upstream directory not found at $UPSTREAM"

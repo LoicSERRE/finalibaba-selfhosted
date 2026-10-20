@@ -217,24 +217,24 @@ select option {
 .dialog-content[data-state="open"] { animation: dialog-content-in 180ms ease-out; }
 .dialog-content[data-state="closed"] { animation: dialog-content-out 150ms ease-in; }
 
-/* ── Discretion mode (v2.13) ─────────────────────────────────────────────
+/* ── Discretion mode (v2.13, scrambled since v2.18) ──────────────────────
    <html data-discreet> is rendered from the DISCREET cookie by the root
    layout and toggled client-side (lib/domain/discretion.ts). Every figure is
    marked rather than guessed: any element showing an amount carries the
    `amount` class, and the chart parts that print figures - value axes,
-   tooltips, label lists, pie labels - are listed here. Recharts 3 renders
-   tick labels in their own z-index layer (`.recharts-yAxis-tick-labels`),
-   outside the axis group, so an axis's own className cannot reach them. Text-based detection
-   was rejected because it can only run after hydration, which would flash
-   the figures it exists to hide. `em` keeps the blur proportional, so a
-   48px net worth is as unreadable as a 12px table cell.
+   tooltips, label lists, pie labels - are listed here (the same list as
+   DISCRETION_TARGETS). Once hydrated, the client replaces their figures with
+   noise and marks them data-scrambled; until then - first paint, a streamed
+   boundary not hydrated yet, a form field - they are blurred, so nothing is
+   ever readable in between. `em` keeps the blur proportional, so a 48px net
+   worth is as unreadable as a 12px table cell.
    __tests__/discretion.test.ts pins this selector list. */
 .amount { transition: filter 150ms ease-out; }
-[data-discreet] .amount,
-[data-discreet] .recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value,
-[data-discreet] .recharts-tooltip-wrapper,
-[data-discreet] .recharts-label-list,
-[data-discreet] .recharts-pie-labels {
+[data-discreet] .amount:not([data-scrambled]),
+[data-discreet] .recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-value:not([data-scrambled]),
+[data-discreet] .recharts-tooltip-wrapper:not([data-scrambled]),
+[data-discreet] .recharts-label-list:not([data-scrambled]),
+[data-discreet] .recharts-pie-labels:not([data-scrambled]) {
   filter: blur(0.4em);
 }
 

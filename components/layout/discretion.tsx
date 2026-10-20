@@ -9,11 +9,13 @@ import {
   discretionCookie,
   isDiscretionShortcut,
 } from "@/lib/domain/discretion";
+import { startScrambling } from "@/components/layout/discretion-scramble";
 
 // The <html> attribute is the single source of truth on the client: the root
 // layout renders it from the DISCREET cookie, and toggling sets the attribute
 // and the cookie together, so the next server render agrees with what is on
-// screen. No router.refresh(): blurring is pure CSS, nothing needs refetching.
+// screen. No router.refresh(): scrambling happens in place
+// (discretion-scramble.ts), nothing needs refetching.
 
 const CHANGE_EVENT = "finalibaba:discretionchange";
 
@@ -22,7 +24,7 @@ function subscribe(onChange: () => void) {
   return () => globalThis.removeEventListener(CHANGE_EVENT, onChange);
 }
 
-function readDiscreet(): boolean {
+export function readDiscreet(): boolean {
   return document.documentElement.hasAttribute(DISCRETION_ATTRIBUTE);
 }
 
@@ -50,6 +52,32 @@ export function DiscretionShortcut() {
     }
     globalThis.addEventListener("keydown", onKeyDown);
     return () => globalThis.removeEventListener("keydown", onKeyDown);
+  }, []);
+  return null;
+}
+
+/**
+ * Scrambles the figures while the mode is on, mounted once in the root
+ * layout. Started from the change event itself rather than a re-render, so
+ * the figures turn to noise in the same frame the toggle is pressed.
+ */
+export function DiscretionScrambler() {
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    function sync() {
+      const on = readDiscreet();
+      if (on && !stop) stop = startScrambling();
+      else if (!on && stop) {
+        stop();
+        stop = null;
+      }
+    }
+    sync();
+    globalThis.addEventListener(CHANGE_EVENT, sync);
+    return () => {
+      globalThis.removeEventListener(CHANGE_EVENT, sync);
+      stop?.();
+    };
   }, []);
   return null;
 }

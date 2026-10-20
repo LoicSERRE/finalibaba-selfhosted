@@ -18,11 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Relationship with the upstream private repo
 
-The private repo is at `/mnt/c/Projets/Finalibaba` on the same machine (default path baked into `scripts/sync-from-upstream.sh`; override with `./scripts/sync-from-upstream.sh <path>`).
+The private repo sits next to this one (`../Finalibaba`, the default of `scripts/sync-from-upstream.sh`; override with `./scripts/sync-from-upstream.sh <path>`). It now also carries the production deploy (`.github/workflows/deploy.yml`, triggered by `repository_dispatch` `image-published` from this repo's `docker.yml`).
 
 **Porting rule:** app-layer changes (features, bug fixes, schema changes) made in `Finalibaba/` should be ported here via `scripts/sync-from-upstream.sh`. Infra-layer changes (deploy pipeline, VPS config, personal credentials) are **never** ported.
 
-The script's `rsync --exclude` list is the source of truth for what never gets synced - it covers infra files (`.github/`, all `docker-compose*.yml`, `env.server.example`, `.env*`), selfhosted-only docs (`CLAUDE.md`, `dev-docs/`, `README.md`, `ROADMAP.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE*`), demo/mock seed files (`prisma/seed-demo.ts`, `prisma/seed-tr-mock.ts`), and `scripts/`, `.claude/` themselves. The files below additionally need protection because they *do* exist upstream but must keep selfhosted-specific content:
+The script's `rsync --exclude` list is the source of truth for what never gets synced - it covers infra files (`.github/`, all `docker-compose*.yml`, `env.server.example`, `.env*`), `.gitignore`, selfhosted-only docs (`CLAUDE.md`, `AGENTS.md`, `dev-docs/`, `README.md`, `ROADMAP.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE*`), demo/mock seed files (`prisma/seed-demo.ts`, `prisma/seed-tr-mock.ts`), and `scripts/`, `.claude/` themselves. The files below additionally need protection because they *do* exist upstream but must keep selfhosted-specific content:
 
 Files that must **never** be overwritten by the sync script:
 
@@ -182,7 +182,7 @@ Each of these was learned from a real incident; the linked doc has the story.
 - **Expected Server Action failures are returned, not thrown** - production replaces thrown messages with an opaque digest. Return `{ ok: false, error: "<stable_key>" }` and translate in the UI; authorization failures still throw.
 - **Transaction queries**: wrap `where` clauses in `excludeInternalTransfers` / `excludeFromBudgetTotals` (and the `*OnSplit` variants) from `lib/domain/transaction-filters.ts`. `categoryId: null` means uncategorized *or* split - add `splits: { none: {} }` where it matters. Beware SQL three-valued logic: a bare `NOT` on a nullable column excludes NULLs too.
 - **Money**: integer cents as `BigInt`, `Decimal.js` arithmetic, `lib/utils/format.ts` helpers. Never pass `BigInt` across the RSC boundary. Imported/manual dates are stored at noon UTC (`${date}T12:00:00.000Z`).
-- **Every rendered amount carries the `amount` class** (`dev-docs/platform.md`, "Discretion mode"): it is what discretion mode blurs, and an unmarked figure just stays readable. `__tests__/discretion.test.ts` fails on a `formatCurrency` outside an `amount` element; chart axes/tooltips are covered by selectors in `globals.css`.
+- **Every rendered amount carries the `amount` class** (`dev-docs/platform.md`, "Discretion mode"): it is what discretion mode scrambles (blurred until hydration), and an unmarked figure just stays readable. Percentages are deliberately left readable. `__tests__/discretion.test.ts` fails on a `formatCurrency` outside an `amount` element; chart axes/tooltips are covered by selectors in `globals.css`.
 - **Undoable deletions** (`dev-docs/platform.md`, "Toasts and undo"): an action that deletes something a user may regret snapshots it with `lib/services/undo-deletion.ts`, returns `{ undoToken }` from `rememberUndo`, and its `DeleteButton` gets `undoable` (no confirmation dialog, a toast with "Annuler"). Revocations and anything security-sensitive keep the dialog: undoing them would re-grant access. Raise toasts with `toast()` from `components/ui/toast.tsx`.
 - **`<main>` sets no overflow** (`components/layout/main-content.tsx`): the window scrolls, so an `overflow-*-auto` there scrolls nothing but makes every `sticky` inside it stop sticking - that broke the offline banner and the Settings tab menu until v2.14. `__tests__/main-content.test.ts` guards it.
 - **Dates in client components**: `formatDateShort(date, localeToIntl(useLocale()))`, never a bare `toLocaleDateString()` (hydration mismatch).
@@ -228,15 +228,11 @@ Defined in `globals.css`. Never use raw Tailwind colour classes for brand colour
 | `--border` | #2a2a38 | Dividers |
 | `--muted` | #a1a1aa | Secondary text |
 
-<!-- BEGIN:nextjs-agent-rules -->
+## This is NOT the Next.js you know
 
-# This is NOT the Next.js you know
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+(Next 16.4's `next dev` manages this kind of block in `AGENTS.md` only, never in this file - see `node_modules/next/dist/server/lib/generate-agent-files.js`. `AGENTS.md` is excluded from the upstream sync.)
 
 ## dev-docs/ index
 
