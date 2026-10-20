@@ -1,8 +1,9 @@
 import { baseCurrency } from "@/lib/utils/base-currency";
 // next-intl locale ("en" | "fr") -> Intl.DateTimeFormat/toLocaleDateString locale tag.
 // Used for date formatting only - formatCurrency/formatPercent below stay on
-// fr-FR regardless of UI locale (amounts are always EUR-denominated here, and
-// making that locale-aware is a separate, much larger change).
+// fr-FR number conventions regardless of UI locale (amounts are in the
+// instance's base currency, v2.19 - lib/utils/base-currency.ts - and making
+// the number format follow the UI language is a separate change).
 export function localeToIntl(locale: string): string {
   return locale === "en" ? "en-US" : "fr-FR";
 }
