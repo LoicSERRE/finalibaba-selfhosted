@@ -18,11 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Relationship with the upstream private repo
 
-The private repo is at `/mnt/c/Projets/Finalibaba` on the same machine (default path baked into `scripts/sync-from-upstream.sh`; override with `./scripts/sync-from-upstream.sh <path>`).
+The private repo sits next to this one (`../Finalibaba`, the default of `scripts/sync-from-upstream.sh`; override with `./scripts/sync-from-upstream.sh <path>`). It now also carries the production deploy (`.github/workflows/deploy.yml`, triggered by `repository_dispatch` `image-published` from this repo's `docker.yml`).
 
 **Porting rule:** app-layer changes (features, bug fixes, schema changes) made in `Finalibaba/` should be ported here via `scripts/sync-from-upstream.sh`. Infra-layer changes (deploy pipeline, VPS config, personal credentials) are **never** ported.
 
-The script's `rsync --exclude` list is the source of truth for what never gets synced - it covers infra files (`.github/`, all `docker-compose*.yml`, `env.server.example`, `.env*`), selfhosted-only docs (`CLAUDE.md`, `dev-docs/`, `README.md`, `ROADMAP.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE*`), demo/mock seed files (`prisma/seed-demo.ts`, `prisma/seed-tr-mock.ts`), and `scripts/`, `.claude/` themselves. The files below additionally need protection because they *do* exist upstream but must keep selfhosted-specific content:
+The script's `rsync --exclude` list is the source of truth for what never gets synced - it covers infra files (`.github/`, all `docker-compose*.yml`, `env.server.example`, `.env*`), `.gitignore`, selfhosted-only docs (`CLAUDE.md`, `AGENTS.md`, `dev-docs/`, `README.md`, `ROADMAP.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE*`), demo/mock seed files (`prisma/seed-demo.ts`, `prisma/seed-tr-mock.ts`), and `scripts/`, `.claude/` themselves. The files below additionally need protection because they *do* exist upstream but must keep selfhosted-specific content:
 
 Files that must **never** be overwritten by the sync script:
 
@@ -228,15 +228,11 @@ Defined in `globals.css`. Never use raw Tailwind colour classes for brand colour
 | `--border` | #2a2a38 | Dividers |
 | `--muted` | #a1a1aa | Secondary text |
 
-<!-- BEGIN:nextjs-agent-rules -->
+## This is NOT the Next.js you know
 
-# This is NOT the Next.js you know
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+(Next 16.4's `next dev` manages this kind of block in `AGENTS.md` only, never in this file - see `node_modules/next/dist/server/lib/generate-agent-files.js`. `AGENTS.md` is excluded from the upstream sync.)
 
 ## dev-docs/ index
 
