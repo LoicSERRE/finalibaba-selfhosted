@@ -215,6 +215,22 @@ export function isBankReportedLoan(account: {
   return account.type === "LOAN" && Boolean(account.syncId || account.gocardlessAccountId);
 }
 
+/**
+ * The liability a net-worth *history* subtracts for an account: its
+ * liabilityCents, except for a bank-reported loan, whose negative balance
+ * rows already carry the debt. The one rule both series use (dashboard and
+ * analytics) - each once built its own map, and the analytics one missed it
+ * until v2.19.3, counting a new 5 000 EUR loan as a 10 000 EUR drop.
+ */
+export function historyLiabilityCents(account: {
+  type: string;
+  syncId?: string | null;
+  gocardlessAccountId?: string | null;
+  liabilityCents: bigint | null;
+}): bigint {
+  return isBankReportedLoan(account) ? BigInt(0) : (account.liabilityCents ?? BigInt(0));
+}
+
 /** How far a bank-reported loan has been repaid, 0-100, when the amount borrowed is known. */
 export function repaidPct(borrowedCents: bigint | null, remainingCents: bigint): number | null {
   if (borrowedCents === null || borrowedCents <= BigInt(0)) return null;

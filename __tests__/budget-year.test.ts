@@ -2,16 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 
 /** v2.20: /budgets over a whole year - its months, added up. */
 
-const m = vi.hoisted(() => ({ groupBy: vi.fn(), splitGroupBy: vi.fn(), findMany: vi.fn(), splitFindMany: vi.fn() }));
+const m = vi.hoisted(() => ({ groupBy: vi.fn(), splitGroupBy: vi.fn(), findMany: vi.fn(), splitFindMany: vi.fn(), categories: vi.fn() }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     transaction: { groupBy: m.groupBy, findMany: m.findMany },
     transactionSplit: { groupBy: m.splitGroupBy, findMany: m.splitFindMany },
+    category: { findMany: m.categories },
   },
 }));
 
 import { monthlyCashflow, monthsCovered, savingsRatePct, yearCategoryRows } from "@/lib/domain/budget-year";
-import { periodAmounts, periodCategoryTotals } from "@/lib/services/budget-period";
+import { loadBudgetYear, periodAmounts, periodCategoryTotals } from "@/lib/services/budget-period";
 
 const utc = (y: number, mo: number, d: number) => new Date(Date.UTC(y, mo, d, 12));
 const UNCATEGORIZED = { name: "Non catégorisé", color: "#71717a" };
@@ -90,5 +91,19 @@ describe("periodCategoryTotals", () => {
       { date: utc(2026, 2, 1), amountCents: BigInt(-10_00) },
       { date: utc(2026, 3, 9), amountCents: BigInt(-5_00) },
     ]);
+  });
+});
+
+describe("loadBudgetYear", () => {
+  it("reads the viewer's categories and the calendar year's figures", async () => {
+    m.categories.mockResolvedValue([{ id: "food" }]);
+    m.groupBy.mockResolvedValue([]);
+    m.splitGroupBy.mockResolvedValue([]);
+    m.findMany.mockResolvedValue([]);
+    m.splitFindMany.mockResolvedValue([]);
+    const data = await loadBudgetYear("user-owner", ["acc"], 2025);
+    expect(data.categories).toEqual([{ id: "food" }]);
+    expect(m.categories.mock.calls[0][0].where).toEqual({ userId: "user-owner" });
+    expect(m.findMany.mock.calls.at(-1)![0].where).toMatchObject({ date: { gte: new Date(Date.UTC(2025, 0, 1)), lt: new Date(Date.UTC(2026, 0, 1)) } });
   });
 });

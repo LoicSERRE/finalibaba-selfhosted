@@ -66,3 +66,17 @@ export async function periodAmounts(accountIds: string[], start: Date, end: Date
   ]);
   return [...whole, ...splits.map((s) => ({ date: s.transaction.date, amountCents: s.amountCents }))];
 }
+
+/** Everything /budgets?year= shows, loaded in one place (the view itself only renders). */
+export async function loadBudgetYear(viewerId: string, accountIds: string[], year: number) {
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year + 1, 0, 1));
+  const [categories, totals, amounts] = await Promise.all([
+    prisma.category.findMany({ where: { userId: viewerId }, orderBy: { name: "asc" } }),
+    periodCategoryTotals(accountIds, start, end),
+    periodAmounts(accountIds, start, end),
+  ]);
+  return { categories, ...totals, amounts };
+}
+
+export type BudgetYearData = Awaited<ReturnType<typeof loadBudgetYear>>;

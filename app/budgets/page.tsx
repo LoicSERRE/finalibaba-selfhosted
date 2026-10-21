@@ -12,7 +12,7 @@ import { AutoCategorizeButton } from "@/components/budgets/auto-categorize-butto
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { normalizeLabel } from "@/lib/domain/recurring";
 import { monthsBetween, computeRolloverCarryInCents } from "@/lib/domain/budgets";
-import { periodCategoryTotals } from "@/lib/services/budget-period";
+import { loadBudgetYear, periodCategoryTotals } from "@/lib/services/budget-period";
 import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
 import { moneyFlowFromMaps } from "@/lib/domain/money-flow";
@@ -79,7 +79,8 @@ export default async function BudgetsPage({
 
   // ?year=YYYY: the whole year (v2.20), its own view.
   if (yearParamValue && /^\d{4}$/.test(yearParamValue)) {
-    return <BudgetsYearView year={Number(yearParamValue)} viewerId={viewer.id} accountIds={accountIds} intlLocale={intlLocale} now={now} />;
+    const year = Number(yearParamValue);
+    return <BudgetsYearView year={year} data={await loadBudgetYear(viewer.id, accountIds, year)} intlLocale={intlLocale} now={now} />;
   }
 
   const [categories, { spendMap, incomeMap }, uncategorizedTx] = await Promise.all([

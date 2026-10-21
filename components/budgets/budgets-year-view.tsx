@@ -1,19 +1,18 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
-import { prisma } from "@/lib/db/prisma";
 import { formatCurrency } from "@/lib/utils/format";
 import { moneyFlowFromMaps } from "@/lib/domain/money-flow";
 import { monthlyCashflow, monthsCovered, savingsRatePct, yearCategoryRows } from "@/lib/domain/budget-year";
-import { periodAmounts, periodCategoryTotals } from "@/lib/services/budget-period";
+import type { BudgetYearData } from "@/lib/services/budget-period";
 import { MoneyFlowChart } from "@/components/budgets/money-flow-chart";
 import { YearCashflowChart } from "@/components/budgets/year-cashflow-chart";
 import { PeriodSwitch } from "@/components/budgets/period-switch";
 
 type Props = {
   readonly year: number;
-  readonly viewerId: string;
-  readonly accountIds: string[];
+  /** Loaded by the page (lib/services/budget-period.ts): a component never queries. */
+  readonly data: BudgetYearData;
   readonly intlLocale: string;
   readonly now: Date;
 };
@@ -32,15 +31,9 @@ const navLink =
  * realised gains already have their year on /income and /tax-report, so
  * this links there instead of repeating them.
  */
-export async function BudgetsYearView({ year, viewerId, accountIds, intlLocale, now }: Props) {
+export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
   const [t, tc] = await Promise.all([getTranslations("budgets"), getTranslations("common")]);
-  const start = new Date(Date.UTC(year, 0, 1));
-  const end = new Date(Date.UTC(year + 1, 0, 1));
-  const [categories, { spendMap, incomeMap }, amounts] = await Promise.all([
-    prisma.category.findMany({ where: { userId: viewerId }, orderBy: { name: "asc" } }),
-    periodCategoryTotals(accountIds, start, end),
-    periodAmounts(accountIds, start, end),
-  ]);
+  const { categories, spendMap, incomeMap, amounts } = data;
 
   const months = monthsCovered(year, now);
   const incomeCents = [...incomeMap.values()].reduce((a, b) => a + b, 0);
