@@ -79,6 +79,18 @@ export function EditLoanTermsDialog({ accountId, values, bankReported }: Props) 
           <Input label={t("deferralMonths")} name="deferralMonths" inputMode="numeric" defaultValue={values.deferralMonths} placeholder="24" />
           <Input label={t("insurance")} name="insurance" inputMode="decimal" defaultValue={values.insurance} placeholder="0" />
         </div>
+        <label className="flex items-start gap-3 text-sm text-[var(--foreground)] cursor-pointer">
+          <input
+            type="checkbox"
+            name="fundsOnAccounts"
+            defaultChecked={values.fundsOnAccounts}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          />
+          <span>
+            {t("fundsOnAccounts")}
+            <span className="block text-xs text-[var(--muted)] mt-0.5">{t("fundsOnAccountsHint")}</span>
+          </span>
+        </label>
         {error && (
           <p role="alert" className="text-xs text-[var(--negative)]">
             {error}

@@ -86,6 +86,8 @@ export type AnalyticsExportData = {
   monthlySavedCents: number;
   momDeltaCents: number | null;
   runwayMonths: number | null;
+  ownFundsRunwayMonths: number | null;
+  borrowedFundsHeldCents: number;
   savingsCents: number;
   monthlyExpensesCents: number;
   goals: { name: string; targetCents: number; pct: number; remainingCents: number }[];
@@ -150,6 +152,8 @@ export function buildAnalyticsExport(
     monthlySavedCents: Number(result.monthlySavedCents),
     momDeltaCents: result.momDelta ?? null,
     runwayMonths: result.runwayMonths ?? null,
+    ownFundsRunwayMonths: result.ownFundsRunwayMonths ?? null,
+    borrowedFundsHeldCents: Number(result.borrowedFundsHeldCents),
     savingsCents: Number(result.savingsCents),
     monthlyExpensesCents: Number(result.monthlyExpensesCents),
     goals: result.goals.map((g) => ({

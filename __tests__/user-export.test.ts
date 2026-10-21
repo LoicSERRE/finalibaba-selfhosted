@@ -62,6 +62,7 @@ describe("every column is either exported or explicitly not", () => {
       "loanNextPaymentCents",
       "loanNextPaymentDate",
       "loanEndDate",
+      "loanFundsOnAccounts",
     ]);
     const excluded = new Set<string>(ACCOUNT_NOT_EXPORTED);
     const unaccounted = scalarFields("Account").filter((f) => !exported.has(f) && !excluded.has(f));

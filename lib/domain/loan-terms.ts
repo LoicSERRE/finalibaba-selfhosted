@@ -17,6 +17,8 @@ export type LoanTerms = {
   loanDeferralMonths: number | null;
   insuranceMonthlyCents: bigint | null;
   loanEndDate: Date | null;
+  /** v2.20: the money borrowed still sits on the user's accounts. */
+  loanFundsOnAccounts: boolean;
 };
 
 export type LoanTermsError =
@@ -72,6 +74,8 @@ export type LoanTermsFields = {
   deferralMonths?: Field;
   insurance?: Field;
   endDate?: Field;
+  /** A checkbox: "on" when ticked, absent otherwise. */
+  fundsOnAccounts?: Field;
 };
 type ParsedTerms = { ok: true; terms: LoanTerms } | { ok: false; error: LoanTermsError };
 
@@ -103,6 +107,7 @@ export function parseLoanTerms(fields: LoanTermsFields): ParsedTerms {
       loanDeferralMonths: deferral.value,
       insuranceMonthlyCents: insurance.value,
       loanEndDate: end.value,
+      loanFundsOnAccounts: fields.fundsOnAccounts === "on",
     },
   };
 }
@@ -116,6 +121,7 @@ export type LoanTermsValues = {
   readonly deferralMonths: string;
   readonly insurance: string;
   readonly endDate: string;
+  readonly fundsOnAccounts: boolean;
 };
 
 function centsText(cents: bigint | null | undefined): string {
@@ -134,6 +140,7 @@ export function loanTermsValues(loan: {
   loanDeferralMonths: number | null;
   insuranceMonthlyCents: bigint | null;
   loanEndDate?: Date | null;
+  loanFundsOnAccounts?: boolean;
 }): LoanTermsValues {
   return {
     amount: centsText(loan.loanAmountCents),
@@ -143,5 +150,6 @@ export function loanTermsValues(loan: {
     deferralMonths: loan.loanDeferralMonths === null ? "" : String(loan.loanDeferralMonths),
     insurance: centsText(loan.insuranceMonthlyCents),
     endDate: dayText(loan.loanEndDate),
+    fundsOnAccounts: loan.loanFundsOnAccounts ?? false,
   };
 }

@@ -42,8 +42,16 @@ describe("parseLoanTerms", () => {
         loanDeferralMonths: 24,
         insuranceMonthlyCents: null,
         loanEndDate: null,
+        loanFundsOnAccounts: false,
       },
     });
+  });
+
+  it("reads the funds-on-accounts checkbox as the browser sends it", () => {
+    const ticked = parseLoanTerms({ fundsOnAccounts: "on" });
+    expect(ticked.ok && ticked.terms.loanFundsOnAccounts).toBe(true);
+    const unticked = parseLoanTerms({ fundsOnAccounts: null });
+    expect(unticked.ok && unticked.terms.loanFundsOnAccounts).toBe(false);
   });
 
   it("refuses what cannot be a loan's terms", () => {
@@ -60,9 +68,10 @@ describe("parseLoanTerms", () => {
   it("round-trips through the dialog's pre-filled values", () => {
     const values = loanTermsValues({
       loanAmountCents: BigInt(5000_00), loanTaeg: 0.99, loanStartDate: new Date("2026-10-01T12:00:00Z"),
-      loanDurationMonths: 72, loanDeferralMonths: 24, insuranceMonthlyCents: null, loanEndDate: null,
+      loanDurationMonths: 72, loanDeferralMonths: 24, insuranceMonthlyCents: null, loanEndDate: null, loanFundsOnAccounts: true,
     });
-    const parsed = parseLoanTerms(values);
+    const parsed = parseLoanTerms({ ...values, fundsOnAccounts: values.fundsOnAccounts ? "on" : null });
+    expect(parsed.ok && parsed.terms.loanFundsOnAccounts).toBe(true);
     expect(parsed.ok && parsed.terms.loanAmountCents).toBe(BigInt(5000_00));
     expect(parsed.ok && parsed.terms.loanStartDate?.toISOString().slice(0, 10)).toBe("2026-10-01");
   });

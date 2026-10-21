@@ -660,7 +660,9 @@
       "detail": "{savings} savings / {expenses} / month",
       "safe": "Solid safety net",
       "ok": "Acceptable buffer",
-      "warning": "Warning: build up emergency savings"
+      "warning": "Warning: build up emergency savings",
+      "ownFunds": "On own funds: {count, plural, one {# month} other {# months}}",
+      "ownFundsDetail": "(after repaying {borrowed} of loans still on your accounts)"
     },
     "goal": {
       "title": "{name} · target {amount}",
@@ -1765,7 +1767,8 @@
     "mdPassiveMissingRates": "Partial estimate: {count} interest-bearing account(s) have no rate set and are not counted here.",
     "mdPassiveWeightedRate": "Balance-weighted average interest rate across all savings accounts: {rate}.",
     "mdPassiveYearEndEstimate": "Alternative estimate, based on real historical balances rather than only today's (fortnight method) - can differ from the figure above if a balance moved a lot this year: estimated year-end interest: {amount}.",
-    "mdFileName": "analytics"
+    "mdFileName": "analytics",
+    "mdOwnFundsRunway": "Runway on own funds"
   },
   "coOwners": {
     "errorUsernameRequired": "Enter a username.",
@@ -1855,6 +1858,8 @@
     "errorDeferral": "The deferral must be shorter than the total duration.",
     "errorInsurance": "Invalid insurance amount.",
     "errorDate": "Invalid date, or an end date before the start date.",
-    "errorUnexpected": "Could not save, try again."
+    "errorUnexpected": "Could not save, try again.",
+    "fundsOnAccounts": "The money borrowed is still on my accounts",
+    "fundsOnAccountsHint": "A student loan parked on a savings account, for instance. The own-funds runway then takes this loan out of your savings. Leave it unticked for a purchase (home, car)."
   }
 }

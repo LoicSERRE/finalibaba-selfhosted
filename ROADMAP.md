@@ -35,6 +35,12 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 
 ---
 
+## v2.20.0 - In progress
+
+- **Own-funds runway**: a loan whose money still sits on your accounts (a student loan parked on a livret) can be flagged in its terms dialog; the runway card and the analytics export then add the runway once those loans are repaid from savings. A loan that paid for a house or a car stays unflagged - only you can tell the two apart.
+
+---
+
 ## v2.19.3 - A bank loan counted once in the monthly history
 
 - **Analytics history**: the month-by-month net worth (Analyse page and its export) subtracted a bank-reported loan twice - once through its negative balance, once through its remaining capital - so taking out a 5 000 € loan showed as a ~10 000 € drop. It now counts once, like the dashboard's series since v2.19.1.

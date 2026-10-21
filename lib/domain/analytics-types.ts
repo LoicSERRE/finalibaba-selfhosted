@@ -44,6 +44,8 @@ export interface AnalyticsAccount {
   loanDurationMonths: number | null;
   loanDeferralMonths: number | null;
   loanStartDate: Date | null;
+  /** Optional: callers that never show the own-funds runway leave it out. */
+  loanFundsOnAccounts?: boolean;
   institution: { name: string } | null;
   holdings: AnalyticsHolding[];
   history: { balanceCents: bigint }[]; // most recent first, only the latest entry is read
@@ -243,6 +245,14 @@ export interface AnalyticsResult {
   // Runway
   hasExpenses: boolean;
   runwayMonths: number | null;
+  /**
+   * The runway once the loans whose money still sits on the user's accounts
+   * are repaid from savings (v2.20). null when no loan is flagged that way -
+   * then it is the runway itself.
+   */
+  ownFundsRunwayMonths: number | null;
+  /** What those loans still owe, taken out of savings for that runway. */
+  borrowedFundsHeldCents: bigint;
   monthlyExpensesCents: bigint;
   savingsCents: bigint; // allocation["savings"]
 

@@ -319,6 +319,11 @@ model Account {
   loanNextPaymentCents  BigInt?
   loanNextPaymentDate   DateTime?
   loanEndDate           DateTime?
+  // LOAN: the money borrowed still sits on the user's own accounts (a student
+  // loan parked on a Livret A), as opposed to spent (a house, a car). Only
+  // these loans are taken out of savings for the "own funds" runway
+  // (lib/domain/analytics.ts) - only the user can know which is which.
+  loanFundsOnAccounts   Boolean                @default(false)
   // LOAN: dedup flag for the "nearly paid off" alert - one-way, a loan only
   // crosses the threshold once. See lib/domain/alerts.ts.
   loanPaidOffAlertSent  Boolean                @default(false)
