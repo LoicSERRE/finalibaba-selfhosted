@@ -821,6 +821,10 @@ model TransactionSplit {
 enum CategoryKind {
   EXPENSE
   INCOME
+  // v2.21: money set aside - savings and investing. Never counted as
+  // spending or income; budgetCents, when set, is a monthly target to reach
+  // rather than a cap (lib/domain/set-aside.ts).
+  SAVINGS
 }
 
 model Category {

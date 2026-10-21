@@ -35,6 +35,12 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 
 ---
 
+## v2.21.0 - In progress
+
+- **Money set aside**: Budgets says where the money that was kept went - transfers to your livrets, securities bought, transfers to brokerage and crypto accounts - in a "Mis de côté" card (month and year) and as its own branches in the money flow, never as spending. A third kind of category, **Épargne**, for what you file yourself, with an optional monthly target; its page now lists the share purchases filed under it, which every budget view used to leave out.
+
+---
+
 ## v2.20.0 - Your year, your loan's schedule, and prices that go up
 
 - **The year on /budgets and /analytics**: Budgets gets a Month / Year switch - the year's money in and out, month by month, its flow, and spending per category against the budget for the months covered; Analytics gets "Sur l'année", net worth since 1 January split into what was saved and the rest (markets, interest, revaluations). Not a separate "year in review" page: dividends, interest and gains already have a year on Income and the tax report, which both link to.

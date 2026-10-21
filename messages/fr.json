@@ -400,7 +400,9 @@
       "zoomIn": "Zoomer",
       "zoomOut": "Dézoomer",
       "zoomReset": "Afficher tout le graphique",
-      "zoomHint": "Pincez ou touchez deux fois pour zoomer, glissez pour vous déplacer."
+      "zoomHint": "Pincez ou touchez deux fois pour zoomer, glissez pour vous déplacer.",
+      "leftover": "Reste sur les comptes",
+      "drawnCurrent": "Pris sur les comptes"
     },
     "year": {
       "subtitle": "L'année entière : ce qui est entré, ce qui est sorti, et où c'est allé.",
@@ -421,6 +423,17 @@
       "incomeLink": "Revenus",
       "taxLink": "Rapport fiscal",
       "flowTitle": "Flux de l'année"
+    },
+    "setAside": {
+      "title": "Mis de côté",
+      "hint": "L'argent sorti de vos comptes courants pour être gardé plutôt que dépensé : les virements vers vos livrets, les achats de titres et les virements vers vos comptes-titres ou crypto, et ce que vous classez dans une catégorie de type Épargne. Ce qui en revient est déduit. Jamais compté comme une dépense.",
+      "savings": "Vers vos livrets",
+      "takenFromSavings": "Retiré de vos livrets",
+      "investment": "Titres et placements",
+      "takenFromInvestment": "Retiré de vos placements",
+      "target": "d'objectif",
+      "leftover": "Reste sur vos comptes courants :",
+      "drawnCurrent": "Pris sur vos comptes courants :"
     }
   },
   "transactions": {
@@ -533,7 +546,10 @@
     "splitRemaining": "{amount} restant à répartir",
     "splitRemove": "Supprimer la répartition",
     "splitBadgeCount": "Divisée ({count})",
-    "splitTrigger": "Diviser cette transaction"
+    "splitTrigger": "Diviser cette transaction",
+    "kindSavings": "Épargne",
+    "kindSavingsHint": "Épargne ou investissement : de l'argent mis de côté, jamais compté comme une dépense. Le montant est un objectif mensuel, pas un plafond.",
+    "targetAmount": "Objectif mensuel (facultatif)"
   },
   "recurring": {
     "title": "Transactions récurrentes",

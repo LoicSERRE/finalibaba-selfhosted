@@ -103,8 +103,11 @@ export default async function AnalyticsPage() {
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.msciWorld),
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.sp500),
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.cac40),
-    // This year's money in and out, as /budgets?year= sums it (v2.20).
-    periodCategoryTotals(accountIds, startOfYear, startOfNextYear),
+    // This year's money in and out, as /budgets?year= sums it (v2.20) -
+    // SAVINGS categories left out, as they are there (v2.21).
+    prisma.category
+      .findMany({ where: { userId: ownerId, kind: "SAVINGS" }, select: { id: true } })
+      .then((rows) => periodCategoryTotals(accountIds, startOfYear, startOfNextYear, new Set(rows.map((r) => r.id)))),
   ]);
 
   const result = computeAnalytics({

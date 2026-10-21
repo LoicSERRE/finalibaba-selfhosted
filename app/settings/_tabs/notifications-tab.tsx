@@ -40,7 +40,9 @@ export async function NotificationsTab({ viewer }: SettingsTabProps) {
       orderBy: { name: "asc" },
     }),
     prisma.category.findMany({
-      where: { userId: viewer.id, budgetCents: { not: null } },
+      // EXPENSE only: a SAVINGS category's budget is a target to reach (v2.21),
+      // and going past it is the point.
+      where: { userId: viewer.id, kind: "EXPENSE", budgetCents: { not: null } },
       select: { id: true, name: true, budgetCents: true },
       orderBy: { name: "asc" },
     }),
