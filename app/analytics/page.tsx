@@ -31,6 +31,8 @@ import { DetailedAllocationSection } from "@/components/analytics/detailed-alloc
 import { MonthlyPerformanceSection } from "@/components/analytics/monthly-performance-section";
 import { TopAssetsSection } from "@/components/analytics/top-assets-section";
 import { FinancingSection } from "@/components/analytics/financing-section";
+import { YearChangeCard } from "@/components/analytics/year-change-card";
+import { periodCategoryTotals } from "@/lib/services/budget-period";
 
 // Stand-in for a grantor who has never opened Settings, used only when reading
 // someone else's portfolio (a guest's page view must not create rows in the
@@ -64,7 +66,7 @@ export default async function AnalyticsPage() {
 
   const { ownerId, accountIds, readOnly } = await getViewContext();
 
-  const [accounts, allBalances, settings, goals, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History] = await Promise.all([
+  const [accounts, allBalances, settings, goals, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History, yearTotals] = await Promise.all([
     prisma.account.findMany({
       where: { id: { in: accountIds } },
       include: {
@@ -101,6 +103,8 @@ export default async function AnalyticsPage() {
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.msciWorld),
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.sp500),
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.cac40),
+    // This year's money in and out, as /budgets?year= sums it (v2.20).
+    periodCategoryTotals(accountIds, startOfYear, startOfNextYear),
   ]);
 
   const result = computeAnalytics({
@@ -194,6 +198,17 @@ export default async function AnalyticsPage() {
         investedPct={result.investedPct}
         momDelta={result.momDelta}
       />
+
+      {result.hasData && result.yearChange && (
+        <YearChangeCard
+          change={result.yearChange}
+          savedCents={
+            [...yearTotals.incomeMap.values()].reduce((a, b) => a + b, 0) - [...yearTotals.spendMap.values()].reduce((a, b) => a + b, 0)
+          }
+          year={currentYear}
+          intlLocale={intlLocale}
+        />
+      )}
 
       {result.hasData && (
         <>

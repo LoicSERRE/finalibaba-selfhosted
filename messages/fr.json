@@ -401,6 +401,26 @@
       "zoomOut": "Dézoomer",
       "zoomReset": "Afficher tout le graphique",
       "zoomHint": "Pincez ou touchez deux fois pour zoomer, glissez pour vous déplacer."
+    },
+    "year": {
+      "subtitle": "L'année entière : ce qui est entré, ce qui est sorti, et où c'est allé.",
+      "switchMonth": "Mois",
+      "switchYear": "Année",
+      "switchLabel": "Période",
+      "income": "Entrées",
+      "expenses": "Sorties",
+      "saved": "Épargné",
+      "savingsRate": "Taux d'épargne",
+      "partial": "Année en cours : {months} mois couverts. Les budgets sont comparés sur ces mois-là.",
+      "chartTitle": "Entrées et sorties, mois par mois",
+      "byCategory": "Dépenses par catégorie",
+      "perMonth": "{amount} par mois en moyenne",
+      "share": "{pct} % des dépenses",
+      "empty": "Aucune transaction sur cette année.",
+      "elsewhere": "Dividendes, intérêts et plus-values de l'année :",
+      "incomeLink": "Revenus",
+      "taxLink": "Rapport fiscal",
+      "flowTitle": "Flux de l'année"
     }
   },
   "transactions": {
@@ -795,7 +815,19 @@
       "colLtv": "LTV"
     },
     "noDataIntro": "Aucune donnée. Ajoutez des comptes dans",
-    "noDataLink": "Comptes."
+    "noDataLink": "Comptes.",
+    "yearChange": {
+      "title": "Sur l'année {year}",
+      "fromJanuary": "depuis le 1er janvier",
+      "fromMonth": "depuis {month} (début de l'historique)",
+      "hint": "La variation du patrimoine net depuis le début de l'année, en deux parts : ce que vous avez épargné sur vos revenus (entrées moins sorties, comme dans Budgets sur l'année), et le reste, c'est-à-dire les marchés, les intérêts et les revalorisations. Un virement entre vos comptes non reconnu comme tel, ou un crédit débloqué, compte comme une entrée.",
+      "netWorth": "Patrimoine net",
+      "saved": "Épargné sur vos revenus",
+      "savedLink": "Le détail dans Budgets",
+      "rest": "Marchés, intérêts, revalorisations",
+      "incomeLink": "Revenus",
+      "taxLink": "Plus-values"
+    }
   },
   "settings": {
     "title": "Paramètres",
@@ -1779,7 +1811,8 @@
     "mdPassiveWeightedRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate}.",
     "mdPassiveYearEndEstimate": "Estimation alternative, basée sur l'historique réel des soldes plutôt que sur le solde actuel seul (méthode des quinzaines) - peut différer du chiffre ci-dessus si un solde a beaucoup varié cette année : intérêts estimés en fin d'année : {amount}.",
     "mdFileName": "analytique",
-    "mdOwnFundsRunway": "Runway sur fonds propres"
+    "mdOwnFundsRunway": "Runway sur fonds propres",
+    "mdYearChange": "Variation depuis le début de l'année"
   },
   "coOwners": {
     "errorUsernameRequired": "Saisis un nom d'utilisateur.",

@@ -77,6 +77,7 @@ export function ExportAnalyticsButton({ data }: Readonly<{ data: AnalyticsExport
       momDelta: t("mdMomDelta"),
       runway: t("mdRunway"),
       ownFundsRunway: t("mdOwnFundsRunway"),
+      yearChange: t("mdYearChange"),
       savingsAvailable: t("mdSavingsAvailable"),
       monthlyExpenses: t("mdMonthlyExpenses"),
       goal: t("mdGoal"),

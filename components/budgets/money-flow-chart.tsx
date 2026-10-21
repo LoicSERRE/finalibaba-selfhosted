@@ -7,7 +7,11 @@ import { PanZoom } from "@/components/ui/pan-zoom";
 import { MoneyFlowNode } from "@/components/budgets/money-flow-node";
 import type { MoneyFlow } from "@/lib/domain/money-flow";
 
-type Props = { readonly flow: MoneyFlow | null };
+type Props = {
+  readonly flow: MoneyFlow | null;
+  /** The year view's own heading (v2.20); the month's otherwise. */
+  readonly title?: string;
+};
 
 /**
  * Where the month's money went (v2.16), as a Sankey: income sources, then
@@ -20,14 +24,14 @@ type Props = { readonly flow: MoneyFlow | null };
  */
 const CHART_WIDTH = 520;
 
-export function MoneyFlowChart({ flow }: Props) {
+export function MoneyFlowChart({ flow, title }: Props) {
   const t = useTranslations("budgets.flow");
   if (!flow) return null;
   const height = Math.max(240, flow.nodes.length * 30);
   return (
     <section className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3" aria-labelledby="money-flow-title">
       <h2 id="money-flow-title" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
-        {t("title")}
+        {title ?? t("title")}
       </h2>
       <PanZoom
         width={CHART_WIDTH}

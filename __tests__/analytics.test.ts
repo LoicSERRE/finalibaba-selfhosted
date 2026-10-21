@@ -634,3 +634,23 @@ describe("computeAnalytics - own-funds runway", () => {
     expect(computeAnalytics(baseInput({ settings, accounts: [livret, big] })).ownFundsRunwayMonths).toBe(0);
   });
 });
+
+// v2.20: net worth since the start of the year, both ends from the history.
+describe("computeAnalytics - year change", () => {
+  const livret = account({ id: "livret", type: "SAVINGS", history: [{ balanceCents: BigInt(16812_00) }] });
+  const at = (iso: string, cents: number) => ({ accountId: "livret", recordedAt: new Date(`${iso}T12:00:00.000Z`), balanceCents: BigInt(cents) });
+
+  it("starts from December when the history reaches back that far", () => {
+    const result = computeAnalytics(baseInput({ accounts: [livret], allBalances: [at("2025-11-15", 9000_00), at("2025-12-20", 10000_00), at("2026-03-10", 12000_00), at("2026-07-10", 16812_00)] }));
+    expect(result.yearChange).toEqual({ startMonth: "2025-12", startCents: 10000_00, endCents: 16812_00 });
+  });
+
+  it("starts from the first month of the year when the history begins there", () => {
+    const result = computeAnalytics(baseInput({ accounts: [livret], allBalances: [at("2026-03-10", 12000_00), at("2026-07-10", 16812_00)] }));
+    expect(result.yearChange?.startMonth).toBe("2026-03");
+  });
+
+  it("says nothing with a single month", () => {
+    expect(computeAnalytics(baseInput({ accounts: [livret], allBalances: [at("2026-07-10", 16812_00)] })).yearChange).toBeNull();
+  });
+});

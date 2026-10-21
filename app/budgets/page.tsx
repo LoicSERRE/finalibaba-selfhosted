@@ -11,11 +11,14 @@ import { UncategorizedGroupCard } from "@/components/budgets/uncategorized-group
 import { AutoCategorizeButton } from "@/components/budgets/auto-categorize-button";
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { normalizeLabel } from "@/lib/domain/recurring";
-import { monthsBetween, computeRolloverCarryInCents, mergeCentsMaps } from "@/lib/domain/budgets";
+import { monthsBetween, computeRolloverCarryInCents } from "@/lib/domain/budgets";
+import { periodCategoryTotals } from "@/lib/services/budget-period";
 import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
 import { moneyFlowFromMaps } from "@/lib/domain/money-flow";
 import { MoneyFlowChart } from "@/components/budgets/money-flow-chart";
+import { BudgetsYearView } from "@/components/budgets/budgets-year-view";
+import { PeriodSwitch } from "@/components/budgets/period-switch";
 
 // "YYYY-MM" - same simple, unvalidated-beyond-shape convention as
 // /tax-report's own ?year= param. An invalid or out-of-range value falls
@@ -56,9 +59,9 @@ const MAX_ROLLOVER_TRANSACTIONS = 5000;
 export default async function BudgetsPage({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; year?: string }>;
 }>) {
-  const { month: monthParamValue } = await searchParams;
+  const { month: monthParamValue, year: yearParamValue } = await searchParams;
   const [t, tc, locale] = await Promise.all([getTranslations("budgets"), getTranslations("common"), getLocale()]);
   const intlLocale = localeToIntl(locale);
 
@@ -74,54 +77,20 @@ export default async function BudgetsPage({
   const viewer = await getViewer();
   const accountIds = await viewAccountIds(viewer.id);
 
-  const [categories, spendByCategory, incomeByCategory, splitSpendByCategory, splitIncomeByCategory, uncategorizedTx] = await Promise.all([
+  // ?year=YYYY: the whole year (v2.20), its own view.
+  if (yearParamValue && /^\d{4}$/.test(yearParamValue)) {
+    return <BudgetsYearView year={Number(yearParamValue)} viewerId={viewer.id} accountIds={accountIds} intlLocale={intlLocale} now={now} />;
+  }
+
+  const [categories, { spendMap, incomeMap }, uncategorizedTx] = await Promise.all([
     // Every category, both kinds - INCOME categories don't get a card on
     // this page (see expenseCategories below) but the "à catégoriser" bulk
     // picker further down still needs to offer them, e.g. for a stray
     // salary-like credit that landed uncategorized.
     prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" } }),
-    // "splits: { none: {} }" excludes split transactions here - their
-    // categoryId is always null (see CLAUDE.md's "Split transactions"), so
-    // their real per-category contribution comes from splitSpendByCategory
-    // below instead, not from this plain groupBy.
-    prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: excludeFromBudgetTotals({
-        accountId: { in: accountIds },
-        amountCents: { lt: BigInt(0) },
-        date: { gte: startOfMonth, lt: startOfNextMonth },
-        splits: { none: {} },
-      }),
-      _sum: { amountCents: true },
-    }),
-    // Same shape as spendByCategory, credits instead of debits - not used
-    // for any single category's card (this page only ever renders EXPENSE
-    // categories), only to compute the "Reste à vivre" summary below: every
-    // credit this month regardless of category, categorized or not.
-    prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: excludeFromBudgetTotals({
-        accountId: { in: accountIds },
-        amountCents: { gt: BigInt(0) },
-        date: { gte: startOfMonth, lt: startOfNextMonth },
-        splits: { none: {} },
-      }),
-      _sum: { amountCents: true },
-    }),
-    // A split transaction's per-category contribution - filtered on the
-    // *parent* transaction's date/isInternalTransfer via the relation, not
-    // TransactionSplit's own createdAt, since a split represents a portion
-    // of a real transaction that happened on that transaction's date.
-    prisma.transactionSplit.groupBy({
-      by: ["categoryId"],
-      where: excludeFromBudgetTotalsOnSplit({ amountCents: { lt: BigInt(0) } }, { accountId: { in: accountIds }, date: { gte: startOfMonth, lt: startOfNextMonth } }),
-      _sum: { amountCents: true },
-    }),
-    prisma.transactionSplit.groupBy({
-      by: ["categoryId"],
-      where: excludeFromBudgetTotalsOnSplit({ amountCents: { gt: BigInt(0) } }, { accountId: { in: accountIds }, date: { gte: startOfMonth, lt: startOfNextMonth } }),
-      _sum: { amountCents: true },
-    }),
+    // Debits and credits per category, split lines in place of their
+    // parent - shared with the year view (lib/services/budget-period.ts).
+    periodCategoryTotals(accountIds, startOfMonth, startOfNextMonth),
     // Also excludes split transactions - already fully allocated across
     // categories (even a split line with a null categoryId is a deliberate
     // "leave this portion uncategorized" choice, not a "please suggest one"
@@ -139,14 +108,6 @@ export default async function BudgetsPage({
   // user points at real income) get their own section on /income instead.
   const expenseCategories = categories.filter((c) => c.kind === "EXPENSE");
 
-  const spendMap = mergeCentsMaps(
-    new Map<string | null, number>(spendByCategory.map((row) => [row.categoryId, -Number(row._sum.amountCents ?? BigInt(0))])),
-    new Map<string | null, number>(splitSpendByCategory.map((row) => [row.categoryId, -Number(row._sum.amountCents ?? BigInt(0))])),
-  );
-  const incomeMap = mergeCentsMaps(
-    new Map<string | null, number>(incomeByCategory.map((row) => [row.categoryId, Number(row._sum.amountCents ?? BigInt(0))])),
-    new Map<string | null, number>(splitIncomeByCategory.map((row) => [row.categoryId, Number(row._sum.amountCents ?? BigInt(0))])),
-  );
   // A split line left with no category (a deliberate "leave this portion
   // uncategorized" choice) still counts as uncategorized spend here, even
   // though the transaction itself is excluded from the bulk-suggestion
@@ -252,6 +213,13 @@ export default async function BudgetsPage({
         </div>
         {expenseCategories.length > 0 && <AddCategoryDialog />}
       </div>
+
+      <PeriodSwitch
+        active="month"
+        monthHref={`/budgets?month=${monthParam(startOfMonth)}`}
+        yearHref={`/budgets?year=${startOfMonth.getUTCFullYear()}`}
+        labels={{ month: t("year.switchMonth"), year: t("year.switchYear"), group: t("year.switchLabel") }}
+      />
 
       <div className="flex items-center justify-center gap-4">
         <Link
