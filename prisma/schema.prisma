@@ -884,6 +884,10 @@ model RecurringTransaction {
   // to ever be rid of it (reproduced: 7 suggestions -> delete -> 8). Delete now
   // leaves this tombstone instead of vanishing.
   dismissedAt   DateTime?
+  // The new price the user was last alerted about (v2.20), so a price
+  // increase notifies once, not on every sync until the template is updated.
+  // A record of a notification sent, like Account.loanPaidOffAlertSent.
+  priceAlertedCents BigInt?
   createdAt     DateTime           @default(now())
 
   @@index([accountId])
@@ -1048,6 +1052,11 @@ model UserSettings {
   // notification category with no pre-existing always-on behavior to
   // preserve for existing installs.
   sectorDataAlertsEnabled     Boolean  @default(false)
+  // v2.20: a recurring expense charged at a higher price. Default true,
+  // unlike the sector-data toggle above: that one reports the app's own
+  // degradation, this one money leaving the user's account, and it only
+  // fires when a price actually rises.
+  priceIncreaseAlertsEnabled  Boolean  @default(true)
   updatedAt                   DateTime @updatedAt
 }
 

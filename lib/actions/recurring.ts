@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
 import { rememberUndo } from "@/lib/services/undo-store";
-import { actionOk, type ActionResult } from "@/lib/domain/action-result";
+import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
+import { findPriceIncreases } from "@/lib/services/recurring-price-changes";
 import { RecurringFrequency } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { parseIntervalCount } from "@/lib/domain/recurring";
@@ -185,4 +186,20 @@ export async function toggleRecurringActive(id: string, active: boolean) {
   await assertRecurringWritable(id);
   await prisma.recurringTransaction.update({ where: { id }, data: { active } });
   revalidateAll();
+}
+
+/**
+ * Takes a price increase on board (v2.20): the template's amount becomes the
+ * one the bank last charged. The new price is re-read from the transactions
+ * here rather than taken from the client, so the action can only ever
+ * confirm what the page showed.
+ */
+export async function acceptRecurringPrice(id: string): Promise<ActionResult<void, "no_price_change">> {
+  await assertRecurringWritable(id);
+  const row = await prisma.recurringTransaction.findUnique({ where: { id }, select: { accountId: true } });
+  const [found] = await findPriceIncreases([row!.accountId], new Date(), id);
+  if (!found) return actionError("no_price_change");
+  await prisma.recurringTransaction.update({ where: { id }, data: { amountCents: found.increase.toCents } });
+  revalidateAll();
+  return actionOk();
 }

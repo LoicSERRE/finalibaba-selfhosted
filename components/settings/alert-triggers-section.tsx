@@ -18,6 +18,7 @@ export async function AlertTriggersSection({
     loanAlertsEnabled: boolean;
     syncFailureAlertsEnabled: boolean;
     sectorDataAlertsEnabled: boolean;
+    priceIncreaseAlertsEnabled: boolean;
   };
 }>) {
   const t = await getTranslations("settings.alertTriggers");
@@ -69,6 +70,18 @@ export async function AlertTriggersSection({
               className="w-4 h-4 rounded accent-[var(--accent)]"
             />
             <span className="text-sm text-[var(--foreground)]">{t("triggerSyncFailure")}</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="priceIncreaseAlertsEnabled"
+              defaultChecked={settings.priceIncreaseAlertsEnabled}
+              className="w-4 h-4 rounded accent-[var(--accent)]"
+            />
+            <span className="text-sm text-[var(--foreground)] flex items-center gap-1">
+              {t("triggerPriceIncrease")}
+              <InfoTooltip>{t("triggerPriceIncreaseHint")}</InfoTooltip>
+            </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer">
             <input

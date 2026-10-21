@@ -10,6 +10,7 @@ import { evaluateNetWorthAlert, isLoanNearlyPaidOff } from "@/lib/domain/alerts"
 import { dispatchAlert } from "@/lib/services/notifications";
 import { checkSyncFailures, checkSectorDataHealth } from "@/lib/services/alerts/sync-failures";
 import { checkCustomAlertRules } from "@/lib/services/alerts/custom-rules";
+import { checkPriceIncreaseAlerts } from "@/lib/services/alerts/price-increases";
 import { baseSymbol } from "@/lib/utils/base-currency";
 
 /**
@@ -138,6 +139,7 @@ export async function POST(req: NextRequest) {
     const syncFailuresFired = await checkSyncFailures(settings);
     const sectorDataFired = await checkSectorDataHealth(settings);
     const customRulesFired = await checkCustomAlertRules(settings, accountIds);
+    const pricesFired = await checkPriceIncreaseAlerts(settings, accountIds);
 
     fired.push(
       ...(netWorthFired ? ["net_worth_threshold"] : []),
@@ -145,6 +147,7 @@ export async function POST(req: NextRequest) {
       ...syncFailuresFired.map((source) => `sync_failure:${source}`),
       ...sectorDataFired.map((source) => `sync_failure:${source}`),
       ...customRulesFired,
+      ...pricesFired.map((id) => `price_increase:${id}`),
     );
   }
 

@@ -53,6 +53,22 @@ function amountTolerance(medianAbsCents: number): number {
   return Math.max(Math.round(medianAbsCents * AMOUNT_TOLERANCE_RATIO), AMOUNT_TOLERANCE_FLOOR_CENTS);
 }
 
+/** Past this, a charge under the same label is something else, not a new price. */
+export const PRICE_CHANGE_MAX_RATIO = 0.5;
+
+/**
+ * Whether `actualCents` can be the same commitment at a new price (v2.20):
+ * same direction, at most PRICE_CHANGE_MAX_RATIO away. A subscription going
+ * from 13,49 to 14,99 is; a 50 EUR purchase under a generic "CB AMAZON" label
+ * that a 6,99 EUR Prime renewal shares is not.
+ */
+export function isSameCommitment(expectedCents: bigint, actualCents: bigint): boolean {
+  const expected = Number(expectedCents);
+  const actual = Number(actualCents);
+  if (expected === 0 || Math.sign(expected) !== Math.sign(actual)) return false;
+  return Math.abs(actual - expected) <= Math.abs(expected) * PRICE_CHANGE_MAX_RATIO;
+}
+
 /** Adds `months` to `date`, clamping the day when the target month is shorter. */
 function addMonthsClamped(date: Date, months: number): Date {
   const day = date.getUTCDate();
@@ -145,7 +161,11 @@ export function isMissed(
     // Skipped for a varying series: the stored figure is a median, not a
     // promise, and a salary paid at 1 715 EUR against a median of 900 would
     // otherwise read as MISSED on the month it actually arrived.
-    if (!series.amountVaries && Math.abs(Number(tx.amountCents) - Number(series.amountCents)) > tolerance) return false;
+    // A new price is not a missed payment either (v2.20): the 14,99 EUR that
+    // replaced a 13,49 EUR subscription was paid. lib/domain/price-changes.ts
+    // reports it as a price change instead.
+    const sameAmount = Math.abs(Number(tx.amountCents) - Number(series.amountCents)) <= tolerance;
+    if (!series.amountVaries && !sameAmount && !isSameCommitment(series.amountCents, tx.amountCents)) return false;
     return Math.abs(tx.date.getTime() - expected.getTime()) <= graceMs;
   });
 

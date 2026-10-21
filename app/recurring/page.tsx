@@ -11,6 +11,8 @@ import { ToggleRecurringButton } from "@/components/recurring/toggle-recurring-b
 import { DeleteButton } from "@/components/shared/delete-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CashflowChart } from "@/components/recurring/cashflow-chart";
+import { PriceIncreasesSection } from "@/components/recurring/price-increases-section";
+import { detectPriceIncrease } from "@/lib/domain/price-changes";
 import { deleteRecurringTransaction, forgetRecurringTransaction } from "@/lib/actions/recurring";
 import { formatCurrency, centsToEuro, localeToIntl } from "@/lib/utils/format";
 import {
@@ -124,6 +126,13 @@ export default async function RecurringPage() {
     ])
   );
 
+  // v2.20: the active fixed-price expenses whose latest charge came in dearer.
+  const accountNames = new Map(recurring.map((r) => [r.accountId, r.account.name]));
+  const priceIncreases = active.flatMap((r) => {
+    const increase = detectPriceIncrease(r, recentTransactions, now);
+    return increase ? [{ id: r.id, label: r.label, accountName: accountNames.get(r.accountId) ?? "?", increase }] : [];
+  });
+
   const upcoming = active
     .flatMap((r) =>
       getOccurrencesInRange(r, now, horizonEnd).map((date) => ({
@@ -175,6 +184,8 @@ export default async function RecurringPage() {
             </div>
             <CashflowChart data={chartData} />
           </div>
+
+          <PriceIncreasesSection rows={priceIncreases} intlLocale={intlLocale} />
 
           {recurring.length > 0 && (
             <div className="space-y-3">
