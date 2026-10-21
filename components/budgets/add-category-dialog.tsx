@@ -9,7 +9,11 @@ import { createCategory, updateCategory } from "@/lib/actions/categories";
 import { CATEGORY_SWATCHES } from "@/lib/utils/palette";
 import { useTranslations } from "next-intl";
 
-type CategoryKind = "EXPENSE" | "INCOME";
+type CategoryKind = "EXPENSE" | "INCOME" | "SAVINGS";
+
+// SAVINGS (v2.21) sits between the two: money that leaves, but is kept.
+const KINDS: readonly CategoryKind[] = ["EXPENSE", "SAVINGS", "INCOME"];
+const KIND_LABEL: Record<CategoryKind, string> = { EXPENSE: "kindExpense", INCOME: "kindIncome", SAVINGS: "kindSavings" };
 
 // Existing category to edit, passed down as plain serializable fields only -
 // budgetEuro is pre-formatted server-side (e.g. "300.00"), never a BigInt.
@@ -72,7 +76,7 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
         <div className="space-y-1.5">
           <span className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("kind")}</span>
           <div className="flex rounded-lg overflow-hidden border border-[var(--border)]">
-            {(["EXPENSE", "INCOME"] as const).map((candidate) => (
+            {KINDS.map((candidate) => (
               <button
                 key={candidate}
                 type="button"
@@ -82,10 +86,11 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
                   kind === candidate ? "bg-[var(--accent)]/15 text-[var(--accent-text)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
                 }`}
               >
-                {t(candidate === "EXPENSE" ? "kindExpense" : "kindIncome")}
+                {t(KIND_LABEL[candidate])}
               </button>
             ))}
           </div>
+          {kind === "SAVINGS" && <p className="text-xs text-[var(--muted)]">{t("kindSavingsHint")}</p>}
         </div>
 
         <Input
@@ -120,6 +125,18 @@ export function AddCategoryDialog({ category }: Readonly<{ category?: EditableCa
             ))}
           </div>
         </div>
+
+        {kind === "SAVINGS" && (
+          <Input
+            id="cat-target"
+            label={t("targetAmount")}
+            type="text"
+            inputMode="decimal"
+            name="budget"
+            placeholder="200"
+            defaultValue={category?.budgetEuro ?? ""}
+          />
+        )}
 
         {kind === "EXPENSE" && (
           <>

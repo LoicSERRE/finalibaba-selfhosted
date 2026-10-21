@@ -8,6 +8,9 @@ import type { BudgetYearData } from "@/lib/services/budget-period";
 import { MoneyFlowChart } from "@/components/budgets/money-flow-chart";
 import { YearCashflowChart } from "@/components/budgets/year-cashflow-chart";
 import { PeriodSwitch } from "@/components/budgets/period-switch";
+import { SetAsideCard } from "@/components/budgets/set-aside-card";
+import { totalSetAside } from "@/lib/domain/set-aside";
+import { flowNames } from "@/components/budgets/flow-names";
 
 type Props = {
   readonly year: number;
@@ -33,7 +36,7 @@ const navLink =
  */
 export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
   const [t, tc] = await Promise.all([getTranslations("budgets"), getTranslations("common")]);
-  const { categories, spendMap, incomeMap, amounts } = data;
+  const { categories, spendMap, incomeMap, amounts, setAside } = data;
 
   const months = monthsCovered(year, now);
   const incomeCents = [...incomeMap.values()].reduce((a, b) => a + b, 0);
@@ -50,15 +53,8 @@ export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
     income: m.incomeCents,
     expense: m.expenseCents,
   }));
-  const flow = moneyFlowFromMaps(incomeMap, spendMap, categories, {
-    income: t("flow.income"),
-    savings: t("flow.savings"),
-    drawn: t("flow.drawn"),
-    other: t("flow.other"),
-    uncategorizedIncome: t("flow.uncategorizedIncome"),
-    uncategorizedSpend: t("flow.uncategorizedSpend"),
-  });
-  const hasData = incomeCents > 0 || expenseCents > 0;
+  const flow = moneyFlowFromMaps(incomeMap, spendMap, categories, flowNames(t), setAside);
+  const hasData = incomeCents > 0 || expenseCents > 0 || totalSetAside(setAside) !== 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -108,6 +104,8 @@ export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
             </div>
           </div>
           {months > 0 && months < 12 && <p className="text-xs text-[var(--muted)] -mt-3">{t("year.partial", { months })}</p>}
+
+          <SetAsideCard setAside={setAside} categories={categories.filter((c) => c.kind === "SAVINGS")} months={months} resteAVivreCents={savedCents} />
 
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("year.chartTitle")}</h2>

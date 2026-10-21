@@ -394,6 +394,16 @@ describe("a BUDGET_OVERRUN rule, where the bug is always a missing filter", () =
     await expect(checkCustomAlertRules(SETTINGS, ["acc-1"])).resolves.toEqual([]);
     expect(txAggregateMock).not.toHaveBeenCalled();
   });
+
+  it("never fires for a SAVINGS category, whose budget is a target to pass (v2.21)", async () => {
+    // A rule created while the category was still EXPENSE outlives a change
+    // of kind: putting 500 EUR aside against a 400 EUR target is the goal.
+    findManyMock.mockResolvedValue([budgetRule({ category: { id: "cat-1", name: "Livret", kind: "SAVINGS", budgetCents: BigInt(400_00) } })]);
+    spent(500_00);
+
+    await expect(checkCustomAlertRules(SETTINGS, ["acc-1"])).resolves.toEqual([]);
+    expect(dispatchMock).not.toHaveBeenCalled();
+  });
 });
 
 

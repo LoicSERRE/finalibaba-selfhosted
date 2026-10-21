@@ -257,6 +257,9 @@ async function checkBudgetOverrunRule(
   accountIds: string[],
 ): Promise<string | null> {
   if (rule.category?.budgetCents == null) return null;
+  // A SAVINGS category's budget is a target, not a cap (v2.21) - a rule
+  // created on it before its kind changed must not fire for reaching it.
+  if (rule.category.kind === "SAVINGS") return null;
 
   // isInternalTransfer: false and the split-portion sum both bring this in
   // line with how app/budgets/page.tsx itself computes a category's spend

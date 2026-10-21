@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, viewAccountIds } from "@/lib/auth-context";
 import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
+import { CURRENT_ACCOUNT_TYPES } from "@/lib/domain/set-aside";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -46,6 +47,15 @@ export default async function CategoryDetailPage({
   const viewer = await getViewer();
   const accountIds = await viewAccountIds(viewer.id);
 
+  // A SAVINGS category (v2.21) lists what the Budgets "Mis de côté" card
+  // counts for it: everything filed under it on a current account, share
+  // purchases and transfers included - they are exactly the movements such a
+  // category exists for, and leaving them out showed an empty category the
+  // user had just filled.
+  const kind = (await prisma.category.findFirst({ where: { id: categoryId, userId: viewer.id }, select: { kind: true } }))?.kind;
+  const savings = kind === "SAVINGS";
+  const currentAccounts = { accountId: { in: accountIds }, account: { type: { in: [...CURRENT_ACCOUNT_TYPES] } } };
+
   const [category, categories, splitLines] = await Promise.all([
     prisma.category.findFirst({
       where: { id: categoryId, userId: viewer.id },
@@ -55,7 +65,9 @@ export default async function CategoryDetailPage({
           // securities movements while the /budgets card it is reached from
           // excluded them, so the drill-down total contradicted the number
           // just clicked.
-          where: excludeFromBudgetTotals({ splits: { none: {} }, accountId: { in: accountIds } }),
+          where: savings
+            ? { splits: { none: {} }, ...currentAccounts }
+            : excludeFromBudgetTotals({ splits: { none: {} }, accountId: { in: accountIds } }),
           orderBy: { date: "desc" },
           include: { account: { select: { name: true } } },
         },
@@ -63,7 +75,9 @@ export default async function CategoryDetailPage({
     }),
     prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
     prisma.transactionSplit.findMany({
-      where: excludeFromBudgetTotalsOnSplit({ categoryId }, { accountId: { in: accountIds } }),
+      where: savings
+        ? { categoryId, transaction: currentAccounts }
+        : excludeFromBudgetTotalsOnSplit({ categoryId }, { accountId: { in: accountIds } }),
       include: { transaction: { include: { account: { select: { name: true } } } } },
     }),
   ]);

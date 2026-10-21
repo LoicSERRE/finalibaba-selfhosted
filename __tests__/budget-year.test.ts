@@ -107,3 +107,28 @@ describe("loadBudgetYear", () => {
     expect(m.findMany.mock.calls.at(-1)![0].where).toMatchObject({ date: { gte: new Date(Date.UTC(2025, 0, 1)), lt: new Date(Date.UTC(2026, 0, 1)) } });
   });
 });
+
+describe("SAVINGS categories in the totals (v2.21)", () => {
+  it("are neither spending nor income", async () => {
+    m.groupBy
+      .mockResolvedValueOnce([
+        { categoryId: "food", _sum: { amountCents: BigInt(-100_00) } },
+        { categoryId: "livret", _sum: { amountCents: BigInt(-500_00) } },
+      ])
+      .mockResolvedValueOnce([{ categoryId: "livret", _sum: { amountCents: BigInt(50_00) } }]);
+    m.splitGroupBy.mockResolvedValueOnce([{ categoryId: "livret", _sum: { amountCents: BigInt(-5_00) } }]).mockResolvedValueOnce([]);
+    const { spendMap, incomeMap } = await periodCategoryTotals(["acc"], utc(2026, 0, 1), utc(2027, 0, 1), new Set(["livret"]));
+    expect([...spendMap.keys()]).toEqual(["food"]);
+    expect(incomeMap.size).toBe(0);
+  });
+
+  it("are left out of the month-by-month amounts, uncategorized rows kept", async () => {
+    m.findMany.mockResolvedValue([]);
+    m.splitFindMany.mockResolvedValue([]);
+    await periodAmounts(["acc"], utc(2026, 0, 1), utc(2027, 0, 1), new Set(["livret"]));
+    // A bare notIn would drop NULL categoryIds too - the uncategorized spending.
+    const notSavings = { OR: [{ categoryId: null }, { categoryId: { notIn: ["livret"] } }] };
+    expect(m.findMany.mock.calls.at(-1)![0].where).toMatchObject(notSavings);
+    expect(m.splitFindMany.mock.calls.at(-1)![0].where).toMatchObject(notSavings);
+  });
+});

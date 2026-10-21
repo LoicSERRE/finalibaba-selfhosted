@@ -400,7 +400,9 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "zoomReset": "Show the whole chart",
-      "zoomHint": "Pinch or double-tap to zoom, drag to move around."
+      "zoomHint": "Pinch or double-tap to zoom, drag to move around.",
+      "leftover": "Left on the accounts",
+      "drawnCurrent": "Taken from the accounts"
     },
     "year": {
       "subtitle": "The whole year: what came in, what went out, and where it went.",
@@ -421,6 +423,17 @@
       "incomeLink": "Income",
       "taxLink": "Tax report",
       "flowTitle": "The year's money flow"
+    },
+    "setAside": {
+      "title": "Set aside",
+      "hint": "Money that left your current accounts to be kept rather than spent: transfers to your savings accounts, securities bought and transfers to your brokerage or crypto accounts, and whatever you file under a Savings category. What comes back is deducted. Never counted as spending.",
+      "savings": "To your savings accounts",
+      "takenFromSavings": "Taken from your savings accounts",
+      "investment": "Securities and investments",
+      "takenFromInvestment": "Taken from your investments",
+      "target": "target",
+      "leftover": "Left on your current accounts:",
+      "drawnCurrent": "Taken from your current accounts:"
     }
   },
   "transactions": {
@@ -533,7 +546,10 @@
     "splitRemaining": "{amount} left to allocate",
     "splitRemove": "Remove split",
     "splitBadgeCount": "Split ({count})",
-    "splitTrigger": "Split this transaction"
+    "splitTrigger": "Split this transaction",
+    "kindSavings": "Savings",
+    "kindSavingsHint": "Savings or investing: money set aside, never counted as spending. The amount is a monthly target, not a cap.",
+    "targetAmount": "Monthly target (optional)"
   },
   "recurring": {
     "title": "Recurring transactions",

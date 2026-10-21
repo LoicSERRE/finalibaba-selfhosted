@@ -21,7 +21,9 @@ function parseOptionalCents(val: FormDataEntryValue | null): bigint | undefined 
 // all - keeps every pre-existing call site (and any future one that
 // doesn't care) working unchanged.
 function parseKind(formData: FormData): CategoryKind {
-  return formData.get("kind") === "INCOME" ? "INCOME" : "EXPENSE";
+  const kind = formData.get("kind");
+  // SAVINGS (v2.21): money set aside - its budget is a monthly target.
+  return kind === "INCOME" || kind === "SAVINGS" ? kind : "EXPENSE";
 }
 
 // Rollover has no meaning for an INCOME category (no budgetCents concept
