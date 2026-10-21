@@ -28,6 +28,9 @@ import { BalanceHistoryTable } from "@/components/account-detail/balance-history
 import { hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
 import { loanTermsValues } from "@/lib/domain/loan-terms";
 import { EditLoanTermsDialog } from "@/components/accounts/edit-loan-terms-dialog";
+import { LoanScheduleSection } from "@/components/account-detail/loan-schedule-section";
+import { PrepaymentSimulator } from "@/components/account-detail/prepayment-simulator";
+import { amortizationSchedule } from "@/lib/domain/loan-schedule";
 
 export default async function AccountDetailPage({
   params,
@@ -79,7 +82,8 @@ export default async function AccountDetailPage({
     ? await prisma.userSettings.findUnique({ where: { userId: ownerId }, select: { country: true } })
     : null;
 
-  const result = computeAccountDetail({ account, intlLocale, now: new Date() });
+  const now = new Date();
+  const result = computeAccountDetail({ account, intlLocale, now });
   // canImportCsv drives every CSV-import affordance on this page (the chart
   // section, the transactions table, the empty state). A granted portfolio is
   // read-only, so it's forced off here rather than at each of the three call
@@ -274,6 +278,32 @@ export default async function AccountDetailPage({
           loanStartDate={account.loanStartDate}
           insuranceMonthlyCents={account.insuranceMonthlyCents}
         />
+      )}
+
+      {/* v2.20: the schedule and an early-repayment simulation, from the terms. */}
+      {result.isLoan && hasLoanParams(account) && (
+        <>
+          <LoanScheduleSection
+            rows={amortizationSchedule(
+              { ...account, loanDeferralMonths: account.loanDeferralMonths ?? 0 },
+              Number(account.insuranceMonthlyCents ?? BigInt(0))
+            )}
+            intlLocale={intlLocale}
+            bankReported={isBankReportedLoan(account)}
+            now={now}
+          />
+          <PrepaymentSimulator
+            bankReported={isBankReportedLoan(account)}
+            terms={{
+              amountCents: Number(account.loanAmountCents),
+              taeg: account.loanTaeg,
+              durationMonths: account.loanDurationMonths,
+              deferralMonths: account.loanDeferralMonths ?? 0,
+              startDate: account.loanStartDate.toISOString(),
+              insuranceCents: Number(account.insuranceMonthlyCents ?? BigInt(0)),
+            }}
+          />
+        </>
       )}
 
       {result.isFiat && account.transactions.length > 0 && (

@@ -1872,5 +1872,42 @@
     "errorUnexpected": "Impossible d'enregistrer, réessayez.",
     "fundsOnAccounts": "L'argent emprunté est encore sur mes comptes",
     "fundsOnAccountsHint": "Par exemple un prêt étudiant placé sur un livret. Le runway sur fonds propres retire alors ce crédit de votre épargne. À laisser décoché pour un achat (logement, voiture)."
+  },
+  "loanSchedule": {
+    "title": "Échéancier",
+    "subtitle": "Le remboursement année par année, calculé à partir des conditions du prêt.",
+    "subtitleBank": "Estimation à partir des conditions saisies. Le capital restant dû réel est celui de la banque.",
+    "year": "Année",
+    "paid": "Payé",
+    "interest": "Intérêts",
+    "principal": "Capital remboursé",
+    "remaining": "Restant dû",
+    "showMonths": "Voir les {count} échéances mois par mois",
+    "monthsTitle": "Échéances mois par mois",
+    "month": "Échéance",
+    "instalment": "Mensualité",
+    "deferralTag": "différé"
+  },
+  "prepayment": {
+    "title": "Simuler un remboursement anticipé",
+    "subtitle": "Ce que changerait le remboursement d'une partie du capital aujourd'hui.",
+    "subtitleBank": "Ce que changerait le remboursement d'une partie du capital aujourd'hui, estimé à partir des conditions saisies.",
+    "amount": "Montant remboursé (€)",
+    "fees": "Indemnités de remboursement anticipé (€)",
+    "feesHint": "Ce que la banque facture pour un remboursement anticipé, s'il y en a : voir votre contrat. En France, elles sont souvent nulles pour un crédit à la consommation remboursé de moins de 10 000 € sur 12 mois.",
+    "mode": "Après le remboursement",
+    "shorten": "Garder la mensualité, finir plus tôt",
+    "shortenHint": "Économise le plus d'intérêts.",
+    "lower": "Garder la date de fin, baisser la mensualité",
+    "lowerHint": "Allège le budget mensuel.",
+    "saving": "Économie nette",
+    "interestLeft": "Intérêts restants : {before} → {after}",
+    "endDate": "Nouvelle fin",
+    "repaidNow": "Soldé aujourd'hui",
+    "monthsSaved": "{count, plural, =0 {Aucun mois gagné} one {# mois gagné} other {# mois gagnés}}",
+    "newPayment": "Nouvelle mensualité",
+    "insteadOf": "au lieu de {amount}",
+    "capitalNow": "Capital restant dû aujourd'hui",
+    "cappedToOwed": "Limité à ce qui reste dû."
   }
 }
