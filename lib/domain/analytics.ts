@@ -10,7 +10,7 @@
  * fifteen call sites keep importing from one module.
  */
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
+import { calcCurrentCapital, hasLoanParams, historyLiabilityCents, isBankReportedLoan } from "@/lib/domain/loan";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
 import {
   computeSavingsInterestProjection,
@@ -371,7 +371,7 @@ function computeMonthlyHistory(
   intlLocale: string
 ): MonthlyHistoryPoint[] {
   const liabMap = new Map<string, bigint>();
-  for (const a of accounts) liabMap.set(a.id, isBankReportedLoan(a) ? BigInt(0) : (a.liabilityCents ?? BigInt(0)));
+  for (const a of accounts) liabMap.set(a.id, historyLiabilityCents(a));
 
   const monthMap = new Map<string, Map<string, bigint>>();
   for (const b of allBalances) {

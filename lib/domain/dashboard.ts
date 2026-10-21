@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { getAccountTaxRate } from "@/lib/domain/tax";
-import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
+import { calcCurrentCapital, hasLoanParams, historyLiabilityCents, isBankReportedLoan } from "@/lib/domain/loan";
 import { buildDashboardHistory } from "@/lib/domain/dashboard-history";
 import { holdingMarketValue } from "@/lib/domain/analytics";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
@@ -150,9 +150,8 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
 
   for (const account of accounts) {
     // A bank-reported loan's history rows already carry what was owed each
-    // day (negative balances); subtracting liabilityCents on top of them
-    // would count the debt twice in the net-worth series.
-    liabMap.set(account.id, isBankReportedLoan(account) ? BigInt(0) : (account.liabilityCents ?? BigInt(0)));
+    // day (negative balances) - historyLiabilityCents leaves it out.
+    liabMap.set(account.id, historyLiabilityCents(account));
     typeMap.set(account.id, account.type);
 
     // Every branch below assigns a real value before use - the initializer
