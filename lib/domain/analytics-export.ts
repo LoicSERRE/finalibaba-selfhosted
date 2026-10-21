@@ -88,6 +88,8 @@ export type AnalyticsExportData = {
   runwayMonths: number | null;
   ownFundsRunwayMonths: number | null;
   borrowedFundsHeldCents: number;
+  /** v2.20: net worth since the start of the year, null without the history. */
+  yearChange: { startMonth: string; startCents: number; endCents: number } | null;
   savingsCents: number;
   monthlyExpensesCents: number;
   goals: { name: string; targetCents: number; pct: number; remainingCents: number }[];
@@ -154,6 +156,7 @@ export function buildAnalyticsExport(
     runwayMonths: result.runwayMonths ?? null,
     ownFundsRunwayMonths: result.ownFundsRunwayMonths ?? null,
     borrowedFundsHeldCents: Number(result.borrowedFundsHeldCents),
+    yearChange: result.yearChange,
     savingsCents: Number(result.savingsCents),
     monthlyExpensesCents: Number(result.monthlyExpensesCents),
     goals: result.goals.map((g) => ({

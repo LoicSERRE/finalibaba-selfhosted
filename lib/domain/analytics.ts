@@ -31,6 +31,7 @@ import type {
   MonthlyHistoryPoint,
   PerformanceRow,
   TopAssetRow,
+  YearChange,
 } from "@/lib/domain/analytics-types";
 
 export * from "@/lib/domain/analytics-market";
@@ -397,6 +398,16 @@ function computeMonthlyHistory(
   });
 }
 
+/** Net worth since the start of `now`'s year, from the month-end history alone. */
+function computeYearChange(monthlyHistory: MonthlyHistoryPoint[], now: Date): YearChange | null {
+  const january = `${now.getUTCFullYear()}-01`;
+  const before = monthlyHistory.filter((p) => p.month < january).at(-1);
+  const start = before ?? monthlyHistory.find((p) => p.month >= january);
+  const end = monthlyHistory.at(-1);
+  if (!start || !end || start === end) return null;
+  return { startMonth: start.month, startCents: start.netWorth, endCents: end.netWorth };
+}
+
 /** The last six months, each with its change against the month before. */
 function computePerformanceRows(monthlyHistory: MonthlyHistoryPoint[]): PerformanceRow[] {
   const last6Months = monthlyHistory.slice(-6);
@@ -543,6 +554,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     allocationSlices,
     totalAllocation: allocationSlices.reduce((s, d) => s + d.value, 0),
     performanceRows: computePerformanceRows(monthlyHistory),
+    yearChange: computeYearChange(monthlyHistory, now),
     topAssets: buildTopAssets(assetRows, grossAssets),
     assetRows,
     // Asset-backed liabilities (real estate, auto) only - LOAN accounts have their own tab.

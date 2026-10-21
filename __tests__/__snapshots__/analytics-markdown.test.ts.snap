@@ -83,6 +83,7 @@ exports[`the whole document, pinned (characterization) > every section together 
 | SAVINGSRATE | +28,1 % |
 | SALARY | 3 200 € |
 | MONTHLYSAVED | 900 € |
+| YEARCHANGE | +1 346 € |
 | RUNWAY | 9 MONTHS |
 | SAVINGSAVAILABLE | 18 000 € |
 | MONTHLYEXPENSES | 1 850 € |
@@ -382,6 +383,7 @@ exports[`the whole document, pinned (characterization) > section resume on its o
 | SAVINGSRATE | +28,1 % |
 | SALARY | 3 200 € |
 | MONTHLYSAVED | 900 € |
+| YEARCHANGE | +1 346 € |
 | RUNWAY | 9 MONTHS |
 | SAVINGSAVAILABLE | 18 000 € |
 | MONTHLYEXPENSES | 1 850 € |

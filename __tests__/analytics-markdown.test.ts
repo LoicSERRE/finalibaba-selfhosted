@@ -262,3 +262,12 @@ describe("own-funds runway row", () => {
     expect(build(["resume"])).not.toContain("OWNFUNDSRUNWAY");
   });
 });
+
+// v2.20: the year's change is a summary row whenever the history reaches it.
+describe("year change row", () => {
+  it("prints the change since the start of the year, and nothing without it", () => {
+    const md = build(["resume"], { ...payload(), yearChange: { startMonth: "2025-12", startCents: 50_000_00, endCents: 59_712_00 } });
+    expect(md.split("\n").find((l) => l.startsWith("| YEARCHANGE |"))).toMatch(/\+\s?9\s?712/);
+    expect(build(["resume"], { ...payload(), yearChange: null })).not.toContain("YEARCHANGE");
+  });
+});

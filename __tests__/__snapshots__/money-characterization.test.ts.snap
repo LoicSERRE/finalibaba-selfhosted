@@ -513,6 +513,11 @@ exports[`computeAnalytics with market data, pinned whole > produces exactly the 
   "totalLatentTax": "137922n",
   "totalLiabilities": "33233743n",
   "weightedSavingsRatePct": 0.017,
+  "yearChange": {
+    "endCents": 1734567,
+    "startCents": 1600000,
+    "startMonth": "2026-05",
+  },
 }
 `;
 
@@ -972,6 +977,11 @@ exports[`computeAnalytics, pinned whole > produces exactly the figures it produc
   "totalLatentTax": "129962n",
   "totalLiabilities": "33233743n",
   "weightedSavingsRatePct": 0.017,
+  "yearChange": {
+    "endCents": 1734567,
+    "startCents": 1600000,
+    "startMonth": "2026-05",
+  },
 }
 `;
 

@@ -401,6 +401,26 @@
       "zoomOut": "Zoom out",
       "zoomReset": "Show the whole chart",
       "zoomHint": "Pinch or double-tap to zoom, drag to move around."
+    },
+    "year": {
+      "subtitle": "The whole year: what came in, what went out, and where it went.",
+      "switchMonth": "Month",
+      "switchYear": "Year",
+      "switchLabel": "Period",
+      "income": "Money in",
+      "expenses": "Money out",
+      "saved": "Saved",
+      "savingsRate": "Savings rate",
+      "partial": "Current year: {months} months covered. Budgets are compared over those months.",
+      "chartTitle": "Money in and out, month by month",
+      "byCategory": "Spending by category",
+      "perMonth": "{amount} a month on average",
+      "share": "{pct}% of spending",
+      "empty": "No transaction this year.",
+      "elsewhere": "The year's dividends, interest and capital gains:",
+      "incomeLink": "Income",
+      "taxLink": "Tax report",
+      "flowTitle": "The year's money flow"
     }
   },
   "transactions": {
@@ -795,7 +815,19 @@
       "colLtv": "LTV"
     },
     "noDataIntro": "No data. Add accounts in",
-    "noDataLink": "Accounts."
+    "noDataLink": "Accounts.",
+    "yearChange": {
+      "title": "In {year}",
+      "fromJanuary": "since 1 January",
+      "fromMonth": "since {month} (start of the history)",
+      "hint": "Net worth's change since the start of the year, in two parts: what you saved out of income (money in minus money out, as Budgets shows for the year), and the rest - markets, interest and revaluations. A transfer between your own accounts not recognised as one, or a loan paid out, counts as money in.",
+      "netWorth": "Net worth",
+      "saved": "Saved out of income",
+      "savedLink": "The detail in Budgets",
+      "rest": "Markets, interest, revaluations",
+      "incomeLink": "Income",
+      "taxLink": "Capital gains"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -1779,7 +1811,8 @@
     "mdPassiveWeightedRate": "Balance-weighted average interest rate across all savings accounts: {rate}.",
     "mdPassiveYearEndEstimate": "Alternative estimate, based on real historical balances rather than only today's (fortnight method) - can differ from the figure above if a balance moved a lot this year: estimated year-end interest: {amount}.",
     "mdFileName": "analytics",
-    "mdOwnFundsRunway": "Runway on own funds"
+    "mdOwnFundsRunway": "Runway on own funds",
+    "mdYearChange": "Change since the start of the year"
   },
   "coOwners": {
     "errorUsernameRequired": "Enter a username.",

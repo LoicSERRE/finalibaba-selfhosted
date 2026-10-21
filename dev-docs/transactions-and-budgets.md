@@ -196,6 +196,10 @@ Verified in a browser against a real database: the unfiltered file has exactly t
 - The chart carries names only; **every amount is in the list under it**, which is the chart's text alternative and what discretion blurs. On a phone the chart scrolls inside its card (`ScrollRegion`), never the page.
 - Verified in a browser against a real database: the list's sources equal the page's income figure and its spending the expenses figure to the cent; in = out; an injected large expense makes "Pris sur l'épargne" exactly expenses - income and removes "Épargne"; an empty month shows no diagram; no sideways page scroll on a phone.
 
+### A whole year on /budgets (v2.20)
+
+`/budgets?year=YYYY` (`BudgetsYearView`, a "Mois / Année" switch on both views) is the month view summed over a calendar year: money in, money out, what was kept and the savings rate; money in and out month by month (`YearCashflowChart`); the year's money flow; spending per category against the monthly budget times the months covered (`monthsCovered`: 12 for a past year, the months begun for the current one, so October is not judged against a twelve-month budget). Both views read the same `periodCategoryTotals` (`lib/services/budget-period.ts`, moved out of the page), so a year is exactly its months added up - checked in the browser by summing ten month views against the year's totals to the cent. Dividends, interest and realised gains already have a year on `/income` and `/tax-report`; the year view links there rather than repeating them - the reason this is a mode of an existing page and not a "year in review" page of its own.
+
 ### Budget rollover
 
 Opt-in per category (`Category.budgetRolloverEnabled`, off by default so every existing budget keeps today's behavior) - unused envelope carries into next month instead of resetting to zero, matching YNAB's "give every dollar a job" model. `lib/domain/budgets.ts` holds the pure math (`monthsBetween`, `computeRolloverCarryInCents`); the actual `Transaction` query and per-month bucketing stay in `app/budgets/page.tsx`, same lib/domain-has-no-DB-calls split as `lib/domain/transactions-ledger.ts`.

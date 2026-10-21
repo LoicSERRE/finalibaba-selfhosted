@@ -202,6 +202,17 @@ export interface SavingsInterestHistoryPoint {
   estimatedCents: number;
 }
 
+/**
+ * Net worth over the current calendar year (v2.20), both ends read from the
+ * same month-end history: the last month before the year, else the year's
+ * first known month (startMonth says which), and the latest month.
+ */
+export interface YearChange {
+  startMonth: string; // "YYYY-MM"
+  startCents: number;
+  endCents: number;
+}
+
 export interface PerformanceRow extends MonthlyHistoryPoint {
   delta: number | null;
   deltaPct: number | null;
@@ -315,6 +326,8 @@ export interface AnalyticsResult {
 
   // History / charts
   performanceRows: PerformanceRow[];
+  /** null with fewer than two months of history in reach. */
+  yearChange: YearChange | null;
 
   // Top assets
   topAssets: TopAssetRow[];
