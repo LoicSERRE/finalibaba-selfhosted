@@ -79,6 +79,7 @@ export async function updateAlertTriggers(formData: FormData) {
   const loanAlertsEnabled = formData.get("loanAlertsEnabled") === "on";
   const syncFailureAlertsEnabled = formData.get("syncFailureAlertsEnabled") === "on";
   const sectorDataAlertsEnabled = formData.get("sectorDataAlertsEnabled") === "on";
+  const priceIncreaseAlertsEnabled = formData.get("priceIncreaseAlertsEnabled") === "on";
 
   const viewer = await getViewer();
   const current = await prisma.userSettings.findUnique({
@@ -96,6 +97,7 @@ export async function updateAlertTriggers(formData: FormData) {
     loanAlertsEnabled,
     syncFailureAlertsEnabled,
     sectorDataAlertsEnabled,
+    priceIncreaseAlertsEnabled,
     ...(thresholdChanged ? { netWorthAlertLastAbove: null } : {}),
   };
 

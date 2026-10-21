@@ -564,7 +564,16 @@
     "restoring": "Restoring…",
     "deleteConfirm": "Removed from your list and no longer suggested. You can restore it from \"Hidden\".",
     "forgetConfirm": "Delete permanently. If the pattern is still in your transactions it may be suggested again.",
-    "approxAmount": "~{amount} on average"
+    "approxAmount": "~{amount} on average",
+    "priceIncreases": {
+      "title": "Price increases",
+      "yearlyTotal": "Extra a year:",
+      "perYear": "a year",
+      "since": "Since {date} · {account}",
+      "accept": "Update the amount",
+      "accepted": "“{label}” amount updated",
+      "acceptFailed": "The price changed in the meantime, reload the page."
+    }
   },
   "income": {
     "title": "Income",
@@ -1052,7 +1061,9 @@
       "triggerLoan": "Loan nearly paid off",
       "triggerSyncFailure": "Sync failure",
       "triggerSectorData": "Sector-exposure data unavailable",
-      "triggerSectorDataHint": "Alert if the sector-exposure chart (Analytics) stops being able to fetch its Yahoo Finance data and no fallback key (FMP/Alpha Vantage) is configured."
+      "triggerSectorDataHint": "Alert if the sector-exposure chart (Analytics) stops being able to fetch its Yahoo Finance data and no fallback key (FMP/Alpha Vantage) is configured.",
+      "triggerPriceIncrease": "A recurring expense's price goes up",
+      "triggerPriceIncreaseHint": "When a subscription or a recurring debit is charged more than expected (at least 2% and 0.30). One alert per new price."
     },
     "alertRules": {
       "title": "Custom alert rules",

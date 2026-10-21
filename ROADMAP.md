@@ -37,6 +37,7 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 
 ## v2.20.0 - In progress
 
+- **Price increases**: a recurring expense charged dearer than its template - a subscription from 13,49 to 14,99 - is listed on /recurring with what it costs a year and a button to take the new price on board, and announced once by ntfy/email/push (Settings → Notifications, on by default). A dearer charge is no longer shown as a missed payment.
 - **Own-funds runway**: a loan whose money still sits on your accounts (a student loan parked on a livret) can be flagged in its terms dialog; the runway card and the analytics export then add the runway once those loans are repaid from savings. A loan that paid for a house or a car stays unflagged - only you can tell the two apart.
 
 ---

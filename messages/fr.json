@@ -564,7 +564,16 @@
     "restoring": "Rétablissement…",
     "deleteConfirm": "La récurrence est retirée de ta liste et ne sera plus suggérée. Tu pourras la rétablir depuis « Masquées ».",
     "forgetConfirm": "Supprimer définitivement. Si le motif existe encore dans tes transactions, il pourra être suggéré à nouveau.",
-    "approxAmount": "~{amount} en moyenne"
+    "approxAmount": "~{amount} en moyenne",
+    "priceIncreases": {
+      "title": "Hausses de prix",
+      "yearlyTotal": "Surcoût annuel :",
+      "perYear": "par an",
+      "since": "Depuis le {date} · {account}",
+      "accept": "Mettre à jour le montant",
+      "accepted": "Montant de « {label} » mis à jour",
+      "acceptFailed": "Le prix a changé entre-temps, rechargez la page."
+    }
   },
   "income": {
     "title": "Revenus",
@@ -1052,7 +1061,9 @@
       "triggerLoan": "Prêt bientôt remboursé",
       "triggerSyncFailure": "Échec de synchronisation",
       "triggerSectorData": "Données de répartition sectorielle indisponibles",
-      "triggerSectorDataHint": "Alerte si le graphique de répartition sectorielle (Analytique) ne parvient plus à récupérer ses données Yahoo Finance et qu'aucune clé de secours (FMP/Alpha Vantage) n'est configurée."
+      "triggerSectorDataHint": "Alerte si le graphique de répartition sectorielle (Analytique) ne parvient plus à récupérer ses données Yahoo Finance et qu'aucune clé de secours (FMP/Alpha Vantage) n'est configurée.",
+      "triggerPriceIncrease": "Hausse de prix d'une dépense récurrente",
+      "triggerPriceIncreaseHint": "Quand un abonnement ou un prélèvement récurrent est débité plus cher que prévu (au moins 2 % et 0,30 €). Une seule alerte par nouveau prix."
     },
     "alertRules": {
       "title": "Règles d'alerte personnalisées",
