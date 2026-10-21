@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.20.0**
+Current release: **v2.21.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -35,9 +35,10 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 
 ---
 
-## v2.21.0 - In progress
+## v2.21.0 - Money set aside
 
 - **Money set aside**: Budgets says where the money that was kept went - transfers to your livrets, securities bought, transfers to brokerage and crypto accounts - in a "Mis de côté" card (month and year) and as its own branches in the money flow, never as spending. A third kind of category, **Épargne**, for what you file yourself, with an optional monthly target; its page now lists the share purchases filed under it, which every budget view used to leave out.
+- **Pre-tag audit**: every scanner at zero, coverage up to 83.51%, lizard held at 23 / 57 after three hidden functions were made visible again, and one stale line in the money-flow docs corrected. The recurring pattern this time is v2.4's: a correct exclusion filter whose excluded money was shown nowhere, read by the user as zero. Details in `dev-docs/release-audit.md`.
 
 ---
 
