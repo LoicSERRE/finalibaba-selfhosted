@@ -134,6 +134,7 @@ exports[`computeAnalytics with market data, pinned whole > produces exactly the 
     "msciWorld": 11.239610150048108,
     "sp500": 7.726003716984353,
   },
+  "borrowedFundsHeldCents": "0n",
   "debtAccounts": [
     {
       "equity": "12000000n",
@@ -376,6 +377,7 @@ exports[`computeAnalytics with market data, pinned whole > produces exactly the 
   "monthlySavedCents": "90000n",
   "netWorth": "1066742n",
   "netWorthBeforeTax": "1204664n",
+  "ownFundsRunwayMonths": null,
   "performanceRows": [
     {
       "date": "mai 26",
@@ -648,6 +650,7 @@ exports[`computeAnalytics, pinned whole > produces exactly the figures it produc
     "msciWorld": 9.334725446662251,
     "sp500": 7.726003716984353,
   },
+  "borrowedFundsHeldCents": "0n",
   "debtAccounts": [
     {
       "equity": "12000000n",
@@ -833,6 +836,7 @@ exports[`computeAnalytics, pinned whole > produces exactly the figures it produc
   "monthlySavedCents": "90000n",
   "netWorth": "789352n",
   "netWorthBeforeTax": "919314n",
+  "ownFundsRunwayMonths": null,
   "performanceRows": [
     {
       "date": "mai 26",

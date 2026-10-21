@@ -122,6 +122,7 @@ export type AccountExport = {
   loanNextPaymentCents: string | null;
   loanNextPaymentDate: string | null;
   loanEndDate: string | null;
+  loanFundsOnAccounts: boolean;
   balances: { recordedAt: string; balanceCents: string; nativeBalanceCents: string | null; fxRate: number | null }[];
   transactions: TransactionExport[];
   holdings: HoldingExport[];
@@ -306,6 +307,7 @@ export function buildUserExport(input: UserExportInput): UserExport {
       loanNextPaymentCents: cents(a.loanNextPaymentCents as bigint),
       loanNextPaymentDate: iso(a.loanNextPaymentDate as Date),
       loanEndDate: iso(a.loanEndDate as Date),
+      loanFundsOnAccounts: Boolean(a.loanFundsOnAccounts),
       balances: ((a.history as Row[]) ?? []).map((b) => ({
         recordedAt: iso(b.recordedAt as Date)!,
         balanceCents: cents(b.balanceCents as bigint)!,

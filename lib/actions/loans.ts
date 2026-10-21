@@ -40,6 +40,7 @@ export async function updateLoanTerms(
     deferralMonths: field("deferralMonths"),
     insurance: field("insurance"),
     endDate: field("endDate"),
+    fundsOnAccounts: field("fundsOnAccounts"),
   });
   if (!parsed.ok) return actionError(parsed.error);
 

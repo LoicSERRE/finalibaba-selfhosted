@@ -48,6 +48,7 @@ export interface AnalyticsExportStrings {
   monthlySaved: string;
   momDelta: string;
   runway: string;
+  ownFundsRunway: string;
   savingsAvailable: string;
   monthlyExpenses: string;
   goal: string;
@@ -141,6 +142,9 @@ function summaryCashFlowRows(data: AnalyticsExportData, s: AnalyticsExportString
   }
   if (data.runwayMonths !== null) {
     rows.push(`| ${s.runway} | ${Math.floor(data.runwayMonths)} ${s.months} |`);
+    if (data.ownFundsRunwayMonths !== null) {
+      rows.push(`| ${s.ownFundsRunway} | ${Math.floor(data.ownFundsRunwayMonths)} ${s.months} (${f.signedMoney(-data.borrowedFundsHeldCents)}) |`);
+    }
     rows.push(`| ${s.savingsAvailable} | ${f.money(data.savingsCents)} |`);
     rows.push(`| ${s.monthlyExpenses} | ${f.money(data.monthlyExpensesCents)} |`);
   }

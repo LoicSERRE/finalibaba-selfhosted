@@ -51,6 +51,9 @@ type Account = AnalyticsInput["accounts"][number];
 type AccountTotals = {
   grossAssets: bigint;
   totalLiabilities: bigint;
+  /** Owed on loans whose money still sits on the user's accounts. */
+  borrowedFundsHeld: bigint;
+  hasFundsHeldLoan: boolean;
   totalLatentTax: bigint;
   // Gain-weighted blended effective tax rate across every account with a real
   // unrealized gain, for the projection chart's tax-aware mode (see
@@ -84,6 +87,8 @@ function emptyTotals(): AccountTotals {
   return {
     grossAssets: BigInt(0),
     totalLiabilities: BigInt(0),
+    borrowedFundsHeld: BigInt(0),
+    hasFundsHeldLoan: false,
     totalLatentTax: BigInt(0),
     weightedTaxRateSum: 0,
     totalPositiveGainCents: BigInt(0),
@@ -164,6 +169,23 @@ function addInvestmentAccount(t: AccountTotals, account: Account, yfData: Analyt
   };
 }
 
+/**
+ * The runway on the user's own money: savings once the loans whose money
+ * still sits there are repaid, never below zero. Only with such a loan and
+ * declared expenses - otherwise there is nothing to tell apart.
+ */
+function ownFundsRunway(
+  savings: bigint,
+  t: AccountTotals,
+  monthlyExpensesCents: bigint
+): Pick<AnalyticsResult, "ownFundsRunwayMonths" | "borrowedFundsHeldCents"> {
+  if (!t.hasFundsHeldLoan || monthlyExpensesCents <= BigInt(0)) {
+    return { ownFundsRunwayMonths: null, borrowedFundsHeldCents: t.borrowedFundsHeld };
+  }
+  const own = savings > t.borrowedFundsHeld ? savings - t.borrowedFundsHeld : BigInt(0);
+  return { ownFundsRunwayMonths: Number(own) / Number(monthlyExpensesCents), borrowedFundsHeldCents: t.borrowedFundsHeld };
+}
+
 /** A loan is a pure liability: it reduces net worth and has no asset row. */
 function loanOutstanding(account: Account, now: Date): bigint {
   // The bank's own figure when the bank reports it (isBankReportedLoan).
@@ -202,7 +224,12 @@ function aggregateAccounts(accounts: Account[], yfData: AnalyticsInput["yfData"]
   const t = emptyTotals();
   for (const account of accounts) {
     if (account.type === "LOAN") {
-      t.totalLiabilities += loanOutstanding(account, now);
+      const owed = loanOutstanding(account, now);
+      t.totalLiabilities += owed;
+      if (account.loanFundsOnAccounts) {
+        t.borrowedFundsHeld += owed;
+        t.hasFundsHeldLoan = true;
+      }
       continue;
     }
     const { value, basis } = valueAccount(t, account, yfData);
@@ -479,6 +506,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     hasExpenses,
     // Runway = total savings / monthly expenses.
     runwayMonths: hasExpenses ? Number(allocation["savings"]) / Number(settings.monthlyExpensesCents) : null,
+    ...ownFundsRunway(allocation["savings"], t, settings.monthlyExpensesCents),
     monthlyExpensesCents: settings.monthlyExpensesCents,
     savingsCents: allocation["savings"],
     goals: computeGoalRows(goals, assetRows, accounts, netWorth),

@@ -660,7 +660,9 @@
       "detail": "{savings} épargne / {expenses} / mois",
       "safe": "Sécurité solide",
       "ok": "Tampon acceptable",
-      "warning": "Attention : renforcer l'épargne de précaution"
+      "warning": "Attention : renforcer l'épargne de précaution",
+      "ownFunds": "Sur fonds propres : {count} mois",
+      "ownFundsDetail": "(après remboursement de {borrowed} de crédit resté sur vos comptes)"
     },
     "goal": {
       "title": "{name} · cap des {amount}",
@@ -1765,7 +1767,8 @@
     "mdPassiveMissingRates": "Estimation partielle : {count} compte(s) rémunéré(s) n'ont pas de taux d'intérêt renseigné et ne sont pas comptés ici.",
     "mdPassiveWeightedRate": "Taux d'intérêt moyen pondéré par le solde, tous livrets confondus : {rate}.",
     "mdPassiveYearEndEstimate": "Estimation alternative, basée sur l'historique réel des soldes plutôt que sur le solde actuel seul (méthode des quinzaines) - peut différer du chiffre ci-dessus si un solde a beaucoup varié cette année : intérêts estimés en fin d'année : {amount}.",
-    "mdFileName": "analytique"
+    "mdFileName": "analytique",
+    "mdOwnFundsRunway": "Runway sur fonds propres"
   },
   "coOwners": {
     "errorUsernameRequired": "Saisis un nom d'utilisateur.",
@@ -1855,6 +1858,8 @@
     "errorDeferral": "Le différé doit être plus court que la durée totale.",
     "errorInsurance": "Assurance invalide.",
     "errorDate": "Date invalide, ou date de fin avant la date de début.",
-    "errorUnexpected": "Impossible d'enregistrer, réessayez."
+    "errorUnexpected": "Impossible d'enregistrer, réessayez.",
+    "fundsOnAccounts": "L'argent emprunté est encore sur mes comptes",
+    "fundsOnAccountsHint": "Par exemple un prêt étudiant placé sur un livret. Le runway sur fonds propres retire alors ce crédit de votre épargne. À laisser décoché pour un achat (logement, voiture)."
   }
 }

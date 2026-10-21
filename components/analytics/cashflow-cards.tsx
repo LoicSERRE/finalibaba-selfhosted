@@ -20,6 +20,8 @@ export function CashflowCards({
   momDelta,
   hasExpenses,
   runwayMonths,
+  ownFundsRunwayMonths,
+  borrowedFundsHeldCents,
   savingsCents,
   monthlyExpensesCents,
 }: Readonly<{
@@ -32,6 +34,9 @@ export function CashflowCards({
   momDelta: number | null;
   hasExpenses: boolean;
   runwayMonths: number | null;
+  /** null unless a loan's money is flagged as still on the user's accounts. */
+  ownFundsRunwayMonths: number | null;
+  borrowedFundsHeldCents: bigint;
   savingsCents: bigint;
   monthlyExpensesCents: bigint;
 }>) {
@@ -120,6 +125,14 @@ export function CashflowCards({
             <p className="text-xs text-[var(--muted)] mt-1 amount">
               {t("runway.detail", { savings: formatCurrency(savingsCents, 0), expenses: formatCurrency(monthlyExpensesCents, 0) })}
             </p>
+            {ownFundsRunwayMonths !== null && (
+              <p className="text-xs text-[var(--foreground)] mt-1.5">
+                {t("runway.ownFunds", { count: Math.floor(ownFundsRunwayMonths) })}{" "}
+                <span className="text-[var(--muted)] amount">
+                  {t("runway.ownFundsDetail", { borrowed: formatCurrency(borrowedFundsHeldCents, 0) })}
+                </span>
+              </p>
+            )}
             <p className="text-xs text-[var(--muted)] mt-0.5">
               {runwayMonths >= 12
                 ? t("runway.safe")

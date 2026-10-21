@@ -207,6 +207,8 @@ export default async function AnalyticsPage() {
             momDelta={result.momDelta}
             hasExpenses={result.hasExpenses}
             runwayMonths={result.runwayMonths}
+            ownFundsRunwayMonths={result.ownFundsRunwayMonths}
+            borrowedFundsHeldCents={result.borrowedFundsHeldCents}
             savingsCents={result.savingsCents}
             monthlyExpensesCents={result.monthlyExpensesCents}
           />

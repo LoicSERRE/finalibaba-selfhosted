@@ -251,3 +251,14 @@ describe("the whole document, pinned (characterization)", () => {
     expect(build([section], rich())).toMatchSnapshot();
   });
 });
+
+// v2.20: the own-funds runway is a row only when a loan's money is flagged
+// as still on the user's accounts.
+describe("own-funds runway row", () => {
+  it("prints it, with what was taken out, only when there is one", () => {
+    const withLoan = build(["resume"], { ...payload(), ownFundsRunwayMonths: 6.55, borrowedFundsHeldCents: 5099_00 });
+    const row = withLoan.split("\n").find((l) => l.startsWith("| OWNFUNDSRUNWAY |"));
+    expect(row).toMatch(/\| OWNFUNDSRUNWAY \| 6 MONTHS \(.*5\s?099.*\) \|/);
+    expect(build(["resume"])).not.toContain("OWNFUNDSRUNWAY");
+  });
+});

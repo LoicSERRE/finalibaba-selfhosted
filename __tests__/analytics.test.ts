@@ -608,3 +608,29 @@ describe("computeAnalytics - monthly history with a bank-reported loan", () => {
     expect(october.delta).toBe(-99_00);
   });
 });
+
+// v2.20: the runway on the user's own money - savings once the loans whose
+// money still sits on their accounts are repaid.
+describe("computeAnalytics - own-funds runway", () => {
+  const settings = { ...BASE_SETTINGS, monthlyExpensesCents: BigInt(1000_00) };
+  const livret = account({ id: "livret", type: "SAVINGS", history: [{ balanceCents: BigInt(16812_00) }] });
+  const studentLoan = account({ id: "pret", type: "LOAN", syncId: "woob:lcl:pret1", liabilityCents: BigInt(5099_00), loanFundsOnAccounts: true });
+  const mortgage = account({ id: "immo", type: "LOAN", liabilityCents: BigInt(150000_00) });
+
+  it("takes only the flagged loans out of savings", () => {
+    const result = computeAnalytics(baseInput({ settings, accounts: [livret, studentLoan, mortgage] }));
+    expect(result.runwayMonths).toBeCloseTo(16.812, 3);
+    expect(result.borrowedFundsHeldCents).toBe(BigInt(5099_00));
+    expect(result.ownFundsRunwayMonths).toBeCloseTo(11.713, 3);
+  });
+
+  it("says nothing without a flagged loan - a mortgage's money is spent", () => {
+    const result = computeAnalytics(baseInput({ settings, accounts: [livret, mortgage] }));
+    expect(result.ownFundsRunwayMonths).toBeNull();
+  });
+
+  it("never goes below zero", () => {
+    const big = account({ ...studentLoan, liabilityCents: BigInt(30000_00) });
+    expect(computeAnalytics(baseInput({ settings, accounts: [livret, big] })).ownFundsRunwayMonths).toBe(0);
+  });
+});
