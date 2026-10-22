@@ -271,19 +271,20 @@ async function checkBudgetOverrunRule(
   // same category), and a split transaction's own categoryId is always
   // null so its portion of this category's spend would otherwise be
   // invisible to this alert entirely. See CLAUDE.md's "Split transactions".
+  // Credits included (v2.21.1): the card's spending is net of refunds, so a
+  // refunded purchase must not trip the alert the card no longer shows over.
   const [spend, splitSpend] = await Promise.all([
     prisma.transaction.aggregate({
       where: excludeFromBudgetTotals({
         accountId: { in: accountIds },
         categoryId: rule.category.id,
-        amountCents: { lt: BigInt(0) },
         date: { gte: monthRange.start, lt: monthRange.end },
       }),
       _sum: { amountCents: true },
     }),
     prisma.transactionSplit.aggregate({
       where: excludeFromBudgetTotalsOnSplit(
-        { categoryId: rule.category.id, amountCents: { lt: BigInt(0) } },
+        { categoryId: rule.category.id },
         { accountId: { in: accountIds }, date: { gte: monthRange.start, lt: monthRange.end } },
       ),
       _sum: { amountCents: true },

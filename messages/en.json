@@ -389,9 +389,7 @@
     "splitBadgeHint": "Part of a transaction split across multiple categories - edit the split from the account's transactions table or the global ledger.",
     "flow": {
       "title": "This month's flow",
-      "income": "Income",
-      "savings": "Savings",
-      "drawn": "Drawn from savings",
+      "hub": "Current accounts",
       "other": "Other",
       "uncategorizedIncome": "Uncategorized income",
       "uncategorizedSpend": "Uncategorized",
@@ -400,21 +398,19 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "zoomReset": "Show the whole chart",
-      "zoomHint": "Pinch or double-tap to zoom, drag to move around.",
-      "leftover": "Left on the accounts",
-      "drawnCurrent": "Taken from the accounts"
+      "zoomHint": "Pinch or double-tap to zoom, drag to move around."
     },
     "year": {
       "subtitle": "The whole year: what came in, what went out, and where it went.",
       "switchMonth": "Month",
       "switchYear": "Year",
       "switchLabel": "Period",
-      "income": "Money in",
-      "expenses": "Money out",
-      "saved": "Saved",
+      "income": "Income",
+      "expenses": "Spending",
+      "saved": "Disposable income",
       "savingsRate": "Savings rate",
       "partial": "Current year: {months} months covered. Budgets are compared over those months.",
-      "chartTitle": "Money in and out, month by month",
+      "chartTitle": "Income and spending, month by month",
       "byCategory": "Spending by category",
       "perMonth": "{amount} a month on average",
       "share": "{pct}% of spending",
@@ -426,14 +422,27 @@
     },
     "setAside": {
       "title": "Set aside",
-      "hint": "Money that left your current accounts to be kept rather than spent: transfers to your savings accounts, securities bought and transfers to your brokerage or crypto accounts, and whatever you file under a Savings category. What comes back is deducted. Never counted as spending.",
+      "hint": "Money that left your current accounts to be kept rather than spent: transfers to your savings accounts, securities bought and transfers to your brokerage or crypto accounts, and whatever you file under a Savings category. What comes back is deducted. Never counted as spending. What your savings and investment accounts earn or cost where they are (interest, fees) counts too.",
       "savings": "To your savings accounts",
       "takenFromSavings": "Taken from your savings accounts",
       "investment": "Securities and investments",
       "takenFromInvestment": "Taken from your investments",
-      "target": "target",
-      "leftover": "Left on your current accounts:",
-      "drawnCurrent": "Taken from your current accounts:"
+      "target": "target"
+    },
+    "movements": {
+      "title": "Your current accounts",
+      "hint": "What became of your current accounts over the period, from their transactions: disposable income, minus what was set aside, plus the movements that are neither income nor spending - a loan paid out or repaid, a transfer marked internal from an account the app does not follow (another bank, a relative). The total is your current accounts' real change.",
+      "loanIn": "Loan paid out",
+      "loanOut": "Loan repayments",
+      "untrackedIn": "Received from other accounts",
+      "untrackedOut": "Sent to other accounts",
+      "between": "Between your current accounts",
+      "elsewhereIn": "Paid from your other accounts",
+      "elsewhereOut": "Kept on your other accounts",
+      "leftover": "Left on your current accounts",
+      "drawnCurrent": "Taken from your current accounts",
+      "details": "{count, plural, one {Show the transaction} other {Show the # transactions}}",
+      "more": "And {count, plural, one {# more} other {# more}}, in Transactions."
     }
   },
   "transactions": {

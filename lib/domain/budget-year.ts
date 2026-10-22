@@ -2,8 +2,8 @@
  * /budgets for a whole year (v2.20): the month's view, summed over a
  * calendar year - spending per category against the budget for the months
  * covered, money in and out month by month, and what was saved. Pure; the
- * figures come from the same per-category maps as the month view
- * (lib/services/budget-period.ts), so a year is exactly its months added up.
+ * figures come from the same ledger as the month view
+ * (lib/domain/period-ledger.ts), so a year is exactly its months added up.
  */
 
 export type MonthCashflow = {
@@ -36,16 +36,15 @@ export function monthsCovered(year: number, now: Date): number {
   return now.getUTCMonth() + 1;
 }
 
-/** Every amount bucketed by calendar month: credits in, debits out (positive). */
-export function monthlyCashflow(rows: readonly { date: Date; amountCents: bigint | number }[]): MonthCashflow[] {
-  const months: MonthCashflow[] = Array.from({ length: 12 }, (_, month) => ({ month, incomeCents: 0, expenseCents: 0 }));
-  for (const row of rows) {
-    const cents = Number(row.amountCents);
-    const bucket = months[row.date.getUTCMonth()];
-    if (cents > 0) bucket.incomeCents += cents;
-    else bucket.expenseCents -= cents;
-  }
-  return months;
+/** The ledger's months ("YYYY-MM") laid out January to December, empty months at zero. */
+export function monthlyCashflow(
+  byMonth: ReadonlyMap<string, { incomeCents: number; expenseCents: number }>,
+  year: number
+): MonthCashflow[] {
+  return Array.from({ length: 12 }, (_, month) => {
+    const figures = byMonth.get(`${year}-${String(month + 1).padStart(2, "0")}`);
+    return { month, incomeCents: figures?.incomeCents ?? 0, expenseCents: figures?.expenseCents ?? 0 };
+  });
 }
 
 /** Spending per category over the year, the biggest first, uncategorized last. */
@@ -64,13 +63,15 @@ export function yearCategoryRows(
       color,
       spentCents,
       monthlyAverageCents: months > 0 ? Math.round(spentCents / months) : 0,
-      sharePct: total > 0 ? (spentCents / total) * 100 : 0,
+      sharePct: total > 0 ? (Math.max(0, spentCents) / total) * 100 : 0,
       budgetCents: budget === null ? null : Number(budget) * months,
     };
   };
+  // Not "> 0": refunds are netted (v2.21.1), and a category that got back
+  // more than it spent still belongs in the list.
   const rows = categories
     .map((c) => row(c.id, c.name, c.color, c.budgetCents))
-    .filter((r) => r.spentCents > 0 || r.budgetCents !== null)
+    .filter((r) => r.spentCents !== 0 || r.budgetCents !== null)
     .sort((a, b) => b.spentCents - a.spentCents);
   if ((spendMap.get(null) ?? 0) > 0) rows.push(row(null, uncategorized.name, uncategorized.color, null));
   return rows;

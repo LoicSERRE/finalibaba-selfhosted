@@ -15,8 +15,6 @@ type Props = {
   readonly categories: readonly SavingsCategory[];
   /** Months the period covers: a SAVINGS category's budget is a monthly target. */
   readonly months: number;
-  /** Money in minus spending over the period, the figure beside this card. */
-  readonly resteAVivreCents: number;
 };
 
 const SAVINGS_COLOR = "#16a34a";
@@ -24,10 +22,10 @@ const INVESTMENT_COLOR = "#06b6d4";
 
 /**
  * Money set aside over the period (v2.21) - savings and investing, never
- * spending - and what is left on the current accounts once it is. Nothing
- * here is counted in the spending beside it.
+ * spending. Nothing here is counted in the spending beside it; what it left
+ * on the current accounts is CurrentAccountsCard's (v2.21.1).
  */
-export async function SetAsideCard({ setAside, categories, months, resteAVivreCents }: Props) {
+export async function SetAsideCard({ setAside, categories, months }: Props) {
   const [t, tc] = await Promise.all([getTranslations("budgets.setAside"), getTranslations("common")]);
   const total = totalSetAside(setAside);
   const inferred = [
@@ -35,7 +33,6 @@ export async function SetAsideCard({ setAside, categories, months, resteAVivreCe
     { key: "investment", name: setAside.investmentCents < 0 ? t("takenFromInvestment") : t("investment"), cents: setAside.investmentCents, color: INVESTMENT_COLOR },
   ].filter((row) => row.cents !== 0);
   if (inferred.length === 0 && categories.length === 0) return null;
-  const leftoverCents = resteAVivreCents - total;
 
   return (
     <section className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3" aria-labelledby="set-aside-title">
@@ -123,13 +120,6 @@ export async function SetAsideCard({ setAside, categories, months, resteAVivreCe
           );
         })}
       </ul>
-
-      <p className="text-xs text-[var(--muted)] border-t border-[var(--border)] pt-2">
-        {leftoverCents >= 0 ? t("leftover") : t("drawnCurrent")}{" "}
-        <span className={`tabular-nums font-medium amount ${leftoverCents >= 0 ? "text-[var(--foreground)]" : "text-[var(--negative)]"}`}>
-          {formatCurrency(Math.abs(leftoverCents))}
-        </span>
-      </p>
     </section>
   );
 }
