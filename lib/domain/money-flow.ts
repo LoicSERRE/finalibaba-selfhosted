@@ -88,16 +88,18 @@ export function buildMoneyFlow(
 
 export type FlowCategory = { id: string; name: string; color: string };
 
-/** Each movement's name in both directions: [left the current accounts, came in]. */
+/** A movement's name in both directions: [left the current accounts, came in]. */
+export type NamePair = readonly [string, string];
+
 export type FlowNames = FlowLabels & {
   uncategorizedIncome: string;
   uncategorizedSpend: string;
-  setSavings: readonly [string, string];
-  setInvestment: readonly [string, string];
-  loan: readonly [string, string];
-  untracked: readonly [string, string];
-  between: readonly [string, string];
-  elsewhere: readonly [string, string];
+  setSavings: NamePair;
+  setInvestment: NamePair;
+  loan: NamePair;
+  untracked: NamePair;
+  between: NamePair;
+  elsewhere: NamePair;
 };
 
 /** What the flow needs of the ledger, without importing its module here. */
@@ -136,9 +138,11 @@ export function moneyFlowFromMaps(
       return { id: id ?? "none", name: category?.name ?? unnamed, color: category?.color ?? OTHER_COLOR, cents };
     });
   // Signed "out": a positive movement left the current accounts.
-  const movement = (id: string, [out, inName]: readonly [string, string], cents: number, color: string): FlowPart => ({
+  // ">=", not "<": lizard reads a "<" here as a type argument list opening
+  // and stops seeing the whole enclosing function.
+  const movement = (id: string, pair: NamePair, cents: number, color: string): FlowPart => ({
     id,
-    name: cents < 0 ? inName : out,
+    name: cents >= 0 ? pair[0] : pair[1],
     cents,
     color,
   });
