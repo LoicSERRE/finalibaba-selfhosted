@@ -32,7 +32,7 @@ import { MonthlyPerformanceSection } from "@/components/analytics/monthly-perfor
 import { TopAssetsSection } from "@/components/analytics/top-assets-section";
 import { FinancingSection } from "@/components/analytics/financing-section";
 import { YearChangeCard } from "@/components/analytics/year-change-card";
-import { periodCategoryTotals } from "@/lib/services/budget-period";
+import { loadPeriodLedger } from "@/lib/services/budget-period";
 
 // Stand-in for a grantor who has never opened Settings, used only when reading
 // someone else's portfolio (a guest's page view must not create rows in the
@@ -104,10 +104,10 @@ export default async function AnalyticsPage() {
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.sp500),
     fetchYFPriceHistory(BENCHMARK_SYMBOLS.cac40),
     // This year's money in and out, as /budgets?year= sums it (v2.20) -
-    // SAVINGS categories left out, as they are there (v2.21).
+    // the same ledger, so the same figure (v2.21.1).
     prisma.category
-      .findMany({ where: { userId: ownerId, kind: "SAVINGS" }, select: { id: true } })
-      .then((rows) => periodCategoryTotals(accountIds, startOfYear, startOfNextYear, new Set(rows.map((r) => r.id)))),
+      .findMany({ where: { userId: ownerId }, select: { id: true, kind: true } })
+      .then((categories) => loadPeriodLedger(accountIds, startOfYear, startOfNextYear, categories)),
   ]);
 
   const result = computeAnalytics({

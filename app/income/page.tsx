@@ -70,11 +70,12 @@ export default async function IncomePage({
     // up there. This section is the category-based half of the same
     // page's "everything that came in" picture.
     prisma.category.findMany({ where: { userId: viewer.id, kind: "INCOME" }, orderBy: { name: "asc" } }),
+    // Net of debits filed under the same category (a salary correction), as
+    // Budgets counts it (v2.21.1).
     prisma.transaction.groupBy({
       by: ["categoryId"],
       where: excludeFromBudgetTotals({
         accountId: { in: accountIds },
-        amountCents: { gt: BigInt(0) },
         date: { gte: startOfYear, lt: startOfNextYear },
         category: { kind: "INCOME" },
       }),
@@ -88,7 +89,7 @@ export default async function IncomePage({
     prisma.transactionSplit.groupBy({
       by: ["categoryId"],
       where: excludeFromBudgetTotalsOnSplit(
-        { amountCents: { gt: BigInt(0) }, category: { kind: "INCOME" } },
+        { category: { kind: "INCOME" } },
         { accountId: { in: accountIds }, date: { gte: startOfYear, lt: startOfNextYear } },
       ),
       _sum: { amountCents: true },

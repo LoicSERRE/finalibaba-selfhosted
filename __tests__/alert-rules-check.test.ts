@@ -348,6 +348,14 @@ describe("a BUDGET_OVERRUN rule, where the bug is always a missing filter", () =
     expect(dispatchMock.mock.calls[0][2]).toContain("450");
   });
 
+  it("does not fire for a purchase that was refunded", async () => {
+    // 450 EUR spent, 100 EUR of it refunded: 350 against a 400 EUR budget.
+    findManyMock.mockResolvedValue([budgetRule()]);
+    spent(450_00 - 100_00);
+
+    await expect(checkCustomAlertRules(SETTINGS, ["acc-1"])).resolves.toEqual([]);
+  });
+
   it("stays quiet while the envelope holds", async () => {
     findManyMock.mockResolvedValue([budgetRule()]);
     spent(399_99);
@@ -356,14 +364,16 @@ describe("a BUDGET_OVERRUN rule, where the bug is always a missing filter", () =
     expect(dispatchMock).not.toHaveBeenCalled();
   });
 
-  it("counts debits only, scoped to this month and these accounts", async () => {
+  it("counts spending net of refunds, scoped to this month and these accounts", async () => {
     findManyMock.mockResolvedValue([budgetRule()]);
     spent(100_00);
 
     await checkCustomAlertRules(SETTINGS, ["acc-1", "acc-2"]);
 
+    // v2.21.1: credits too - the card nets refunds, so must the alert.
     const w = txAggregateMock.mock.calls[0][0].where;
-    expect(w.amountCents).toEqual({ lt: BigInt(0) });
+    expect(w.amountCents).toBeUndefined();
+    expect(splitAggregateMock.mock.calls[0][0].where.amountCents).toBeUndefined();
     expect(w.accountId).toEqual({ in: ["acc-1", "acc-2"] });
     expect(w.categoryId).toBe("cat-1");
     expect(w.date.gte).toBeInstanceOf(Date);

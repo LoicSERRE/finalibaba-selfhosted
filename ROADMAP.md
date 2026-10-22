@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.21.0**
+Current release: **v2.21.1**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -34,6 +34,12 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
 ---
+
+## v2.21.1 - Current accounts that add up
+
+- **Budgets' figures add up to the current accounts' real change.** One ledger per period puts every line in exactly one place - income, spending, set aside, or another movement - and a new "Vos comptes courants" card lays the sum out, listing a loan paid out, a transfer in from an untracked bank or a refund from a relative instead of folding them into "taken from your current accounts". Checked against a real backup: 24 periods, to the cent.
+- **Refunds come off their category** instead of counting as income, on the card, the drill-down, budget alerts, rollover and /income alike.
+- The money flow's middle node is the current accounts, balanced by their real change; the year view's KPIs say Revenus, Dépenses, Reste à vivre.
 
 ## v2.21.0 - Money set aside
 

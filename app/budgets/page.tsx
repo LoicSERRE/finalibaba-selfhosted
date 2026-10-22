@@ -12,8 +12,9 @@ import { AutoCategorizeButton } from "@/components/budgets/auto-categorize-butto
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { normalizeLabel } from "@/lib/domain/recurring";
 import { monthsBetween, computeRolloverCarryInCents } from "@/lib/domain/budgets";
-import { loadBudgetYear, periodCategoryTotals, periodSetAside, savingsCategoryIdsOf } from "@/lib/services/budget-period";
+import { loadBudgetYear, loadPeriodLedger } from "@/lib/services/budget-period";
 import { SetAsideCard } from "@/components/budgets/set-aside-card";
+import { CurrentAccountsCard } from "@/components/budgets/current-accounts-card";
 import { flowNames } from "@/components/budgets/flow-names";
 import { excludeFromBudgetTotals, excludeFromBudgetTotalsOnSplit } from "@/lib/domain/transaction-filters";
 import { getTranslations, getLocale } from "next-intl/server";
@@ -88,17 +89,15 @@ export default async function BudgetsPage({
   // Every category, every kind - INCOME categories don't get a card on this
   // page (see expenseCategories below) but the "à catégoriser" bulk picker
   // further down still needs to offer them, e.g. for a stray salary-like
-  // credit that landed uncategorized. Loaded first: the totals below leave
-  // the SAVINGS ones out (v2.21).
+  // credit that landed uncategorized. Loaded first: the ledger needs each
+  // category's kind.
   const categories = await prisma.category.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" } });
-  const savingsIds = savingsCategoryIdsOf(categories);
 
-  const [{ spendMap, incomeMap }, setAside, uncategorizedTx] = await Promise.all([
-    // Debits and credits per category, split lines in place of their
-    // parent - shared with the year view (lib/services/budget-period.ts).
-    periodCategoryTotals(accountIds, startOfMonth, startOfNextMonth, savingsIds),
-    // Money set aside (v2.21): never in the two maps above, shown beside them.
-    periodSetAside(accountIds, startOfMonth, startOfNextMonth, savingsIds),
+  const [ledger, uncategorizedTx] = await Promise.all([
+    // Every line of the month in exactly one place - income, spending, set
+    // aside or another movement of the current accounts - shared with the
+    // year view (lib/services/budget-period.ts).
+    loadPeriodLedger(accountIds, startOfMonth, startOfNextMonth, categories),
     // Also excludes split transactions - already fully allocated across
     // categories (even a split line with a null categoryId is a deliberate
     // "leave this portion uncategorized" choice, not a "please suggest one"
@@ -115,6 +114,7 @@ export default async function BudgetsPage({
   // an income category. INCOME categories (Revenus, or anything else a
   // user points at real income) get their own section on /income instead.
   const expenseCategories = categories.filter((c) => c.kind === "EXPENSE");
+  const { spendMap, incomeMap, setAside } = ledger;
 
   // A split line left with no category (a deliberate "leave this portion
   // uncategorized" choice) still counts as uncategorized spend here, even
@@ -123,8 +123,9 @@ export default async function BudgetsPage({
   // is uncategorized" vs "which whole transactions can be bulk-assigned").
   const uncategorizedSpentCents = spendMap.get(null) ?? 0;
 
-  // "Reste à vivre" - every credit minus every debit this month, categorized
-  // or not, internal transfers already excluded from both maps above. Not
+  // "Reste à vivre" - income minus spending this month, categorized or not,
+  // refunds netted per category; transfers and money set aside are in
+  // neither map (CurrentAccountsCard places them). Not
   // scoped to categorized transactions only: it's meant to answer "how much
   // came in vs went out", which shouldn't require perfect categorization to
   // be true.
@@ -132,9 +133,9 @@ export default async function BudgetsPage({
   const totalExpenseCents = [...spendMap.values()].reduce((a, b) => a + b, 0);
   const resteAVivreCents = totalIncomeCents - totalExpenseCents;
 
-  // The same two maps, drawn as a flow (v2.16): the diagram and the figures
+  // The same ledger, drawn as a flow (v2.16): the diagram and the figures
   // above it are the same numbers by construction.
-  const moneyFlow = moneyFlowFromMaps(incomeMap, spendMap, categories, flowNames(t), setAside);
+  const moneyFlow = moneyFlowFromMaps(incomeMap, spendMap, categories, flowNames(t), ledger);
 
   const groupsByLabel = new Map<string, { label: string; totalCents: number; ids: string[] }>();
   for (const tx of uncategorizedTx) {
@@ -159,12 +160,13 @@ export default async function BudgetsPage({
   if (rolloverCategories.length > 0) {
     const earliestAnchor = new Date(Math.min(...rolloverCategories.map((c) => c.budgetRolloverEnabledAt!.getTime())));
     const rolloverCategoryIds = rolloverCategories.map((c) => c.id);
+    // Credits included: a category's spending is net of its refunds
+    // (v2.21.1), the same figure as on its card.
     const [rolloverTx, rolloverSplits] = await Promise.all([
       prisma.transaction.findMany({
         where: excludeFromBudgetTotals({
           accountId: { in: accountIds },
           categoryId: { in: rolloverCategoryIds },
-          amountCents: { lt: BigInt(0) },
           date: { gte: earliestAnchor, lt: startOfMonth },
         }),
         select: { categoryId: true, date: true, amountCents: true },
@@ -177,7 +179,7 @@ export default async function BudgetsPage({
       // window instead of the current calendar month.
       prisma.transactionSplit.findMany({
         where: excludeFromBudgetTotalsOnSplit(
-          { categoryId: { in: rolloverCategoryIds }, amountCents: { lt: BigInt(0) } },
+          { categoryId: { in: rolloverCategoryIds } },
           { accountId: { in: accountIds }, date: { gte: earliestAnchor, lt: startOfMonth } },
         ),
         select: { categoryId: true, amountCents: true, transaction: { select: { date: true } } },
@@ -251,7 +253,7 @@ export default async function BudgetsPage({
         />
       ) : (
         <>
-          {(totalIncomeCents > 0 || totalExpenseCents > 0) && (
+          {(totalIncomeCents !== 0 || totalExpenseCents !== 0) && (
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-1">
               <span className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("resteAVivreTitle")}</span>
               <div
@@ -269,11 +271,14 @@ export default async function BudgetsPage({
             </div>
           )}
 
-          <SetAsideCard
-            setAside={setAside}
-            categories={categories.filter((c) => c.kind === "SAVINGS")}
-            months={1}
+          <SetAsideCard setAside={setAside} categories={categories.filter((c) => c.kind === "SAVINGS")} months={1} />
+
+          <CurrentAccountsCard
             resteAVivreCents={resteAVivreCents}
+            setAside={setAside}
+            other={ledger.other}
+            otherLines={ledger.otherLines}
+            currentChangeCents={ledger.currentChangeCents}
           />
 
           <MoneyFlowChart flow={moneyFlow} />

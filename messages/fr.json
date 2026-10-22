@@ -389,9 +389,7 @@
     "splitBadgeHint": "Fait partie d'une transaction divisée entre plusieurs catégories - modifiez la répartition depuis le tableau des transactions du compte ou le grand livre.",
     "flow": {
       "title": "Flux du mois",
-      "income": "Revenus",
-      "savings": "Épargne",
-      "drawn": "Pris sur l'épargne",
+      "hub": "Comptes courants",
       "other": "Autres",
       "uncategorizedIncome": "Revenus non catégorisés",
       "uncategorizedSpend": "Non catégorisé",
@@ -400,21 +398,19 @@
       "zoomIn": "Zoomer",
       "zoomOut": "Dézoomer",
       "zoomReset": "Afficher tout le graphique",
-      "zoomHint": "Pincez ou touchez deux fois pour zoomer, glissez pour vous déplacer.",
-      "leftover": "Reste sur les comptes",
-      "drawnCurrent": "Pris sur les comptes"
+      "zoomHint": "Pincez ou touchez deux fois pour zoomer, glissez pour vous déplacer."
     },
     "year": {
       "subtitle": "L'année entière : ce qui est entré, ce qui est sorti, et où c'est allé.",
       "switchMonth": "Mois",
       "switchYear": "Année",
       "switchLabel": "Période",
-      "income": "Entrées",
-      "expenses": "Sorties",
-      "saved": "Épargné",
+      "income": "Revenus",
+      "expenses": "Dépenses",
+      "saved": "Reste à vivre",
       "savingsRate": "Taux d'épargne",
       "partial": "Année en cours : {months} mois couverts. Les budgets sont comparés sur ces mois-là.",
-      "chartTitle": "Entrées et sorties, mois par mois",
+      "chartTitle": "Revenus et dépenses, mois par mois",
       "byCategory": "Dépenses par catégorie",
       "perMonth": "{amount} par mois en moyenne",
       "share": "{pct} % des dépenses",
@@ -426,14 +422,27 @@
     },
     "setAside": {
       "title": "Mis de côté",
-      "hint": "L'argent sorti de vos comptes courants pour être gardé plutôt que dépensé : les virements vers vos livrets, les achats de titres et les virements vers vos comptes-titres ou crypto, et ce que vous classez dans une catégorie de type Épargne. Ce qui en revient est déduit. Jamais compté comme une dépense.",
+      "hint": "L'argent sorti de vos comptes courants pour être gardé plutôt que dépensé : les virements vers vos livrets, les achats de titres et les virements vers vos comptes-titres ou crypto, et ce que vous classez dans une catégorie de type Épargne. Ce qui en revient est déduit. Jamais compté comme une dépense. Ce que vos livrets et placements rapportent ou coûtent sur place (intérêts, frais) y est compté aussi.",
       "savings": "Vers vos livrets",
       "takenFromSavings": "Retiré de vos livrets",
       "investment": "Titres et placements",
       "takenFromInvestment": "Retiré de vos placements",
-      "target": "d'objectif",
-      "leftover": "Reste sur vos comptes courants :",
-      "drawnCurrent": "Pris sur vos comptes courants :"
+      "target": "d'objectif"
+    },
+    "movements": {
+      "title": "Vos comptes courants",
+      "hint": "Ce que sont devenus vos comptes courants sur la période, d'après leurs opérations : le reste à vivre, moins ce qui a été mis de côté, plus les mouvements qui ne sont ni des revenus ni des dépenses - un prêt versé ou remboursé, un virement marqué comme interne qui vient d'un compte que l'app ne suit pas (une autre banque, un proche). Le total est la variation réelle de vos comptes courants.",
+      "loanIn": "Prêt versé",
+      "loanOut": "Remboursements de prêt",
+      "untrackedIn": "Reçu d'autres comptes",
+      "untrackedOut": "Envoyé vers d'autres comptes",
+      "between": "Entre vos comptes courants",
+      "elsewhereIn": "Payé depuis vos autres comptes",
+      "elsewhereOut": "Resté sur vos autres comptes",
+      "leftover": "Resté sur vos comptes courants",
+      "drawnCurrent": "Pris sur vos comptes courants",
+      "details": "{count, plural, one {Voir l'opération} other {Voir les # opérations}}",
+      "more": "Et {count, plural, one {# autre} other {# autres}}, dans Transactions."
     }
   },
   "transactions": {

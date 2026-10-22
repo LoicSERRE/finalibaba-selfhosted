@@ -30,7 +30,9 @@ export function CategoryCard({
 }>) {
   const budgetCents = category.budgetCents !== null ? Number(category.budgetCents) : null;
   const effectiveBudgetCents = budgetCents !== null ? budgetCents + rolloverCarryInCents : null;
-  const pct = effectiveBudgetCents ? Math.round((spentCents / effectiveBudgetCents) * 100) : 0;
+  // Never below zero: refunds are netted (v2.21.1), and a month that got
+  // back more than it spent fills nothing.
+  const pct = effectiveBudgetCents ? Math.max(0, Math.round((spentCents / effectiveBudgetCents) * 100)) : 0;
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3">

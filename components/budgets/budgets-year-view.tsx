@@ -10,6 +10,8 @@ import { YearCashflowChart } from "@/components/budgets/year-cashflow-chart";
 import { PeriodSwitch } from "@/components/budgets/period-switch";
 import { SetAsideCard } from "@/components/budgets/set-aside-card";
 import { totalSetAside } from "@/lib/domain/set-aside";
+import { totalOther } from "@/lib/domain/period-ledger";
+import { CurrentAccountsCard } from "@/components/budgets/current-accounts-card";
 import { flowNames } from "@/components/budgets/flow-names";
 
 type Props = {
@@ -36,7 +38,8 @@ const navLink =
  */
 export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
   const [t, tc] = await Promise.all([getTranslations("budgets"), getTranslations("common")]);
-  const { categories, spendMap, incomeMap, amounts, setAside } = data;
+  const { categories, ledger } = data;
+  const { spendMap, incomeMap, setAside } = ledger;
 
   const months = monthsCovered(year, now);
   const incomeCents = [...incomeMap.values()].reduce((a, b) => a + b, 0);
@@ -48,13 +51,13 @@ export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
     color: "#71717a",
   });
   const monthFmt = new Intl.DateTimeFormat(intlLocale, { month: "short", timeZone: "UTC" });
-  const chart = monthlyCashflow(amounts).map((m) => ({
+  const chart = monthlyCashflow(ledger.byMonth, year).map((m) => ({
     label: monthFmt.format(new Date(Date.UTC(year, m.month, 1))),
     income: m.incomeCents,
     expense: m.expenseCents,
   }));
-  const flow = moneyFlowFromMaps(incomeMap, spendMap, categories, flowNames(t), setAside);
-  const hasData = incomeCents > 0 || expenseCents > 0 || totalSetAside(setAside) !== 0;
+  const flow = moneyFlowFromMaps(incomeMap, spendMap, categories, flowNames(t), ledger);
+  const hasData = incomeCents !== 0 || expenseCents !== 0 || totalSetAside(setAside) !== 0 || totalOther(ledger.other) !== 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -105,7 +108,15 @@ export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
           </div>
           {months > 0 && months < 12 && <p className="text-xs text-[var(--muted)] -mt-3">{t("year.partial", { months })}</p>}
 
-          <SetAsideCard setAside={setAside} categories={categories.filter((c) => c.kind === "SAVINGS")} months={months} resteAVivreCents={savedCents} />
+          <SetAsideCard setAside={setAside} categories={categories.filter((c) => c.kind === "SAVINGS")} months={months} />
+
+          <CurrentAccountsCard
+            resteAVivreCents={savedCents}
+            setAside={setAside}
+            other={ledger.other}
+            otherLines={ledger.otherLines}
+            currentChangeCents={ledger.currentChangeCents}
+          />
 
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("year.chartTitle")}</h2>
@@ -118,7 +129,7 @@ export async function BudgetsYearView({ year, data, intlLocale, now }: Props) {
             <h2 id="year-categories-title" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">{t("year.byCategory")}</h2>
             {rows.map((r) => {
               const over = r.budgetCents !== null && r.spentCents > r.budgetCents;
-              const pct = r.budgetCents ? Math.min(100, (r.spentCents / r.budgetCents) * 100) : r.sharePct;
+              const pct = r.budgetCents ? Math.min(100, Math.max(0, (r.spentCents / r.budgetCents) * 100)) : r.sharePct;
               return (
                 <div key={r.id ?? "none"} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
