@@ -68,7 +68,7 @@ psycopg2-binary>=2.9.13
 fastapi>=0.143.0
 uvicorn>=0.54.0
 apscheduler>=3.11.3
-playwright>=1.63.0
+playwright>=1.64.0
 # Transitive (requests, woob, pytr), pinned here only to raise its floor:
 # CVE-2026-97687 and CVE-2026-97689, both fixed in 2.8.0, were found by the
 # v2.12.0 release scan of the sync image. pip-audit had not flagged them yet.
