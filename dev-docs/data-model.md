@@ -2,7 +2,7 @@
 
 ### Data model
 
-- `Institution` → many `Account`. Carries at most one per-user sync provider's credentials: `woobModule`/`woobLogin`/`woobPassword`, or (v2.1) `trPhone`/`trPin` - never both, enforced by each config action clearing the other's fields. See "Per-user Trade Republic" below
+- `Institution` → many `Account`. Carries at most one per-user sync provider's credentials: `woobModule`/`woobLogin`/`woobPassword` plus `woobConfig` (whatever else the module declares - see `dev-docs/sync-service.md`, "Module config fields"), or (v2.1) `trPhone`/`trPin` - never both, enforced by each config action clearing the other's fields. `woobLogin`/`woobPassword` are null for a module that declares no such field (an exchange keyed by API keys), so `woobModule` alone means "syncs through Woob". See "Per-user Trade Republic" below
 - `Account` (`AccountType`: `CHECKING | SAVINGS | INVESTMENT | REAL_ESTATE | MEAL_VOUCHER | CRYPTO | AUTOMOBILE | LOAN`)
   - Fiat (CHECKING, SAVINGS, MEAL_VOUCHER): `HistoricalBalance` (balance in cents as `BigInt`)
   - Investment/Crypto: `Holding` (ticker + `Decimal` quantity) + live price at runtime. `investmentSubtype` = `"PEA"` or `"CTO"` (cosmetic label only). `taxTreatment` (`TaxTreatment` enum) + `taxRatePct` drive the actual latent-tax rate - see "Tax treatment" below

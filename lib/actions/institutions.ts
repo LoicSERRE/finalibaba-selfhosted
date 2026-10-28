@@ -6,14 +6,17 @@ import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned } from "@/lib/auth-context";
 import { encryptSecret } from "@/lib/domain/crypto-at-rest";
 import { legacyTrSyncIds, parseTrSuffix, buildTrSyncId } from "@/lib/domain/sync-ids";
+import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
+import { woobExtraFromFormData, type WoobCredentialError } from "@/lib/domain/woob-fields";
+import { prepareWoobColumns } from "@/lib/services/woob-modules";
 
-export async function createInstitution(formData: FormData) {
+export async function createInstitution(formData: FormData): Promise<ActionResult<void, WoobCredentialError>> {
   const name = (formData.get("name") as string).trim();
   if (!name) throw new Error("Name required");
 
   const woobModule = (formData.get("woobModule") as string | null)?.trim() || null;
-  const woobLogin = (formData.get("woobLogin") as string | null)?.trim() || null;
-  const woobPassword = (formData.get("woobPassword") as string | null)?.trim() || null;
+  const woobLogin = (formData.get("woobLogin") as string | null)?.trim() ?? "";
+  const woobPassword = (formData.get("woobPassword") as string | null)?.trim() ?? "";
   const trPhone = (formData.get("trPhone") as string | null)?.trim() || null;
   const trPin = (formData.get("trPin") as string | null)?.trim() || null;
 
@@ -27,15 +30,21 @@ export async function createInstitution(formData: FormData) {
   // path, and it is the one a brand-new user takes first. `woobModule` is a
   // module name rather than a credential and stays readable, since
   // sync/db.py matches on it and it identifies no person.
+  // A Woob bank goes through prepareWoobColumns, like setWoobConfig: the
+  // module decides what it needs (the Crédit Agricole region, a date of
+  // birth - issue #135), and a payload missing any of it is refused rather
+  // than stored as a connection that can never load.
   let provider: Record<string, string | null> = {};
   if (trPhone && trPin) {
     provider = { trPhone: encryptSecret(trPhone), trPin: encryptSecret(trPin) };
-  } else if (woobModule && woobLogin && woobPassword) {
-    provider = {
-      woobModule,
-      woobLogin: encryptSecret(woobLogin),
-      woobPassword: encryptSecret(woobPassword),
-    };
+  } else if (woobModule) {
+    const prepared = await prepareWoobColumns(woobModule, {
+      login: woobLogin,
+      password: woobPassword,
+      extra: woobExtraFromFormData(formData),
+    });
+    if (!prepared.ok) return actionError(prepared.error, prepared.field);
+    provider = prepared.columns;
   }
 
   const viewer = await getViewer();
@@ -59,6 +68,7 @@ export async function createInstitution(formData: FormData) {
     await prisma.institution.create({ data: { userId: viewer.id, name, ...provider } });
   }
   revalidatePath("/settings");
+  return actionOk();
 }
 
 export async function setGocardlessInstitutionId(id: string, gcId: string) {
@@ -94,30 +104,39 @@ export async function clearGocardlessConnection(id: string) {
   revalidatePath("/settings");
 }
 
-export async function setWoobConfig(id: string, module: string, login: string, password: string) {
+export type WoobConfigInput = {
+  module: string;
+  login: string;
+  password: string;
+  /** The module's other fields (issue #135), field id to value. */
+  extra: Record<string, string>;
+};
+
+export async function setWoobConfig(
+  id: string,
+  input: WoobConfigInput,
+): Promise<ActionResult<void, WoobCredentialError>> {
   const viewer = await getViewer();
   await assertOwned("institution", id, viewer.id);
+  // Whatever the module declares, checked against the module itself and
+  // encrypted - see lib/services/woob-modules.ts. Every field is replaced:
+  // a value left over from another module would be handed to this one.
+  const prepared = await prepareWoobColumns(input.module, input);
+  if (!prepared.ok) return actionError(prepared.error, prepared.field);
   // Clears any Trade Republic config for the same reason
   // setTradeRepublicConfig clears the Woob fields: one provider per
   // institution, decided explicitly here rather than by whichever branch the
   // sync service happens to test first.
   await prisma.institution.update({
     where: { id },
-    data: {
-      woobModule: module,
-      // Encrypted at rest: these are somebody else's bank credentials, and
-      // before v2.10.5 one SELECT returned every invited user's in clear.
-      woobLogin: encryptSecret(login),
-      woobPassword: encryptSecret(password),
-      trPhone: null,
-      trPin: null,
-    },
+    data: { ...prepared.columns, trPhone: null, trPin: null },
   });
   await recordAuditEvent({
     action: AUDIT.bankConfigured, actorId: viewer.id, targetType: "Institution",
-    targetId: id, detail: `woob:${module}`,
+    targetId: id, detail: `woob:${prepared.columns.woobModule}`,
   });
   revalidatePath("/settings");
+  return actionOk();
 }
 
 /**
@@ -143,6 +162,7 @@ export async function setTradeRepublicConfig(id: string, phone: string, pin: str
       woobModule: null,
       woobLogin: null,
       woobPassword: null,
+      woobConfig: null,
     },
   });
   await recordAuditEvent({
@@ -171,7 +191,7 @@ export async function clearWoobConfig(id: string) {
   await assertOwned("institution", id, viewer.id);
   await prisma.institution.update({
     where: { id },
-    data: { woobModule: null, woobLogin: null, woobPassword: null },
+    data: { woobModule: null, woobLogin: null, woobPassword: null, woobConfig: null },
   });
   revalidatePath("/settings");
 }

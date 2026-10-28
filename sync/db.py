@@ -192,10 +192,15 @@ def record_loan(cur, account_db_id: str, *, owed_cents: int, facts: dict):
 
 
 def get_woob_institutions(cur) -> list[dict]:
-    """Return all institutions with Woob credentials configured."""
+    """Return all institutions with a Woob module configured.
+
+    `woobModule` alone decides it: a module whose CONFIG declares no `login`
+    (an exchange keyed by API keys, see woob_config.py) is stored with a null
+    woobLogin and is just as configured. Every write path sets the module and
+    its credentials together, never the module alone."""
     cur.execute(
-        'SELECT id, name, "woobModule", "woobLogin", "woobPassword" FROM "Institution" '
-        'WHERE "woobModule" IS NOT NULL AND "woobLogin" IS NOT NULL'
+        'SELECT id, name, "woobModule", "woobLogin", "woobPassword", "woobConfig" FROM "Institution" '
+        'WHERE "woobModule" IS NOT NULL'
     )
     # Decrypted at the boundary: every consumer below receives usable
     # credentials and none of them has to remember this exists.

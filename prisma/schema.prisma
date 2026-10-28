@@ -231,6 +231,12 @@ model Institution {
   woobModule              String? // Woob backend module name, e.g. "bnporc", "caissedepargne"
   woobLogin               String?
   woobPassword            String?
+  // Whatever else the module's CONFIG declares (issue #135): the Crédit
+  // Agricole region, a date of birth, an API key. A JSON object of field id
+  // to string, encrypted as a whole like woobPassword - it can hold secrets,
+  // and which ones depends on the module. Validated against the module's own
+  // field list on write (lib/services/woob-modules.ts).
+  woobConfig              String?
   // Per-user Trade Republic (v2.1). Same type-conditional-nullable-fields
   // convention as the woob* trio above and as Account's own LOAN-only
   // columns: an institution carries either a Woob config, a Trade Republic

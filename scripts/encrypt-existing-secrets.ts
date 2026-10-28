@@ -19,7 +19,9 @@ const APPLY = process.argv.includes("--apply");
 
 async function countPending(): Promise<number> {
   const [institutions, users, settings, links, keys, invites] = await Promise.all([
-    prisma.institution.findMany({ select: { woobLogin: true, woobPassword: true, trPhone: true, trPin: true } }),
+    prisma.institution.findMany({
+      select: { woobLogin: true, woobPassword: true, woobConfig: true, trPhone: true, trPin: true },
+    }),
     prisma.user.findMany({ select: { totpSecret: true } }),
     prisma.userSettings.findMany({ select: { smtpPassword: true, ntfyAuthToken: true } }),
     prisma.shareLink.findMany({ select: { token: true } }),

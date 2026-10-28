@@ -26,7 +26,7 @@ def test_a_sync_is_skipped_while_a_setup_is_in_flight(monkeypatch):
     """The core guard. Skipped, not failed: run() must return without touching
     Woob at all."""
     called = []
-    monkeypatch.setattr(sync_woob, "_configure_woob", lambda *a, **k: called.append(a))
+    monkeypatch.setattr(sync_woob, "update_woob_repositories", lambda *a, **k: called.append(a))
 
     setup_locks.mark_setup_started("inst-1")
     result = sync_woob.run("inst-1", "Amundi", "amundi", "login", "pw")
@@ -38,7 +38,7 @@ def test_a_sync_is_skipped_while_a_setup_is_in_flight(monkeypatch):
 def test_skipping_writes_no_sync_log(monkeypatch):
     """A skip is not a failure. Writing a SyncLog row would raise a failure
     alert for a bank that is in the middle of being connected properly."""
-    monkeypatch.setattr(sync_woob, "_configure_woob", lambda *a, **k: None)
+    monkeypatch.setattr(sync_woob, "update_woob_repositories", lambda *a, **k: None)
     wrote = []
     monkeypatch.setattr(sync_woob, "_fail", lambda *a, **k: wrote.append(a))
 
@@ -51,7 +51,7 @@ def test_skipping_writes_no_sync_log(monkeypatch):
 def test_an_unrelated_institution_still_syncs(monkeypatch):
     """The lock is per institution - one bank being set up must not freeze the
     others."""
-    monkeypatch.setattr(sync_woob, "_configure_woob", lambda *a, **k: None)
+    monkeypatch.setattr(sync_woob, "update_woob_repositories", lambda *a, **k: None)
 
     setup_locks.mark_setup_started("inst-1")
 

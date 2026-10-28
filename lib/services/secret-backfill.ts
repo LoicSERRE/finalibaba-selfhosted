@@ -22,7 +22,7 @@ import { encryptSecret, isEncrypted, tokenLookupHash } from "@/lib/domain/crypto
 export type BackfillResult = { encrypted: number; alreadyDone: number; failures: number };
 
 const CREDENTIAL_TABLES = [
-  { label: "Institution", fields: ["woobLogin", "woobPassword", "trPhone", "trPin"] },
+  { label: "Institution", fields: ["woobLogin", "woobPassword", "woobConfig", "trPhone", "trPin"] },
   { label: "User", fields: ["totpSecret"] },
   { label: "UserSettings", fields: ["smtpPassword", "ntfyAuthToken"] },
 ] as const;

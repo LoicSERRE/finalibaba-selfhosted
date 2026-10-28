@@ -6,6 +6,7 @@ Endpoints (internal Docker network only, not exposed externally):
   POST /sync/trade-republic → trigger Trade Republic sync
   POST /sync/institution/{id} → trigger Woob sync for a specific institution
   GET  /woob/modules        → list every Woob module capable of bank sync
+  GET  /woob/modules/{m}/fields → the config fields that module declares
   GET  /status              → last sync logs per source
 
 Cron: every 4 hours
@@ -27,6 +28,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+import woob_config
 from crypto_at_rest import decrypt_institution_row
 from sync_activity import is_running, running, tracked
 from workers import executor
@@ -131,10 +133,10 @@ def _notify_owner(institution_id: str) -> None:
 
 
 @tracked(lambda inst_id, *_rest: f"woob:{inst_id}")
-def _run_woob_institution(inst_id: str, inst_name: str, module: str, login: str, password: str):
+def _run_woob_institution(inst_id: str, inst_name: str, module: str, login, password, extra=None):
     try:
         import sync_woob
-        result = sync_woob.run(inst_id, inst_name, module, login, password)
+        result = sync_woob.run(inst_id, inst_name, module, login, password, extra)
         log.info("Woob sync done for %s: %s", inst_name, result)
         _notify_owner(inst_id)
     except sync_woob.AuthRequiredError:
@@ -184,7 +186,7 @@ def _run_all_woob():
         log.exception("Failed to fetch Woob institutions")
         return
     for inst in institutions:
-        _run_woob_institution(inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
+        _run_woob_institution(inst["id"], inst["name"], *woob_config.credentials(inst))
 
 
 def _run_all_tr_institutions():
@@ -355,6 +357,17 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(_keepalive_tr, "interval", minutes=90, id="tr_keepalive")
     scheduler.start()
     log.info("Scheduler started - Woob-source sync every 30min, full sync every 4h, TR keepalive every 90min")
+
+    # Credentials earlier versions copied in clear to Woob's backends file, on
+    # the persistent woob_session volume. Nothing writes them there any more
+    # (woob_config.py), so the ones already there are removed at every start -
+    # a no-op once done.
+    try:
+        purged = woob_config.purge_legacy_backends()
+        if purged:
+            log.info("Removed %d institution section(s) from Woob's backends file", purged)
+    except OSError:
+        log.exception("Could not clean Woob's backends file")
 
     # Immediate keepalive on startup: if the container restarts when the session
     # was close to expiry (3h TTL), the next scheduled keepalive (≤2h away) would
@@ -706,7 +719,8 @@ def _institution_job(institution_id: str):
         conn = get_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
-            'SELECT id, name, "woobModule", "woobLogin", "woobPassword", "trPhone" FROM "Institution" WHERE id = %s',
+            'SELECT id, name, "woobModule", "woobLogin", "woobPassword", "woobConfig", "trPhone" '
+            'FROM "Institution" WHERE id = %s',
             (institution_id,),
         )
         inst = decrypt_institution_row(cur.fetchone())
@@ -733,7 +747,7 @@ def _institution_job(institution_id: str):
             {"error": "No sync backend configured for this institution"}, status_code=400
         )
 
-    args = (inst["id"], inst["name"], inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
+    args = (inst["id"], inst["name"], *woob_config.credentials(inst))
     return _run_woob_institution, args, f"woob:{inst['id']}", inst["name"]
 
 
@@ -800,6 +814,45 @@ async def list_woob_bank_modules():
     except Exception:
         log.exception("Failed to list Woob bank modules")
         return JSONResponse({"error": "Failed to list modules - check service logs"}, status_code=500)
+
+
+@app.get("/woob/modules/{module}/fields")
+async def woob_module_fields(module: str):
+    """The fields a person fills in to connect through this module, read from
+    the module's own CONFIG - see woob_config.py for why it is not a list kept
+    here (issue #135). Returns labels, kinds, choices and defaults; never a
+    stored value. Only CapBank modules are described: this loads the module's
+    code, and nothing else is offered in the picker."""
+    import asyncio
+
+    if not woob_config.is_valid_module_name(module):
+        return JSONResponse({"error": "unknown_module"}, status_code=404)
+
+    def _describe():
+        from woob.core import Woob
+        from woob.exceptions import ModuleLoadError
+
+        w = Woob()
+        info = w.repositories.get_module_info(module)
+        if info is None or "CapBank" not in [str(c) for c in info.capabilities]:
+            return None
+        try:
+            loaded = w.load_or_install_module(module)
+        except ModuleLoadError:
+            log.warning("Woob module %s cannot be loaded - no fields to describe", module)
+            return "unavailable"
+        return woob_config.describe_fields(loaded.klass.CONFIG)
+
+    try:
+        fields = await asyncio.get_event_loop().run_in_executor(executor, _describe)
+    except Exception:
+        log.exception("Failed to describe Woob module %s", module)
+        return JSONResponse({"error": "Failed to describe module - check service logs"}, status_code=500)
+    if fields is None:
+        return JSONResponse({"error": "unknown_module"}, status_code=404)
+    if fields == "unavailable":
+        return JSONResponse({"error": "module_unavailable"}, status_code=422)
+    return {"module": module, "fields": fields}
 
 
 @app.get("/health")

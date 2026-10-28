@@ -39,14 +39,16 @@ import logging
 import psycopg2.extras
 
 import setup_locks
+import woob_config
 from crypto_at_rest import decrypt_institution_row
 from db import get_conn
 from sync_woob import (
+    BackendConfigError,
     ModuleUnavailableError,
-    _configure_woob,
     load_backend_or_explain,
     make_woob,
     persist_accounts,
+    update_woob_repositories,
 )
 
 log = logging.getLogger(__name__)
@@ -81,7 +83,7 @@ def _fetch_institution(institution_id: str) -> dict | None:
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        'SELECT id, name, "woobModule", "woobLogin", "woobPassword" FROM "Institution" WHERE id = %s',
+        'SELECT id, name, "woobModule", "woobLogin", "woobPassword", "woobConfig" FROM "Institution" WHERE id = %s',
         (institution_id,),
     )
     row = decrypt_institution_row(cur.fetchone())
@@ -264,7 +266,7 @@ def start_setup(institution_id: str) -> dict:
     # From here until _cleanup, no scheduled sync may open a competing session
     # on this bank - see setup_locks for the Amundi approval it silently broke.
     setup_locks.mark_setup_started(institution_id)
-    _configure_woob(backend_name, inst["woobModule"], inst["woobLogin"], inst["woobPassword"])
+    update_woob_repositories()
 
     # Same storage as the sync path, deliberately: what this setup
     # authenticates is exactly what the next sync must reuse.
@@ -275,7 +277,13 @@ def start_setup(institution_id: str) -> dict:
         # so the except never fired and `get_backend` below raised a KeyError
         # the user received as a bare 500. Seen four times in a row on a real
         # Caisse d'Epargne connection, with nothing on screen saying why.
-        load_backend_or_explain(w, inst["woobModule"], backend_name)
+        module, login, password, extra = woob_config.credentials(inst)
+        load_backend_or_explain(w, module, backend_name, login, password, extra)
+    except BackendConfigError as e:
+        # A region or a date of birth missing: nothing to connect yet, and the
+        # message says where to add it.
+        _cleanup(institution_id)
+        raise SetupError(str(e)) from None
     except ModuleUnavailableError as e:
         # The lock has to come off, or a module this image cannot load would
         # freeze every scheduled sync on that bank until the entry expires.

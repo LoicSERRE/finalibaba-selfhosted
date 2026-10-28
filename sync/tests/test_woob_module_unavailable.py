@@ -35,6 +35,16 @@ import sync_woob
 from sync_woob import ModuleUnavailableError, load_backend_or_explain
 
 
+class _Loaded:
+    """What get_or_load_module returns: a module whose CONFIG is read for the
+    params. An empty BackendConfig declares nothing, so no param is passed."""
+
+    def __init__(self):
+        from woob.tools.backend import BackendConfig
+
+        self.klass = type("FakeModule", (), {"CONFIG": BackendConfig()})
+
+
 class FakeModulesLoader:
     def __init__(self, error=None):
         self._error = error
@@ -44,26 +54,24 @@ class FakeModulesLoader:
         self.asked.append(name)
         if self._error:
             raise self._error
-        return object()
+        return _Loaded()
 
 
 class FakeWoob:
-    """Mimics the one behaviour that matters: load_backends never raises."""
+    """Mimics what matters: the module loader that raises, and a backend
+    registration that has to be checked rather than assumed."""
 
     def __init__(self, *, load_error=None, registers=True):
         self.modules_loader = FakeModulesLoader(load_error)
         self.backend_instances = {}
+        self.storage = object()
         self._registers = registers
         self.load_calls = []
 
-    def load_backends(self, modules=None, names=None, **kwargs):
-        self.load_calls.append((modules, names))
+    def load_backend(self, module, name, params=None, storage=None, **kwargs):
+        self.load_calls.append((module, name))
         if self._registers:
-            for n in names or []:
-                self.backend_instances[n] = object()
-        # Deliberately returns normally either way - this is what woob does,
-        # and assuming otherwise is the bug this file exists for.
-        return dict(self.backend_instances)
+            self.backend_instances[name] = object()
 
 
 def _module_load_error(message):
@@ -79,28 +87,28 @@ def test_missing_python_package_is_reported_with_the_package_name():
         load_error=_module_load_error('Module requires python package "python-jose" but not installed.')
     )
     with pytest.raises(ModuleUnavailableError) as excinfo:
-        load_backend_or_explain(w, "caissedepargne", "inst_abc")
+        load_backend_or_explain(w, "caissedepargne", "inst_abc", "x", "y")
     assert "python-jose" in str(excinfo.value)
     assert "caissedepargne" in str(excinfo.value)
 
 
 def test_the_backend_is_never_used_when_the_module_failed():
     # The KeyError came from reaching get_backend anyway. Nothing must be
-    # registered, and load_backends must not even be attempted.
+    # registered, and load_backend must not even be attempted.
     w = FakeWoob(load_error=_module_load_error("anything"))
     with pytest.raises(ModuleUnavailableError):
-        load_backend_or_explain(w, "caissedepargne", "inst_abc")
+        load_backend_or_explain(w, "caissedepargne", "inst_abc", "x", "y")
     assert w.load_calls == []
     assert w.backend_instances == {}
 
 
 def test_a_module_that_loads_but_registers_nothing_is_still_a_failure():
-    # load_backends can return having registered nothing - a malformed or
-    # incomplete backend config. Checked rather than assumed, because the
-    # symptom downstream is the same KeyError.
+    # A backend call that returns having registered nothing is still a
+    # failure. Checked rather than assumed, because the symptom downstream is
+    # the same KeyError.
     w = FakeWoob(registers=False)
     with pytest.raises(ModuleUnavailableError) as excinfo:
-        load_backend_or_explain(w, "lcl", "inst_abc")
+        load_backend_or_explain(w, "lcl", "inst_abc", "x", "y")
     assert "lcl" in str(excinfo.value)
 
 
@@ -108,9 +116,9 @@ def test_the_ordinary_case_still_loads_and_registers():
     # The guard must not become "never load anything", which a fix aimed only
     # at the failure would happily do.
     w = FakeWoob()
-    load_backend_or_explain(w, "lcl", "inst_abc")
+    load_backend_or_explain(w, "lcl", "inst_abc", "x", "y")
     assert w.modules_loader.asked == ["lcl"]
-    assert w.load_calls == [(["lcl"], ["inst_abc"])]
+    assert w.load_calls == [("lcl", "inst_abc")]
     assert "inst_abc" in w.backend_instances
 
 
@@ -119,7 +127,7 @@ def test_an_unexpected_loader_error_is_still_explained_rather_than_raw():
     # whatever it raises. It must still reach the user as a sentence.
     w = FakeWoob(load_error=RuntimeError("repository index is corrupt"))
     with pytest.raises(ModuleUnavailableError) as excinfo:
-        load_backend_or_explain(w, "bred", "inst_abc")
+        load_backend_or_explain(w, "bred", "inst_abc", "x", "y")
     assert "bred" in str(excinfo.value)
 
 
@@ -134,7 +142,7 @@ def test_the_sync_path_reports_unsupported_rather_than_blaming_credentials(monke
     written = {}
 
     monkeypatch.setattr(sync_woob.setup_locks, "is_setup_in_progress", lambda _i: False)
-    monkeypatch.setattr(sync_woob, "_configure_woob", lambda *a, **k: None)
+    monkeypatch.setattr(sync_woob, "update_woob_repositories", lambda: None)
     monkeypatch.setattr(sync_woob, "make_woob", lambda: FakeWoob(load_error=_module_load_error('needs "chompjs"')))
     monkeypatch.setattr(sync_woob, "get_conn", lambda: _FakeConn())
 

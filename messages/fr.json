@@ -1668,6 +1668,22 @@
     "adoptButton": "Reprendre les comptes existants",
     "adoptSuccess": "{count} compte(s) repris, avec leur historique. Connecte-toi puis lance une synchronisation."
   },
+  "woobFields": {
+    "loading": "Chargement des champs demandés par cette banque…",
+    "choose": "Choisir…",
+    "moduleDefault": "Par défaut (choix du module)",
+    "yes": "Oui",
+    "no": "Non",
+    "errors": {
+      "invalid_module": "Nom de module Woob invalide.",
+      "missing_credentials": "Identifiant et mot de passe requis.",
+      "invalid_value": "Valeur invalide : {field}.",
+      "missing_field": "Champ requis : {field}.",
+      "unknown_field": "Champ inconnu pour cette banque : {field}.",
+      "fields_unavailable": "Le service de synchronisation ne répond pas : impossible de vérifier les champs de cette banque. Réessaie dans un instant.",
+      "unexpected": "Erreur inattendue."
+    }
+  },
   "exportButton": {
     "export": "Exporter",
     "csv": "CSV",
