@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.21.2**
+Current release: **v2.21.3**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -34,6 +34,10 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
 ---
+
+## v2.21.3 - The v2.21.2 that deploys
+
+- **v2.21.2 published its images but never deployed.** Trivy failed the app image on three HIGH undici advisories (CVE-2026-109383, CVE-2026-109869, CVE-2026-87018) in undici 6.28.1, bundled inside the pnpm 11.28.2 that corepack caches in the image - v2.12.0's shape again. pnpm 11.28.7 bundles the patched 6.29.1; the image was rebuilt and scanned with the release workflow's own Trivy command before tagging. Same code as v2.21.2 otherwise.
 
 ## v2.21.2 - Every bank asks for what it needs
 
