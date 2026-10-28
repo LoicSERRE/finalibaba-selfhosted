@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.21.1**
+Current release: **v2.21.2**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -34,6 +34,12 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
 ---
+
+## v2.21.2 - Every bank asks for what it needs
+
+- **Woob banks that need more than a login connect** (#135). The sync form asks for the fields each bank's own Woob module declares - Crédit Agricole's caisse régionale, Banque Populaire's region, ING's and BforBank's date of birth, the exchanges' API keys - checks them on save and stores them encrypted in `Institution.woobConfig`. About a dozen of Woob's 96 bank modules could never load before.
+- **Bank credentials no longer reach the disk in clear**: the sync service passes them to Woob in memory and purges the copies earlier versions wrote to Woob's backends file.
+- **Security updates**: Next.js 16.4.2 (two critical unauthenticated RCEs and a DoS), plus nodemailer, fast-uri, zod, happy-dom and @vitest/mocker - no open advisory left. Dependabot CI had been red since a test read "today" before noon UTC; fixed.
 
 ## v2.21.1 - Current accounts that add up
 
