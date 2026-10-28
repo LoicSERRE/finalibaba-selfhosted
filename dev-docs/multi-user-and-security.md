@@ -175,10 +175,24 @@ and nothing re-ran the list. **An accepted finding needs its acceptance
 re-derived whenever the architecture moves, not carried forward as prose.**
 
 **What is encrypted** (`lib/domain/crypto-at-rest.ts`, mirrored in
-`sync/crypto_at_rest.py`): `Institution.woobLogin`/`woobPassword`/`trPhone`/
-`trPin`, `User.totpSecret`, `UserSettings.smtpPassword`/`ntfyAuthToken`, and
-the three bearer tokens (`ShareLink`, `ApiKey`, `Invitation`). AES-256-GCM,
-random 12-byte IV, `enc:v1:<iv>:<ciphertext+tag>`.
+`sync/crypto_at_rest.py`): `Institution.woobLogin`/`woobPassword`/`woobConfig`/
+`trPhone`/`trPin`, `User.totpSecret`, `UserSettings.smtpPassword`/`ntfyAuthToken`,
+and the three bearer tokens (`ShareLink`, `ApiKey`, `Invitation`). AES-256-GCM,
+random 12-byte IV, `enc:v1:<iv>:<ciphertext+tag>`. `woobConfig` (issue #135) is
+one JSON object encrypted as a whole: which of its fields are secrets depends on
+the module, and a date of birth is personal data either way.
+
+**And never copied to disk in clear again.** Until issue #135 the sync service
+decrypted the Woob credentials only to write them, in clear, into Woob's own
+`~/.config/woob/backends` - on the persistent `woob_session` volume, so the
+encryption at rest stopped at the database. Values were also written as INI
+`key = value` lines, so a newline in a password could add keys of its own. The
+backend is now built in memory (`Woob.load_backend(params=...)`, see
+`sync/woob_config.py`), every value is refused if it carries a control
+character (app and sync side), and the service removes the `[inst_*]` sections
+earlier versions left in that file at every start (`purge_legacy_backends`).
+The `[lcl]` section the `.env` LCL sync writes there is the operator's own
+configuration and stays.
 
 **What is NOT, and why it is not a gap to close.** Account names, balances and
 transaction labels stay readable. The app sums and groups them in SQL - 15

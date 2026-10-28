@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned, OWNER_USER_ID } from "@/lib/auth-context";
+import type { WoobField } from "@/lib/domain/woob-fields";
+import { fetchWoobModuleFields } from "@/lib/services/woob-modules";
 
 // Internal Docker Compose service-to-service traffic on a private bridge
 // network, never exposed externally - TLS here would need self-signed cert
@@ -211,7 +213,7 @@ const WOOB_MODULES_FALLBACK: WoobBankModule[] = [
   { module: "bnporc", label: "BNP Paribas" },
   { module: "caissedepargne", label: "Caisse d'Épargne" },
   { module: "societegenerale", label: "Société Générale" },
-  { module: "creditagricole", label: "Crédit Agricole" },
+  { module: "cragr", label: "Crédit Agricole" },
   { module: "boursorama", label: "Boursorama" },
   { module: "fortuneo", label: "Fortuneo" },
   { module: "hellobank", label: "Hello Bank!" },
@@ -238,6 +240,17 @@ export async function getWoobBankModules(): Promise<WoobBankModule[]> {
   } catch {
     return WOOB_MODULES_FALLBACK;
   }
+}
+
+/**
+ * What this module asks for besides the bank picker - login, password and
+ * whatever else its CONFIG declares (issue #135: the Crédit Agricole region).
+ * Null when the sync service cannot say, and the form then falls back to a
+ * login and a password. Labels and choices only, never a stored value.
+ */
+export async function getWoobModuleFields(module: string): Promise<WoobField[] | null> {
+  await getViewer();
+  return fetchWoobModuleFields(module);
 }
 
 // Shared by both setup backends, which is why it is named for the route rather
@@ -393,7 +406,9 @@ async function syncableInstitutionIds(userId: string): Promise<string[]> {
   const rows = await prisma.institution.findMany({
     where: {
       userId,
-      OR: [{ woobModule: { not: null }, woobLogin: { not: null } }, { trPhone: { not: null } }],
+      // woobModule alone, as in sync/db.py: a module keyed by API keys has
+      // no login, and every write sets the module with its credentials.
+      OR: [{ woobModule: { not: null } }, { trPhone: { not: null } }],
     },
     select: { id: true },
   });

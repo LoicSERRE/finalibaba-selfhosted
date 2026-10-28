@@ -1668,6 +1668,22 @@
     "adoptButton": "Take over existing accounts",
     "adoptSuccess": "{count} account(s) taken over, history included. Connect, then run a sync."
   },
+  "woobFields": {
+    "loading": "Loading the fields this bank asks for…",
+    "choose": "Choose…",
+    "moduleDefault": "Default (left to the module)",
+    "yes": "Yes",
+    "no": "No",
+    "errors": {
+      "invalid_module": "Invalid Woob module name.",
+      "missing_credentials": "Login and password are required.",
+      "invalid_value": "Invalid value: {field}.",
+      "missing_field": "Required field: {field}.",
+      "unknown_field": "Unknown field for this bank: {field}.",
+      "fields_unavailable": "The sync service is not responding, so this bank's fields cannot be checked. Try again in a moment.",
+      "unexpected": "Unexpected error."
+    }
+  },
   "exportButton": {
     "export": "Export",
     "csv": "CSV",

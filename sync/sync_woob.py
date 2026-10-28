@@ -2,7 +2,8 @@
 Generic Woob sync - works with any Woob-compatible bank module.
 
 Called per institution by main.py. Credentials are stored in the Institution
-table (woobModule / woobLogin / woobPassword), not in env vars.
+table (woobModule / woobLogin / woobPassword, plus woobConfig for whatever else
+the module declares - see woob_config.py), not in env vars.
 
 For banks that require 2FA on first use, the sync will fail with auth_required.
 Interactive setup (if needed) must be done manually in the container for now.
@@ -18,6 +19,7 @@ import psycopg2.extras
 
 import fx
 import setup_locks
+import woob_config
 import woob_errors
 import woob_loans
 from crypto_at_rest import decrypt_institution_row
@@ -72,7 +74,14 @@ class ModuleUnavailableError(Exception):
     """A Woob module that cannot be loaded at all, with the reason attached."""
 
 
-def load_backend_or_explain(w, module: str, backend_name: str) -> None:
+class BackendConfigError(Exception):
+    """The module loaded, but refused the configuration it was given - a
+    required field missing (issue #135: the Crédit Agricole region) or a value
+    it rejects. Unlike ModuleUnavailableError the user can fix it, from
+    Settings. The message names the fields, never their values."""
+
+
+def load_backend_or_explain(w, module: str, backend_name: str, login, password, extra=None) -> None:
     """Load one backend, or say why it could not be loaded.
 
     **`load_backends` does not raise when a module fails to load**, which both
@@ -89,17 +98,20 @@ def load_backend_or_explain(w, module: str, backend_name: str) -> None:
     fine.
 
     So the module is loaded explicitly first, because that is the call that
-    raises `ModuleLoadError` carrying the real cause. `load_backends`'s own
-    `errors` parameter is no use here: it collects `ConfigError` only, and a
-    missing Python package is not one.
+    raises `ModuleLoadError` carrying the real cause. The backend is then
+    built from `params` in memory (`load_backend`), which does raise - a
+    `ConfigError` naming the fields it refused - instead of from Woob's
+    backends file, where `load_backends` swallowed exactly that error and
+    left the generic "configuration incomplete" below as the only clue.
 
     Then the registration is CHECKED rather than assumed. A guard that trusts
     a function to raise is not a guard.
     """
     from woob.exceptions import ModuleLoadError
+    from woob.tools.backend import Module
 
     try:
-        w.modules_loader.get_or_load_module(module)
+        loaded = w.modules_loader.get_or_load_module(module)
     except ModuleLoadError as e:
         raise ModuleUnavailableError(
             f"Le module Woob '{module}' n'a pas pu etre charge : {e}"
@@ -109,7 +121,18 @@ def load_backend_or_explain(w, module: str, backend_name: str) -> None:
             f"Le module Woob '{module}' est introuvable ou illisible : {e}"
         ) from e
 
-    w.load_backends(modules=[module], names=[backend_name])
+    config = loaded.klass.CONFIG
+    try:
+        params = woob_config.build_params(config, login, password, extra)
+    except woob_config.InvalidConfigValue as e:
+        raise BackendConfigError(woob_config.explain(config, [e.field_id])) from None
+
+    # `from None`, and Woob's own message left out: it can quote the value it
+    # rejected, and a traceback of this error ends up in the container log.
+    try:
+        w.load_backend(module, backend_name, params=params, storage=w.storage)
+    except Module.ConfigError as e:
+        raise BackendConfigError(woob_config.explain(config, getattr(e, "bad_fields", None) or [])) from None
 
     if backend_name not in w.backend_instances:
         raise ModuleUnavailableError(
@@ -118,39 +141,10 @@ def load_backend_or_explain(w, module: str, backend_name: str) -> None:
         )
 
 
-def _configure_woob(backend_name: str, module: str, login: str, password: str):
-    """Write a Woob backends config file for the given institution."""
-    config_dir = Path.home() / ".config" / "woob"
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    # Each institution gets its own named backend (backend_name = sanitised institution id)
-    backends_file = config_dir / "backends"
-
-    # Read existing config (other banks may already be configured)
-    existing = backends_file.read_text() if backends_file.exists() else ""
-
-    # Remove the existing block for this backend if present
-    lines = existing.splitlines(keepends=True)
-    new_lines = []
-    skip = False
-    for line in lines:
-        if line.strip() == f"[{backend_name}]":
-            skip = True
-        elif line.startswith("[") and skip:
-            skip = False
-        if not skip:
-            new_lines.append(line)
-
-    new_block = (
-        f"[{backend_name}]\n"
-        f"_module = {module}\n"
-        f"login = {login}\n"
-        f"password = {password}\n"
-    )
-    new_lines.append(new_block)
-    backends_file.write_text("".join(new_lines))
-    backends_file.chmod(0o600)
-
+def update_woob_repositories() -> None:
+    """Refresh Woob's module index, so a module fixed upstream is picked up
+    without waiting for a container restart. Non-fatal: the modules already
+    installed still load."""
     result = subprocess.run(["woob", "config", "update"], capture_output=True, text=True, timeout=60, check=False)
     if result.returncode != 0:
         log.warning("woob config update failed (non-fatal): %s", result.stderr[:200])
@@ -511,7 +505,7 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
     return {"label": account.label, "balance_cents": balance_cents, "account_db_id": account_db_id, "currency": currency}
 
 
-def run(institution_id: str, institution_name: str, module: str, login: str, password: str) -> dict:
+def run(institution_id: str, institution_name: str, module: str, login, password, extra=None) -> dict:
     # A setup is in flight: the user is solving a captcha or approving on their
     # phone right now. Opening a second session would invalidate the pending
     # validation and strand them (issue #51). Skipped, NOT failed - there is
@@ -525,11 +519,18 @@ def run(institution_id: str, institution_name: str, module: str, login: str, pas
     backend_name = f"inst_{institution_id.replace('-', '_')[:20]}"
     sync_source = f"woob:{institution_id}"
 
-    _configure_woob(backend_name, module, login, password)
+    update_woob_repositories()
 
     w = make_woob()
     try:
-        load_backend_or_explain(w, module, backend_name)
+        load_backend_or_explain(w, module, backend_name, login, password, extra)
+    except BackendConfigError as e:
+        # `auth_required`: the fix is on the user's side, in Settings, and the
+        # reminder is worth repeating until they make it.
+        log.error("%s: %s", institution_name, e)
+        fail_conn = get_conn()
+        _fail(fail_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor), fail_conn, sync_source, "auth_required", str(e))
+        return {"accounts": 0, "error": "config_invalid"}
     except ModuleUnavailableError as e:
         # `unsupported`, not `auth_required`: nothing the user types will fix a
         # package the image does not ship, and auth_required sends them round a
@@ -649,7 +650,7 @@ if __name__ == "__main__":
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        'SELECT id, name, "woobModule", "woobLogin", "woobPassword" FROM "Institution" WHERE id = %s',
+        'SELECT id, name, "woobModule", "woobLogin", "woobPassword", "woobConfig" FROM "Institution" WHERE id = %s',
         (inst_id,),
     )
     row = decrypt_institution_row(cur.fetchone())
@@ -664,7 +665,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     try:
-        result = run(row["id"], row["name"], row["woobModule"], row["woobLogin"], row["woobPassword"])
+        result = run(row["id"], row["name"], *woob_config.credentials(row))
         print(f"✓ {row['name']} sync OK - {len(result['synced'])} account(s)")
     except AuthRequiredError as e:
         print(f"⚠ {e}")

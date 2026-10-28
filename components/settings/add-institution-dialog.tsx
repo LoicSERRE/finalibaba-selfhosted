@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { WoobModulePicker } from "@/components/settings/woob-module-picker";
 import { createInstitution } from "@/lib/actions/institutions";
 import { bankPickerEntries, isTradeRepublicModule } from "@/lib/domain/sync-providers";
+import { useWoobErrorMessage, useWoobModuleFields } from "@/components/settings/woob-module-fields";
+import { AddInstitutionWoobSection } from "@/components/settings/add-institution-woob-section";
 import { useTranslations } from "next-intl";
 
 interface Props {
@@ -46,6 +48,8 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
   const isTradeRepublic = isTradeRepublicModule(selectedModule);
   const woobEnabled = !!knownBank && !isTradeRepublic;
   const hasDedicatedEnvSync = !!knownBank && dedicatedEnvNames.has(knownBank.label.toLowerCase());
+  const { fields, loading: fieldsLoading } = useWoobModuleFields(woobEnabled ? selectedModule : null);
+  const woobErrorMessage = useWoobErrorMessage();
 
   const reset = () => {
     setSelectedModule("");
@@ -61,7 +65,11 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
     setError(null);
     startTransition(async () => {
       try {
-        await createInstitution(fd);
+        const result = await createInstitution(fd);
+        if (!result.ok) {
+          setError(woobErrorMessage(result.error, result.detail, fields));
+          return;
+        }
         reset();
         setOpen(false);
       } catch (e) {
@@ -132,20 +140,12 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
         )}
 
         {woobEnabled && (
-          <>
-            <input type="hidden" name="woobModule" value={selectedModule} />
-            <div className="space-y-3 pt-1 border-t border-[var(--border)]">
-              {hasDedicatedEnvSync && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/40">
-                  <AlertTriangle size={14} className="text-[var(--warning)] shrink-0 mt-0.5" aria-hidden="true" />
-                  <p className="text-xs text-[var(--warning)]">{t("dedicatedEnvWarning")}</p>
-                </div>
-              )}
-              <p className="text-xs text-[var(--muted)] pt-1">{t("woobHint")}</p>
-              <Input id="inst-woob-login" label={t("login")} type="text" name="woobLogin" autoComplete="username" required />
-              <Input id="inst-woob-password" label={t("password")} type="password" name="woobPassword" autoComplete="current-password" required />
-            </div>
-          </>
+          <AddInstitutionWoobSection
+            module={selectedModule}
+            hasDedicatedEnvSync={hasDedicatedEnvSync}
+            fields={fields}
+            fieldsLoading={fieldsLoading}
+          />
         )}
 
         {error && <p role="alert" className="text-xs text-[var(--negative)]">{error}</p>}
@@ -155,7 +155,7 @@ export function AddInstitutionDialog({ modules, dedicatedEnvNames }: Readonly<Pr
             <Button type="button" variant="outline" onClick={() => { reset(); setOpen(false); }}>
               {tc("cancel")}
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || fieldsLoading}>
               {pending ? t("creating") : t("submit")}
             </Button>
           </div>

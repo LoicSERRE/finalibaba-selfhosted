@@ -128,7 +128,7 @@ def decrypt_secret(stored: str | None) -> str | None:
 
 # The Institution columns that hold credentials. `woobModule` is deliberately
 # absent: it is a module name, identifies nobody, and sync/db.py matches on it.
-CREDENTIAL_FIELDS = ("woobLogin", "woobPassword", "trPhone", "trPin")
+CREDENTIAL_FIELDS = ("woobLogin", "woobPassword", "woobConfig", "trPhone", "trPin")
 
 
 def decrypt_institution_row(row):

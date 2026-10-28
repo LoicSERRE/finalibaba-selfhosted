@@ -95,11 +95,36 @@ beforeEach(() => {
   accountDeleteManyMock.mockReset().mockResolvedValue({ count: 0 });
   transactionFindFirstMock.mockReset().mockResolvedValue(null);
   historicalBalanceFindFirstMock.mockReset().mockResolvedValue(null);
+  // The sync service is unreachable unless a test says otherwise: a Woob form
+  // then falls back to login and password, as before issue #135.
+  syncFetchMock.mockReset().mockRejectedValue(new Error("sync service down"));
 });
 
 afterEach(() => {
   vi.clearAllMocks();
 });
+
+const syncFetchMock = vi.fn();
+vi.stubGlobal("fetch", syncFetchMock);
+
+/** The sync service describing a module, as GET /woob/modules/{m}/fields does. */
+function syncDescribes(fields: unknown[]) {
+  syncFetchMock.mockResolvedValue(new Response(JSON.stringify({ module: "x", fields }), { status: 200 }));
+}
+
+const CRAGR_FIELDS = [
+  {
+    id: "website",
+    label: "Caisse Régionale",
+    kind: "choice",
+    required: true,
+    default: null,
+    choices: [{ value: "www.ca-sudrhonealpes.fr", label: "Sud Rhône Alpes" }],
+    regexp: null,
+  },
+  { id: "login", label: "Identifiant", kind: "text", required: true, default: null, choices: [], regexp: "^\\d{11}$" },
+  { id: "password", label: "Code", kind: "secret", required: true, default: null, choices: [], regexp: "^\\d{6}$" },
+];
 
 function formData(fields: Record<string, string>): FormData {
   const fd = new FormData();
@@ -122,26 +147,87 @@ describe("createInstitution", () => {
     expect(institutionCreateMock).toHaveBeenCalledWith({ data: { userId: "user-owner", name: "LCL" } });
   });
 
-  it("only attaches Woob credentials when module, login, AND password are all present", async () => {
-    await createInstitution(formData({ name: "LCL", woobModule: "lcl", woobLogin: "user" }));
-    expect(institutionCreateMock).toHaveBeenCalledWith({ data: { userId: "user-owner", name: "LCL" } });
+  it("refuses a Woob bank without its credentials rather than storing a connection that cannot load", async () => {
+    const result = await createInstitution(formData({ name: "LCL", woobModule: "lcl", woobLogin: "user" }));
+    expect(result).toEqual({ ok: false, error: "missing_credentials", detail: "password" });
+    expect(institutionCreateMock).not.toHaveBeenCalled();
 
-    institutionCreateMock.mockClear();
-    await createInstitution(
+    const ok = await createInstitution(
       formData({ name: "LCL", woobModule: "lcl", woobLogin: "user", woobPassword: "pw" }),
     );
-    expect(institutionCreateMock).toHaveBeenCalledWith({
-      data: {
-        userId: "user-owner",
-        name: "LCL",
-        woobModule: "lcl",
-        // Stored encrypted, and asserted by decrypting rather than by
-        // matching a literal: a test that pinned the ciphertext would pass
-        // just as happily if encryption were removed and the literal updated.
-        woobLogin: expect.stringMatching(/^enc:v1:/),
-        woobPassword: expect.stringMatching(/^enc:v1:/),
-      },
+    expect(ok).toEqual({ ok: true, data: undefined });
+    const { data } = institutionCreateMock.mock.calls[0][0];
+    expect(data).toEqual({
+      userId: "user-owner",
+      name: "LCL",
+      woobModule: "lcl",
+      woobLogin: expect.stringMatching(/^enc:v1:/),
+      woobPassword: expect.stringMatching(/^enc:v1:/),
+      woobConfig: null,
     });
+    // Decrypted rather than matched against a literal: a test that pinned the
+    // ciphertext would pass just as happily with encryption removed.
+    expect(decryptSecret(data.woobLogin)).toBe("user");
+    expect(decryptSecret(data.woobPassword)).toBe("pw");
+  });
+});
+
+// Issue #135: the Crédit Agricole module needs its regional bank, and only a
+// login and a password were ever stored, so it could never load.
+describe("Woob module fields (issue #135)", () => {
+  it("stores the region, encrypted, next to the credentials", async () => {
+    syncDescribes(CRAGR_FIELDS);
+    const result = await createInstitution(
+      formData({
+        name: "Crédit Agricole",
+        woobModule: "cragr",
+        woobLogin: "12345678901",
+        woobPassword: "123456",
+        "woobConfig.website": "www.ca-sudrhonealpes.fr",
+      }),
+    );
+    expect(result.ok).toBe(true);
+    const { data } = institutionCreateMock.mock.calls[0][0];
+    expect(isEncrypted(data.woobConfig)).toBe(true);
+    expect(JSON.parse(decryptSecret(data.woobConfig) ?? "")).toEqual({ website: "www.ca-sudrhonealpes.fr" });
+    expect(syncFetchMock.mock.calls[0][0]).toMatch(/\/woob\/modules\/cragr\/fields$/);
+  });
+
+  it("refuses the connection without the region, naming the field", async () => {
+    syncDescribes(CRAGR_FIELDS);
+    const result = await setWoobConfig("inst-1", { module: "cragr", login: "12345678901", password: "123456", extra: {} });
+    expect(result).toEqual({ ok: false, error: "missing_field", detail: "website" });
+    expect(institutionUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a field the module does not declare", async () => {
+    syncDescribes(CRAGR_FIELDS);
+    const result = await setWoobConfig("inst-1", {
+      module: "cragr",
+      login: "12345678901",
+      password: "123456",
+      extra: { website: "www.ca-sudrhonealpes.fr", _module: "evil" },
+    });
+    expect(result).toEqual({ ok: false, error: "unknown_field", detail: "_module" });
+    expect(institutionUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses extra values it cannot check when the sync service is down", async () => {
+    const result = await setWoobConfig("inst-1", {
+      module: "cragr",
+      login: "12345678901",
+      password: "123456",
+      extra: { website: "www.ca-sudrhonealpes.fr" },
+    });
+    expect(result).toEqual({ ok: false, error: "fields_unavailable" });
+    expect(institutionUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("never puts a module name it has not checked into the sync service URL", async () => {
+    const result = await setWoobConfig("inst-1", { module: "../health", login: "u", password: "p", extra: {} });
+    expect(result).toEqual({ ok: false, error: "invalid_module" });
+    expect(syncFetchMock).not.toHaveBeenCalled();
+    expect(institutionUpdateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -292,7 +378,7 @@ describe("migrateDedicatedSyncToWoob", () => {
 // than only setting its own fields.
 describe("provider config is mutually exclusive", () => {
   it("setWoobConfig clears any Trade Republic credentials", async () => {
-    await setWoobConfig("inst-1", "lcl", "user", "secret");
+    await setWoobConfig("inst-1", { module: "lcl", login: "user", password: "secret", extra: {} });
 
     expect(institutionUpdateMock).toHaveBeenCalledWith({
       where: { id: "inst-1" },
@@ -300,6 +386,9 @@ describe("provider config is mutually exclusive", () => {
         woobModule: "lcl",
         woobLogin: expect.stringMatching(/^enc:v1:/),
         woobPassword: expect.stringMatching(/^enc:v1:/),
+        // Replaced on every save: a value left over from another module
+        // would be handed to this one.
+        woobConfig: null,
         trPhone: null,
         trPin: null,
       },
@@ -317,6 +406,7 @@ describe("provider config is mutually exclusive", () => {
         woobModule: null,
         woobLogin: null,
         woobPassword: null,
+        woobConfig: null,
       },
     });
   });

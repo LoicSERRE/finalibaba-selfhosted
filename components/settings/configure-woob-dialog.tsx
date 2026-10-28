@@ -19,6 +19,8 @@ import {
   isTradeRepublicModule,
 } from "@/lib/domain/sync-providers";
 import { formatDateShort, localeToIntl } from "@/lib/utils/format";
+import { declaresWoobCredential, extraWoobFields, woobExtraFromFormData } from "@/lib/domain/woob-fields";
+import { WoobExtraFields, useWoobErrorMessage, useWoobModuleFields } from "@/components/settings/woob-module-fields";
 import { useLocale, useTranslations } from "next-intl";
 
 /**
@@ -120,9 +122,16 @@ export function ConfigureWoobDialog({
   const t = useTranslations("configureWoob");
   const intlLocale = localeToIntl(useLocale());
   const tc = useTranslations("common");
+  const tf = useTranslations("woobFields");
 
   const banks = useMemo(() => bankPickerEntries(modules), [modules]);
   const isTradeRepublic = isTradeRepublicModule(module);
+  // What this module asks for besides the picker (issue #135). Not fetched
+  // for Trade Republic, which has no Woob module.
+  const { fields, loading: fieldsLoading } = useWoobModuleFields(isTradeRepublic ? null : module);
+  const woobErrorMessage = useWoobErrorMessage();
+  const asksIdentifier = isTradeRepublic || declaresWoobCredential(fields, "login");
+  const asksSecret = isTradeRepublic || declaresWoobCredential(fields, "password");
   const isConfigured = !!currentModule || isTradeRepublicConfigured;
   // Deliberately independent of hasDedicatedEnvSync: that flag only reflects
   // whether LCL_LOGIN/TR_PHONE is *currently* set, but the whole point of
@@ -171,9 +180,10 @@ export function ConfigureWoobDialog({
     });
   };
 
-  const handleSubmit = (e: React.SubmitEvent) => {
+  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!module || !identifier || !secret) return;
+    if (!module || (asksIdentifier && !identifier) || (asksSecret && !secret)) return;
+    const extra = woobExtraFromFormData(new FormData(e.currentTarget));
     setError(null);
     startTransition(async () => {
       try {
@@ -183,7 +193,11 @@ export function ConfigureWoobDialog({
         if (isTradeRepublic) {
           await setTradeRepublicConfig(institutionId, identifier, secret);
         } else {
-          await setWoobConfig(institutionId, module, identifier, secret);
+          const result = await setWoobConfig(institutionId, { module, login: identifier, password: secret, extra });
+          if (!result.ok) {
+            setError(woobErrorMessage(result.error, result.detail, fields));
+            return;
+          }
         }
         setOpen(false);
       } catch (e) {
@@ -332,11 +346,20 @@ export function ConfigureWoobDialog({
         <CredentialFields
           isTradeRepublic={isTradeRepublic}
           isConfigured={isConfigured}
+          asksIdentifier={asksIdentifier}
+          asksSecret={asksSecret}
           identifier={identifier}
           secret={secret}
           onIdentifier={setIdentifier}
           onSecret={setSecret}
         />
+
+        {fieldsLoading && <p className="text-xs text-[var(--muted)]">{tf("loading")}</p>}
+        {/* Every value is asked again on each save, like the password: a
+            stored one is never sent back to the browser. */}
+        {!isTradeRepublic && fields && (
+          <WoobExtraFields key={module} fields={extraWoobFields(fields)} idPrefix="woob-config" />
+        )}
 
         {error && <p role="alert" className="text-xs text-[var(--negative)]">{error}</p>}
 
@@ -351,7 +374,7 @@ export function ConfigureWoobDialog({
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               {tc("cancel")}
             </Button>
-            <Button type="submit" disabled={pending || !module || module === "__custom__"}>
+            <Button type="submit" disabled={pending || fieldsLoading || !module || module === "__custom__"}>
               {pending && <RefreshCw size={12} className="animate-spin" aria-hidden="true" />}
               {isConfigured ? t("update") : t("submit")}
             </Button>
@@ -373,6 +396,8 @@ export function ConfigureWoobDialog({
 function CredentialFields({
   isTradeRepublic,
   isConfigured,
+  asksIdentifier,
+  asksSecret,
   identifier,
   secret,
   onIdentifier,
@@ -380,6 +405,10 @@ function CredentialFields({
 }: Readonly<{
   isTradeRepublic: boolean;
   isConfigured: boolean;
+  /** False for a module that declares no `login` (or no `password`), such
+   *  as an exchange keyed by API keys - see lib/domain/woob-fields.ts. */
+  asksIdentifier: boolean;
+  asksSecret: boolean;
   identifier: string;
   secret: string;
   onIdentifier: (v: string) => void;
@@ -410,27 +439,31 @@ function CredentialFields({
 
   return (
     <>
-      <Input
-        id="woob-login"
-        label={fields.identifierLabel}
-        type="text"
-        value={identifier}
-        onChange={(e) => onIdentifier(e.target.value)}
-        placeholder={fields.identifierPlaceholder}
-        autoComplete={fields.identifierAutoComplete}
-        required={!isConfigured}
-      />
+      {asksIdentifier && (
+        <Input
+          id="woob-login"
+          label={fields.identifierLabel}
+          type="text"
+          value={identifier}
+          onChange={(e) => onIdentifier(e.target.value)}
+          placeholder={fields.identifierPlaceholder}
+          autoComplete={fields.identifierAutoComplete}
+          required={!isConfigured}
+        />
+      )}
 
-      <Input
-        id="woob-password"
-        label={fields.secretLabel}
-        type="password"
-        value={secret}
-        onChange={(e) => onSecret(e.target.value)}
-        placeholder={fields.secretPlaceholder}
-        autoComplete={fields.secretAutoComplete}
-        required={!isConfigured}
-      />
+      {asksSecret && (
+        <Input
+          id="woob-password"
+          label={fields.secretLabel}
+          type="password"
+          value={secret}
+          onChange={(e) => onSecret(e.target.value)}
+          placeholder={fields.secretPlaceholder}
+          autoComplete={fields.secretAutoComplete}
+          required={!isConfigured}
+        />
+      )}
     </>
   );
 }
