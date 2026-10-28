@@ -30,17 +30,19 @@ import { checkPriceIncreaseAlerts } from "@/lib/services/alerts/price-increases"
 import { acceptRecurringPrice } from "@/lib/actions/recurring";
 import type { UserSettingsModel } from "@/app/generated/prisma/models";
 
-// The latest expected charge is today at midnight UTC - always in the past,
-// whatever the hour the test runs - so the tests need no fake clock.
+// The latest expected charge is yesterday at noon UTC - always in the past,
+// whatever the hour the test runs - so the tests need no fake clock. Not
+// today: occurrences land at noon UTC (addMonthsClamped), so today's is still
+// ahead of the clock before 12:00 UTC, which is when Dependabot's CI runs.
 const now = new Date();
-const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+const chargeDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12));
 // The anchor is itself an occurrence: no month arithmetic to trip on a 29 February.
-const anchor = today;
+const anchor = chargeDate;
 const series = (priceAlertedCents: bigint | null = null) => ({
   id: "r1", accountId: "acc1", label: "NETFLIX.COM", amountCents: BigInt(-13_49), amountVaries: false,
   frequency: "MONTHLY", intervalCount: 1, anchorDate: anchor, priceAlertedCents, account: { name: "Compte courant" },
 });
-const charged = (cents: number) => [{ accountId: "acc1", label: "NETFLIX.COM", amountCents: BigInt(-cents), date: today }];
+const charged = (cents: number) => [{ accountId: "acc1", label: "NETFLIX.COM", amountCents: BigInt(-cents), date: chargeDate }];
 const settings = (on = true) => ({ userId: "user-owner", priceIncreaseAlertsEnabled: on }) as unknown as UserSettingsModel;
 
 beforeEach(() => {
