@@ -56,20 +56,20 @@ importers:
         specifier: ^18.0.8
         version: 18.0.8
       lucide-react:
-        specifier: ^1.57.0
-        version: 1.57.0(@types/react@19.3.0)(react@19.3.1)
+        specifier: ^1.61.0
+        version: 1.61.0(@types/react@19.3.0)(react@19.3.1)
       next:
         specifier: ^16.4.2
         version: 16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       next-auth:
         specifier: ^4.24.15
-        version: 4.24.15(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(nodemailer@10.1.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: 4.24.15(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(nodemailer@10.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       next-intl:
         specifier: ^4.14.9
         version: 4.14.9(@swc/helpers@0.5.23)(@types/react@19.3.0)(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
       nodemailer:
-        specifier: ^10.1.4
-        version: 10.1.4
+        specifier: ^10.2.0
+        version: 10.2.0
       otplib:
         specifier: ^13.5.0
         version: 13.5.0
@@ -3318,8 +3318,8 @@ packages:
     resolution: {integrity: sha512-DqC6n3QQ77zdFpCMASA1a3Jlb64Hv2N2DciFGkO/4L9+q/IpIAuRlKOvCXabtRW6cQf8usbmM6BE/TOPysCdIA==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
 
-  lucide-react@1.57.0:
-    resolution: {integrity: sha512-bXFZEucYhAzLD62Jse76AbTR6LiSLTn3Tqir2f1n8rZrWAdLodYy7jnRZSPIT89dRLk/IseMOUWG82wJtTyTTw==}
+  lucide-react@1.61.0:
+    resolution: {integrity: sha512-v2SQPPPNjnr+BlhL9Spuzmo5yR+hLkftfuE4E3jaxdNPgSH0hJKPcLJBP7yAta87jQNPsSERS59PJjCJ/CorBA==}
     peerDependencies:
       '@types/react': '*'
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -3455,8 +3455,8 @@ packages:
     resolution: {integrity: sha512-wRNIrw4DmVLKQlbgOMdkMx27Wrpzes2hh5Jtbi2bjPd+4wJstWIqP5A+lscnqbm0xxmT5Bpg8Lec5ItEBwx6BQ==}
     engines: {node: '>=18'}
 
-  nodemailer@10.1.4:
-    resolution: {integrity: sha512-EsMnOR2oRv4LGnWvHgcVYkkQ4O2j8KO4WTw6l+PHR4sOXo8SAgIraxtEnGDmotjbhv0hDsu3IuDIFZm8iXwO4A==}
+  nodemailer@10.2.0:
+    resolution: {integrity: sha512-/XyGw6kX2stMdKGUJdAQmYAeY1FscWfdRydfd2NtK3A3KDfUUXCqZzExSNAt2xhh90X2qLCR+o2Gd48YPJcJwA==}
     engines: {node: '>=20.0.0'}
 
   oauth@0.9.15:
@@ -7542,7 +7542,7 @@ snapshots:
 
   lru.min@1.1.4: {}
 
-  lucide-react@1.57.0(@types/react@19.3.0)(react@19.3.1):
+  lucide-react@1.61.0(@types/react@19.3.0)(react@19.3.1):
     dependencies:
       react: 19.3.1
     optionalDependencies:
@@ -7612,7 +7612,7 @@ snapshots:
     dependencies:
       content-type: 2.1.0
 
-  next-auth@4.24.15(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(nodemailer@10.1.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  next-auth@4.24.15(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(nodemailer@10.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@babel/runtime': 7.29.7
       '@panva/hkdf': 1.2.1
@@ -7627,7 +7627,7 @@ snapshots:
       react-dom: 19.3.1(react@19.3.1)
       uuid: 14.0.1
     optionalDependencies:
-      nodemailer: 10.1.4
+      nodemailer: 10.2.0
 
   next-intl-swc-plugin-extractor@4.14.9: {}
 
@@ -7686,7 +7686,7 @@ snapshots:
 
   node-releases@2.0.51: {}
 
-  nodemailer@10.1.4: {}
+  nodemailer@10.2.0: {}
 
   oauth@0.9.15: {}
 
