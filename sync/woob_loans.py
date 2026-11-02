@@ -13,8 +13,12 @@ from Woob's own classification, never from the label - "Crédit Mutuel" or
 import datetime
 from decimal import Decimal
 
-# AccountType names Woob uses for money owed (woob/capabilities/bank/base.py).
-LOAN_TYPE_NAMES = frozenset({"LOAN", "MORTGAGE", "CONSUMER_CREDIT", "REVOLVING_CREDIT"})
+# AccountType values Woob uses for money owed (woob/capabilities/bank/base.py):
+# LOAN, MORTGAGE, CONSUMER_CREDIT, REVOLVING_CREDIT. Woob's Enum is its own,
+# not the stdlib one - its members are plain ints with no `.name`, so the
+# v2.19.1 check by name never matched, and a module returning a plain Account
+# typed as a loan (cragr, #148) had its debt counted as cash.
+LOAN_TYPE_VALUES = frozenset({4, 17, 18, 19})
 
 
 def _present(value):
@@ -34,7 +38,7 @@ def is_loan(account) -> bool:
     if type(account).__name__ == "Loan":
         return True
     kind = getattr(account, "type", None)
-    return getattr(kind, "name", None) in LOAN_TYPE_NAMES
+    return isinstance(kind, int) and not isinstance(kind, bool) and kind in LOAN_TYPE_VALUES
 
 
 def _cents(amount) -> int | None:

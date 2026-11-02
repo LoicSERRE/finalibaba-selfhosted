@@ -8,7 +8,6 @@ CHECKING with negative balances, then synced again under v2.19.1.
 """
 
 import datetime
-import enum
 import os
 import uuid
 from decimal import Decimal
@@ -29,10 +28,16 @@ class _NotAvailable:
 NA = _NotAvailable()
 
 
-class AccountType(enum.Enum):
+class AccountType:
+    """Woob's AccountType: its own Enum, whose members are plain ints with no
+    `.name` (woob/capabilities/base.py) - modelling it with enum.Enum is what
+    let a CA loan, a plain Account with type 4, pass as cash (#148)."""
+
     CHECKING = 1
     LOAN = 4
+    MORTGAGE = 17
     CONSUMER_CREDIT = 18
+    REVOLVING_CREDIT = 19
 
 
 class Account:
@@ -46,10 +51,26 @@ class Loan(Account):
 
 def test_a_woob_loan_is_a_loan_whatever_its_label():
     assert woob_loans.is_loan(Loan(label="PRÊT PERSONNEL ETUDES", type=AccountType.LOAN))
-    # Classified by type even when the module returns a plain Account.
-    assert woob_loans.is_loan(Account(label="Mon crédit conso", type=AccountType.CONSUMER_CREDIT))
+    # Classified by type even when the module returns a plain Account, as
+    # cragr does for every loan (#148).
+    for kind in (AccountType.LOAN, AccountType.MORTGAGE, AccountType.CONSUMER_CREDIT, AccountType.REVOLVING_CREDIT):
+        assert woob_loans.is_loan(Account(label="Prêt Habitat", type=kind))
     # A bank name in a label proves nothing.
     assert not woob_loans.is_loan(Account(label="COMPTE CREDIT MUTUEL", type=AccountType.CHECKING))
+
+
+def test_real_woob_accounts_typed_as_loans_are_loans():
+    # Against Woob's own classes, so the fakes above cannot drift from it again.
+    bank = pytest.importorskip("woob.capabilities.bank")
+    for kind in (bank.AccountType.LOAN, bank.AccountType.MORTGAGE, bank.AccountType.CONSUMER_CREDIT, bank.AccountType.REVOLVING_CREDIT):
+        account = bank.Account(id="pret")
+        account.type = kind
+        assert woob_loans.is_loan(account)
+    checking = bank.Account(id="courant")
+    checking.type = bank.AccountType.CHECKING
+    assert not woob_loans.is_loan(checking)
+    assert not woob_loans.is_loan(bank.Account(id="inconnu"))
+    assert woob_loans.is_loan(bank.Loan(id="pret-lcl"))
 
 
 def test_loan_facts_reads_what_the_bank_gives_and_skips_what_it_does_not():
@@ -140,6 +161,30 @@ def test_a_loan_synced_as_checking_is_retyped_and_its_debt_recorded(cur):
     # Its balance rows stay what was owed: negative.
     cur.execute('SELECT "balanceCents" FROM "HistoricalBalance" WHERE "accountId" = %s', (second["account_db_id"],))
     assert {int(r["balanceCents"]) for r in cur.fetchall()} == {-509_900}
+
+
+def test_a_plain_account_typed_as_a_loan_already_synced_as_cash_is_retyped(cur):
+    # #148: cragr returns every loan as a plain Account with type 4, which the
+    # check by name missed - stored as CHECKING, its debt sat in the user's cash.
+    import sync_woob
+
+    institution_id = f"test-inst-{uuid.uuid4().hex[:8]}"
+    cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (institution_id, "CA test"))
+    first = sync_woob._sync_account(
+        cur, institution_id, "CA", Account(id="habitat", label="PRET HABITAT", balance=Decimal("-84210.55"))
+    )
+    assert _account(cur, first["account_db_id"])["type"] == "CHECKING"
+
+    loan = Account(id="habitat", label="PRET HABITAT", type=AccountType.LOAN, balance=Decimal("-84210.55"))
+    second = sync_woob._sync_account(cur, institution_id, "CA", loan)
+
+    assert second["account_db_id"] == first["account_db_id"]
+    row = _account(cur, second["account_db_id"])
+    assert row["type"] == "LOAN"
+    assert int(row["liabilityCents"]) == 8_421_055
+    # A plain Account carries none of Loan's fields: nothing is invented.
+    assert row["loanAmountCents"] is None
+    assert row["loanTaeg"] is None
 
 
 def test_a_new_loan_is_created_as_one_and_a_positive_balance_still_means_owed(cur):
