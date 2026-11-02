@@ -12,6 +12,8 @@ allowBuilds:
   esbuild: true
   prisma: true
   unrs-resolver: true
+minimumReleaseAgeExclude:
+  - minimatch@11.0.4
 # pnpm 11 moved settings that used to live under package.json's "pnpm" key
 # (npm's "overrides" field too) here - see https://pnpm.io/settings.
 # Not an actual multi-package workspace; this file just holds config.
@@ -142,5 +144,8 @@ overrides:
   # minimatch 3.x entirely in favor of 10.x everywhere - that's a major
   # version bump so dependabot.yml will surface it as its own PR rather than
   # silently grouping it with patch/minor bumps.
-  "minimatch@10.2.6>brace-expansion": ">=5.0.12 <6.0.0"
+  # GHSA-g3hv-75wg-m249 is fixed only in minimatch 11; typescript-estree uses
+  # the named `minimatch` export, which 11 keeps. The 3.x line (eslint 9 and
+  # eslint-config-next's plugins call it as a function) has no fix.
+  "minimatch@>=10.0.0 <11.0.1": ">=11.0.4 <12.0.0"
   "minimatch@3.1.5>brace-expansion": ">=1.1.21 <2.0.0"
