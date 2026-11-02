@@ -19,6 +19,7 @@ real-account comparison done directly with the user for the rounding fix).
 """
 
 import asyncio
+import json
 
 import requests
 
@@ -30,6 +31,7 @@ from sync_tr import (
     _parse_tr_timestamp,
     _position_isin,
     _timeline_item_to_transaction,
+    new_tr_api,
     resolve_position,
     split_crypto_positions,
     tr_cookies_path,
@@ -413,3 +415,49 @@ def test_tr_cookies_path_cannot_escape_its_directory():
         assert path.parent == parent, hostile
         assert path.name.startswith("cookies.inst-"), hostile
         assert ".." not in path.name, hostile
+
+
+# ── new_tr_api (#147) ─────────────────────────────────────────────────────────
+
+REQUIRED_LOGIN_HEADERS = ("X-TR-Device-Info", "X-TR-App-Version", "X-Tr-Platform")
+
+
+def _sent_requests(monkeypatch, replies):
+    sent = []
+
+    def fake_send(session, request, **kwargs):
+        sent.append(request)
+        response = requests.Response()
+        response.status_code = 200
+        response._content = json.dumps(replies.pop(0)).encode()
+        response.request = request
+        return response
+
+    monkeypatch.setattr(requests.Session, "send", fake_send)
+    return sent
+
+
+def test_every_v1_login_call_sends_the_headers_trade_republic_requires(monkeypatch):
+    sent = _sent_requests(monkeypatch, [{"processId": "pid-1", "countdownInSeconds": 60}, {}, {}])
+    api = new_tr_api(phone_no="+490000000000", pin="0000", waf_token=None)
+
+    api.initiate_weblogin()
+    api.resend_weblogin()
+    api.complete_weblogin("1234")
+
+    assert [r.url for r in sent] == [
+        "https://api.traderepublic.com/api/v1/auth/web/login",
+        "https://api.traderepublic.com/api/v1/auth/web/login/pid-1/resend",
+        "https://api.traderepublic.com/api/v1/auth/web/login/pid-1/1234",
+    ]
+    for request in sent:
+        for header in REQUIRED_LOGIN_HEADERS:
+            assert request.headers.get(header), f"{header} missing on {request.url}"
+        assert request.headers.get("User-Agent")
+
+
+def test_new_tr_api_leaves_pytrs_shared_default_headers_alone():
+    from pytr.api import TradeRepublicApi
+
+    new_tr_api(phone_no="+490000000000", pin="0000", waf_token=None)
+    assert not set(REQUIRED_LOGIN_HEADERS) & set(TradeRepublicApi._default_headers)

@@ -19,7 +19,7 @@ start -> enter code.
 
 import logging
 
-from sync_tr import _get_api, fetch_tr_institution, tr_cookies_path
+from sync_tr import _get_api, fetch_tr_institution, new_tr_api, tr_cookies_path
 
 log = logging.getLogger(__name__)
 
@@ -74,12 +74,10 @@ def start_setup(institution_id: str) -> dict:
         # failure here (a broken cookie file, a pytr change) is still traceable.
         log.debug("TR setup (%s): no resumable session, starting a fresh login - %s", institution_id, e)
 
-    from pytr.api import TradeRepublicApi
-
     cookies_file = tr_cookies_path(institution_id)
     cookies_file.parent.mkdir(parents=True, exist_ok=True)
 
-    api = TradeRepublicApi(
+    api = new_tr_api(
         phone_no=inst["trPhone"],
         pin=inst["trPin"],
         save_cookies=True,

@@ -67,15 +67,24 @@ def tr_cookies_path(scope_institution_id: str | None) -> pathlib.Path | None:
     return pathlib.Path.home() / ".pytr" / f"cookies.inst-{safe}.txt"
 
 
-def _get_api(phone_no: str, pin: str, interactive: bool, scope_institution_id: str | None = None):
+def new_tr_api(**kwargs):
+    """TradeRepublicApi sending the login headers TR now requires on v1 too (#147, pytr-org/pytr#414)."""
     from pytr.api import TradeRepublicApi
+
+    api = TradeRepublicApi(**kwargs)
+    # A new dict: the session's headers are pytr's shared class-level dict.
+    api._websession.headers = {**api._websession.headers, **api._login_headers()}
+    return api
+
+
+def _get_api(phone_no: str, pin: str, interactive: bool, scope_institution_id: str | None = None):
     # save_cookies=True → pytr persists cookies to ~/.pytr/cookies.<phone>.txt
     # (MozillaCookieJar format, WAF token excluded automatically), unless
     # cookies_file overrides it - see tr_cookies_path above.
     cookies_file = tr_cookies_path(scope_institution_id)
     if cookies_file:
         cookies_file.parent.mkdir(parents=True, exist_ok=True)
-    api = TradeRepublicApi(
+    api = new_tr_api(
         phone_no=phone_no, pin=pin, save_cookies=True,
         **({"cookies_file": str(cookies_file)} if cookies_file else {}),
     )

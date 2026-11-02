@@ -33,9 +33,9 @@ def start_setup() -> dict:
     phone_no = os.environ["TR_PHONE"]
     pin = os.environ["TR_PIN"]
 
-    from pytr.api import TradeRepublicApi
+    from sync_tr import new_tr_api
 
-    api = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=True)
+    api = new_tr_api(phone_no=phone_no, pin=pin, save_cookies=True)
 
     log.info("TR setup: initiation du web login via pytr (WAF token via Playwright)…")
     countdown = api.initiate_weblogin()
