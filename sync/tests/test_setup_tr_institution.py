@@ -76,7 +76,9 @@ def env(monkeypatch, tmp_path):
         setup_tr_institution, "tr_cookies_path", lambda inst: tmp_path / f"cookies.{inst}.txt"
     )
 
-    monkeypatch.setattr(setup_tr_institution, "new_tr_api", lambda **kwargs: state["api"])
+    import pytr.api
+
+    monkeypatch.setattr(pytr.api, "TradeRepublicApi", lambda **kwargs: state["api"])
     return state
 
 
