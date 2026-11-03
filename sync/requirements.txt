@@ -32,30 +32,8 @@ chompjs>=1.4.1
 # fails silently (sync_tr.py only surfaces get_conn/write_sync_log errors,
 # not "the upstream library's response shape changed").
 #
-# Bumped 2026-08-08 to master's tip (still no tag past v0.4.10 at this
-# date). Reviewed every commit in the range against what this project
-# actually calls (TradeRepublicApi.initiate_weblogin/complete_weblogin +
-# the low-level subscribe()/_recv_subscription() WebSocket API in
-# sync_tr.py) - most of the range (event/timeline/dl_docs parsing fixes)
-# touches code this project never calls, a no-op for us either way. Two
-# real changes in pytr/api.py, both opt-in and not adopted here (yet):
-#   - waf_token="awswaf": a pure-Python alternative to the Playwright-based
-#     WAF token fetch (would let sync/Dockerfile drop Playwright/Chromium
-#     entirely if it holds up) - pytr's own README still calls it
-#     "reported to no longer work reliably", so not worth risking against
-#     a real TR account without dedicated testing first.
-#   - use_v2_login=True: a newer login flow (push-notification confirm in
-#     the TR app instead of typing a 4-digit code) that also sidesteps the
-#     WAF token, but replaces setup_tr.py's synchronous start/complete
-#     pattern with an internal poll-until-confirmed wait (up to ~2min) -
-#     needs a different setup UI (a wait screen, not a code field), and
-#     the feature is one day old upstream. A real follow-up, not a
-#     drive-by pin bump.
-# Neither is used here - this bump only tracks master for currency and the
-# unrelated bugfixes; both stay on today's default behavior (v1 login,
-# waf_token="playwright", i.e. byte-for-byte how setup_tr.py already calls
-# TradeRepublicApi(...) with no extra kwargs).
-# Bumped 2026-11-03 to pytr-org/pytr#414's merge: login headers on v1 (#147).
+# The sync uses pytr's v2 web login (sync_tr.new_tr_api): approved in the
+# TR app, no AWS WAF token, so no Playwright/Chromium in the image.
 pytr @ git+https://github.com/pytr-org/pytr.git@85f76576856f0e97c3461a6b16716d6f93b4e62e
 # Declared explicitly rather than leaned on as woob's transitive dependency:
 # sync/crypto_at_rest.py decrypts real bank credentials with it, and a
@@ -69,7 +47,6 @@ psycopg2-binary>=2.9.13
 fastapi>=0.161.1
 uvicorn>=0.54.0
 apscheduler>=3.11.3
-playwright>=1.64.1
 # Transitive (requests, woob, pytr), pinned here only to raise its floor:
 # CVE-2026-97687 and CVE-2026-97689, both fixed in 2.8.0, were found by the
 # v2.12.0 release scan of the sync image. pip-audit had not flagged them yet.
