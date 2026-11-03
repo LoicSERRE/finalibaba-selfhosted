@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.21.4**
+Current release: **v2.22.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -35,6 +35,13 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
 ---
+
+## v2.22.0 - Your accounts, the way you classify them
+
+- **Pick a synced account's type** (from #148). A Woob bank that reports a loan as a current account, or the other way round, can now be corrected from the account's edit dialog, and the sync keeps the choice. Switching to or from a loan moves its balance into debt or out of it, history included.
+- **Stop syncing an account**: a Woob account you don't want gets "Ne plus synchroniser", which deletes it and keeps the sync from importing it again. Settings lists these under their bank with "Réimporter".
+- Trade Republic's login fix now comes from pytr itself (pytr-org/pytr#414), and the local workaround from v2.21.4 is gone.
+- **Pre-tag audit**: every scanner at zero, lizard held at 23 / 57 after a new trap (a `<` comparison read as a type argument) was undone, JS coverage 82.17% (lower only because a file with no tests is now measured), Python 68%. The recurring pattern is the loan classification's third patch, whose root cause was a test fake of Woob's enum. Details in `dev-docs/release-audit.md`.
 
 ## v2.21.4 - Trade Republic connects again
 
