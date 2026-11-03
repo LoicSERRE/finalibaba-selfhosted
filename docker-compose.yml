@@ -100,6 +100,10 @@ services:
       # here (bounded, 4h cron). See CLAUDE.md's "Trade Republic real-time
       # tracking".
       TR_REALTIME_ENABLED: ${TR_REALTIME_ENABLED:-}
+      # Read by pytr itself, see .env.example. Empty keeps pytr's default.
+      PYTR_TR_APP_VERSION: ${PYTR_TR_APP_VERSION:-}
+      PYTR_TR_PLATFORM: ${PYTR_TR_PLATFORM:-}
+      PYTR_TR_USER_AGENT: ${PYTR_TR_USER_AGENT:-}
       # Reused as the shared bearer token for the alerts-check call below,
       # not a new secret - see app/api/alerts/check/route.ts.
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required - run: openssl rand -base64 32}"
