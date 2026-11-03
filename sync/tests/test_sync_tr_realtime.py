@@ -209,7 +209,10 @@ class FakeApi:
                 return sub_id, payload, {}
             if not self._pushes:
                 raise _StopLoop
-            return "sub-1", {"type": "cash"}, self._pushes.pop(0)
+            push = self._pushes.pop(0)
+            if isinstance(push, tuple):  # (subscription, payload), e.g. a ticker tick
+                return "sub-t", push[0], push[1]
+            return "sub-1", {"type": "cash"}, push
         finally:
             self.in_recv = False
 
@@ -218,7 +221,7 @@ class _StopLoop(Exception):
     """Ends the otherwise-infinite listen loop deterministically."""
 
 
-def _drive(monkeypatch, pushes, has_crypto=True, refuse=(), no_throttle=True):
+def _drive(monkeypatch, pushes, has_crypto=True, refuse=(), no_throttle=True, tickers=(), price_writes=None, notified=None):
     """Run _run_one_session's real body against FakeApi, faking only the
     boundaries it cannot own here (credentials, database, the app callback)."""
     api = FakeApi(pushes, refuse=refuse)
@@ -247,6 +250,19 @@ def _drive(monkeypatch, pushes, has_crypto=True, refuse=(), no_throttle=True):
     monkeypatch.setattr(sync_tr_realtime, "_get_securities_accounts", lambda _a: ({"default": ["040575"]}, has_crypto))
     monkeypatch.setattr(sync_tr_realtime, "upsert_account", lambda *a, **k: "acc-1")
     monkeypatch.setattr(sync_tr_realtime, "_notify_and_followup", lambda *_a: None)
+
+    async def fake_ticker_topics(*_a):
+        return [{"type": "ticker", "id": t} for t in tickers]
+
+    monkeypatch.setattr(sync_tr_realtime, "_ticker_topics", fake_ticker_topics)
+
+    def fake_write(_cur, institution_id, prices):
+        if price_writes is not None:
+            price_writes.append(dict(prices))
+        return len(prices)
+
+    monkeypatch.setattr(sync_tr_realtime, "_write_live_prices", fake_write)
+    monkeypatch.setattr(sync_tr_realtime, "_notify", lambda *_a: notified.append(1) if notified is not None else None)
 
     def fake_fetch(*_a, **kw):
         fetches.append(1)
@@ -307,3 +323,119 @@ def test_a_chatty_topic_cannot_cause_a_fetch_storm(monkeypatch):
     # tick would have meant a full fetch cycle per tick.
     _, fetches = _drive(monkeypatch, pushes=["p1", "p2", "p3", "p4"], no_throttle=False)
     assert len(fetches) == 1, "the 30s floor must collapse a burst into one fetch"
+
+
+# ── Live prices (ticker subscriptions) ─────────────────────────────────────────
+
+
+def _tick(ticker_id, price):
+    return ({"type": "ticker", "id": ticker_id}, {"last": {"price": price}})
+
+
+def test_ticker_price_cents_reads_last_then_bid():
+    from sync_tr import ticker_price_cents
+
+    assert ticker_price_cents({"last": {"price": "69135.48"}}) == 6_913_548
+    assert ticker_price_cents({"bid": {"price": "2030.92"}}) == 203_092
+    assert ticker_price_cents({}) == 0
+    assert ticker_price_cents(None) == 0
+
+
+def test_held_instruments_get_a_ticker_subscription(monkeypatch):
+    api, _ = _drive(monkeypatch, pushes=[], tickers=["XF000BTC0017.BHS"])
+    assert "ticker" in api.subscribed
+
+
+def test_a_tick_rewrites_the_price_and_never_triggers_a_full_fetch(monkeypatch):
+    writes, notified = [], []
+    _, fetches = _drive(
+        monkeypatch,
+        pushes=[_tick("XF000BTC0017.BHS", "69200.00")],
+        tickers=["XF000BTC0017.BHS"],
+        price_writes=writes,
+        notified=notified,
+    )
+    assert fetches == []
+    assert writes == [{"XF000BTC0017": 6_920_000}]
+    assert notified == [1]
+
+
+def test_a_burst_of_ticks_is_written_once_with_the_latest_prices(monkeypatch):
+    writes = []
+    pushes = [
+        _tick("XF000BTC0017.BHS", "69200.00"),
+        _tick("XF000BTC0017.BHS", "69210.00"),
+        _tick("XF000ETH0019.BHS", "2031.00"),
+    ]
+    _drive(monkeypatch, pushes=pushes, tickers=["XF000BTC0017.BHS", "XF000ETH0019.BHS"], price_writes=writes)
+    # The first tick is written at once; the rest wait for the 30s interval.
+    assert writes == [{"XF000BTC0017": 6_920_000}]
+
+
+def test_a_cash_push_still_triggers_a_fetch_alongside_ticks(monkeypatch):
+    _, fetches = _drive(
+        monkeypatch, pushes=[_tick("XF000BTC0017.BHS", "69200.00"), "cash-push"], tickers=["XF000BTC0017.BHS"]
+    )
+    assert len(fetches) == 1
+
+
+# ── _write_live_prices against PostgreSQL ──────────────────────────────────────
+
+
+@pytest.fixture
+def cur():
+    import os
+
+    psycopg2 = pytest.importorskip("psycopg2")
+    extras = pytest.importorskip("psycopg2.extras")
+
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        pytest.skip("DATABASE_URL not set")
+    conn = psycopg2.connect(url)
+    try:
+        cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
+        yield cursor
+        cursor.close()
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def _holding(cur, institution_id, sync_id, isin, price):
+    import uuid
+
+    account_id = str(uuid.uuid4())
+    cur.execute(
+        'INSERT INTO "Account" (id, name, type, "institutionId", "syncId", "updatedAt") VALUES (%s, %s, %s, %s, %s, NOW())',
+        (account_id, "Crypto", "CRYPTO", institution_id, sync_id),
+    )
+    cur.execute(
+        'INSERT INTO "Holding" (id, "accountId", ticker, name, quantity, "lastPriceCents", "updatedAt") '
+        "VALUES (%s, %s, %s, %s, 1, %s, NOW())",
+        (str(uuid.uuid4()), account_id, isin, isin, price),
+    )
+    return account_id
+
+
+def _price(cur, account_id):
+    cur.execute('SELECT "lastPriceCents" FROM "Holding" WHERE "accountId" = %s', (account_id,))
+    return int(cur.fetchone()["lastPriceCents"])
+
+
+def test_live_prices_reach_only_this_connections_holdings(cur):
+    import uuid
+
+    mine, other = (f"test-inst-{uuid.uuid4().hex[:8]}" for _ in range(2))
+    for inst in (mine, other):
+        cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (inst, inst))
+    tr = _holding(cur, mine, f"tr:{mine}:crypto", "XF000BTC0017", 6_900_000)
+    someone_elses = _holding(cur, other, f"tr:{other}:crypto", "XF000BTC0017", 6_900_000)
+    manual = _holding(cur, mine, None, "XF000BTC0017", 6_900_000)
+
+    assert sync_tr_realtime._write_live_prices(cur, mine, {"XF000BTC0017": 6_920_000}) == 1
+    assert _price(cur, tr) == 6_920_000
+    assert _price(cur, someone_elses) == 6_900_000
+    assert _price(cur, manual) == 6_900_000
+    # An unchanged price is not a change: no write, so no tab refresh either.
+    assert sync_tr_realtime._write_live_prices(cur, mine, {"XF000BTC0017": 6_920_000}) == 0
