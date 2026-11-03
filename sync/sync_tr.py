@@ -72,7 +72,13 @@ def new_tr_api(**kwargs):
     the app (or types an authenticator code), and no WAF token is needed."""
     from pytr.api import TradeRepublicApi
 
-    return TradeRepublicApi(use_v2_login=True, **kwargs)
+    api = TradeRepublicApi(use_v2_login=True, **kwargs)
+    # pytr keeps these on the class, shared by every instance: two connections
+    # in one process (a listener and a batch sync) mixed up each other's ticks.
+    api.subscriptions = {}
+    api._previous_responses = {}
+    api._lock = asyncio.Lock()
+    return api
 
 
 def login_step(api, countdown) -> dict:
