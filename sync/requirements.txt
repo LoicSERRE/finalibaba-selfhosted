@@ -23,8 +23,8 @@ woob[lcl,swile]==3.7.*
 # add it here and rebuild.
 python-jose>=3.5.0
 chompjs>=1.4.1
-# Pinned to a commit, not just the bare repo URL: pytr has no PyPI release
-# (pip-audit can't check it either, see ci.yml), and an unpinned git
+# Pinned to a commit, not just the bare repo URL: pytr's PyPI releases lag
+# master by months (pip-audit can't check a git pin, see ci.yml), and an unpinned git
 # dependency means every fresh install silently resolves to whatever's on
 # master at that moment - not reproducible, and risky for a dependency that
 # handles real bank credentials. Bump deliberately, not via automatic
@@ -55,8 +55,8 @@ chompjs>=1.4.1
 # unrelated bugfixes; both stay on today's default behavior (v1 login,
 # waf_token="playwright", i.e. byte-for-byte how setup_tr.py already calls
 # TradeRepublicApi(...) with no extra kwargs).
-# Once pytr-org/pytr#414 is in, sync_tr.new_tr_api can go.
-pytr @ git+https://github.com/pytr-org/pytr.git@1cff3d701e0db82e3425dae2194f2eb702914484
+# Bumped 2026-11-03 to pytr-org/pytr#414's merge: login headers on v1 (#147).
+pytr @ git+https://github.com/pytr-org/pytr.git@85f76576856f0e97c3461a6b16716d6f93b4e62e
 # Declared explicitly rather than leaned on as woob's transitive dependency:
 # sync/crypto_at_rest.py decrypts real bank credentials with it, and a
 # dependency that arrives by accident can leave by accident too.

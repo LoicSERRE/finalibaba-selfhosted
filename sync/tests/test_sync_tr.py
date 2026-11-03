@@ -31,7 +31,6 @@ from sync_tr import (
     _parse_tr_timestamp,
     _position_isin,
     _timeline_item_to_transaction,
-    new_tr_api,
     resolve_position,
     split_crypto_positions,
     tr_cookies_path,
@@ -417,7 +416,7 @@ def test_tr_cookies_path_cannot_escape_its_directory():
         assert ".." not in path.name, hostile
 
 
-# ── new_tr_api (#147) ─────────────────────────────────────────────────────────
+# ── v1 login headers (#147) ─────────────────────────────────────────────────────────
 
 REQUIRED_LOGIN_HEADERS = ("X-TR-Device-Info", "X-TR-App-Version", "X-Tr-Platform")
 
@@ -439,7 +438,9 @@ def _sent_requests(monkeypatch, replies):
 
 def test_every_v1_login_call_sends_the_headers_trade_republic_requires(monkeypatch):
     sent = _sent_requests(monkeypatch, [{"processId": "pid-1", "countdownInSeconds": 60}, {}, {}])
-    api = new_tr_api(phone_no="+490000000000", pin="0000", waf_token=None)
+    from pytr.api import TradeRepublicApi
+
+    api = TradeRepublicApi(phone_no="+490000000000", pin="0000", waf_token=None)
 
     api.initiate_weblogin()
     api.resend_weblogin()
@@ -454,10 +455,3 @@ def test_every_v1_login_call_sends_the_headers_trade_republic_requires(monkeypat
         for header in REQUIRED_LOGIN_HEADERS:
             assert request.headers.get(header), f"{header} missing on {request.url}"
         assert request.headers.get("User-Agent")
-
-
-def test_new_tr_api_leaves_pytrs_shared_default_headers_alone():
-    from pytr.api import TradeRepublicApi
-
-    new_tr_api(phone_no="+490000000000", pin="0000", waf_token=None)
-    assert not set(REQUIRED_LOGIN_HEADERS) & set(TradeRepublicApi._default_headers)
