@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.21.3**
+Current release: **v2.21.4**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -26,6 +26,7 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **GoCardless webhooks** - the findable webhook docs cover their Payments product, not Bank Account Data. Re-checked against the current endpoint reference: five families (auth, institutions, agreements, requisitions, accounts), every one a synchronous REST call, no webhook or subscription anywhere.
 - **Plaid** - US/Canada coverage, where this app has no users yet. The condition here is demand rather than feasibility, so it was checked as such: zero issues in the repository's entire history mention Plaid, Interactive Brokers or Revolut. Three issues exist in total, all about sync failures.
 - **End-to-end encryption of bank credentials, per user.** The only design under which the instance operator genuinely cannot read them: a key derived from the user's own password, held in their session. The cost is that their bank only syncs while they are logged in - no 4h cron, no overnight alerts for them - so it is a per-user choice rather than a setting, and a real piece of work. Worth revisiting only if somebody actually asks for it.
+- **SCI (French property company) as an entity** ([discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50)). Asked for: an SCI holding its own real estate, SCPI, bank accounts and loans; partners linked by their share of it; usufruct / bare ownership; the partner's current account (CCA), an asset for the partner and a debt for the SCI; and both the SCI's own net worth and each partner's consolidated one. None of it fits today's model, where an account belongs to users (`AccountCoOwner`, no percentage) and every figure counts in full for each of them. Needs a design first: an owner that is not a user, ownership shares applied to every total, and how a CCA appears on both sides without being counted twice.
 - **`scripts/` is not linted, and CI now executes code from it.** `ci.yml` runs `ruff check sync/` only, so `scripts/lizard-blind-spots.py` - which `quality.yml` runs on every push - is unlinted. Extending it means fixing two pre-existing findings in `audit-bank-modules.py` first (ISC004, BLE001), both cosmetic.
 - **`/invite/<bogus>` and `/shared/<bogus>` answer 200, not 404.** The right page renders (uniform not-found, no signal about which reason), so this is a status-code correctness point rather than a user-visible one, and both routes are already `robots: noindex`.
 - **Convert the remaining Server Actions to `ActionResult`.** v2.12 converted the Security tab's session controls and the password form and documented the pattern in `components/settings/session-controls.tsx`; about sixty sites in `lib/actions/*` still throw, which production turns into an opaque digest. Convert per domain as each is touched, most-used forms first.
@@ -34,6 +35,12 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
 ---
+
+## v2.21.4 - Trade Republic connects again
+
+- **Trade Republic connects again** (#147). Since 1 November Trade Republic refuses a web login without its device headers (`400 MISSING_REQUIRED_HEADER`, [pytr#413](https://github.com/pytr-org/pytr/issues/413)); the sync service now sends them, the same fix as [pytr#414](https://github.com/pytr-org/pytr/pull/414).
+- **Crédit Agricole loans count as debt** (#148). Woob modules that report a loan as a plain account typed "loan" had it stored as a current account; these are now recognised and reclassified on the next sync.
+- Dependency updates: fastapi, playwright, dotenv, nodemailer, docker/login-action, and minimatch 11 for the lint tooling (GHSA-g3hv-75wg-m249).
 
 ## v2.21.3 - The v2.21.2 that deploys
 
