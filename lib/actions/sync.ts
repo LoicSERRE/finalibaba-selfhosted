@@ -118,7 +118,7 @@ export async function completeLCLSetup(): Promise<{ accounts: number }> {
   return res.json();
 }
 
-export async function startTRSetup(): Promise<{ countdown: number }> {
+export async function startTRSetup(): Promise<{ status: "pending_approval" | "code_required"; countdown: number }> {
   await assertOwnsEnvSync();
   const res = await fetchSync("/sync/trade-republic/setup/start", { method: "POST" });
   if (!res.ok) {
@@ -128,13 +128,18 @@ export async function startTRSetup(): Promise<{ countdown: number }> {
   return res.json();
 }
 
-export async function completeTRSetup(code: string): Promise<void> {
+/** Without a code, waits for the login to be approved in the Trade Republic app. */
+export async function completeTRSetup(code?: string): Promise<void> {
   await assertOwnsEnvSync();
-  const res = await fetchSync("/sync/trade-republic/setup/complete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code }),
-  });
+  const res = await fetchSync(
+    "/sync/trade-republic/setup/complete",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code ?? null }),
+    },
+    SETUP_COMPLETE_TIMEOUT_MS,
+  );
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error((data as { error?: string }).error ?? `Erreur ${res.status}`);
@@ -255,7 +260,7 @@ export async function getWoobModuleFields(module: string): Promise<WoobField[] |
 
 // Shared by both setup backends, which is why it is named for the route rather
 // than for Woob. The optional fields are what differs: Woob reports the medium
-// it used, Trade Republic how long its pushed code stays valid.
+// it used, Trade Republic how long its login stays open.
 export type InstitutionSetupResult =
   /** `synced` is how many accounts the setup itself WROTE, using the session
    *  the user just authorised. Present means the data is already in the
@@ -266,13 +271,20 @@ export type InstitutionSetupResult =
    *  it for an approval (see setup_woob.py's AppValidation branch, which sends
    *  only medium_label and message) - it was declared required and was always
    *  undefined at runtime. */
-  | { status: "pending_approval"; medium_type?: string | null; medium_label?: string | null; message?: string | null }
+  | {
+      status: "pending_approval";
+      medium_type?: string | null;
+      medium_label?: string | null;
+      message?: string | null;
+      /** Trade Republic only: seconds its login stays open for the approval. */
+      countdown?: number;
+    }
   | {
       status: "code_required";
       medium_type?: string | null;
       medium_label?: string | null;
       message?: string | null;
-      /** Trade Republic only: seconds its pushed code stays valid. */
+      /** Trade Republic only: seconds its login stays open for the code. */
       countdown?: number;
     }
   /** The bank put a reCAPTCHA in front of its login (Amundi does). Woob raises

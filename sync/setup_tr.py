@@ -1,21 +1,13 @@
 """
-Trade Republic web login setup - délègue à pytr (PR #327 mergé dans master).
+Trade Republic setup for the TR_PHONE/TR_PIN connection from the environment,
+on Trade Republic's v2 web login (see setup_tr_institution.py, the per-user
+equivalent).
 
-Depuis pytr master, initiate_weblogin() obtient le token AWS WAF via Playwright
-en interne. Plus besoin de gérer le contexte Playwright manuellement.
-
-Flow :
   1. POST /sync/trade-republic/setup/start
-     → Crée TradeRepublicApi avec save_cookies=True
-     → api.initiate_weblogin() : pytr ouvre Chromium headless, récupère le WAF token,
-       fait POST /api/v1/auth/web/login
-     → TR envoie un code à 4 chiffres sur le téléphone
-     → Retourne {"countdown": N}
-
-  2. POST /sync/trade-republic/setup/complete  {"code": "1234"}
-     → api.complete_weblogin(code) : fait POST /api/v1/auth/web/login/{processId}/{code}
-       et sauvegarde automatiquement les cookies (sans WAF token) dans
-       ~/.pytr/cookies.<phone>.txt
+     -> {"status": "pending_approval" | "code_required", "countdown": N}
+  2. POST /sync/trade-republic/setup/complete  {"code": "123456" | null}
+     -> waits until the login is approved in the Trade Republic app (or checks
+        the authenticator code), then saves the cookies to ~/.pytr.
 """
 import logging
 import os
@@ -33,26 +25,30 @@ def start_setup() -> dict:
     phone_no = os.environ["TR_PHONE"]
     pin = os.environ["TR_PIN"]
 
-    from pytr.api import TradeRepublicApi
+    from sync_tr import login_step, new_tr_api
 
-    api = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=True)
+    api = new_tr_api(phone_no=phone_no, pin=pin, save_cookies=True)
 
-    log.info("TR setup: initiation du web login via pytr (WAF token via Playwright)…")
-    countdown = api.initiate_weblogin()
-    countdown = int(countdown) + 1 if countdown else 181
+    log.info("TR setup: initiation du web login via pytr…")
+    step = login_step(api, api.initiate_weblogin())
 
-    log.info("TR setup: login initié - code valide %ds", countdown)
+    log.info("TR setup: login initié - %s pendant %ds", step["status"], step["countdown"])
     _pending = {"api": api}
-    return {"countdown": countdown}
+    return step
 
 
-def complete_setup(code: str) -> None:
+def complete_setup(code: str | None = None) -> None:
     if _pending is None:
         raise RuntimeError("Aucun login en attente - relance /setup/start d'abord")
 
     api = _pending["api"]
-    log.info("TR setup: completion du login avec le code…")
-    api.complete_weblogin(code)  # sauvegarde les cookies automatiquement
+    log.info("TR setup: attente de la validation du login…")
+    try:
+        # Waits for the approval in the app, then saves the cookies.
+        api.complete_weblogin(code if api.weblogin_needs_authenticator else None)
+    except TimeoutError:
+        _cleanup()
+        raise
 
     log.info("TR setup: session sauvegardée dans %s", api._cookies_file)
     _cleanup()

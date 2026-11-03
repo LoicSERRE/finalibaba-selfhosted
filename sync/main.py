@@ -543,9 +543,8 @@ async def tr_setup_start():
 @app.post("/sync/trade-republic/setup/complete")
 async def tr_setup_complete(request: Request):
     body = await request.json()
-    code = (body.get("code") or "").strip()
-    if not code:
-        return JSONResponse({"error": "missing code"}, status_code=400)
+    # None when the login is approved in the app rather than with a code.
+    code = (body.get("code") or "").strip() or None
     import asyncio
 
     import setup_tr
@@ -678,8 +677,6 @@ async def institution_setup_complete(institution_id: str, request: Request):
     loop = asyncio.get_event_loop()
     provider = _institution_provider(institution_id)
     if provider == "tr":
-        if not code:
-            return JSONResponse({"error": "Code manquant"}, status_code=400)
         try:
             result = await loop.run_in_executor(
                 executor, setup_tr_institution.complete_setup, institution_id, code

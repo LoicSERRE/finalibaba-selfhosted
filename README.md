@@ -95,16 +95,16 @@ All sync modules are **optional** - the app works fully without them. Leave cred
 
 Available in 18 EU countries: AT, BE, DE, EE, ES, FI, FR, GR, IE, IT, LT, LU, LV, NL, PL, PT, SI, SK.
 
-**From the interface (recommended).** In **Settings → Institutions**, click **Add an institution**, search for **Trade Republic** in the bank list, and enter your phone number and PIN. Then **Connect** on that institution's row and type the 4-digit code the Trade Republic app shows you. Nothing to put in `.env`, no terminal, and every user on a multi-user instance can connect their own account this way - see [Multiple users](#multiple-users-optional).
+**From the interface (recommended).** In **Settings → Institutions**, click **Add an institution**, search for **Trade Republic** in the bank list, and enter your phone number and PIN. Then **Connect** on that institution's row and approve the login in the Trade Republic app (or type your authenticator code, if you use one). Nothing to put in `.env`, no terminal, and every user on a multi-user instance can connect their own account this way - see [Multiple users](#multiple-users-optional).
 
 **From `.env` (the original path, still supported).** Set `TR_PHONE` and `TR_PIN`, then run the interactive setup once:
 
 ```bash
 docker compose exec -it sync python setup_tr.py
-# Approve the notification in the TR app, then enter the 4-digit code
+# Approve the login in the TR app (or type your authenticator code)
 ```
 
-Either way the session persists in a Docker volume. Renew it when it expires (every few weeks) - from Settings for a UI-configured account, or by re-running the command above for the `.env` one.
+Either way the session persists in a Docker volume. Trade Republic ends a web session about a day after it starts, so expect to approve a new login in the app roughly daily - from Settings for a UI-configured account, or by re-running the command above for the `.env` one.
 
 > [!IMPORTANT]
 > **One Trade Republic account can only be connected once per instance.** Trade Republic allows a single active web session per account, so putting the same phone number in `.env` *and* on an institution makes the two log each other out on every sync. Pick one path.

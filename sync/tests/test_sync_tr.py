@@ -31,6 +31,8 @@ from sync_tr import (
     _parse_tr_timestamp,
     _position_isin,
     _timeline_item_to_transaction,
+    login_step,
+    new_tr_api,
     resolve_position,
     split_crypto_positions,
     tr_cookies_path,
@@ -416,7 +418,7 @@ def test_tr_cookies_path_cannot_escape_its_directory():
         assert ".." not in path.name, hostile
 
 
-# ── v1 login headers (#147) ─────────────────────────────────────────────────────────
+# ── v2 web login ──────────────────────────────────────────────────────────────
 
 REQUIRED_LOGIN_HEADERS = ("X-TR-Device-Info", "X-TR-App-Version", "X-Tr-Platform")
 
@@ -436,22 +438,36 @@ def _sent_requests(monkeypatch, replies):
     return sent
 
 
-def test_every_v1_login_call_sends_the_headers_trade_republic_requires(monkeypatch):
-    sent = _sent_requests(monkeypatch, [{"processId": "pid-1", "countdownInSeconds": 60}, {}, {}])
-    from pytr.api import TradeRepublicApi
+def test_a_login_approved_in_the_app_goes_through_the_v2_process_with_its_headers(monkeypatch):
+    sent = _sent_requests(
+        monkeypatch,
+        [
+            {"processId": "pid-1", "countdownInSeconds": 60},
+            {"status": "PENDING"},
+            {"status": "PENDING"},
+            {"status": "CONFIRMED"},
+        ],
+    )
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    api = new_tr_api(phone_no="+490000000000", pin="0000")
 
-    api = TradeRepublicApi(phone_no="+490000000000", pin="0000", waf_token=None)
+    step = login_step(api, api.initiate_weblogin())
+    api.complete_weblogin()
 
-    api.initiate_weblogin()
-    api.resend_weblogin()
-    api.complete_weblogin("1234")
-
-    assert [r.url for r in sent] == [
-        "https://api.traderepublic.com/api/v1/auth/web/login",
-        "https://api.traderepublic.com/api/v1/auth/web/login/pid-1/resend",
-        "https://api.traderepublic.com/api/v1/auth/web/login/pid-1/1234",
-    ]
+    # No WAF token to fetch, so no Playwright: the v2 login does without one.
+    assert api._waf_token is None
+    assert step == {"status": "pending_approval", "countdown": 61}
+    process = "https://api.traderepublic.com/api/v2/auth/web/login/processes/pid-1"
+    assert [r.url for r in sent] == ["https://api.traderepublic.com/api/v2/auth/web/login", process, process, process]
     for request in sent:
         for header in REQUIRED_LOGIN_HEADERS:
             assert request.headers.get(header), f"{header} missing on {request.url}"
-        assert request.headers.get("User-Agent")
+
+
+def test_an_account_with_an_authenticator_app_is_asked_for_its_code(monkeypatch):
+    _sent_requests(
+        monkeypatch,
+        [{"processId": "pid-1", "countdownInSeconds": 60}, {"status": "PENDING", "requiredAction": "AUTHENTICATOR_VERIFICATION"}],
+    )
+    api = new_tr_api(phone_no="+490000000000", pin="0000")
+    assert login_step(api, api.initiate_weblogin())["status"] == "code_required"

@@ -1,7 +1,7 @@
 """Unit tests for the per-institution Trade Republic setup flow (v2.1).
 
 No network and no DB: `fetch_tr_institution`, `_get_api` and
-`TradeRepublicApi` are all patched, so what is under test is this module's own
+`new_tr_api` are all patched, so what is under test is this module's own
 control flow - which failures become a user-facing SetupError, when a code is
 actually requested, and whether pending state stays keyed per institution.
 
@@ -22,12 +22,14 @@ OTHER = "inst-2"
 
 
 class FakeApi:
-    """Stands in for pytr's TradeRepublicApi over the two calls used here."""
+    """Stands in for pytr's TradeRepublicApi over the v2 login calls used here."""
 
-    def __init__(self, countdown=60, weblogin_error=None, complete_error=None):
+    def __init__(self, countdown=60, weblogin_error=None, complete_error=None, needs_code=False):
         self._countdown = countdown
         self._weblogin_error = weblogin_error
         self._complete_error = complete_error
+        self.weblogin_needs_authenticator = needs_code
+        self.completed = False
         self.completed_with = None
         self._cookies_file = "/tmp/fake-cookies.txt"
 
@@ -36,10 +38,11 @@ class FakeApi:
             raise self._weblogin_error
         return self._countdown
 
-    def complete_weblogin(self, code):
+    def complete_weblogin(self, verify_code=None):
         if self._complete_error:
             raise self._complete_error
-        self.completed_with = code
+        self.completed = True
+        self.completed_with = verify_code
 
 
 @pytest.fixture(autouse=True)
@@ -76,9 +79,7 @@ def env(monkeypatch, tmp_path):
         setup_tr_institution, "tr_cookies_path", lambda inst: tmp_path / f"cookies.{inst}.txt"
     )
 
-    import pytr.api
-
-    monkeypatch.setattr(pytr.api, "TradeRepublicApi", lambda **kwargs: state["api"])
+    monkeypatch.setattr(setup_tr_institution, "new_tr_api", lambda **kwargs: state["api"])
     return state
 
 
@@ -117,18 +118,20 @@ def test_a_resumable_session_needs_no_code_at_all(env):
     assert INST not in setup_tr_institution._pending
 
 
-def test_requests_a_code_and_reports_how_long_it_stays_valid(env):
-    env["api"] = FakeApi(countdown=60)
-    result = start_setup(INST)
-    assert result["status"] == "code_required"
-    # +1 so a UI counting down never claims 0s while the code is still good.
-    assert result["countdown"] == 61
+def test_asks_for_an_approval_in_the_app_and_says_how_long_it_stays_open(env):
+    env["api"] = FakeApi(countdown=61)
+    assert start_setup(INST) == {"status": "pending_approval", "countdown": 61}
     assert INST in setup_tr_institution._pending
+
+
+def test_asks_for_the_authenticator_code_when_the_account_has_one(env):
+    env["api"] = FakeApi(countdown=61, needs_code=True)
+    assert start_setup(INST)["status"] == "code_required"
 
 
 def test_falls_back_to_a_default_countdown_when_trade_republic_reports_none(env):
     env["api"] = FakeApi(countdown=None)
-    assert start_setup(INST)["countdown"] == 181
+    assert start_setup(INST)["countdown"] == 121
 
 
 def test_a_refused_login_becomes_a_user_facing_error_and_leaves_nothing_pending(env):
@@ -158,21 +161,49 @@ def test_completing_without_a_started_attempt_tells_the_user_to_restart(env):
     assert "relance" in e.value.user_message.lower()
 
 
-def test_a_rejected_code_keeps_the_attempt_alive_so_it_can_be_retyped(env):
-    env["api"] = FakeApi(complete_error=RuntimeError("bad code"))
-    start_setup(INST)
-    with pytest.raises(SetupError):
-        complete_setup(INST, "0000")
-    # A typo must not force the whole flow to start over and push a new code.
-    assert INST in setup_tr_institution._pending
-
-
-def test_a_valid_code_connects_and_clears_the_attempt(env):
+def test_an_approval_in_the_app_connects_with_no_code(env):
     api = FakeApi()
     env["api"] = api
     start_setup(INST)
-    assert complete_setup(INST, "1234") == {"status": "connected"}
-    assert api.completed_with == "1234"
+    assert complete_setup(INST) == {"status": "connected"}
+    assert api.completed and api.completed_with is None
+    assert INST not in setup_tr_institution._pending
+
+
+def test_a_valid_authenticator_code_connects_and_clears_the_attempt(env):
+    api = FakeApi(needs_code=True)
+    env["api"] = api
+    start_setup(INST)
+    assert complete_setup(INST, "123456") == {"status": "connected"}
+    assert api.completed_with == "123456"
+    assert INST not in setup_tr_institution._pending
+
+
+def test_an_authenticator_login_without_its_code_asks_for_it(env):
+    env["api"] = FakeApi(needs_code=True)
+    start_setup(INST)
+    with pytest.raises(SetupError):
+        complete_setup(INST)
+    assert INST in setup_tr_institution._pending
+
+
+def test_a_rejected_code_keeps_the_attempt_alive_so_it_can_be_retyped(env):
+    env["api"] = FakeApi(needs_code=True, complete_error=ValueError("bad code"))
+    start_setup(INST)
+    with pytest.raises(SetupError):
+        complete_setup(INST, "000000")
+    # A typo must not force the whole flow to start over.
+    assert INST in setup_tr_institution._pending
+
+
+@pytest.mark.parametrize("error", [TimeoutError(), ValueError("Unexpected login process status: 'REJECTED'")])
+def test_an_approval_that_never_comes_ends_the_attempt(env, error):
+    env["api"] = FakeApi(complete_error=error)
+    start_setup(INST)
+    with pytest.raises(SetupError) as e:
+        complete_setup(INST)
+    assert "relance" in e.value.user_message
+    # That login process is over on Trade Republic's side: only a new one can work.
     assert INST not in setup_tr_institution._pending
 
 
@@ -180,17 +211,17 @@ def test_a_valid_code_connects_and_clears_the_attempt(env):
 
 
 def test_two_institutions_can_be_mid_setup_at_once(env):
-    first, second = FakeApi(), FakeApi()
+    first, second = FakeApi(needs_code=True), FakeApi(needs_code=True)
     env["api"] = first
     start_setup(INST)
     env["api"] = second
     start_setup(OTHER)
 
     # Completing one must not consume or disturb the other's pending login.
-    complete_setup(INST, "1111")
-    assert first.completed_with == "1111"
+    complete_setup(INST, "111111")
+    assert first.completed_with == "111111"
     assert second.completed_with is None
     assert OTHER in setup_tr_institution._pending
 
-    complete_setup(OTHER, "2222")
-    assert second.completed_with == "2222"
+    complete_setup(OTHER, "222222")
+    assert second.completed_with == "222222"

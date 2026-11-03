@@ -11,15 +11,20 @@ constraint applies: several institutions can plausibly be mid-setup at once
 (two family members adding their accounts on the same evening), so pending
 state is keyed by institution id instead of a single module-level global.
 
-Trade Republic's own second factor is always the same one: it pushes a code to
-its mobile app and waits. There is no equivalent of Woob's three outcome
-families (approval-only, code, unsupported), so the surface here is simply
-start -> enter code.
+Trade Republic's v2 web login has two outcomes: the user approves it in the
+mobile app (pending_approval, then complete_setup waits for it), or, with an
+authenticator app enabled, types its code (code_required).
 """
 
 import logging
 
-from sync_tr import _get_api, fetch_tr_institution, tr_cookies_path
+from sync_tr import (
+    _get_api,
+    fetch_tr_institution,
+    login_step,
+    new_tr_api,
+    tr_cookies_path,
+)
 
 log = logging.getLogger(__name__)
 
@@ -52,10 +57,10 @@ def _require_credentials(institution_id: str) -> dict:
 
 
 def start_setup(institution_id: str) -> dict:
-    """Ask Trade Republic to push a login code to the user's phone.
+    """Start a Trade Republic login, which the user approves in the app.
 
-    Returns the countdown TR reports for how long that code stays valid, so
-    the UI can show it rather than leaving the user guessing.
+    Returns what the user has to do - approve in the app (pending_approval)
+    or type an authenticator code (code_required) - and for how long.
     """
     _cleanup(institution_id)
     inst = _require_credentials(institution_id)
@@ -74,12 +79,10 @@ def start_setup(institution_id: str) -> dict:
         # failure here (a broken cookie file, a pytr change) is still traceable.
         log.debug("TR setup (%s): no resumable session, starting a fresh login - %s", institution_id, e)
 
-    from pytr.api import TradeRepublicApi
-
     cookies_file = tr_cookies_path(institution_id)
     cookies_file.parent.mkdir(parents=True, exist_ok=True)
 
-    api = TradeRepublicApi(
+    api = new_tr_api(
         phone_no=inst["trPhone"],
         pin=inst["trPin"],
         save_cookies=True,
@@ -94,21 +97,29 @@ def start_setup(institution_id: str) -> dict:
             f"Trade Republic a refusé la connexion : {str(e)[:200]}"
         ) from e
 
-    countdown = int(countdown) + 1 if countdown else 181
+    step = login_step(api, countdown)
     _pending[institution_id] = {"api": api}
-    log.info("TR setup (%s): code valid for %ds", inst["name"], countdown)
-    return {"status": "code_required", "countdown": countdown}
+    log.info("TR setup (%s): %s for %ds", inst["name"], step["status"], step["countdown"])
+    return step
 
 
-def complete_setup(institution_id: str, code: str) -> dict:
-    """Finish the login with the code from the Trade Republic app."""
+def complete_setup(institution_id: str, code: str | None = None) -> dict:
+    """Wait for the user to approve the login in the app (or check their
+    authenticator code), then save the session. Blocks until Trade Republic
+    answers, up to the login's own expiry (about two minutes)."""
     entry = _pending.get(institution_id)
     if not entry:
         raise SetupError("Aucune connexion en attente - relance la configuration.")
 
     api = entry["api"]
+    needs_code = api.weblogin_needs_authenticator
+    if needs_code and not code:
+        raise SetupError("Saisis le code de ton application d'authentification.")
     try:
-        api.complete_weblogin(code)  # persists cookies to our per-institution file
+        api.complete_weblogin(code if needs_code else None)  # persists cookies to our per-institution file
+    except TimeoutError as e:
+        _cleanup(institution_id)
+        raise SetupError("Connexion non validée à temps dans l'app Trade Republic - relance-la.") from e
     except Exception as e:
         # Logged server-side, never forwarded: main.py's own SetupError handler
         # states the invariant that a user_message is written here at raise
@@ -117,7 +128,11 @@ def complete_setup(institution_id: str, code: str) -> dict:
         # institutions route already follow - an upstream library's exception
         # text is not something to hand a browser.
         log.exception("TR setup (%s): weblogin completion refused", institution_id)
-        raise SetupError("Code refusé par Trade Republic - vérifie le code reçu dans l'app et réessaie.") from e
+        if needs_code:
+            # A typo: the login process is still open, so the code can be retyped.
+            raise SetupError("Code refusé par Trade Republic - vérifie le code de ton application d'authentification.") from e
+        _cleanup(institution_id)
+        raise SetupError("Trade Republic n'a pas validé la connexion - relance-la.") from e
 
     log.info("TR setup (%s): session saved to %s", institution_id, api._cookies_file)
     _cleanup(institution_id)
