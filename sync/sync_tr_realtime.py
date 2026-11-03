@@ -24,7 +24,7 @@ connection. Everything that differs between the two - credentials, the
 account syncId shape, the SyncLog source, whose browser tabs get refreshed -
 follows from that single argument.
 
-Subscribes to neonPortfolio/cash(/cryptoPortfolio) - the topics confirmed
+Subscribes to cash and compactPortfolioByType - the topics confirmed
 (against pytr's own pinned source) to push on real change - rather than
 timelineTransactions itself, which sync_tr.py only ever uses as a one-shot
 paginated fetch and isn't confirmed to be push-capable. A push on any
@@ -52,6 +52,8 @@ from sync_tr import (
     _get_securities_accounts,
     _is_auth_error,
     fetch_tr_institution,
+    resolve_ticker_id,
+    ticker_price_cents,
     tr_sync_id,
 )
 
@@ -81,6 +83,13 @@ BASE_TOPICS = ({"type": "cash"},)
 # price tick could turn this into a fetch storm. Nothing bounded that before.
 # 30s is still "within seconds" for a wealth dashboard.
 MIN_FETCH_INTERVAL_S = 30
+
+# cash and compactPortfolioByType only push when money or a position moves, so
+# prices - crypto above all - stood still between batch syncs. Each held
+# instrument's ticker is subscribed too, on the exchange the batch prices it
+# from, and a tick only rewrites that holding's price: batched, at most this
+# often, and never a full fetch cycle.
+PRICE_WRITE_INTERVAL_S = 30
 
 INITIAL_BACKOFF_S = 5
 MAX_BACKOFF_S = 300
@@ -122,6 +131,11 @@ def _app_call(path: str, timeout: int, payload: dict | None = None) -> None:
         log.warning("TR realtime: failed to call %s: %s", path, e)
 
 
+def _notify(owner_user_id: str | None) -> None:
+    """Refresh the connection owner's open tabs (app/api/realtime/notify)."""
+    _app_call("/api/realtime/notify", timeout=5, payload={"userId": owner_user_id} if owner_user_id else None)
+
+
 def _notify_and_followup(owner_user_id: str | None) -> None:
     """Fans the SSE 'something changed' signal out to any open browser tabs
     (app/api/realtime/notify), then runs the same auto-categorize/alerts
@@ -134,7 +148,7 @@ def _notify_and_followup(owner_user_id: str | None) -> None:
     everyone else's - their dashboard would keep showing the previous figures
     while somebody else's tab refreshed for their trade.
     """
-    _app_call("/api/realtime/notify", timeout=5, payload={"userId": owner_user_id} if owner_user_id else None)
+    _notify(owner_user_id)
     _app_call("/api/transactions/auto-categorize", timeout=30)
     _app_call("/api/alerts/check", timeout=30)
 
@@ -178,6 +192,51 @@ def _resolve_db_institution(cur, institution_id: str | None) -> str:
     return resolved
 
 
+def _held_isins(cur, institution_id: str) -> list[str]:
+    """The instruments held in this connection's Trade Republic accounts."""
+    cur.execute(
+        """
+        SELECT DISTINCT h.ticker FROM "Holding" h JOIN "Account" a ON a.id = h."accountId"
+        WHERE a."institutionId" = %s AND a."syncId" LIKE 'tr:%%'
+        ORDER BY h.ticker
+        """,
+        (institution_id,),
+    )
+    return [row["ticker"] for row in cur.fetchall()]
+
+
+def _write_live_prices(cur, institution_id: str, prices: dict[str, int]) -> int:
+    """Store the latest ticked price of each instrument held through this
+    connection. Returns how many holdings actually changed."""
+    changed = 0
+    for isin, price_cents in prices.items():
+        cur.execute(
+            """
+            UPDATE "Holding" h SET "lastPriceCents" = %s, "updatedAt" = NOW()
+            FROM "Account" a
+            WHERE a.id = h."accountId" AND a."institutionId" = %s AND a."syncId" LIKE 'tr:%%'
+              AND h.ticker = %s AND h."lastPriceCents" <> %s
+            """,
+            (price_cents, institution_id, isin, price_cents),
+        )
+        changed += cur.rowcount
+    return changed
+
+
+async def _ticker_topics(api, isins, label) -> list[dict]:
+    """A ticker subscription per held instrument, on the batch's own exchange."""
+    topics = []
+    for isin in isins:
+        try:
+            ticker_id, _name = await resolve_ticker_id(api, isin)
+        except Exception as e:
+            log.warning("TR realtime [%s]: no ticker for %s - %s", label, isin, e)
+            continue
+        if ticker_id:
+            topics.append({"type": "ticker", "id": ticker_id})
+    return topics
+
+
 async def _subscribe_surviving(api, candidates, label):
     """Subscribe to each candidate topic and keep the ones TR actually answers.
 
@@ -197,7 +256,11 @@ async def _subscribe_surviving(api, candidates, label):
         pending[await api.subscribe(topic)] = topic
 
     accepted = []
-    for _ in range(len(pending)):
+    # A ticker can tick again before every other topic has answered once, so
+    # this waits for the answers rather than counting messages (bounded).
+    for _ in range(4 * len(pending)):
+        if not pending:
+            break
         try:
             sub_id, _sub, _payload = await api.recv()
         except TradeRepublicError as e:
@@ -245,11 +308,17 @@ async def _run_one_session(institution_id: str | None = None) -> None:
         )
         cur.execute('SELECT "syncId" FROM "Transaction" WHERE "accountId" = %s', (cash_account_id,))
         known_tx_ids = {row["syncId"].split(":", 1)[1] for row in cur.fetchall() if row["syncId"]}
+        isins = _held_isins(cur, db_institution_id)
         conn.commit()
+
+        # Resolved before anything else is subscribed: each lookup reads its
+        # own answer off the socket, which nothing else may be pushing to yet.
+        tickers = await _ticker_topics(api, isins, label)
 
         candidates = [
             *BASE_TOPICS,
             *({"type": "compactPortfolioByType", "secAccNo": n} for ns in sec_accounts.values() for n in ns),
+            *tickers,
         ]
         accepted = await _subscribe_surviving(api, candidates, label)
         if not accepted:
@@ -257,6 +326,8 @@ async def _run_one_session(institution_id: str | None = None) -> None:
 
         log.info("TR realtime [%s]: listening on %s", label, accepted)
         last_fetch = 0.0
+        last_price_write = 0.0
+        ticked: dict[str, int] = {}
 
         while True:
             try:
@@ -278,12 +349,24 @@ async def _run_one_session(institution_id: str | None = None) -> None:
                 # deltas being exactly the change pushes this exists for. Which
                 # topic moved does not matter here, since any push means "go
                 # re-derive the real delta from the API".
-                await api.recv()
+                _sub_id, subscription, payload = await api.recv()
 
                 # A topic that pushes on every price tick would otherwise mean
                 # a full fetch cycle per tick. Bounded here rather than trusted
                 # to be quiet.
                 now = asyncio.get_event_loop().time()
+                if (subscription or {}).get("type") == "ticker":
+                    price_cents = ticker_price_cents(payload)
+                    if price_cents:
+                        ticked[subscription["id"].split(".", 1)[0]] = price_cents
+                    if ticked and now - last_price_write >= PRICE_WRITE_INTERVAL_S:
+                        last_price_write = now
+                        changed = _write_live_prices(cur, db_institution_id, ticked)
+                        conn.commit()
+                        ticked = {}
+                        if changed:
+                            _notify(owner_user_id)
+                    continue
                 if now - last_fetch < MIN_FETCH_INTERVAL_S:
                     continue
                 last_fetch = now
