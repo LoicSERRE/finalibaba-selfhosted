@@ -389,9 +389,9 @@ jobs:
   # Docker-network-only per SECURITY.md, never internet-exposed. Findings
   # still upload to the Security tab either way, so they stay visible - this
   # only stops them from blocking every future release until they're
-  # properly triaged (would need testing whether Playwright's actual
-  # headless Chromium launch survives trimming that dependency closure,
-  # which needs real TR credentials to verify and wasn't safe to rush).
+  # properly triaged. v2.23 removed Playwright/Chromium and the build
+  # headers (78 -> 52); what remains is unfixed Debian base packages and
+  # pip's own vendored libraries, see dev-docs/platform.md.
   trivy-scan:
     name: Trivy image scan (${{ matrix.image }})
     if: github.event_name == 'release'
