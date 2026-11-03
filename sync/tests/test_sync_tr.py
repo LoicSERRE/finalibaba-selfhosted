@@ -471,3 +471,30 @@ def test_an_account_with_an_authenticator_app_is_asked_for_its_code(monkeypatch)
     )
     api = new_tr_api(phone_no="+490000000000", pin="0000")
     assert login_step(api, api.initiate_weblogin())["status"] == "code_required"
+
+
+def test_two_connections_in_one_process_keep_their_own_subscriptions():
+    # pytr keeps subscriptions and the last message per subscription in
+    # class-level dicts while each instance numbers from 1, so the listener and
+    # a batch sync running beside it filed each other's ticks under the wrong
+    # instrument (Apple at Bitcoin's price).
+    import asyncio
+
+    a = new_tr_api(phone_no="+490000000000", pin="0000")
+    b = new_tr_api(phone_no="+490000000001", pin="0000")
+
+    class FakeWs:
+        async def send(self, _msg):
+            pass
+
+    async def subscribe_both():
+        for api in (a, b):
+            api._ws = FakeWs()
+            api._ws.close_code = None
+        await a.subscribe({"type": "ticker", "id": "US0378331005.TDG"})
+        await b.subscribe({"type": "ticker", "id": "XF000BTC0017.BHS"})
+
+    asyncio.run(subscribe_both())
+    assert a.subscriptions == {"1": {"type": "ticker", "id": "US0378331005.TDG"}}
+    assert b.subscriptions == {"1": {"type": "ticker", "id": "XF000BTC0017.BHS"}}
+    assert a._previous_responses is not b._previous_responses

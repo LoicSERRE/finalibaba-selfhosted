@@ -72,7 +72,13 @@ def new_tr_api(**kwargs):
     the app (or types an authenticator code), and no WAF token is needed."""
     from pytr.api import TradeRepublicApi
 
-    return TradeRepublicApi(use_v2_login=True, **kwargs)
+    api = TradeRepublicApi(use_v2_login=True, **kwargs)
+    # pytr keeps these on the class, shared by every instance: two connections
+    # in one process (a listener and a batch sync) mixed up each other's ticks.
+    api.subscriptions = {}
+    api._previous_responses = {}
+    api._lock = asyncio.Lock()
+    return api
 
 
 def login_step(api, countdown) -> dict:
@@ -252,37 +258,42 @@ async def _fetch_positions_for_account(api, sec_number: str) -> list:
     raise last_error
 
 
+# Prefer TR's own exchange (TDG), then EUR venues
+PREFERRED_EXCHANGES = ["TDG", "LSX", "XETR", "XFRA", "XMIL", "TIB"]
+
+
+async def resolve_ticker_id(api, isin: str) -> tuple[str | None, str | None]:
+    """(ISIN.EXCHANGE ticker id, name) from the instrument's metadata, or (None, name)."""
+    sub = await api.subscribe({"type": "instrument", "id": isin})
+    try:
+        instr = await asyncio.wait_for(api._recv_subscription(sub), timeout=8)
+    finally:
+        await api.unsubscribe(sub)
+    if not isinstance(instr, dict):
+        return None, None
+    name = instr.get("shortName") or instr.get("name") or None
+    active_exchanges = [e["slug"] for e in instr.get("exchanges", []) if e.get("active")]
+    exchange = next((e for e in PREFERRED_EXCHANGES if e in active_exchanges), active_exchanges[0] if active_exchanges else None)
+    return (f"{isin}.{exchange}" if exchange else None), name
+
+
+def ticker_price_cents(tick) -> int:
+    """Price in cents from a ticker payload: {"last": {"price": "296.5"}, "bid": {...}, ...}."""
+    if not isinstance(tick, dict):
+        return 0
+    price_str = (tick.get("last") or {}).get("price") or (tick.get("bid") or {}).get("price") or 0
+    return int(Decimal(str(price_str)) * 100)
+
+
 async def _fetch_ticker_price(api, isin: str) -> tuple[int, str | None]:
     """Return (price_cents, name) via instrument + ticker ISIN.EXCHANGE subscriptions."""
     try:
-        # Step 1: get instrument metadata (name + available exchanges)
-        sub = await api.subscribe({"type": "instrument", "id": isin})
-        instr = await asyncio.wait_for(api._recv_subscription(sub), timeout=8)
-        if not isinstance(instr, dict):
-            return 0, None
-
-        name = instr.get("shortName") or instr.get("name") or None
-        active_exchanges = [e["slug"] for e in instr.get("exchanges", []) if e.get("active")]
-
-        # Prefer TR's own exchange (TDG), then EUR venues
-        preferred = ["TDG", "LSX", "XETR", "XFRA", "XMIL", "TIB"]
-        exchange = next((e for e in preferred if e in active_exchanges), active_exchanges[0] if active_exchanges else None)
-        if not exchange:
+        ticker_id, name = await resolve_ticker_id(api, isin)
+        if not ticker_id:
             return 0, name
-
-        # Step 2: fetch live price via ticker ISIN.EXCHANGE
-        sub2 = await api.subscribe({"type": "ticker", "id": f"{isin}.{exchange}"})
+        sub2 = await api.subscribe({"type": "ticker", "id": ticker_id})
         tick = await asyncio.wait_for(api._recv_subscription(sub2), timeout=8)
-        if not isinstance(tick, dict):
-            return 0, name
-
-        # Response: {"last": {"price": "296.5", ...}, "bid": {...}, "ask": {...}}
-        price_str = (
-            (tick.get("last") or {}).get("price")
-            or (tick.get("bid") or {}).get("price")
-            or 0
-        )
-        return int(Decimal(str(price_str)) * 100), name
+        return ticker_price_cents(tick), name
     except Exception as e:
         log.warning("TR ticker %s erreur : %s", isin, e)
         return 0, None
