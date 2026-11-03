@@ -20,12 +20,11 @@ interface SyncLog {
  * Establish a Trade Republic session for one institution (v2.1).
  *
  * The counterpart to WoobSetupPrompt, and deliberately its own component
- * rather than a branch inside it: Trade Republic has exactly one second
- * factor (a code pushed to its own mobile app), so none of Woob's three
- * outcome families - approval-only, code, unsupported - apply. What it does
- * have and Woob does not is an expiry: TR reports how long the code stays
- * valid, and a user who does not know the code has expired just sees it
- * rejected with no explanation.
+ * rather than a branch inside it. Trade Republic's v2 login (v2.23) ends one
+ * of two ways: the user approves it in the mobile app - the usual case, while
+ * the sync service waits for it - or, with an authenticator app enabled,
+ * types its code. Either way TR reports how long the login stays open, and
+ * the countdown is shown so an expired login is not a mystery.
  *
  * The ceremony lives in a dialog rather than inline in the institution row,
  * after a report that the code panel was "mal placé" and that confirming it
@@ -48,6 +47,7 @@ interface SyncLog {
 type Step =
   | { name: "idle" }
   | { name: "requesting" }
+  | { name: "approve"; secondsLeft: number | null }
   | { name: "code"; secondsLeft: number | null }
   | { name: "validating" }
   | { name: "syncing" }
@@ -65,7 +65,7 @@ export function TradeRepublicSetupPrompt({
   const t = useTranslations("syncStatus");
   const tc = useTranslations("common");
 
-  const secondsLeft = step.name === "code" ? step.secondsLeft : null;
+  const secondsLeft = step.name === "code" || step.name === "approve" ? step.secondsLeft : null;
 
   // One interval for the whole countdown, cleared on unmount and whenever the
   // flow moves on - not a timeout re-armed per tick, which would leak one timer
@@ -74,8 +74,8 @@ export function TradeRepublicSetupPrompt({
     if (secondsLeft === null || secondsLeft <= 0) return;
     const id = setInterval(() => {
       setStep((s) =>
-        s.name === "code" && s.secondsLeft !== null
-          ? { name: "code", secondsLeft: Math.max(0, s.secondsLeft - 1) }
+        (s.name === "code" || s.name === "approve") && s.secondsLeft !== null
+          ? { ...s, secondsLeft: Math.max(0, s.secondsLeft - 1) }
           : s
       );
     }, 1000);
@@ -107,7 +107,7 @@ export function TradeRepublicSetupPrompt({
   const closeDialog = (next: boolean) => {
     // A ceremony in flight owns the screen: closing mid-way would leave a
     // pushed code and a half-open session with nothing on screen about either.
-    if (!next && (step.name === "requesting" || step.name === "validating" || step.name === "syncing")) return;
+    if (!next && (step.name === "requesting" || step.name === "approve" || step.name === "validating" || step.name === "syncing")) return;
     setOpen(next);
     if (!next) reset();
   };
@@ -145,14 +145,29 @@ export function TradeRepublicSetupPrompt({
         await runSync();
         return;
       }
-      setStep({
-        name: "code",
-        secondsLeft: result.status === "code_required" ? (result.countdown ?? null) : null,
-      });
+      const countdown = "countdown" in result ? (result.countdown ?? null) : null;
+      if (result.status === "pending_approval") {
+        await awaitApproval(countdown);
+        return;
+      }
+      setStep({ name: "code", secondsLeft: countdown });
     } catch (e) {
       setError(e instanceof Error ? e.message : t("unknownError"));
       setStep({ name: "idle" });
     }
+  };
+
+  // The sync service answers once the login is approved in the app, or once
+  // Trade Republic gives up on it - so this one call is the whole wait.
+  const awaitApproval = async (countdown: number | null) => {
+    setStep({ name: "approve", secondsLeft: countdown });
+    const result = await completeInstitutionSetup(institutionId);
+    if (!result.ok) {
+      setError(result.error);
+      setStep({ name: "idle" });
+      return;
+    }
+    await runSync();
   };
 
   const handleComplete = async () => {
@@ -179,7 +194,7 @@ export function TradeRepublicSetupPrompt({
       open={open}
       onOpenChange={closeDialog}
       title={t("trDialogTitle")}
-      description={t("trCodeHint")}
+      description={t("trDialogHint")}
       trigger={
         <Button
           variant="outline"
@@ -205,6 +220,17 @@ export function TradeRepublicSetupPrompt({
         )}
 
         {step.name === "requesting" && <Waiting label={t("trRequesting")} />}
+
+        {step.name === "approve" && (
+          <div className="space-y-2">
+            <Waiting label={t("trApproveHint")} />
+            {secondsLeft !== null && (
+              <p className={`text-xs ${expired ? "text-[var(--negative)]" : "text-[var(--muted)]"}`}>
+                {expired ? t("trCodeExpired") : t("trApproveCountdown", { seconds: secondsLeft })}
+              </p>
+            )}
+          </div>
+        )}
 
         {step.name === "code" && (
           <div className="space-y-3">
@@ -281,6 +307,7 @@ function TradeRepublicSteps({ step }: Readonly<{ step: Step }>) {
   const currentIndex = {
     idle: 0,
     requesting: 0,
+    approve: 1,
     code: 1,
     validating: 1,
     syncing: 2,

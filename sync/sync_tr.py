@@ -67,15 +67,28 @@ def tr_cookies_path(scope_institution_id: str | None) -> pathlib.Path | None:
     return pathlib.Path.home() / ".pytr" / f"cookies.inst-{safe}.txt"
 
 
-def _get_api(phone_no: str, pin: str, interactive: bool, scope_institution_id: str | None = None):
+def new_tr_api(**kwargs):
+    """TradeRepublicApi on Trade Republic's v2 web login: the user approves it in
+    the app (or types an authenticator code), and no WAF token is needed."""
     from pytr.api import TradeRepublicApi
+
+    return TradeRepublicApi(use_v2_login=True, **kwargs)
+
+
+def login_step(api, countdown) -> dict:
+    """What the user has to do to finish a login initiate_weblogin started."""
+    status = "code_required" if api.weblogin_needs_authenticator else "pending_approval"
+    return {"status": status, "countdown": int(countdown) if countdown else 121}
+
+
+def _get_api(phone_no: str, pin: str, interactive: bool, scope_institution_id: str | None = None):
     # save_cookies=True → pytr persists cookies to ~/.pytr/cookies.<phone>.txt
     # (MozillaCookieJar format, WAF token excluded automatically), unless
     # cookies_file overrides it - see tr_cookies_path above.
     cookies_file = tr_cookies_path(scope_institution_id)
     if cookies_file:
         cookies_file.parent.mkdir(parents=True, exist_ok=True)
-    api = TradeRepublicApi(
+    api = new_tr_api(
         phone_no=phone_no, pin=pin, save_cookies=True,
         **({"cookies_file": str(cookies_file)} if cookies_file else {}),
     )
@@ -85,11 +98,14 @@ def _get_api(phone_no: str, pin: str, interactive: bool, scope_institution_id: s
             return api
         raise AuthRequiredError("Trade Republic: no saved session. Run --setup")
 
-    # Interactive mode (--setup CLI): pytr handles the WAF token via Playwright
-    countdown = api.initiate_weblogin()
-    print(f"\n📱 Open the Trade Republic app and approve the connection (code valid for {countdown}s).")
-    code = input("Enter the code displayed in the app: ").strip()
-    api.complete_weblogin(code)  # saves cookies automatically
+    # Interactive mode (--setup CLI)
+    step = login_step(api, api.initiate_weblogin())
+    code = None
+    if step["status"] == "code_required":
+        code = input("Enter the code from your authenticator app: ").strip()
+    else:
+        print(f"\n📱 Approve the login in the Trade Republic app ({step['countdown']}s).")
+    api.complete_weblogin(code)  # waits for the approval, saves cookies
     print("✓ Web session saved")
     return api
 

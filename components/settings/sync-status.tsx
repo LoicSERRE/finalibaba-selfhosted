@@ -40,6 +40,7 @@ type SetupStep =
   | "idle"
   | "starting"
   | "awaiting_code"
+  | "awaiting_tr_approval"
   | "submitting"
   | "awaiting_approval"
   | "completing";
@@ -87,8 +88,16 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
     setSetupStep("starting");
     setSetupError(null);
     try {
-      await startTRSetup();
-      setSetupStep("awaiting_code");
+      const result = await startTRSetup();
+      if (result.status === "code_required") {
+        setSetupStep("awaiting_code");
+        return;
+      }
+      // Returns once the login is approved in the app (or expires).
+      setSetupStep("awaiting_tr_approval");
+      await completeTRSetup();
+      setSetupStep("idle");
+      handleSync();
     } catch (e) {
       setSetupError(e instanceof Error ? e.message : t("unknownError"));
       setSetupStep("idle");
@@ -206,7 +215,15 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
         </p>
       )}
 
-      {/* TR - code input */}
+      {/* TR - waiting for the approval in the app */}
+      {setupStep === "awaiting_tr_approval" && (
+        <output className="mt-3 ml-[26px] flex items-center gap-2 p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20 text-xs text-[var(--muted)]">
+          <RefreshCw size={12} className="animate-spin" aria-hidden="true" />
+          {t("trApproveHint")}
+        </output>
+      )}
+
+      {/* TR - authenticator code input */}
       {(setupStep === "awaiting_code" || setupStep === "submitting") && (
         <div className="mt-3 ml-[26px] p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--warning)]/20">
           <p className="text-xs text-[var(--muted)] mb-2">{t("trCodeHint")}</p>
@@ -214,16 +231,16 @@ export function SyncStatus({ source, label, log }: Readonly<Props>) {
             <input
               type="text"
               inputMode="numeric"
-              maxLength={4}
+              maxLength={6}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               onKeyDown={(e) => e.key === "Enter" && handleCompleteTRSetup()}
-              placeholder="1234"
+              placeholder="123456"
               disabled={setupStep === "submitting"}
               aria-label={t("trCodeAriaLabel")}
-              className="w-20 text-center text-lg font-mono tracking-[0.4em] px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
+              className="w-28 text-center text-lg font-mono tracking-[0.4em] px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
             />
-            <Button size="sm" onClick={handleCompleteTRSetup} disabled={code.length !== 4 || setupStep === "submitting"}>
+            <Button size="sm" onClick={handleCompleteTRSetup} disabled={code.length !== 6 || setupStep === "submitting"}>
               {setupStep === "submitting" ? (
                 <><RefreshCw size={12} className="animate-spin" aria-hidden="true" /> {t("validating")}</>
               ) : (
