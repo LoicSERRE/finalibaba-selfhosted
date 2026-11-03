@@ -864,7 +864,9 @@
       "emptyDescription": "Add your first institution to start creating accounts.",
       "accounts": "{count} account",
       "accountsPlural": "{count} accounts",
-      "openBanking": "Open Banking"
+      "openBanking": "Open Banking",
+      "notImported": "Not imported:",
+      "importAgain": "Import again"
     },
     "profile": {
       "title": "Financial profile",
@@ -1334,6 +1336,12 @@
     "title": "Delete this account?",
     "description": "The account \"{name}\" and all its history (balances, transactions) will be permanently deleted."
   },
+  "stopSyncingAccount": {
+    "trigger": "Stop syncing",
+    "title": "Stop syncing this account?",
+    "description": "The account \"{name}\" and all its history (balances, transactions) will be deleted, and the sync will no longer import it. You can import it again from Settings: it will come back with what the bank still provides.",
+    "confirm": "Delete and stop importing"
+  },
   "deleteInstitution": {
     "description": "The institution \"{name}\" and all associated accounts will be permanently deleted."
   },
@@ -1602,7 +1610,11 @@
     "trigger": "Rename account",
     "title": "Rename account",
     "nameField": "Account name",
-    "submit": "Save"
+    "submit": "Save",
+    "editTrigger": "Edit account",
+    "editTitle": "Edit account",
+    "typeField": "Type",
+    "typeHint": "If your bank classifies this account wrongly: the sync will keep your choice."
   },
   "updateRealEstate": {
     "title": "Update: {name}",

@@ -9,7 +9,12 @@ import {
 } from "@/lib/domain/sync-status";
 import { isLegacyEnvSyncId, isPerUserSyncId } from "@/lib/domain/sync-ids";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
-import { deleteInstitution, migrateDedicatedSyncToWoob, adoptDedicatedTrAccounts } from "@/lib/actions/institutions";
+import {
+  deleteInstitution,
+  migrateDedicatedSyncToWoob,
+  adoptDedicatedTrAccounts,
+  resumeSyncingAccount,
+} from "@/lib/actions/institutions";
 import type { WoobBankModule } from "@/lib/actions/sync";
 import { DeleteButton } from "@/components/shared/delete-button";
 import { InstitutionLogo } from "@/components/shared/institution-logo";
@@ -77,6 +82,7 @@ export type InstitutionRowData = {
   readonly trPhone: string | null;
   readonly _count: { accounts: number };
   readonly accounts: readonly { syncId: string | null; gocardlessAccountId: string | null }[];
+  readonly ignoredSyncAccounts: readonly { nativeId: string; name: string }[];
 };
 
 /** The two SyncLog fields this row reads, so neither side imports the model. */
@@ -159,6 +165,24 @@ export async function InstitutionRow({
           failed said nothing about why. It also carries the instruction a
           captcha bank depends on - that refreshing it means clicking Connect,
           not Synchronize. */}
+      {/* Accounts the user asked the sync to skip (v2.22), each one click
+          from being imported again. */}
+      {inst.ignoredSyncAccounts.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+          <span>{t("settings.institutions.notImported")}</span>
+          {inst.ignoredSyncAccounts.map((a) => (
+            <form key={a.nativeId} action={resumeSyncingAccount.bind(null, inst.id, a.nativeId)} className="inline-flex items-center gap-1">
+              <span className="text-[var(--foreground)]">{a.name}</span>
+              <button
+                type="submit"
+                className="min-h-[44px] px-1 text-[var(--accent-text)] hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded"
+              >
+                {t("settings.institutions.importAgain")}
+              </button>
+            </form>
+          ))}
+        </div>
+      )}
       {syncLog?.message && syncLog.status !== SYNC_STATUS_SUCCESS && (
         <p
           className={`mt-2 text-xs ${

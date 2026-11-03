@@ -241,3 +241,85 @@ def test_terms_the_user_set_survive_the_next_sync_and_live_figures_do_not(cur):
     assert int(row["loanNextPaymentCents"]) == 420
     cur.execute('SELECT "loanDurationMonths" FROM "Account" WHERE id = %s', (account_id,))
     assert cur.fetchone()["loanDurationMonths"] == 72
+
+
+# ── What the user decided (v2.22) ─────────────────────────────────────────
+
+
+def test_a_type_the_user_picked_wins_over_woob_either_way():
+    facts = woob_loans.loan_facts(Loan(label="PRÊT", type=AccountType.LOAN, total_amount=Decimal(5000)))
+    assert woob_loans.as_chosen(facts, None) is facts
+    assert woob_loans.as_chosen(facts, "CHECKING") is None
+    assert woob_loans.as_chosen(facts, "LOAN") is facts
+    # Woob says nothing about it: a loan with no terms, filled in by the user.
+    assert woob_loans.as_chosen(None, "LOAN") == dict.fromkeys(facts)
+
+
+def _pick_type(cur, account_id, account_type):
+    cur.execute('UPDATE "Account" SET type = %s, "typeSetByUser" = true WHERE id = %s', (account_type, account_id))
+
+
+def test_an_account_the_user_made_a_loan_is_synced_as_one(cur):
+    import sync_woob
+
+    institution_id = f"test-inst-{uuid.uuid4().hex[:8]}"
+    cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (institution_id, "Bank test"))
+    plain = Account(id="credit", label="CREDIT RENOUVELABLE", balance=Decimal("1500.00"))
+    account_id = sync_woob._sync_account(cur, institution_id, "Bank", plain)["account_db_id"]
+    _pick_type(cur, account_id, "LOAN")
+
+    summary = sync_woob._sync_account(cur, institution_id, "Bank", plain)
+
+    row = _account(cur, account_id)
+    assert row["type"] == "LOAN"
+    assert int(row["liabilityCents"]) == 150_000
+    assert summary["balance_cents"] == -150_000
+
+
+def test_an_account_the_user_says_is_not_a_loan_stays_what_they_said(cur):
+    import sync_woob
+
+    institution_id = f"test-inst-{uuid.uuid4().hex[:8]}"
+    cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (institution_id, "Bank test"))
+    first = sync_woob._sync_account(cur, institution_id, "Bank", Account(id="cc", label="COMPTE", balance=Decimal("250.00")))
+    account_id = first["account_db_id"]
+    _pick_type(cur, account_id, "CHECKING")
+
+    summary = sync_woob._sync_account(
+        cur, institution_id, "Bank", Account(id="cc", label="COMPTE", type=AccountType.LOAN, balance=Decimal("250.00"))
+    )
+
+    row = _account(cur, account_id)
+    assert row["type"] == "CHECKING"
+    assert row["liabilityCents"] is None
+    assert summary["balance_cents"] == 25_000
+
+
+def test_holdings_do_not_retype_an_account_the_user_typed(cur):
+    from db import promote_account_to_investment, upsert_account
+
+    institution_id = f"test-inst-{uuid.uuid4().hex[:8]}"
+    cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (institution_id, "Bank test"))
+    account_id = upsert_account(
+        cur, sync_id=f"woob:{institution_id}:x", name="X", account_type="CHECKING", institution_id=institution_id
+    )
+    _pick_type(cur, account_id, "CHECKING")
+    assert not promote_account_to_investment(cur, account_id)
+    assert _account(cur, account_id)["type"] == "CHECKING"
+
+
+def test_an_account_the_user_stopped_syncing_is_not_imported_again(cur):
+    import sync_woob
+
+    institution_id = f"test-inst-{uuid.uuid4().hex[:8]}"
+    cur.execute('INSERT INTO "Institution" (id, name, "createdAt") VALUES (%s, %s, NOW())', (institution_id, "Bank test"))
+    cur.execute(
+        'INSERT INTO "IgnoredSyncAccount" ("institutionId", "nativeId", name) VALUES (%s, %s, %s)',
+        (institution_id, "pro", "COMPTE PRO"),
+    )
+
+    assert sync_woob._sync_account(cur, institution_id, "Bank", Account(id="pro", label="COMPTE PRO", balance=Decimal(10))) is None
+    cur.execute('SELECT count(*) AS n FROM "Account" WHERE "institutionId" = %s', (institution_id,))
+    assert cur.fetchone()["n"] == 0
+    # Only that account: the institution's others still come in.
+    assert sync_woob._sync_account(cur, institution_id, "Bank", Account(id="perso", label="PERSO", balance=Decimal(10)))

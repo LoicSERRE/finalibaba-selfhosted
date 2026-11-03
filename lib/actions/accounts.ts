@@ -3,13 +3,16 @@
 import { suggestedSavingsRate } from "@/lib/domain/tax-locale";
 import { revalidateAccount } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, assertAccountWritable } from "@/lib/auth-context";
+import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
 import { AccountType, TaxTreatment } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { balanceColumns, isBaseCurrency, parseAccountCurrency } from "@/lib/domain/currency";
 import { rateToBaseOn } from "@/lib/services/exchange-rate";
+import { setBalanceSigns } from "@/lib/services/loan-balances";
 import { atNoonUtc } from "@/lib/domain/manual-entries";
+import { canPickSyncedType, isSyncedAccountType } from "@/lib/domain/synced-account-type";
+import { woobNativeId } from "@/lib/domain/sync-ids";
 
 const TAX_TREATMENTS = new Set(Object.values(TaxTreatment));
 
@@ -207,6 +210,73 @@ export async function renameAccount(formData: FormData) {
   await assertAccountWritable(viewer.id, id);
   await prisma.account.update({ where: { id }, data: { name } });
   revalidateAll(id);
+}
+
+/**
+ * The type of an account a Woob bank syncs, picked by the user (v2.22) - a
+ * bank can report a loan as a current account or the other way round, #148.
+ * typeSetByUser makes the sync keep it. A loan's balance rows are what was
+ * owed, negative (the sync's own convention), so crossing that line flips
+ * them, and liabilityCents - what net worth subtracts - follows.
+ */
+export async function setSyncedAccountType(formData: FormData) {
+  const id = formData.get("id") as string;
+  const type = formData.get("type");
+  if (!isSyncedAccountType(type)) throw new Error("Invalid account type.");
+
+  const viewer = await getViewer();
+  await assertAccountWritable(viewer.id, id);
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { id },
+    select: { type: true, syncId: true, history: { select: { balanceCents: true }, orderBy: { recordedAt: "desc" }, take: 1 } },
+  });
+  if (!canPickSyncedType(account.syncId)) throw new Error("Account not found.");
+
+  const toLoan = type === "LOAN" && account.type !== "LOAN";
+  const fromLoan = type !== "LOAN" && account.type === "LOAN";
+  const latest = account.history[0]?.balanceCents ?? BigInt(0);
+  const owedCents = latest >= BigInt(0) ? latest : -latest;
+  await prisma.$transaction(async (tx) => {
+    if (toLoan || fromLoan) await setBalanceSigns(tx, id, toLoan ? -1 : 1);
+    await tx.account.update({
+      where: { id },
+      data: {
+        type,
+        typeSetByUser: true,
+        ...(toLoan && { liabilityCents: owedCents }),
+        ...(fromLoan && { liabilityCents: null }),
+      },
+    });
+  });
+  revalidateAll(id);
+}
+
+/**
+ * Deletes an account a Woob bank syncs and tells the sync never to import it
+ * again (v2.22) - otherwise the next sync recreates it. The sync is the
+ * institution's, so only its owner decides, not a co-owner of the account.
+ * Settings lists these with a way to import them again.
+ */
+export async function stopSyncingAccount(id: string) {
+  const viewer = await getViewer();
+  const account = await prisma.account.findUnique({
+    where: { id },
+    select: { name: true, syncId: true, institutionId: true },
+  });
+  const nativeId = woobNativeId(account?.syncId);
+  if (!account?.institutionId || nativeId === null) throw new Error("Account not found.");
+  await assertOwned("institution", account.institutionId, viewer.id);
+
+  const key = { institutionId: account.institutionId, nativeId };
+  await prisma.$transaction([
+    prisma.ignoredSyncAccount.upsert({
+      where: { institutionId_nativeId: key },
+      create: { ...key, name: account.name },
+      update: { name: account.name },
+    }),
+    prisma.account.delete({ where: { id } }),
+  ]);
+  revalidateAll();
 }
 
 export async function updateRealEstateAccount(formData: FormData) {

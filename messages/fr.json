@@ -864,7 +864,9 @@
       "emptyDescription": "Ajoutez votre première institution pour commencer à créer des comptes.",
       "accounts": "{count} compte",
       "accountsPlural": "{count} comptes",
-      "openBanking": "Open Banking"
+      "openBanking": "Open Banking",
+      "notImported": "Non importés :",
+      "importAgain": "Réimporter"
     },
     "profile": {
       "title": "Profil financier",
@@ -1334,6 +1336,12 @@
     "title": "Supprimer ce compte ?",
     "description": "Le compte «{name}» et tout son historique (soldes, transactions) seront définitivement supprimés."
   },
+  "stopSyncingAccount": {
+    "trigger": "Ne plus synchroniser",
+    "title": "Ne plus synchroniser ce compte ?",
+    "description": "Le compte «{name}» et tout son historique (soldes, transactions) seront supprimés, et la synchronisation ne l'importera plus. Tu pourras le réimporter depuis les Réglages : il reviendra avec ce que la banque fournit encore.",
+    "confirm": "Supprimer et ne plus importer"
+  },
   "deleteInstitution": {
     "description": "L'institution « {name} » et tous ses comptes associés seront définitivement supprimés."
   },
@@ -1602,7 +1610,11 @@
     "trigger": "Renommer le compte",
     "title": "Renommer le compte",
     "nameField": "Nom du compte",
-    "submit": "Enregistrer"
+    "submit": "Enregistrer",
+    "editTrigger": "Modifier le compte",
+    "editTitle": "Modifier le compte",
+    "typeField": "Type",
+    "typeHint": "Si ta banque classe mal ce compte : la synchronisation gardera ton choix."
   },
   "updateRealEstate": {
     "title": "Mettre à jour : {name}",

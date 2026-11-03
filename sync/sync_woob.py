@@ -27,6 +27,7 @@ from db import (
     composite_sync_id,
     get_conn,
     infer_account_type,
+    is_sync_ignored,
     legacy_composite_sync_id,
     mark_holdings_reported,
     mark_holdings_stale,
@@ -39,6 +40,7 @@ from db import (
     to_cents,
     upsert_account,
     upsert_transaction,
+    user_account_type,
     write_sync_log,
 )
 
@@ -473,13 +475,13 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
     dev-docs/currencies.md); stored as EUR with the native figure beside it."""
     if account.balance is None:
         return None
+    if is_sync_ignored(cur, institution_id, str(account.id)):
+        log.info("%s - %s: not imported, the user asked so", institution_name, account.label)
+        return None
     balance_cents = to_cents(account.balance)
     sync_id = f"woob:{institution_id}:{account.id}"
     # A loan is whatever Woob classifies as one, never a label guess (v2.19.1).
     loan = woob_loans.loan_facts(account)
-    if loan is not None:
-        # Stored as what is owed, negative, whatever sign the module uses.
-        balance_cents = -abs(balance_cents)
     account_type = "LOAN" if loan is not None else infer_account_type(account.label)
     account_db_id = upsert_account(
         cur,
@@ -488,6 +490,10 @@ def _sync_account(cur, institution_id, institution_name, account) -> dict | None
         account_type=account_type,
         institution_id=institution_id,
     )
+    loan = woob_loans.as_chosen(loan, user_account_type(cur, account_db_id))
+    if loan is not None:
+        # Stored as what is owed, negative, whatever sign the module uses.
+        balance_cents = -abs(balance_cents)
     currency = resolve_account_currency(cur, account_db_id, fx.parse_currency(getattr(account, "currency", None)))
     if currency is None:
         return None

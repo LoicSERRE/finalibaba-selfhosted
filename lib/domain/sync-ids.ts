@@ -81,3 +81,17 @@ export function isPerUserSyncId(syncId: string | null | undefined, institutionId
     syncId.startsWith(`${TR_PREFIX}${institutionId}:`) || syncId.startsWith(`woob:${institutionId}:`)
   );
 }
+
+/**
+ * The bank's own id of a Woob-synced account - `woob:<institutionId>:<id>` or
+ * `lcl:<id>` - or null for any other account. It is what the sync matches an
+ * IgnoredSyncAccount on (sync/db.py's is_sync_ignored), so it must be exactly
+ * the `account.id` Woob reported: everything after the prefix, colons and all.
+ */
+export function woobNativeId(syncId: string | null | undefined): string | null {
+  if (syncId?.startsWith("lcl:")) return syncId.slice("lcl:".length) || null;
+  if (!syncId?.startsWith("woob:")) return null;
+  const rest = syncId.slice("woob:".length);
+  const separator = rest.indexOf(":");
+  return separator > 0 ? rest.slice(separator + 1) || null : null;
+}

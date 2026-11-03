@@ -6,6 +6,7 @@ import {
   isLegacyEnvSyncId,
   legacyTrSyncIds,
   isPerUserSyncId,
+  woobNativeId,
 } from "@/lib/domain/sync-ids";
 
 // Account.syncId is globally unique, so the shape of these strings is what
@@ -120,4 +121,23 @@ describe("isPerUserSyncId", () => {
   ])("%s does not belong to %s (%s)", (syncId, inst, why) => {
     expect(isPerUserSyncId(syncId as string | null, inst), why).toBe(false);
   });
+});
+
+describe("woobNativeId", () => {
+  // What sync/db.py's is_sync_ignored matches on: exactly the account.id Woob
+  // reported, which the sync puts after the prefix untouched.
+  it.each([
+    ["woob:inst-1:98765", "98765"],
+    ["lcl:01835090481R", "01835090481R"],
+    ["woob:inst-1:FR76:1234", "FR76:1234"],
+  ])("%s -> %s", (syncId, nativeId) => {
+    expect(woobNativeId(syncId)).toBe(nativeId);
+  });
+
+  it.each([["tr:cash"], ["tr:inst-1:cash"], ["woob:inst-1"], ["woob::1"], ["lcl:"], [null], [undefined]])(
+    "%s is not a Woob account",
+    (syncId) => {
+      expect(woobNativeId(syncId)).toBeNull();
+    },
+  );
 });

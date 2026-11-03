@@ -169,6 +169,13 @@ Verified against PostgreSQL by replaying the incident: an account stored as CHEC
 
 The disbursement itself (+5 000 € on the checking account) is ordinary money in as far as budgets know; the internal-transfer detector pairs it with the loan account only if the bank also reports the matching movement on the loan, which LCL does not. Marking it as an internal transfer by hand keeps it out of the month's income.
 
+### What the user decides (v2.22)
+
+From #148: a bank can classify an account wrongly, and a user may not want some accounts imported at all. Both apply to Woob accounts only (`woob:` and `lcl:` sync ids): Trade Republic writes fixed kinds, and GoCardless would need its own handling of a loan's sign.
+
+- **The type**: the account's edit dialog offers the types a bank account can be (`SYNCED_ACCOUNT_TYPES`). `setSyncedAccountType` sets `typeSetByUser`, after which `promote_account_to_*` leave the account alone and `woob_loans.as_chosen` makes the user's choice decide whether it is synced as a loan, either way. Crossing the loan line flips the stored balances (a loan's rows are what is owed, negative) and sets or clears `liabilityCents`.
+- **Not imported**: on a Woob account, "Ne plus synchroniser" deletes it and records it in `IgnoredSyncAccount`, which `is_sync_ignored` checks before anything is written. Only the institution's owner can do it, since the sync is theirs. Settings lists these under the institution with "Réimporter", and the account comes back with whatever history the bank still provides.
+
 ### Classifying what a bank login can fail with
 
 `sync/woob_errors.py`. Built after **measuring** the catalogue rather than after
