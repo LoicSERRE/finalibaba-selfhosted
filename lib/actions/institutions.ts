@@ -395,3 +395,11 @@ export async function migrateDedicatedSyncToWoob(institutionId: string): Promise
   revalidatePath("/");
   return { deleted: result.count };
 }
+
+/** Lets the sync import an account it was told to skip (stopSyncingAccount) again, from its next run. */
+export async function resumeSyncingAccount(institutionId: string, nativeId: string) {
+  const viewer = await getViewer();
+  await assertOwned("institution", institutionId, viewer.id);
+  await prisma.ignoredSyncAccount.deleteMany({ where: { institutionId, nativeId } });
+  revalidatePath("/settings");
+}

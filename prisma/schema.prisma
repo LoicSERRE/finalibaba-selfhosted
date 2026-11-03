@@ -255,6 +255,7 @@ model Institution {
   trPin                   String?
   userId                  String    @default("user-owner")
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ignoredSyncAccounts     IgnoredSyncAccount[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -333,6 +334,9 @@ model Account {
   // LOAN: dedup flag for the "nearly paid off" alert - one-way, a loan only
   // crosses the threshold once. See lib/domain/alerts.ts.
   loanPaidOffAlertSent  Boolean                @default(false)
+  // The user picked this account's type (v2.22): the sync no longer retypes
+  // it, either way - see sync/db.py's promote_account_to_*.
+  typeSetByUser         Boolean                @default(false)
   // When the bank last reported the lines inside this account, and when it
   // first stopped. A statement that comes back empty is genuinely ambiguous -
   // a silent read failure, or an account that really was emptied - and the
@@ -1191,4 +1195,17 @@ model PushSubscription {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// A bank account the user asked the sync never to import again (v2.22).
+/// Keyed by the bank's own account id - the trailing segment of `woob:` and
+/// `lcl:` sync ids, the same match sync/db.py's upsert_account falls back on.
+model IgnoredSyncAccount {
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  institutionId String
+  nativeId      String
+  name          String
+  createdAt     DateTime    @default(now())
+
+  @@id([institutionId, nativeId])
 }

@@ -125,13 +125,14 @@ def promote_account_to_investment(cur, account_db_id: str) -> bool:
 
     Only from CHECKING, which is infer_account_type's "nothing matched"
     fallback - never from SAVINGS or anything a keyword or a person chose, so
-    this can correct a guess without overriding a decision. Holdings are a far
+    this can correct a guess without overriding a decision (nor a type the user
+    picked, v2.22). Holdings are a far
     better signal than a label: "PEE SOPRA STERIA GROUP" matches no keyword,
     but an account reporting fund lines is an investment account whatever it is
     called.
     """
     cur.execute(
-        'UPDATE "Account" SET type = \'INVESTMENT\' WHERE id = %s AND type = \'CHECKING\'',
+        'UPDATE "Account" SET type = \'INVESTMENT\' WHERE id = %s AND type = \'CHECKING\' AND NOT "typeSetByUser"',
         (account_db_id,),
     )
     return cur.rowcount > 0
@@ -142,15 +143,31 @@ def promote_account_to_loan(cur, account_db_id: str) -> bool:
 
     Only from CHECKING - infer_account_type's "nothing matched" fallback, which
     is where every loan synced before v2.19.1 landed - so a guess is corrected
-    and a decision is not. Its balance rows stay: they are what was owed on
+    and a decision (nor a type the user picked, v2.22) is not. Its balance rows stay: they are what was owed on
     each day, which is exactly how a bank-reported loan's history is read
     (lib/domain/loan.ts, isBankReportedLoan).
     """
     cur.execute(
-        'UPDATE "Account" SET type = \'LOAN\' WHERE id = %s AND type = \'CHECKING\'',
+        'UPDATE "Account" SET type = \'LOAN\' WHERE id = %s AND type = \'CHECKING\' AND NOT "typeSetByUser"',
         (account_db_id,),
     )
     return cur.rowcount > 0
+
+
+def user_account_type(cur, account_db_id: str) -> str | None:
+    """The type the user picked for this account (v2.22), or None if they never did."""
+    cur.execute('SELECT type, "typeSetByUser" FROM "Account" WHERE id = %s', (account_db_id,))
+    row = cur.fetchone()
+    return row["type"] if row and row["typeSetByUser"] else None
+
+
+def is_sync_ignored(cur, institution_id: str, native_id: str) -> bool:
+    """Whether the user asked never to import this bank account again (v2.22)."""
+    cur.execute(
+        'SELECT 1 FROM "IgnoredSyncAccount" WHERE "institutionId" = %s AND "nativeId" = %s',
+        (institution_id, native_id),
+    )
+    return cur.fetchone() is not None
 
 
 def record_loan(cur, account_db_id: str, *, owed_cents: int, facts: dict):

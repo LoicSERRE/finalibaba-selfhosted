@@ -26,6 +26,7 @@ import { LoanSection } from "@/components/account-detail/loan-section";
 import { TransactionsTable } from "@/components/account-detail/transactions-table";
 import { BalanceHistoryTable } from "@/components/account-detail/balance-history-table";
 import { hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
+import { canPickSyncedType } from "@/lib/domain/synced-account-type";
 import { loanTermsValues } from "@/lib/domain/loan-terms";
 import { EditLoanTermsDialog } from "@/components/accounts/edit-loan-terms-dialog";
 import { LoanScheduleSection } from "@/components/account-detail/loan-schedule-section";
@@ -158,6 +159,12 @@ export default async function AccountDetailPage({
         netAfterTax={result.netAfterTax}
         value={result.value}
         liability={result.liability}
+        canPickType={canPickSyncedType(account.syncId)}
+        stopSyncingHref={
+          canPickSyncedType(account.syncId) && account.institution?.userId === viewer.id
+            ? `/accounts?tab=${result.backTab}`
+            : null
+        }
       />
 
       {/* Only interest-bearing types: a real-estate or loan account has no

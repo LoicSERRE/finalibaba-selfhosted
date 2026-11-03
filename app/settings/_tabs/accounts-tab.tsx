@@ -46,6 +46,7 @@ export async function AccountsTab({ viewer, show }: SettingsTabProps) {
         // institution - see that action's own comment for why both counts
         // matter to the user before they confirm the migration.
         accounts: { select: { id: true, syncId: true, gocardlessAccountId: true } },
+        ignoredSyncAccounts: { select: { nativeId: true, name: true }, orderBy: { name: "asc" } },
       },
       orderBy: { name: "asc" },
     }),

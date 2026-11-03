@@ -228,6 +228,7 @@ export const ACCOUNT_NOT_EXPORTED = [
   "gocardlessAccountId",
   "holdingsReportedAt",
   "holdingsStaleSince",
+  "typeSetByUser",
   // A record of a notification already sent, not a setting.
   "loanPaidOffAlertSent",
 ] as const;

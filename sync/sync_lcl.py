@@ -19,12 +19,14 @@ from db import (
     get_conn,
     get_institution_id,
     infer_account_type,
+    is_sync_ignored,
     legacy_composite_sync_id,
     promote_account_to_loan,
     record_balance,
     record_loan,
     upsert_account,
     upsert_transaction,
+    user_account_type,
     write_sync_log,
 )
 
@@ -149,12 +151,14 @@ def _sync_account(cur, institution_id, account) -> dict | None:
     the account has no balance to record."""
     if account.balance is None:
         return None
+    if is_sync_ignored(cur, institution_id, str(account.id)):
+        log.info("LCL - %s : not imported, the user asked so", account.label)
+        return None
     balance_cents = int(Decimal(str(account.balance)) * 100)
     sync_id = f"lcl:{account.id}"
-    # Same rule as sync_woob.py (v2.19.1): a loan is what Woob says is one.
+    # Same rules as sync_woob.py: a loan is what Woob says is one (v2.19.1),
+    # unless the user picked the type (v2.22).
     loan = woob_loans.loan_facts(account)
-    if loan is not None:
-        balance_cents = -abs(balance_cents)
     account_type = "LOAN" if loan is not None else infer_account_type(account.label)
     account_db_id = upsert_account(
         cur,
@@ -163,6 +167,9 @@ def _sync_account(cur, institution_id, account) -> dict | None:
         account_type=account_type,
         institution_id=institution_id,
     )
+    loan = woob_loans.as_chosen(loan, user_account_type(cur, account_db_id))
+    if loan is not None:
+        balance_cents = -abs(balance_cents)
     record_balance(cur, account_db_id, balance_cents)
     if loan is not None:
         # LCL accounts are EUR: the figures go in as reported.

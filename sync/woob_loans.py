@@ -71,3 +71,12 @@ def loan_facts(account) -> dict | None:
         "next_payment_date": _date(getattr(account, "next_payment_date", None)),
         "end_date": _date(getattr(account, "maturity_date", None)),
     }
+
+
+def as_chosen(facts: dict | None, user_type: str | None) -> dict | None:
+    """loan_facts once the user picked the account's type (v2.22): their choice wins, either way."""
+    if user_type is None:
+        return facts
+    if user_type != "LOAN":
+        return None
+    return facts or dict.fromkeys(("borrowed_cents", "rate_pct", "next_payment_cents", "next_payment_date", "end_date"))

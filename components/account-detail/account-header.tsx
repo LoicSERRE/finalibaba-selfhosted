@@ -7,6 +7,7 @@ import { UpdateAutomobileDialog } from "@/components/accounts/update-automobile-
 import { RenameAccountDialog } from "@/components/accounts/rename-account-dialog";
 import { CoOwnersDialog } from "@/components/account-detail/co-owners-dialog";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
+import { StopSyncingAccountButton } from "@/components/accounts/stop-syncing-account-button";
 import type { getTranslations } from "next-intl/server";
 
 type T = Awaited<ReturnType<typeof getTranslations>>;
@@ -32,6 +33,8 @@ export function AccountHeader({
   netAfterTax,
   value,
   liability,
+  canPickType = false,
+  stopSyncingHref = null,
   readOnly = false,
 }: Readonly<{
   td: T;
@@ -69,6 +72,12 @@ export function AccountHeader({
   netAfterTax: bigint;
   value: bigint;
   liability: bigint;
+  /** An account a Woob bank syncs (v2.22): its type can be corrected. */
+  canPickType?: boolean;
+  /** Where to go after "stop syncing" - set only for the owner of the
+   *  institution behind a Woob-synced account, the one person who decides
+   *  what its sync imports. */
+  stopSyncingHref?: string | null;
   /** True when a granted (read-only) portfolio is on screen - drops every
    *  rename/update/delete affordance. Not the access control (each of those
    *  Server Actions guards ownership itself), just no dead buttons. */
@@ -107,7 +116,9 @@ export function AccountHeader({
           </div>
           <div className="flex items-center gap-1 min-w-0">
             <h1 className="text-2xl font-semibold text-[var(--foreground)] break-words min-w-0">{account.name}</h1>
-            {!readOnly && <RenameAccountDialog id={account.id} name={account.name} />}
+            {!readOnly && (
+              <RenameAccountDialog id={account.id} name={account.name} type={canPickType ? account.type : undefined} />
+            )}
             {/* Account-level actions belong together, at the top. Co-ownership
                 used to live in a card below the transactions table - up to 200
                 rows down the page - where it was both a scroll away and easy
@@ -191,6 +202,11 @@ export function AccountHeader({
                   backHref="/accounts?tab=automobiles"
                 />
               )}
+            </div>
+          )}
+          {!readOnly && stopSyncingHref && (
+            <div className="mt-3 flex justify-end">
+              <StopSyncingAccountButton id={account.id} name={account.name} backHref={stopSyncingHref} />
             </div>
           )}
           {!readOnly && isLoan && !isSynced && (
