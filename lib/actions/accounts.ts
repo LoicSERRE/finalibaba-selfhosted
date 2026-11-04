@@ -162,7 +162,15 @@ export async function createAccount(formData: FormData): Promise<ActionResult<vo
     },
   });
 
-  // Record initial balance snapshot (fiat accounts only).
+  // Record the initial balance snapshot - for a fiat account, and for a
+  // property or a vehicle (its value) too.
+  //
+  // The value one matters as much: a history counts an account only from its
+  // first balance row, and a property used to get its first one only when its
+  // value was next edited. Until then it was missing from every chart while
+  // its loan, which gets a row at creation (below), was already subtracted -
+  // a building bought with a mortgage, typically a company's (SCI), drew the
+  // curve below zero until someone retyped the building's value.
   //
   // `balanceCents !== null` rather than a truthiness check plus a > 0 floor:
   // both 0 and a negative balance are real states a fiat account can start in
@@ -174,7 +182,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult<vo
   // an account created in the afternoon had its only balance AFTER a spend
   // typed for the same day (manual entries land at noon), and that spend was
   // refused as having no balance before it.
-  if (balanceCents !== null && isFiat) {
+  if (balanceCents !== null && (isFiat || isManualType(type))) {
     await prisma.historicalBalance.create({
       data: {
         accountId: account.id,
