@@ -12,12 +12,10 @@ import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { NetWorthChart } from "@/components/shared/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
-import { AttachAccountsDialog, CapTableDialog, CompanySettingsDialog } from "@/components/companies/company-manager-dialogs";
+import { AttachAccountsDialog } from "@/components/companies/attach-accounts-dialog";
+import { CompanyAssociatesCard } from "@/components/companies/company-associates-card";
+import { CompanySettingsDialog } from "@/components/companies/company-settings-dialog";
 import { LeaveCompanyButton, OpenAsPortfolioButton } from "@/components/companies/company-view-actions";
-
-// One colour per associate in the parts bar - distinct in lightness, not hue
-// alone, and repeating past six.
-const ASSOCIATE_COLORS = ["#6366f1", "#f59e0b", "#14b8a6", "#ec4899", "#a1665e", "#0ea5e9"];
 
 /**
  * A company's own page (dev-docs/companies.md, interface "C"): its value, the
@@ -50,10 +48,6 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
   const allocation: AllocationSlice[] = (
     ["cash", "savings", "investments", "crypto", "realEstate", "auto"] as const
   ).map((key) => ({ name: tAlloc(key), value: result.allocationRaw[key], color: ALLOCATION_CATEGORY_COLORS[key] }));
-  const barLabel = [
-    t("page.associatesBar"),
-    associates.map((a) => t("page.associateShare", { name: a.name, pct: partsPct(a.parts, company.totalParts) })).join(", "),
-  ].join(" : ");
   const accounts = result.institutions.flatMap((inst) =>
     inst.accounts.map((a) => ({ ...a, institution: inst.name })),
   );
@@ -154,41 +148,13 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
           )}
         </section>
 
-        <section className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3" aria-labelledby="company-associates">
-          <div className="flex items-center justify-between gap-2">
-            <h2 id="company-associates" className="text-sm font-medium text-[var(--foreground)]">{t("page.associates")}</h2>
-            {isManager && <CapTableDialog companyId={company.id} totalParts={company.totalParts} associates={associates} />}
-          </div>
-          <div
-            className="flex h-2.5 rounded-full overflow-hidden"
-            role="img"
-            aria-label={barLabel}
-          >
-            {associates.map((a, i) => (
-              <div
-                key={a.id}
-                style={{ width: `${partsPct(a.parts, company.totalParts)}%`, background: ASSOCIATE_COLORS[i % ASSOCIATE_COLORS.length] }}
-              />
-            ))}
-          </div>
-          <ul className="divide-y divide-[var(--border)]">
-            {associates.map((a, i) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                <span className="flex items-center gap-2 min-w-0">
-                  <span aria-hidden="true" className="size-2.5 rounded-full shrink-0" style={{ background: ASSOCIATE_COLORS[i % ASSOCIATE_COLORS.length] }} />
-                  <span className="break-words text-[var(--foreground)]">
-                    {a.name}
-                    {a.isViewer && <span className="text-[var(--muted)]"> ({t("page.you")})</span>}
-                    {isManager && a.link === "pending" && <span className="text-xs text-[var(--warning)]"> · {t("page.invitationSent")}</span>}
-                  </span>
-                </span>
-                <span className="text-xs text-[var(--muted)] shrink-0 tabular-nums">
-                  {t("page.partsAndPct", { parts: a.parts.toLocaleString(locale), pct: partsPct(a.parts, company.totalParts) })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <CompanyAssociatesCard
+          companyId={company.id}
+          totalParts={company.totalParts}
+          associates={associates}
+          isManager={isManager}
+          locale={locale}
+        />
       </div>
     </div>
   );

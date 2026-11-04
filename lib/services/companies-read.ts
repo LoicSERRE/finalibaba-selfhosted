@@ -204,3 +204,30 @@ async function loadAttachable(userId: string, companyId: string) {
     companyInstitutions: companyInstitutions.map(institutionRow),
   };
 }
+
+/**
+ * What the Accounts page shows about companies, for the scope on screen: on
+ * the viewer's own portfolio their cards, their pending links and what a new
+ * company could take; in a company's scope only its name (for the banner);
+ * on a granted portfolio nothing. BigInt turned into numbers for the client.
+ */
+export async function loadAccountsPageCompanies(userId: string, scope: { readOnly: boolean; companyId?: string }) {
+  const none = { ownPortfolio: false, cards: [], pending: [], attachable: { accounts: [], institutions: [] }, scopedName: null };
+  if (scope.companyId) {
+    const company = await prisma.company.findUnique({ where: { id: scope.companyId }, select: { name: true } });
+    return { ...none, scopedName: company?.name ?? null };
+  }
+  if (scope.readOnly) return none;
+  const [cards, pending, attachable] = await Promise.all([
+    loadCompanyCards(userId, new Date()),
+    loadPendingCompanyLinks(userId),
+    loadPersonalAttachable(userId),
+  ]);
+  return {
+    ownPortfolio: true,
+    cards: cards.map((c) => ({ ...c, valueCents: Number(c.valueCents), shareCents: Number(c.shareCents) })),
+    pending,
+    attachable,
+    scopedName: null,
+  };
+}

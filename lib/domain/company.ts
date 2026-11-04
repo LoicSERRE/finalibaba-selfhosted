@@ -207,11 +207,14 @@ export const COMPANY_ENTRY_TYPE = "COMPANY";
  * row per share - so the list adds up to the net worth above it rather than
  * leaving the shares out. The rows point at the company, not at an account.
  */
-export function withCompaniesGroup<G extends { name: string | null; logoUrl: string | null; total: bigint; accounts: { id: string; name: string; value: bigint; type: string }[] }>(
-  institutions: G[],
-  shares: readonly CompanyShare[],
-  label: string,
-): (G | { name: string; logoUrl: null; total: bigint; accounts: { id: string; name: string; value: bigint; type: string }[] })[] {
+export interface AccountGroup {
+  name: string | null;
+  logoUrl: string | null;
+  total: bigint;
+  accounts: { id: string; name: string; value: bigint; type: string }[];
+}
+
+export function withCompaniesGroup(institutions: AccountGroup[], shares: readonly CompanyShare[], label: string): AccountGroup[] {
   if (shares.length === 0) return institutions;
   return [
     ...institutions,

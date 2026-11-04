@@ -7,8 +7,7 @@ import Link from "next/link";
 import { AddAccountDialog } from "@/components/accounts/add-account-dialog";
 import { CompaniesSection } from "@/components/companies/companies-section";
 import { CreateCompanyDialog } from "@/components/companies/create-company-dialog";
-import { ViewingCompanyBanner } from "@/components/companies/company-view-actions";
-import { loadCompanyCards, loadPendingCompanyLinks, loadPersonalAttachable } from "@/lib/services/companies-read";
+import { loadAccountsPageCompanies } from "@/lib/services/companies-read";
 import { ExportAccountsButton } from "@/components/shared/export-accounts-button";
 import { FiatTab } from "@/components/accounts/fiat-tab";
 import { InvestmentTab } from "@/components/accounts/investment-tab";
@@ -62,13 +61,7 @@ export default async function AccountsPage({
   // portfolio, their companies sit beside their accounts and can be created
   // from here. In a company's scope, a banner says so and what is added here
   // goes to the company. On a granted portfolio, neither.
-  const ownPortfolio = !readOnly && !companyId;
-  const [companyCards, pendingLinks, attachable, scopedCompany] = await Promise.all([
-    ownPortfolio ? loadCompanyCards(viewer.id, new Date()) : Promise.resolve([]),
-    ownPortfolio ? loadPendingCompanyLinks(viewer.id) : Promise.resolve([]),
-    ownPortfolio ? loadPersonalAttachable(viewer.id) : Promise.resolve({ accounts: [], institutions: [] }),
-    companyId ? prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }) : Promise.resolve(null),
-  ]);
+  const companies = await loadAccountsPageCompanies(viewer.id, { readOnly, companyId });
 
   const [fiatAccounts, investAccounts, realEstateAccounts, automobileAccounts, loanAccounts, institutions] =
     await Promise.all([
@@ -155,19 +148,14 @@ export default async function AccountsPage({
               writable set from the session alone), so hiding them isn't the
               access control - it's so a guest is never offered a button whose
               only possible outcome is an error. */}
-          {ownPortfolio && <CreateCompanyDialog attachable={attachable} />}
+          {companies.ownPortfolio && <CreateCompanyDialog attachable={companies.attachable} />}
           {!readOnly && (tab === "liquidites" || tab === "investissements") && (
             <AddAccountDialog institutions={institutions} defaultType={defaultType} companyId={companyId} />
           )}
         </div>
       </div>
 
-      {scopedCompany && <ViewingCompanyBanner name={scopedCompany.name} readOnly={readOnly} />}
-
-      <CompaniesSection
-        cards={companyCards.map((c) => ({ ...c, valueCents: Number(c.valueCents), shareCents: Number(c.shareCents) }))}
-        pending={pendingLinks}
-      />
+      <CompaniesSection cards={companies.cards} pending={companies.pending} scopedName={companies.scopedName} readOnly={readOnly} />
 
       {/* Tabs */}
       <div className="grid grid-cols-5 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-1 gap-1">
