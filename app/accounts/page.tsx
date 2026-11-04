@@ -5,6 +5,9 @@ import { getViewContext } from "@/lib/auth-context";
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import Link from "next/link";
 import { AddAccountDialog } from "@/components/accounts/add-account-dialog";
+import { CompaniesSection } from "@/components/companies/companies-section";
+import { CreateCompanyDialog } from "@/components/companies/create-company-dialog";
+import { loadAccountsPageCompanies } from "@/lib/services/companies-read";
 import { ExportAccountsButton } from "@/components/shared/export-accounts-button";
 import { FiatTab } from "@/components/accounts/fiat-tab";
 import { InvestmentTab } from "@/components/accounts/investment-tab";
@@ -53,7 +56,12 @@ export default async function AccountsPage({
 
   // Scoped to the viewer's visible accounts (own + co-owned); institutions
   // to the ones they own. Mono mode resolves to the owner, i.e. everything.
-  const { ownerId, accountIds, readOnly } = await getViewContext();
+  const { viewer, ownerId, accountIds, readOnly, companyId } = await getViewContext();
+  // Companies (dev-docs/companies.md, interface "C"): on the viewer's own
+  // portfolio, their companies sit beside their accounts and can be created
+  // from here. In a company's scope, a banner says so and what is added here
+  // goes to the company. On a granted portfolio, neither.
+  const companies = await loadAccountsPageCompanies(viewer.id, { readOnly, companyId });
 
   const [fiatAccounts, investAccounts, realEstateAccounts, automobileAccounts, loanAccounts, institutions] =
     await Promise.all([
@@ -90,8 +98,10 @@ export default async function AccountsPage({
       }),
       // Only id + name reach the client dialogs - never the woob*/tr*/gocardless*
       // credential columns of this row. See dev-docs/multi-user-and-security.md.
+      // A company's bank connections in its scope, the person's own outside
+      // it - so a new account never lands on the wrong side.
       prisma.institution.findMany({
-        where: { userId: ownerId },
+        where: { userId: ownerId, companyId: companyId ?? null },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
@@ -138,11 +148,14 @@ export default async function AccountsPage({
               writable set from the session alone), so hiding them isn't the
               access control - it's so a guest is never offered a button whose
               only possible outcome is an error. */}
+          {companies.ownPortfolio && <CreateCompanyDialog attachable={companies.attachable} />}
           {!readOnly && (tab === "liquidites" || tab === "investissements") && (
-            <AddAccountDialog institutions={institutions} defaultType={defaultType} />
+            <AddAccountDialog institutions={institutions} defaultType={defaultType} companyId={companyId} />
           )}
         </div>
       </div>
+
+      <CompaniesSection cards={companies.cards} pending={companies.pending} scopedName={companies.scopedName} readOnly={readOnly} />
 
       {/* Tabs */}
       <div className="grid grid-cols-5 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-1 gap-1">
@@ -170,9 +183,9 @@ export default async function AccountsPage({
 
       {tab === "liquidites" && <FiatTab t={t} ta={ta} rows={fiatRows} />}
       {tab === "investissements" && <InvestmentTab t={t} ta={ta} rows={investRows} />}
-      {tab === "immobilier" && <RealEstateTab t={t} institutions={institutions} rows={realEstateRows} readOnly={readOnly} />}
-      {tab === "credits" && <LoanTab t={t} td={td} intlLocale={intlLocale} institutions={institutions} rows={loanRows} readOnly={readOnly} />}
-      {tab === "automobiles" && <AutomobileTab t={t} institutions={institutions} rows={automobileRows} readOnly={readOnly} />}
+      {tab === "immobilier" && <RealEstateTab t={t} institutions={institutions} rows={realEstateRows} readOnly={readOnly} companyId={companyId} />}
+      {tab === "credits" && <LoanTab t={t} td={td} intlLocale={intlLocale} institutions={institutions} rows={loanRows} readOnly={readOnly} companyId={companyId} />}
+      {tab === "automobiles" && <AutomobileTab t={t} institutions={institutions} rows={automobileRows} readOnly={readOnly} companyId={companyId} />}
     </div>
   );
 }

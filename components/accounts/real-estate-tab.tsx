@@ -16,18 +16,21 @@ export function RealEstateTab({
   institutions,
   rows,
   readOnly = false,
+  companyId,
 }: Readonly<{
   t: T;
   institutions: { id: string; name: string }[];
   rows: RealEstateRow[];
   /** True when a granted (read-only) portfolio is on screen. */
   readOnly?: boolean;
+  /** Set in a company\'s scope: new accounts are the company\'s. */
+  companyId?: string;
 }>) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
         {!readOnly && (
-        <AddRealEstateDialog institutions={institutions} />
+        <AddRealEstateDialog institutions={institutions} companyId={companyId} />
         )}
       </div>
       {rows.length === 0 ? (

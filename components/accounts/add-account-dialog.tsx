@@ -22,9 +22,11 @@ const CTO_CRYPTO_SUGGESTED_RATE_PCT = (FR_PFU_TOTAL_RATE * 100).toFixed(1);
 export function AddAccountDialog({
   institutions,
   defaultType,
+  companyId,
 }: Readonly<{
   institutions: { id: string; name: string }[];
   defaultType?: string;
+  companyId?: string;
 }>) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState(defaultType ?? "CHECKING");
@@ -92,6 +94,9 @@ export function AddAccountDialog({
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* In a company's scope: the account is the company's. The server checks
+            the viewer manages it (companyForNewAccount). */}
+        {companyId && <input type="hidden" name="companyId" value={companyId} />}
         <Select
           label={t("type")}
           name="type"

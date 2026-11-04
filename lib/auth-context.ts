@@ -396,6 +396,37 @@ export async function companyAccountIds(companyId: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
+/**
+ * Read access to one company account, from outside the company scope: the
+ * manager may write it, an accepted associate read it, anyone else nothing
+ * (null - same as an account that does not exist). The account page uses it
+ * so a company's accounts open from the company's own page.
+ */
+export async function companyAccountAccess(
+  userId: string,
+  accountId: string,
+): Promise<{ companyId: string; role: CompanyRole; managerUserId: string } | null> {
+  const account = await prisma.account.findUnique({
+    where: { id: assertId(accountId) },
+    select: { companyId: true, userId: true },
+  });
+  if (!account?.companyId) return null;
+  const role = await companyRole(userId, account.companyId);
+  return role ? { companyId: account.companyId, role, managerUserId: account.userId } : null;
+}
+
+/** Every company this user manages or holds an accepted link to. */
+export async function viewerCompanies(userId: string): Promise<{ id: string; name: string; role: CompanyRole }[]> {
+  const rows = await prisma.company.findMany({
+    where: {
+      OR: [{ managerUserId: userId }, { associates: { some: { userId, linkAcceptedAt: { not: null } } } }],
+    },
+    select: { id: true, name: true, managerUserId: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((c) => ({ id: c.id, name: c.name, role: c.managerUserId === userId ? "manager" : "associate" }));
+}
+
 /** The viewing cookie's value for a company, beside a grantor's user id. A
  *  cuid never contains ":", so the two cannot be confused. */
 export const COMPANY_SCOPE_PREFIX = "company:";

@@ -29,6 +29,8 @@ const {
   instanceSettingsFindUniqueMock,
   companyFindUniqueMock,
   companyAssociateCountMock,
+  accountFindUniqueMock,
+  companyFindManyMock,
 } = vi.hoisted(() => ({
   userFindUniqueMock: vi.fn(),
   accountFindManyMock: vi.fn(),
@@ -45,19 +47,21 @@ const {
   instanceSettingsFindUniqueMock: vi.fn(),
   companyFindUniqueMock: vi.fn(),
   companyAssociateCountMock: vi.fn(),
+  accountFindUniqueMock: vi.fn(),
+  companyFindManyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: { findUnique: userFindUniqueMock },
-    account: { findMany: accountFindManyMock, count: accountCountMock },
+    account: { findMany: accountFindManyMock, count: accountCountMock, findUnique: accountFindUniqueMock },
     accountCoOwner: { findMany: coOwnerFindManyMock, count: coOwnerCountMock },
     portfolioGrant: { findUnique: grantFindUniqueMock },
     category: { count: categoryCountMock },
     goal: { count: goalCountMock },
     transaction: { count: transactionCountMock },
     instanceSettings: { findUnique: instanceSettingsFindUniqueMock },
-    company: { findUnique: companyFindUniqueMock },
+    company: { findUnique: companyFindUniqueMock, findMany: companyFindManyMock },
     companyAssociate: { count: companyAssociateCountMock },
   },
 }));
@@ -87,6 +91,8 @@ import {
   accountPools,
   companyRole,
   assertCompanyManager,
+  companyAccountAccess,
+  viewerCompanies,
 } from "@/lib/auth-context";
 
 const OWNER = { id: OWNER_USER_ID, role: "ADMIN" as const };
@@ -108,6 +114,8 @@ beforeEach(() => {
     instanceSettingsFindUniqueMock,
     companyFindUniqueMock,
     companyAssociateCountMock,
+    accountFindUniqueMock,
+    companyFindManyMock,
   ]) {
     m.mockReset();
   }
@@ -759,5 +767,58 @@ describe("companies (dev-docs/companies.md)", () => {
       await expect(getViewContext()).resolves.toMatchObject({ ownerId: "user-b", readOnly: false });
       expect(companyFindUniqueMock).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("company reads for the interface", () => {
+  const COMPANY = "ckcompany00000000000000001";
+  const ACCOUNT = "ckaccount00000000000000001";
+
+  it("companyAccountAccess is null for a personal account - nothing to widen", async () => {
+    accountFindUniqueMock.mockResolvedValue({ companyId: null, userId: "user-a" });
+    await expect(companyAccountAccess("user-b", ACCOUNT)).resolves.toBeNull();
+    expect(companyFindUniqueMock).not.toHaveBeenCalled();
+  });
+
+  it("companyAccountAccess is null for an outsider to the company", async () => {
+    accountFindUniqueMock.mockResolvedValue({ companyId: COMPANY, userId: "user-a" });
+    companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+    companyAssociateCountMock.mockResolvedValue(0);
+    await expect(companyAccountAccess("user-b", ACCOUNT)).resolves.toBeNull();
+  });
+
+  it("companyAccountAccess gives an accepted associate read access, the manager write", async () => {
+    accountFindUniqueMock.mockResolvedValue({ companyId: COMPANY, userId: "user-a" });
+    companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+    companyAssociateCountMock.mockResolvedValue(1);
+    await expect(companyAccountAccess("user-b", ACCOUNT)).resolves.toEqual({
+      companyId: COMPANY,
+      role: "associate",
+      managerUserId: "user-a",
+    });
+    await expect(companyAccountAccess("user-a", ACCOUNT)).resolves.toMatchObject({ role: "manager" });
+  });
+
+  it("companyAccountAccess refuses an operator object as the id", async () => {
+    await expect(companyAccountAccess("user-b", { not: "x" } as unknown as string)).rejects.toThrow();
+    expect(accountFindUniqueMock).not.toHaveBeenCalled();
+  });
+
+  it("viewerCompanies lists managed companies and ACCEPTED links only", async () => {
+    companyFindManyMock.mockResolvedValue([
+      { id: "c1", name: "A", managerUserId: "user-b" },
+      { id: "c2", name: "B", managerUserId: "user-a" },
+    ]);
+    await expect(viewerCompanies("user-b")).resolves.toEqual([
+      { id: "c1", name: "A", role: "manager" },
+      { id: "c2", name: "B", role: "associate" },
+    ]);
+    expect(companyFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [{ managerUserId: "user-b" }, { associates: { some: { userId: "user-b", linkAcceptedAt: { not: null } } } }],
+        },
+      })
+    );
   });
 });

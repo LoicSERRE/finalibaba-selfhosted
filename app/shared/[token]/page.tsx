@@ -13,6 +13,7 @@ import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-stat
 import { SharedHoldingsSection } from "@/components/shared/shared-holdings-section";
 import { SharedTransactionsSection } from "@/components/shared/shared-transactions-section";
 import { computePortfolio } from "@/lib/services/net-worth";
+import { withCompaniesGroup } from "@/lib/domain/company";
 import { isShareLinkExpired, buildSharedHoldings } from "@/lib/domain/share-links";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { getTranslations, getLocale } from "next-intl/server";
@@ -113,7 +114,7 @@ export default async function SharedDashboardPage({
         history={history}
         allocationSlices={allocationSlices}
         allocationHistory={allocationHistory}
-        institutions={institutions}
+        institutions={withCompaniesGroup(institutions, portfolio.input.companyShares, t("companies.sectionTitle"))}
         interactive={false}
         empty={<DashboardEmptyState />}
       />

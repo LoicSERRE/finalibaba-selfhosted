@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCompanyShare,
+  capTableDraft,
+  withCompaniesGroup,
+  partsPct,
   mergedKeys,
   shareCents,
   sharesOn,
@@ -201,5 +204,39 @@ describe("computeDashboard with company shares", () => {
 
   it("counts a person with only a share as having data", () => {
     expect(computeDashboard(input({ companyShares: [share()] })).hasAccounts).toBe(true);
+  });
+});
+
+describe("capTableDraft / partsPct (the forms)", () => {
+  it("adds what is typed so far and says what is left", () => {
+    expect(capTableDraft(1000, [600, 300])).toEqual({ allocated: 900, remaining: 100, complete: false });
+    expect(capTableDraft(1000, [600, 400])).toEqual({ allocated: 1000, remaining: 0, complete: true });
+  });
+
+  it("counts a half-typed row as nothing, never as complete", () => {
+    expect(capTableDraft(100, [Number.NaN, 100])).toMatchObject({ allocated: 100, complete: true });
+    expect(capTableDraft(0, [])).toMatchObject({ complete: false });
+    expect(capTableDraft(100, [150, -50])).toMatchObject({ allocated: 150, complete: false });
+  });
+
+  it("rounds a percentage to one decimal", () => {
+    expect(partsPct(1, 3)).toBeCloseTo(33.3, 10);
+    expect(partsPct(600, 1000)).toBeCloseTo(60, 10);
+    expect(partsPct(5, 0)).toBe(0);
+  });
+});
+
+describe("withCompaniesGroup", () => {
+  const groups = [{ name: "Banque", logoUrl: null, total: BigInt(10_00), accounts: [{ id: "a", name: "Livret", value: BigInt(10_00), type: "SAVINGS" }] }];
+
+  it("leaves the list alone without shares", () => {
+    expect(withCompaniesGroup(groups, [], "Sociétés")).toBe(groups);
+  });
+
+  it("adds one group whose rows are the shares, so the list adds up to the net worth", () => {
+    const out = withCompaniesGroup(groups, [share(), share({ companyId: "co-2", name: "Holding", valueCents: BigInt(-5_00) })], "Sociétés");
+    expect(out).toHaveLength(2);
+    expect(out[1]).toMatchObject({ name: "Sociétés", total: BigInt(108_000_00 - 5_00) });
+    expect(out[1].accounts.map((a) => [a.id, a.type])).toEqual([["co-1", "COMPANY"], ["co-2", "COMPANY"]]);
   });
 });
