@@ -39,7 +39,7 @@ export function CreateCompanyDialog({ attachable }: Readonly<{ attachable: Attac
   const [taxRegime, setTaxRegime] = useState<(typeof REGIMES)[number]>("IR");
   const [totalParts, setTotalParts] = useState("1000");
   const [rows, setRows] = useState<CapTableRowDraft[]>(() => [
-    { key: newRowKey(), name: "", parts: "", username: "", self: true },
+    { key: newRowKey(), name: "", parts: "", username: "", self: true, currentAccount: "" },
   ]);
   const [accountIds, setAccountIds] = useState<Set<string>>(new Set());
   const [institutionIds, setInstitutionIds] = useState<Set<string>>(new Set());

@@ -14,6 +14,7 @@ export type CompanyCardData = {
   totalParts: number;
   valueCents: number;
   shareCents: number;
+  currentAccountCents: number;
 };
 
 export type PendingCompanyLinkData = {

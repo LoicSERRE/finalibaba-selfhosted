@@ -665,6 +665,7 @@ describe("computeAnalytics with company shares", () => {
       parts: 600,
       totalParts: 1000,
       companyValueCents: BigInt(180_000_00),
+      currentAccountCents: BigInt(0),
       valueCents: BigInt(108_000_00),
       history: [
         { isoDate: "2026-05-20", valueCents: 100_000_00 },

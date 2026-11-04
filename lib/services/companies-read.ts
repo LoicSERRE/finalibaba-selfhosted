@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { companyAccountIds, companyRole, viewerCompanies, type CompanyRole } from "@/lib/auth-context";
 import { computePortfolio } from "@/lib/services/net-worth";
-import { shareCents } from "@/lib/domain/company";
+import { netAssetValueCents, shareCents } from "@/lib/domain/company";
 
 /**
  * What the company screens read (dev-docs/companies.md, interface "C"). A
@@ -9,19 +9,33 @@ import { shareCents } from "@/lib/domain/company";
  * with the viewer they resolved, and it re-checks the role itself.
  */
 
-/** Parts this user holds through an ACCEPTED link - the same rule as their net worth. */
-async function partsHeld(userId: string, companyId: string): Promise<number> {
-  const rows = await prisma.companyHolding.findMany({
-    where: { companyId, fullOwner: { userId, linkAcceptedAt: { not: null } } },
-    select: { parts: true },
+/**
+ * What this user holds in the company through an ACCEPTED link - the same
+ * rule as their net worth: their parts and their current account.
+ */
+async function viewerStake(userId: string, companyId: string): Promise<{ parts: number; currentAccountCents: bigint }> {
+  const row = await prisma.companyAssociate.findFirst({
+    where: { companyId, userId, linkAcceptedAt: { not: null } },
+    select: { currentAccountCents: true, holdings: { select: { parts: true } } },
   });
-  return rows.reduce((sum, r) => sum + r.parts, 0);
+  return {
+    parts: row?.holdings.reduce((sum, h) => sum + h.parts, 0) ?? 0,
+    currentAccountCents: row?.currentAccountCents ?? BigInt(0),
+  };
 }
 
+/**
+ * The company's own figures over its own accounts, and its net asset value:
+ * those figures minus what it owes its associates on their current accounts.
+ */
 async function companyValue(companyId: string, intlLocale: string, now: Date) {
-  const accountIds = await companyAccountIds(companyId);
+  const [accountIds, currentAccounts] = await Promise.all([
+    companyAccountIds(companyId),
+    prisma.companyAssociate.aggregate({ where: { companyId }, _sum: { currentAccountCents: true } }),
+  ]);
   const { result } = await computePortfolio({ accountIds, shareholderId: null, intlLocale, now });
-  return { accountIds, result };
+  const currentAccountsCents = currentAccounts._sum.currentAccountCents ?? BigInt(0);
+  return { accountIds, result, currentAccountsCents, anrCents: netAssetValueCents(result.netWorth, currentAccountsCents) };
 }
 
 export interface CompanyCard {
@@ -30,8 +44,12 @@ export interface CompanyCard {
   role: CompanyRole;
   partsHeld: number;
   totalParts: number;
+  /** The company's net asset value (current accounts deducted). */
   valueCents: bigint;
+  /** Its worth to the viewer: their share of that value plus their current account. */
   shareCents: bigint;
+  /** The viewer's current account, included in shareCents. */
+  currentAccountCents: bigint;
 }
 
 /** One card per company on the Accounts page: its value and the viewer's share. */
@@ -39,19 +57,20 @@ export async function loadCompanyCards(userId: string, now: Date): Promise<Compa
   const companies = await viewerCompanies(userId);
   return Promise.all(
     companies.map(async (c) => {
-      const [company, held, { result }] = await Promise.all([
+      const [company, stake, value] = await Promise.all([
         prisma.company.findUniqueOrThrow({ where: { id: c.id }, select: { totalParts: true } }),
-        partsHeld(userId, c.id),
+        viewerStake(userId, c.id),
         companyValue(c.id, "en-US", now),
       ]);
       return {
         id: c.id,
         name: c.name,
         role: c.role,
-        partsHeld: held,
+        partsHeld: stake.parts,
         totalParts: company.totalParts,
-        valueCents: result.netWorth,
-        shareCents: shareCents(result.netWorth, held, company.totalParts),
+        valueCents: value.anrCents,
+        shareCents: shareCents(value.anrCents, stake.parts, company.totalParts) + stake.currentAccountCents,
+        currentAccountCents: stake.currentAccountCents,
       };
     }),
   );
@@ -96,6 +115,9 @@ export interface CompanyPageAssociate {
   link: "accepted" | "pending" | null;
   /** The linked user's username - for the manager's editor only. */
   username: string | null;
+  /** Their current account, in cents. Every associate sees every one, as in
+   *  the company's own books (a family's choice, dev-docs/companies.md). */
+  currentAccountCents: number;
 }
 
 /**
@@ -109,7 +131,7 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
   if (!role) return null;
   const isManager = role === "manager";
 
-  const [company, associates, held, value] = await Promise.all([
+  const [company, associates, stake, value] = await Promise.all([
     prisma.company.findUniqueOrThrow({
       where: { id: companyId },
       select: { id: true, name: true, kind: true, taxRegime: true, totalParts: true },
@@ -121,12 +143,13 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
         name: true,
         userId: true,
         linkAcceptedAt: true,
+        currentAccountCents: true,
         user: { select: { username: true } },
         holdings: { select: { parts: true } },
       },
       orderBy: { createdAt: "asc" },
     }),
-    partsHeld(userId, companyId),
+    viewerStake(userId, companyId),
     companyValue(companyId, intlLocale, now),
   ]);
 
@@ -137,16 +160,23 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
     isViewer: a.userId === userId,
     link: a.userId ? (a.linkAcceptedAt ? "accepted" : "pending") : null,
     username: isManager ? (a.user?.username ?? null) : null,
+    currentAccountCents: Number(a.currentAccountCents),
   }));
 
   return {
     company,
     role,
     associates: rows,
-    partsHeld: held,
-    partValueCents: shareCents(value.result.netWorth, 1, company.totalParts),
-    shareCents: shareCents(value.result.netWorth, held, company.totalParts),
+    partsHeld: stake.parts,
+    anrCents: value.anrCents,
+    currentAccountsCents: value.currentAccountsCents,
+    ownCurrentAccountCents: stake.currentAccountCents,
+    partValueCents: shareCents(value.anrCents, 1, company.totalParts),
+    shareCents: shareCents(value.anrCents, stake.parts, company.totalParts),
     result: value.result,
+    // The net asset value per day: the accounts' history less today's current
+    // accounts, so the curve ends on the figure above it.
+    anrHistory: value.result.history.map((p) => ({ ...p, netWorth: p.netWorth - Number(value.currentAccountsCents) })),
     attachable: isManager ? await loadAttachable(userId, companyId) : null,
   };
 }
@@ -225,7 +255,12 @@ export async function loadAccountsPageCompanies(userId: string, scope: { readOnl
   ]);
   return {
     ownPortfolio: true,
-    cards: cards.map((c) => ({ ...c, valueCents: Number(c.valueCents), shareCents: Number(c.shareCents) })),
+    cards: cards.map((c) => ({
+      ...c,
+      valueCents: Number(c.valueCents),
+      shareCents: Number(c.shareCents),
+      currentAccountCents: Number(c.currentAccountCents),
+    })),
     pending,
     attachable,
     scopedName: null,

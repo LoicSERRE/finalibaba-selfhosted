@@ -14,6 +14,7 @@ export type ManagerAssociate = {
   username: string | null;
   isViewer: boolean;
   link: "accepted" | "pending" | null;
+  currentAccountCents: number;
 };
 
 /** A returned failure as the sentence to show, or null for a success. */

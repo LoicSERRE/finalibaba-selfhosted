@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCompanyShare,
+  netAssetValueCents,
   capTableDraft,
   withCompaniesGroup,
   partsPct,
@@ -26,6 +27,7 @@ function share(overrides: Partial<CompanyShare> = {}): CompanyShare {
     parts: 600,
     totalParts: 1000,
     companyValueCents: BigInt(180_000_00),
+    currentAccountCents: BigInt(0),
     valueCents: BigInt(108_000_00),
     history: [],
     ...overrides,
@@ -73,6 +75,9 @@ describe("validateCapTable", () => {
     ["negative parts", 100, [{ name: "A", parts: -50 }, { name: "B", parts: 150 }], "parts_invalid"],
     ["parts sent as a string", 100, [{ name: "A", parts: "100" }], "parts_invalid"],
     ["parts that fall short", 1000, [{ name: "A", parts: 600 }, { name: "B", parts: 399 }], "parts_sum_mismatch"],
+    ["a negative current account", 100, [{ name: "A", parts: 100, currentAccountCents: -1 }], "current_account_invalid"],
+    ["a fractional current account", 100, [{ name: "A", parts: 100, currentAccountCents: 10.5 }], "current_account_invalid"],
+    ["a current account sent as a string", 100, [{ name: "A", parts: 100, currentAccountCents: "500" }], "current_account_invalid"],
     ["parts that overshoot", 1000, [{ name: "A", parts: 600 }, { name: "B", parts: 401 }], "parts_sum_mismatch"],
     [
       "one user linked twice",
@@ -238,5 +243,43 @@ describe("withCompaniesGroup", () => {
     expect(out).toHaveLength(2);
     expect(out[1]).toMatchObject({ name: "Sociétés", total: BigInt(108_000_00 - 5_00) });
     expect(out[1].accounts.map((a) => [a.id, a.type])).toEqual([["co-1", "COMPANY"], ["co-2", "COMPANY"]]);
+  });
+});
+
+describe("current accounts (comptes courants d'associés)", () => {
+  // 180 000 on the company's bank account, 50 000 of it lent by associates:
+  // the company owes that back, so its net asset value is 130 000.
+  const company = { id: "co-1", name: "SCI", totalParts: 1000 };
+  const accounts = { totalCents: BigInt(50_000_00), ownCents: BigInt(30_000_00) };
+
+  it("come off the company's value before anyone's share", () => {
+    expect(netAssetValueCents(BigInt(180_000_00), BigInt(50_000_00))).toBe(BigInt(130_000_00));
+    expect(buildCompanyShare(company, 600, BigInt(180_000_00), [], accounts).companyValueCents).toBe(BigInt(130_000_00));
+  });
+
+  it("add the lender's own current account to their share, once", () => {
+    // 60 % of 130 000 = 78 000, plus the 30 000 they lent.
+    const s = buildCompanyShare(company, 600, BigInt(180_000_00), [], accounts);
+    expect(s.valueCents).toBe(BigInt(78_000_00 + 30_000_00));
+    expect(s.currentAccountCents).toBe(BigInt(30_000_00));
+  });
+
+  it("add up, across all associates, to exactly the company's accounts", () => {
+    // Nothing is created or lost: the two associates' figures together are
+    // the 180 000 sitting on the company's accounts.
+    const a = buildCompanyShare(company, 600, BigInt(180_000_00), [], accounts);
+    const b = buildCompanyShare(company, 400, BigInt(180_000_00), [], { totalCents: BigInt(50_000_00), ownCents: BigInt(20_000_00) });
+    expect(a.valueCents + b.valueCents).toBe(BigInt(180_000_00));
+  });
+
+  it("apply to every day of the history, at today's amounts", () => {
+    const s = buildCompanyShare(company, 600, BigInt(180_000_00), [{ isoDate: "2026-01-01", netWorth: 100_000_00 }], accounts);
+    // 60 % of (100 000 - 50 000) + 30 000.
+    expect(s.history).toEqual([{ isoDate: "2026-01-01", valueCents: 30_000_00 + 30_000_00 }]);
+  });
+
+  it("change nothing when there are none", () => {
+    const s = buildCompanyShare(company, 600, BigInt(180_000_00), []);
+    expect(s).toMatchObject({ companyValueCents: BigInt(180_000_00), currentAccountCents: BigInt(0), valueCents: BigInt(108_000_00) });
   });
 });

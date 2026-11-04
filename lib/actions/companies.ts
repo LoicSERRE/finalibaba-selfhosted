@@ -55,6 +55,8 @@ type ResolvedAssociate = {
   userId: string | null;
   /** The manager linking themselves: nobody else to ask. */
   acceptedNow: boolean;
+  /** Checked by validateCapTable before anything is written. */
+  currentAccountCents?: number;
 };
 
 /**
@@ -92,6 +94,7 @@ async function resolveAssociates(
       parts: r.parts as number,
       userId,
       acceptedNow: userId === viewerId,
+      currentAccountCents: r.currentAccountCents as number | undefined,
     });
   }
   return { ok: true, rows };
@@ -108,7 +111,7 @@ export async function createCompany(input: {
   kind: string;
   taxRegime: string;
   totalParts: number;
-  associates: { name: string; parts: number; username?: string | null; self?: boolean }[];
+  associates: { name: string; parts: number; username?: string | null; self?: boolean; currentAccountCents?: number }[];
 }): Promise<{ ok: true; companyId: string } | CompanyFailure> {
   const viewer = await getViewer();
   const named = validateCompanyName(input?.name);
@@ -137,6 +140,7 @@ export async function createCompany(input: {
           name: row.name,
           userId: row.userId,
           linkAcceptedAt: row.acceptedNow ? new Date() : null,
+          currentAccountCents: BigInt(row.currentAccountCents ?? 0),
         },
       });
       await tx.companyHolding.create({ data: { companyId: created.id, parts: row.parts, fullOwnerId: associate.id } });
@@ -176,7 +180,14 @@ export async function saveCapTable(
   companyId: string,
   input: {
     totalParts: number;
-    associates: { id?: string; name: string; parts: number; username?: string | null; self?: boolean }[];
+    associates: {
+      id?: string;
+      name: string;
+      parts: number;
+      username?: string | null;
+      self?: boolean;
+      currentAccountCents?: number;
+    }[];
   },
 ): Promise<{ ok: true } | CompanyFailure> {
   companyId = assertId(companyId);
@@ -208,7 +219,12 @@ export async function saveCapTable(
       let linkAcceptedAt: Date | null = null;
       if (row.acceptedNow) linkAcceptedAt = previous?.linkAcceptedAt ?? new Date();
       else if (sameLink) linkAcceptedAt = previous.linkAcceptedAt;
-      const data = { name: row.name, userId: row.userId, linkAcceptedAt };
+      const data = {
+        name: row.name,
+        userId: row.userId,
+        linkAcceptedAt,
+        currentAccountCents: BigInt(row.currentAccountCents ?? 0),
+      };
       const associate = row.id
         ? await tx.companyAssociate.update({ where: { id: row.id }, data })
         : await tx.companyAssociate.create({ data: { ...data, companyId } });

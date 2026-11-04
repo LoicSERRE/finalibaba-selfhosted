@@ -86,7 +86,12 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
           <p className="text-xs text-[var(--muted)]">{t("page.anr")}</p>
-          <p className="text-2xl font-semibold tabular-nums text-[var(--accent)] mt-1 amount">{formatCurrency(result.netWorth, 0)}</p>
+          <p className="text-2xl font-semibold tabular-nums text-[var(--accent)] mt-1 amount">{formatCurrency(data.anrCents, 0)}</p>
+          {data.currentAccountsCents > BigInt(0) && (
+            <p className="text-xs text-[var(--muted)] mt-1 amount">
+              {t("page.afterCurrentAccounts", { amount: formatCurrency(data.currentAccountsCents, 0) })}
+            </p>
+          )}
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
           {data.partsHeld > 0 ? (
@@ -94,6 +99,11 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
               <p className="text-xs text-[var(--muted)]">{t("page.yourShareLabel", { pct: partsPct(data.partsHeld, company.totalParts) })}</p>
               <p className="text-2xl font-semibold tabular-nums text-[var(--foreground)] mt-1 amount">{formatCurrency(data.shareCents, 0)}</p>
               <p className="text-xs text-[var(--muted)] mt-1">{t("page.yourShareHint")}</p>
+              {data.ownCurrentAccountCents > BigInt(0) && (
+                <p className="text-xs text-[var(--muted)] mt-0.5 amount">
+                  {t("page.plusYourCurrentAccount", { amount: formatCurrency(data.ownCurrentAccountCents, 0) })}
+                </p>
+              )}
             </>
           ) : (
             <p className="text-sm text-[var(--muted)]">{t("page.noShare")}</p>
@@ -109,7 +119,7 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
           <div className="lg:col-span-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">{t("page.history")}</h2>
-            <NetWorthChart data={result.history} />
+            <NetWorthChart data={data.anrHistory} />
           </div>
           <div className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
             <h2 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider mb-4">{t("page.allocation")}</h2>

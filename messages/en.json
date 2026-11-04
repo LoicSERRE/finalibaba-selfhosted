@@ -2062,7 +2062,9 @@
       "back": "Back",
       "next": "Continue",
       "create": "Create the company",
-      "creating": "Creating…"
+      "creating": "Creating…",
+      "currentAccount": "Current account",
+      "currentAccountN": "Associate {n} current account"
     },
     "errors": {
       "name_required": "Give a name (to the company and to every associate).",
@@ -2080,7 +2082,8 @@
       "institution_account": "This account belongs to a bank connection: attach the whole connection.",
       "co_owned": "A co-owned account cannot go into a company.",
       "not_an_associate": "Management can only go to a linked associate who accepted.",
-      "name_conflict": "That person already has a bank connection with the same name."
+      "name_conflict": "That person already has a bank connection with the same name.",
+      "current_account_invalid": "A current account is an amount of zero or more."
     },
     "page": {
       "back": "Accounts",
@@ -2108,7 +2111,10 @@
       "editAssociates": "Edit",
       "settings": "Settings",
       "attach": "Attach an account",
-      "associateShare": "{name}: {pct}%"
+      "associateShare": "{name}: {pct}%",
+      "afterCurrentAccounts": "after {amount} of associates' current accounts",
+      "plusYourCurrentAccount": "+ your current account of {amount}",
+      "currentAccountOf": "current account {amount}"
     },
     "capTable": {
       "title": "Associates and parts",
@@ -2136,6 +2142,7 @@
       "noHandoverCandidate": "No linked associate has accepted yet.",
       "delete": "Delete the company",
       "deleteConfirm": "Its accounts go back to your personal portfolio and the cap table is deleted."
-    }
+    },
+    "includingCurrentAccount": "including current account {amount}"
   }
 }

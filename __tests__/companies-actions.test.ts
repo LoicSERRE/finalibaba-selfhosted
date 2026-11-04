@@ -337,3 +337,30 @@ describe("setViewingCompany", () => {
     expect(h.cookieSet).not.toHaveBeenCalled();
   });
 });
+
+describe("current accounts in the cap table", () => {
+  it("are stored per associate, in cents", async () => {
+    const input = valid();
+    (input.associates[0] as { currentAccountCents?: number }).currentAccountCents = 30_000_00;
+    await actions.createCompany(input);
+    const [self, other] = h.associate.create.mock.calls.map((c) => c[0].data);
+    expect(self.currentAccountCents).toBe(BigInt(30_000_00));
+    expect(other.currentAccountCents).toBe(BigInt(0));
+  });
+
+  it("refuse a negative amount, writing nothing", async () => {
+    const input = valid();
+    (input.associates[1] as { currentAccountCents?: number }).currentAccountCents = -5;
+    await expect(actions.createCompany(input)).resolves.toEqual({ ok: false, error: "current_account_invalid" });
+    expect(h.company.create).not.toHaveBeenCalled();
+  });
+
+  it("are saved again with the cap table", async () => {
+    h.associate.findMany.mockResolvedValue([{ id: "ckassoc0000000000000000001", userId: MANAGER, linkAcceptedAt: new Date() }]);
+    await actions.saveCapTable(COMPANY, {
+      totalParts: 10,
+      associates: [{ id: "ckassoc0000000000000000001", name: "A", parts: 10, self: true, currentAccountCents: 12_345 }],
+    });
+    expect(h.associate.update.mock.calls[0][0].data.currentAccountCents).toBe(BigInt(12_345));
+  });
+});
