@@ -89,6 +89,9 @@ export async function GET(req: NextRequest) {
         name,
         type,
         institutionId,
+        // A company's bank connection makes company accounts, like the sync
+        // does from the same column (sync/db.py).
+        companyId: institution.companyId,
         gocardlessAccountId: gcAccountId,
         // Born in the base, like every account: the bank's own currency is
         // settled just below, re-denominating from the base if it differs.

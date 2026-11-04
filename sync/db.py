@@ -333,6 +333,17 @@ def _realign_owner(cur, account_id: str, institution_id: str) -> str:
             'UPDATE "Account" SET "userId" = %s WHERE id = %s AND "userId" <> %s',
             (owner_id, account_id, owner_id),
         )
+    # Same invariant for the company (dev-docs/companies.md): an account and
+    # its institution agree, so an institution moved into or out of a company
+    # carries the accounts it syncs with it.
+    cur.execute(
+        """
+        UPDATE "Account" a SET "companyId" = i."companyId"
+        FROM "Institution" i
+        WHERE a.id = %s AND i.id = %s AND a."companyId" IS DISTINCT FROM i."companyId"
+        """,
+        (account_id, institution_id),
+    )
     return account_id
 
 
@@ -404,12 +415,14 @@ def upsert_account(cur, *, sync_id: str, name: str, account_type: str, instituti
     account_id = str(uuid.uuid4())
     cur.execute(
         """
-        INSERT INTO "Account" (id, name, type, "institutionId", "userId", "syncId", currency, "createdAt", "updatedAt")
-        VALUES (%s, %s, %s, %s, COALESCE(%s, 'user-owner'), %s, %s, NOW(), NOW())
+        INSERT INTO "Account" (id, name, type, "institutionId", "userId", "syncId", currency, "companyId", "createdAt", "updatedAt")
+        VALUES (%s, %s, %s, %s, COALESCE(%s, 'user-owner'), %s, %s,
+                (SELECT "companyId" FROM "Institution" WHERE id = %s), NOW(), NOW())
         """,
         # Born in the base (v2.19), not the column's EUR default: a bank
         # reporting another currency then re-denominates from the base.
-        (account_id, name, account_type, institution_id, owner_id, sync_id, fx.base_currency(cur)),
+        # A company's bank connection makes company accounts.
+        (account_id, name, account_type, institution_id, owner_id, sync_id, fx.base_currency(cur), institution_id),
     )
     return account_id
 

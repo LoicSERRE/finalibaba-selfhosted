@@ -20,16 +20,16 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
-const { assertTransactionsWritableMock, baseAccountIdsMock } = vi.hoisted(() => ({
+const { assertTransactionsWritableMock, writableAccountIdsMock } = vi.hoisted(() => ({
   assertTransactionsWritableMock: vi.fn(async () => {}),
-  baseAccountIdsMock: vi.fn(async () => ["acc1", "acc2"]),
+  writableAccountIdsMock: vi.fn(async () => ["acc1", "acc2"]),
 }));
 
 vi.mock("@/lib/auth-context", () => ({
   getViewer: vi.fn(async () => ({ id: "user-owner", role: "ADMIN", isMonoMode: true })),
   assertTransactionsWritable: assertTransactionsWritableMock,
   assertOwned: vi.fn(async () => {}),
-  baseAccountIds: baseAccountIdsMock,
+  writableAccountIds: writableAccountIdsMock,
 }));
 
 import { setInternalTransferFlag } from "@/lib/actions/transactions";
@@ -42,7 +42,7 @@ beforeEach(() => {
     .mockResolvedValue({ accountId: "acc1", categoryId: "cat1", internalTransferPairId: null });
   txUpdateManyMock.mockReset().mockResolvedValue({ count: 0 });
   assertTransactionsWritableMock.mockReset().mockResolvedValue(undefined);
-  baseAccountIdsMock.mockReset().mockResolvedValue(["acc1", "acc2"]);
+  writableAccountIdsMock.mockReset().mockResolvedValue(["acc1", "acc2"]);
 });
 
 afterEach(() => {

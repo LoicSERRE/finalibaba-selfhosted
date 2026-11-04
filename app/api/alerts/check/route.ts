@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { baseAccountIds } from "@/lib/auth-context";
 import type { UserSettingsModel } from "@/app/generated/prisma/models";
 import { localeToIntl } from "@/lib/utils/format";
-import { computeDashboard } from "@/lib/domain/dashboard";
+import { computePortfolio } from "@/lib/services/net-worth";
 import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
 import { evaluateNetWorthAlert, isLoanNearlyPaidOff } from "@/lib/domain/alerts";
 import { dispatchAlert } from "@/lib/services/notifications";
@@ -23,24 +23,14 @@ import { baseSymbol } from "@/lib/utils/base-currency";
 async function checkNetWorthAlert(settings: UserSettingsModel, accountIds: string[]): Promise<boolean> {
   if (settings.netWorthAlertThresholdCents === null) return false;
 
-  const [accounts, allBalances] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds } },
-      include: {
-        institution: true,
-        holdings: true,
-        history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
-      },
-      orderBy: { name: "asc" },
-    }),
-    prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
-  ]);
-  const { netWorth } = computeDashboard({
-    accounts,
-    allBalances,
+  // The same net worth as the person's dashboard, company shares included.
+  const { result } = await computePortfolio({
+    accountIds,
+    shareholderId: settings.userId,
     intlLocale: localeToIntl("fr"),
     now: new Date(),
   });
+  const { netWorth } = result;
 
   const { shouldFire, isAbove } = evaluateNetWorthAlert(
     netWorth,

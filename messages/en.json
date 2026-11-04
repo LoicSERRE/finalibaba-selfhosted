@@ -108,7 +108,8 @@
     "investments": "Investments",
     "crypto": "Crypto",
     "realEstate": "Real estate",
-    "auto": "Auto"
+    "auto": "Auto",
+    "companies": "Companies"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -333,7 +334,11 @@
       "removeConfirm": "Remove {name} from this account? Their alert rules and goals tied to it will be deleted.",
       "trigger": "Manage co-owners",
       "triggerShared": "Shared with {count} person(s) - manage",
-      "pending": "Invitation pending - they need to accept it in their settings"
+      "pending": "Invitation pending - they need to accept it in their settings",
+      "errorUsernameRequired": "Enter a username.",
+      "errorNoSuchUser": "No user with that name on this instance.",
+      "errorThatIsYou": "That is your own account.",
+      "errorCompanyAccount": "A company account is shared through its associates, not by co-ownership."
     },
     "ownedBy": "{name}'s account",
     "ownedByHint": "This account belongs to {name}; you co-own it.",
@@ -1880,11 +1885,6 @@
     "mdFileName": "analytics",
     "mdOwnFundsRunway": "Runway on own funds",
     "mdYearChange": "Change since the start of the year"
-  },
-  "coOwners": {
-    "errorUsernameRequired": "Enter a username.",
-    "errorNoSuchUser": "No user with that name on this instance.",
-    "errorThatIsYou": "That is your own account."
   },
   "discretion": {
     "hide": "Hide amounts",

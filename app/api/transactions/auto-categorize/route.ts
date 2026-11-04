@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isInternalRequest } from "@/lib/services/internal-auth";
 import { prisma } from "@/lib/db/prisma";
-import { baseAccountIds } from "@/lib/auth-context";
+import { accountPools } from "@/lib/auth-context";
 import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
 
 /**
@@ -35,10 +35,11 @@ export async function POST(req: NextRequest) {
   const users = await prisma.user.findMany({ select: { id: true } });
   let categorized = 0;
   for (const user of users) {
-    const accountIds = await baseAccountIds(user.id);
-    if (accountIds.length === 0) continue;
-    const result = await autoCategorizeForUser(user.id, accountIds);
-    categorized += result.categorized;
+    // One pass per patrimony (accountPools): the person's own, then each
+    // company they manage, so transfers between them are never paired.
+    for (const pool of await accountPools(user.id)) {
+      categorized += (await autoCategorizeForUser(user.id, pool)).categorized;
+    }
   }
 
   return NextResponse.json({ ok: true, categorized });

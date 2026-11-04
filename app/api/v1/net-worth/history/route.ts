@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
 import { authenticateApiKey } from "@/lib/services/api-auth";
 import { baseAccountIds } from "@/lib/auth-context";
-import { computeDashboard } from "@/lib/domain/dashboard";
+import { computePortfolio } from "@/lib/services/net-worth";
 import { localeToIntl } from "@/lib/utils/format";
 
 // GET /api/v1/net-worth/history - daily net worth series, e.g. for a Home
@@ -21,15 +20,8 @@ export async function GET(req: NextRequest) {
   // granted for reading and could be revoked at any time.
   const accountIds = await baseAccountIds(key.userId);
 
-  const [accounts, allBalances] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds } },
-      include: { institution: true, holdings: true, history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 } },
-    }),
-    prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
-  ]);
-
-  const { history } = computeDashboard({ accounts, allBalances, intlLocale: localeToIntl("fr"), now: new Date() });
+  const { result } = await computePortfolio({ accountIds, shareholderId: key.userId, intlLocale: localeToIntl("fr"), now: new Date() });
+  const { history } = result;
 
   return NextResponse.json({
     history: history.map((point) => ({ date: point.isoDate, netWorthCents: point.netWorth })),

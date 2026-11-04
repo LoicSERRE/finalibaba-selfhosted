@@ -3,6 +3,7 @@
  * of analytics.ts for size - a type never needs reading to follow the maths,
  * and 300 lines of them sat between the helpers and the function.
  */
+import type { CompanyShare } from "@/lib/domain/company";
 import type Decimal from "decimal.js";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 import type { PricePoint, YFDividendInfo } from "@/lib/domain/analytics-market";
@@ -97,6 +98,8 @@ export interface AnalyticsInput {
   intlLocale: string;
   /** Evaluation instant - never read internally via `new Date()`/`Date.now()`, so this function stays pure and deterministic for tests. */
   now: Date;
+  /** The person's company shares, same meaning as in DashboardInput. */
+  companyShares?: readonly CompanyShare[];
 }
 
 // ── Output ─────────────────────────────────────────────────────────────────────

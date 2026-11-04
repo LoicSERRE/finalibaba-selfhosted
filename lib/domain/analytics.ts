@@ -12,6 +12,7 @@
 import { getAccountTaxRate } from "@/lib/domain/tax";
 import { calcCurrentCapital, hasLoanParams, historyLiabilityCents, isBankReportedLoan } from "@/lib/domain/loan";
 import { ALLOCATION_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/utils/palette";
+import { mergedKeys, shareTotals, sharesOn, type CompanyShare } from "@/lib/domain/company";
 import {
   computeSavingsInterestProjection,
   computeGoalRows,
@@ -398,6 +399,31 @@ function computeMonthlyHistory(
   });
 }
 
+/**
+ * Month-end history with the company shares added, each carried forward to
+ * the month's last known point. A month only a company reported gets a row.
+ */
+function withCompanyShares(
+  monthly: MonthlyHistoryPoint[],
+  shares: readonly CompanyShare[],
+  intlLocale: string,
+): MonthlyHistoryPoint[] {
+  if (shares.length === 0) return monthly;
+  const toMonth = (isoDate: string) => isoDate.slice(0, 7);
+  const months = mergedKeys(monthly.map((p) => p.month), shares, toMonth);
+  const shareValues = sharesOn(months, shares, toMonth);
+  let own = -1;
+  return months.map((month, k) => {
+    while (own + 1 < monthly.length && monthly[own + 1].month <= month) own++;
+    const [y, m] = month.split("-");
+    return {
+      month,
+      date: new Intl.DateTimeFormat(intlLocale, { month: "short", year: "2-digit" }).format(new Date(+y, +m - 1, 1)),
+      netWorth: (own >= 0 ? monthly[own].netWorth : 0) + shareValues[k].net,
+    };
+  });
+}
+
 /** Net worth since the start of `now`'s year, from the month-end history alone. */
 function computeYearChange(monthlyHistory: MonthlyHistoryPoint[], now: Date): YearChange | null {
   const january = `${now.getUTCFullYear()}-01`;
@@ -456,11 +482,17 @@ function buildAllocationSlices(allocation: Record<string, bigint>): AllocationSl
 }
 
 export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
-  const { accounts, allBalances, settings, goals, yfData, incomeEventsYtd, intlLocale, now } = input;
+  const { accounts, allBalances, settings, goals, yfData, incomeEventsYtd, intlLocale, now, companyShares = [] } = input;
   const nowMs = now.getTime();
 
   const t = aggregateAccounts(accounts, yfData, now);
-  const { grossAssets, totalLiabilities, totalLatentTax, allocation, assetRows } = t;
+  const { totalLatentTax, allocation, assetRows } = t;
+  // Company shares, the same way computeDashboard adds them: an asset in its
+  // own bucket when positive, a liability when the company owes more.
+  const shares = shareTotals(companyShares);
+  const grossAssets = t.grossAssets + shares.assetsCents;
+  const totalLiabilities = t.totalLiabilities + shares.liabilitiesCents;
+  allocation["companies"] = (allocation["companies"] ?? BigInt(0)) + shares.assetsCents;
 
   const perf = computeInvestmentPerformance(t.investPerfRowsInternal, nowMs);
   const benchmarkCAGRs = computeBenchmarkCAGRs(
@@ -491,7 +523,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
   const { estimatedYearEndSavingsInterestCents, estimatedYearEndInterestHistory } =
     computeSavingsInterestProjection(accounts, allBalances, now, intlLocale);
 
-  const monthlyHistory = computeMonthlyHistory(accounts, allBalances, intlLocale);
+  const monthlyHistory = withCompanyShares(computeMonthlyHistory(accounts, allBalances, intlLocale), companyShares, intlLocale);
   const momDelta = monthOnMonthDelta(monthlyHistory);
   const allocationSlices = buildAllocationSlices(allocation);
 
@@ -499,7 +531,7 @@ export function computeAnalytics(input: AnalyticsInput): AnalyticsResult {
     // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
     // real payments) but zero gross assets by design. Gating on grossAssets
     // showed the empty state to a user who had already added an account.
-    hasData: accounts.length > 0,
+    hasData: accounts.length > 0 || companyShares.length > 0,
     netWorth,
     netWorthBeforeTax,
     grossAssets,

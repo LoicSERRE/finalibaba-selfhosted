@@ -27,6 +27,8 @@ const {
   cookieGetMock,
   cookiesMock,
   instanceSettingsFindUniqueMock,
+  companyFindUniqueMock,
+  companyAssociateCountMock,
 } = vi.hoisted(() => ({
   userFindUniqueMock: vi.fn(),
   accountFindManyMock: vi.fn(),
@@ -41,6 +43,8 @@ const {
   cookieGetMock: vi.fn(),
   cookiesMock: vi.fn(),
   instanceSettingsFindUniqueMock: vi.fn(),
+  companyFindUniqueMock: vi.fn(),
+  companyAssociateCountMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -53,6 +57,8 @@ vi.mock("@/lib/db/prisma", () => ({
     goal: { count: goalCountMock },
     transaction: { count: transactionCountMock },
     instanceSettings: { findUnique: instanceSettingsFindUniqueMock },
+    company: { findUnique: companyFindUniqueMock },
+    companyAssociate: { count: companyAssociateCountMock },
   },
 }));
 
@@ -77,6 +83,10 @@ import {
   OWNER_USER_ID,
   getViewerForTwoFactorSetup,
   isTwoFactorEnrollmentRequired,
+  writableAccountIds,
+  accountPools,
+  companyRole,
+  assertCompanyManager,
 } from "@/lib/auth-context";
 
 const OWNER = { id: OWNER_USER_ID, role: "ADMIN" as const };
@@ -96,6 +106,8 @@ beforeEach(() => {
     getServerSessionMock,
     cookieGetMock,
     instanceSettingsFindUniqueMock,
+    companyFindUniqueMock,
+    companyAssociateCountMock,
   ]) {
     m.mockReset();
   }
@@ -236,10 +248,10 @@ describe("baseAccountIds", () => {
     await baseAccountIds("user-b");
 
     expect(accountFindManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "user-b" } })
+      expect.objectContaining({ where: { userId: "user-b", companyId: null } })
     );
     expect(coOwnerFindManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "user-b", acceptedAt: { not: null } } })
+      expect.objectContaining({ where: { userId: "user-b", acceptedAt: { not: null }, account: { companyId: null } } })
     );
   });
 });
@@ -299,7 +311,7 @@ describe("viewAccountIds", () => {
 
     await expect(viewAccountIds("user-b", OWNER_USER_ID)).resolves.toEqual(["owner-1"]);
     expect(accountFindManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: OWNER_USER_ID } })
+      expect.objectContaining({ where: { userId: OWNER_USER_ID, companyId: null } })
     );
   });
 
@@ -313,7 +325,7 @@ describe("viewAccountIds", () => {
 
     await expect(viewAccountIds("user-b", OWNER_USER_ID)).resolves.toEqual(["b1"]);
     expect(accountFindManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "user-b" } })
+      expect.objectContaining({ where: { userId: "user-b", companyId: null } })
     );
   });
 });
@@ -610,5 +622,142 @@ describe("getPublicViewer (the root layout only)", () => {
     userFindUniqueMock.mockResolvedValue(OWNER);
 
     await expect(getPublicViewer()).resolves.toEqual({ id: OWNER_USER_ID, role: "ADMIN", isMonoMode: true });
+  });
+});
+
+describe("companies (dev-docs/companies.md)", () => {
+  // The scope resolver is the only place that decides who sees a company.
+  // Every case below is a cross-user one: user-b against user-a's company.
+  const COMPANY = "ckcompany00000000000000001";
+
+  describe("the personal set leaves company accounts out", () => {
+    it("baseAccountIds keeps only accounts with no company", async () => {
+      accountFindManyMock.mockResolvedValue([{ id: "perso" }]);
+      coOwnerFindManyMock.mockResolvedValue([]);
+      await baseAccountIds("user-a");
+      expect(accountFindManyMock).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: "user-a", companyId: null } })
+      );
+    });
+
+    it("writableAccountIds adds the companies the user manages, for writes only", async () => {
+      accountFindManyMock.mockImplementation(async ({ where }: { where: { companyId: unknown } }) =>
+        where.companyId === null ? [{ id: "perso" }] : [{ id: "sci-bank" }]
+      );
+      coOwnerFindManyMock.mockResolvedValue([]);
+      await expect(writableAccountIds("user-a")).resolves.toEqual(["perso", "sci-bank"]);
+    });
+
+    it("accountPools keeps each patrimony apart, so no transfer between them pairs", async () => {
+      accountFindManyMock.mockImplementation(async ({ where }: { where: { companyId: unknown } }) =>
+        where.companyId === null
+          ? [{ id: "perso" }]
+          : [
+              { id: "sci1-bank", companyId: "c1" },
+              { id: "sci2-bank", companyId: "c2" },
+              { id: "sci1-flat", companyId: "c1" },
+            ]
+      );
+      coOwnerFindManyMock.mockResolvedValue([]);
+      await expect(accountPools("user-a")).resolves.toEqual([["perso"], ["sci1-bank", "sci1-flat"], ["sci2-bank"]]);
+    });
+  });
+
+  describe("companyRole", () => {
+    it("is manager for the manager", async () => {
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      await expect(companyRole("user-a", COMPANY)).resolves.toBe("manager");
+    });
+
+    it("is associate only for an ACCEPTED link", async () => {
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      companyAssociateCountMock.mockResolvedValue(1);
+      await expect(companyRole("user-b", COMPANY)).resolves.toBe("associate");
+      expect(companyAssociateCountMock).toHaveBeenCalledWith({
+        where: { companyId: COMPANY, userId: "user-b", linkAcceptedAt: { not: null } },
+      });
+    });
+
+    it("is null for an outsider and for a pending link alike", async () => {
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      companyAssociateCountMock.mockResolvedValue(0);
+      await expect(companyRole("user-b", COMPANY)).resolves.toBeNull();
+    });
+
+    it("is null for a company that does not exist - the same answer as somebody else's", async () => {
+      companyFindUniqueMock.mockResolvedValue(null);
+      await expect(companyRole("user-b", COMPANY)).resolves.toBeNull();
+    });
+
+    it("refuses an operator object as the id", async () => {
+      await expect(companyRole("user-b", { not: "x" } as unknown as string)).rejects.toThrow();
+      expect(companyFindUniqueMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("assertCompanyManager", () => {
+    it("lets the manager through", async () => {
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      await expect(assertCompanyManager("user-a", COMPANY)).resolves.toBeUndefined();
+    });
+
+    it("refuses an associate with the same Not found. as an outsider", async () => {
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      companyAssociateCountMock.mockResolvedValue(1);
+      await expect(assertCompanyManager("user-b", COMPANY)).rejects.toThrow("Not found.");
+      companyAssociateCountMock.mockResolvedValue(0);
+      await expect(assertCompanyManager("user-b", COMPANY)).rejects.toThrow("Not found.");
+    });
+  });
+
+  describe("the company scope in getViewContext", () => {
+    const signedInAs = (id: string) => {
+      process.env.AUTH_ENABLED = "true";
+      getServerSessionMock.mockResolvedValue({ user: { id } });
+      userFindUniqueMock.mockResolvedValue({ id, role: "MEMBER", sessionsRevokedAt: null, totpEnabled: true });
+      cookieGetMock.mockReturnValue({ value: `company:${COMPANY}` });
+    };
+    const scoped = (where: { companyId?: unknown }) =>
+      where.companyId === COMPANY ? [{ id: "sci-bank" }] : [{ id: "own" }];
+
+    it("shows the manager the company, writable", async () => {
+      signedInAs("user-a");
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      accountFindManyMock.mockImplementation(async ({ where }: { where: { companyId?: unknown } }) => scoped(where));
+      await expect(getViewContext()).resolves.toMatchObject({
+        ownerId: "user-a",
+        accountIds: ["sci-bank"],
+        readOnly: false,
+        companyId: COMPANY,
+      });
+    });
+
+    it("shows an accepted associate the company read-only", async () => {
+      signedInAs("user-b");
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      companyAssociateCountMock.mockResolvedValue(1);
+      accountFindManyMock.mockImplementation(async ({ where }: { where: { companyId?: unknown } }) => scoped(where));
+      await expect(getViewContext()).resolves.toMatchObject({ accountIds: ["sci-bank"], readOnly: true });
+    });
+
+    it("falls an outsider back to their own portfolio, never the company's accounts", async () => {
+      signedInAs("user-b");
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      companyAssociateCountMock.mockResolvedValue(0);
+      accountFindManyMock.mockImplementation(async ({ where }: { where: { companyId?: unknown } }) => scoped(where));
+      coOwnerFindManyMock.mockResolvedValue([]);
+      const ctx = await getViewContext();
+      expect(ctx).toMatchObject({ ownerId: "user-b", accountIds: ["own"], readOnly: false });
+      expect(ctx.companyId).toBeUndefined();
+    });
+
+    it("treats a malformed cookie as a stale selection, not an error", async () => {
+      signedInAs("user-b");
+      cookieGetMock.mockReturnValue({ value: "company:" });
+      accountFindManyMock.mockResolvedValue([{ id: "own" }]);
+      coOwnerFindManyMock.mockResolvedValue([]);
+      await expect(getViewContext()).resolves.toMatchObject({ ownerId: "user-b", readOnly: false });
+      expect(companyFindUniqueMock).not.toHaveBeenCalled();
+    });
   });
 });

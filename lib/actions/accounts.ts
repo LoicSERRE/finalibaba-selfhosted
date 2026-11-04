@@ -1,5 +1,6 @@
 "use server";
 
+import { companyForNewAccount } from "@/lib/services/company-guards";
 import { suggestedSavingsRate } from "@/lib/domain/tax-locale";
 import { revalidateAccount } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
@@ -113,6 +114,9 @@ export async function createAccount(formData: FormData): Promise<ActionResult<vo
   // attach their account to another user's institution by passing its id (the
   // picker only offers their own). assertOwned also narrows the id to a string.
   if (institutionId) await assertOwned("institution", institutionId, viewer.id);
+  // Under a company's bank connection, or asked for by its manager: a company
+  // account. Checked server-side - see companyForNewAccount.
+  const companyId = await companyForNewAccount(viewer.id, institutionId, formData.get("companyId"));
 
   // An explicit rate wins; otherwise the country preset gets one chance to
   // suggest one from the name, and whatever it returns is STORED rather than
@@ -141,6 +145,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult<vo
       type,
       currency,
       institutionId,
+      companyId,
       manualValueCents: isManualType(type) ? (balanceCents ?? undefined) : undefined,
       liabilityCents: initialLiabilityCents,
       purchasePriceCents: type === "AUTOMOBILE" ? (purchasePriceCents ?? undefined) : undefined,

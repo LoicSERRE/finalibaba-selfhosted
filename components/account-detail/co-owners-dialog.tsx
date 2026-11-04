@@ -44,6 +44,7 @@ const SHARE_ERRORS = {
   username_required: "errorUsernameRequired",
   no_such_user: "errorNoSuchUser",
   that_is_you: "errorThatIsYou",
+  company_account: "errorCompanyAccount",
 } as const;
 
 export function CoOwnersDialog({

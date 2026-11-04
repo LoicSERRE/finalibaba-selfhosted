@@ -991,6 +991,7 @@ exports[`computeDashboard, pinned whole > produces exactly the figures it produc
     {
       "auto": 0,
       "cash": 200000,
+      "companies": 0,
       "crypto": 0,
       "date": "1 mai",
       "investments": 0,
@@ -1001,6 +1002,7 @@ exports[`computeDashboard, pinned whole > produces exactly the figures it produc
     {
       "auto": 0,
       "cash": 250000,
+      "companies": 0,
       "crypto": 0,
       "date": "15 juin",
       "investments": 0,
@@ -1011,6 +1013,7 @@ exports[`computeDashboard, pinned whole > produces exactly the figures it produc
     {
       "auto": 0,
       "cash": 250000,
+      "companies": 0,
       "crypto": 0,
       "date": "1 juil.",
       "investments": 0,
@@ -1021,6 +1024,7 @@ exports[`computeDashboard, pinned whole > produces exactly the figures it produc
     {
       "auto": 0,
       "cash": 234567,
+      "companies": 0,
       "crypto": 0,
       "date": "20 juil.",
       "investments": 0,
@@ -1032,6 +1036,7 @@ exports[`computeDashboard, pinned whole > produces exactly the figures it produc
   "allocationRaw": {
     "auto": 950000,
     "cash": 234567,
+    "companies": 0,
     "crypto": 900000,
     "investments": 268490,
     "realEstate": 12000000,

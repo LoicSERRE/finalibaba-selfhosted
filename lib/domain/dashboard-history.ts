@@ -16,6 +16,7 @@
  */
 import { calcCurrentCapital, hasLoanParams, isBankReportedLoan } from "@/lib/domain/loan";
 import { clampedEquity } from "@/lib/domain/dashboard";
+import { mergedKeys, sharesOn, type CompanyShare } from "@/lib/domain/company";
 import type {
   DashboardAccount,
   DashboardAllocationHistoryPoint,
@@ -90,7 +91,7 @@ function walkDailyBalances(
     // counterpart).
     const buckets: Record<string, bigint> = {
       cash: BigInt(0), savings: BigInt(0), investments: BigInt(0),
-      crypto: BigInt(0), realEstate: BigInt(0), auto: BigInt(0),
+      crypto: BigInt(0), realEstate: BigInt(0), auto: BigInt(0), companies: BigInt(0),
     };
     for (const [id, v] of running) {
       gross += v;
@@ -105,6 +106,41 @@ function walkDailyBalances(
   return { historyRaw, allocationHistoryRaw };
 }
 
+type HistoryRaw = { day: string; netWorth: number }[];
+type AllocationHistoryRaw = { day: string; buckets: Record<string, bigint> }[];
+
+/**
+ * Adds each company share to the day series: the union of the person's own
+ * days and the companies' days, every series carried forward from its last
+ * known point. A day only a company reported still gets a point, so a share
+ * moving is visible even while the person's own accounts sit still.
+ */
+function withCompanyShares(
+  sortedDays: string[],
+  historyRaw: HistoryRaw,
+  allocationHistoryRaw: AllocationHistoryRaw,
+  shares: readonly CompanyShare[],
+): { days: string[]; historyRaw: HistoryRaw; allocationHistoryRaw: AllocationHistoryRaw } {
+  if (shares.length === 0) return { days: sortedDays, historyRaw, allocationHistoryRaw };
+  const days = mergedKeys(sortedDays, shares);
+  const shareValues = sharesOn(days, shares);
+  const empty = (): Record<string, bigint> => ({
+    cash: BigInt(0), savings: BigInt(0), investments: BigInt(0),
+    crypto: BigInt(0), realEstate: BigInt(0), auto: BigInt(0), companies: BigInt(0),
+  });
+  const mergedHistory: HistoryRaw = [];
+  const mergedAllocation: AllocationHistoryRaw = [];
+  let own = -1;
+  days.forEach((day, k) => {
+    while (own + 1 < sortedDays.length && sortedDays[own + 1] <= day) own++;
+    const ownNetWorth = own >= 0 ? historyRaw[own].netWorth : 0;
+    const ownBuckets = own >= 0 ? allocationHistoryRaw[own].buckets : empty();
+    mergedHistory.push({ day, netWorth: ownNetWorth + shareValues[k].net });
+    mergedAllocation.push({ day, buckets: { ...ownBuckets, companies: BigInt(shareValues[k].positive) } });
+  });
+  return { days, historyRaw: mergedHistory, allocationHistoryRaw: mergedAllocation };
+}
+
 export function buildDashboardHistory(
   accounts: DashboardAccount[],
   allBalances: DashboardBalance[],
@@ -112,6 +148,7 @@ export function buildDashboardHistory(
   typeMap: Map<string, string>,
   intlLocale: string,
   now: Date,
+  companyShares: readonly CompanyShare[] = [],
 ): {
   history: DashboardHistoryPoint[];
   allocationHistory: DashboardAllocationHistoryPoint[];
@@ -157,8 +194,9 @@ export function buildDashboardHistory(
     }
   }
 
-  const { historyRaw, allocationHistoryRaw } = walkDailyBalances(
-    sortedDays, dayMap, liabMap, typeMap, loanParamsMap,
+  const own = walkDailyBalances(sortedDays, dayMap, liabMap, typeMap, loanParamsMap);
+  const { days, historyRaw, allocationHistoryRaw } = withCompanyShares(
+    sortedDays, own.historyRaw, own.allocationHistoryRaw, companyShares,
   );
 
   const history: DashboardHistoryPoint[] = historyRaw.map(({ day, netWorth: nw }) => {
@@ -181,6 +219,7 @@ export function buildDashboardHistory(
       crypto: Number(buckets.crypto),
       realEstate: Number(buckets.realEstate),
       auto: Number(buckets.auto),
+      companies: Number(buckets.companies),
     };
   });
 
@@ -189,7 +228,7 @@ export function buildDashboardHistory(
   if (historyRaw.length >= 2) {
     const last = historyRaw.at(-1)!.netWorth;
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const refIdx = Math.max(0, sortedDays.findLastIndex((d) => d <= thirtyDaysAgo));
+    const refIdx = Math.max(0, days.findLastIndex((d) => d <= thirtyDaysAgo));
     const ref = historyRaw[refIdx].netWorth;
     const amount = last - ref;
     const percent = ref !== 0 ? (amount / Math.abs(ref)) * 100 : null;

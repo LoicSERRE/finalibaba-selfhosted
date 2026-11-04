@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getViewer, assertAccountWritable, baseAccountIds } from "@/lib/auth-context";
+import { getViewer, assertAccountWritable, writableAccountIds } from "@/lib/auth-context";
 import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { revalidateCategory, revalidateIncome, revalidateTransactions } from "@/lib/actions/revalidate";
 import { takeUndo } from "@/lib/services/undo-store";
@@ -53,13 +53,13 @@ export async function undoDeletion(token: string): Promise<ActionResult<void, Un
         revalidatePath("/recurring");
         break;
       case "transactionsCategory": {
-        await restoreTransactionsCategory(snapshot, await baseAccountIds(viewer.id));
+        await restoreTransactionsCategory(snapshot, await writableAccountIds(viewer.id));
         const categoryIds = [snapshot.assignedCategoryId, ...snapshot.previous.map((row) => row.categoryId)];
         for (const accountId of snapshot.accountIds) revalidateTransactions(accountId, categoryIds);
         break;
       }
       case "transactionsTransfer":
-        await restoreTransactionsTransfer(snapshot, await baseAccountIds(viewer.id));
+        await restoreTransactionsTransfer(snapshot, await writableAccountIds(viewer.id));
         for (const accountId of snapshot.accountIds) revalidateTransactions(accountId);
         break;
     }

@@ -55,6 +55,8 @@ const {
   isAuthEnabledMock: vi.fn(() => true),
 }));
 
+const companyCountMock = vi.hoisted(() => vi.fn(async () => 0));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: {
@@ -68,6 +70,9 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     account: {
       count: accountCountMock,
+    },
+    company: {
+      count: companyCountMock,
     },
     invitation: {
       findUnique: invitationFindUniqueMock,
@@ -304,6 +309,14 @@ describe("deleteUser", () => {
     requireAdminMock.mockRejectedValue(new Error("Admin access required."));
 
     await expect(deleteUser("user-b")).rejects.toThrow("Admin access required.");
+    expect(userDeleteMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a company's manager, rather than failing on the foreign key", async () => {
+    // Company.manager is Restrict: the company's accounts must never vanish
+    // with a user. Management is handed over first (dev-docs/companies.md).
+    companyCountMock.mockResolvedValueOnce(1);
+    await expect(deleteUser("user-b")).rejects.toThrow(/manages a company/);
     expect(userDeleteMock).not.toHaveBeenCalled();
   });
 

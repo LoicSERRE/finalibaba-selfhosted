@@ -221,6 +221,9 @@ export const ACCOUNT_NOT_EXPORTED = [
   "id",
   "userId",
   "institutionId",
+  // An instance-local relation id, like institutionId. Companies themselves
+  // (their cap table) are not part of this export yet - dev-docs/companies.md.
+  "companyId",
   "createdAt",
   "updatedAt",
   // Instance-local sync plumbing, see the header.

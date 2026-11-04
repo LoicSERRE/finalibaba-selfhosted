@@ -1,6 +1,6 @@
 # Companies (SCI first)
 
-Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: designed, not built.** The defensive security audit in `ROADMAP.md` comes first: this feature adds a read path between users, and it should land on an access layer that has been verified, not assumed.
+Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: step 1 in progress** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth) is built; its interface is the next PR. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
 
 ## What users actually need
 
@@ -174,8 +174,22 @@ Written as tests in the same PR as each step:
 - the manager's personal artifacts (share link, API, export) contain their share and never the company's accounts;
 - invariants (parts sum, holding shape, account/institution/manager agreement) are rejected when violated, server-side.
 
+## Decided during step 1
+
+- **Where the companies live: from the person's accounts ("C").** Three mock-ups were compared - the company as a portfolio of the sidebar switcher, a "Sociétés" entry in the menu, and this one. A company is a card on the Accounts page (its value, the share held), created from the usual "Ajouter" button through a three-step guide (the company, its associates and parts, its accounts). Its own page reuses the dashboard pieces (ANR, the share, the part's value, the history, its accounts, its associates). "Ouvrir comme portefeuille" sets the company scope of the switcher for budgets and transactions. Why: a company is set up once and then looked at, so it belongs where a person's assets already are; no eighth menu entry (the mobile bar has seven) and no global mode to forget you are in.
+- **Linking an associate to a user is an invitation**, as co-ownership became one in v2.23 (`dev-docs/multi-user-and-security.md`, "Both are invitations"). `CompanyAssociate.linkAcceptedAt` is null until that user accepts; until then they neither see the company nor get its share in their net worth. The manager linking themselves is accepted at once. Declining - or leaving later - unlinks the row and keeps the name and the parts, so the cap table still adds up.
+
+## How step 1 is built
+
+- **Three account sets in `lib/auth-context.ts`.** `baseAccountIds` is the personal set (company accounts left out): net worth and every derived artifact. `writableAccountIds` adds the companies the user manages: batch writes (categorizing, undo). `accountPools` splits the writable set by patrimony - personal, then one per company - for the passes that pair accounts (internal transfers, history-based categorization), so a transfer from a person to their SCI is never paired as internal.
+- **One net-worth loader**, `lib/services/net-worth.ts`: `computePortfolio` loads the accounts and the person's company shares, `loadCompanyShares` values each company with `computeDashboard` over its own accounts. The dashboard, share links, `/api/v1/net-worth*` and the net-worth alert go through it; analytics passes the same shares to `computeAnalytics`. `__tests__/net-worth-consumers.test.ts` fails on a `computeDashboard` call anywhere else.
+- **The company scope** is the viewing cookie with a `company:` prefix (`getViewContext`): writable for the manager, read-only for an accepted associate, the viewer's own portfolio for anyone else.
+- **Mutations** (`lib/actions/companies.ts`) all start with `assertCompanyManager`. The cap table is saved as a whole in one transaction. An account under a bank connection moves with its institution (`setInstitutionCompany`), a manual one on its own (`setAccountCompany`); a co-owned account can do neither, and a company account cannot be co-owned. `deleteUser` refuses a manager (the FK is Restrict).
+- **Sync**: `sync/db.py` gives a new account its institution's `companyId` and realigns it on every sync, like `userId`.
+
+**Deliberate gaps, for later**: `/api/v1/accounts` lists the key owner's accounts only (a share is not an account; it is in `/net-worth`). The personal data export does not include companies yet. On a hand-over, the company's transactions keep the categories of the previous manager (they still display; the new manager re-categorizes with their own).
+
 ## Open questions
 
-- Where the companies live in the UI (Settings tab vs sidebar switcher vs both) - decide with a mock-up at step 1.
 - Whether an associate may see the other associates' CCA amounts (they are in the SCI's books, but some families may not want it).
 - Whether the discount should differ per associate (it sometimes does, for a minority stake).

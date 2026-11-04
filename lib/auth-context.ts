@@ -317,12 +317,88 @@ const ACCEPTED = { acceptedAt: { not: null } } as const;
  * grant check of their own.
  */
 export async function baseAccountIds(userId: string): Promise<string[]> {
+  // companyId: null on both sides. A company's accounts belong to its manager
+  // (Account.userId) but are the company's patrimony: the manager's personal
+  // figures count their SHARE of the company (lib/services/company-shares.ts),
+  // never its accounts at 100 %. Excluding them here, once, is what keeps the
+  // dashboard, exports, API, alerts and share links from each having to.
   const [owned, coOwned] = await Promise.all([
-    prisma.account.findMany({ where: { userId }, select: { id: true } }),
-    prisma.accountCoOwner.findMany({ where: { userId, ...ACCEPTED }, select: { accountId: true } }),
+    prisma.account.findMany({ where: { userId, companyId: null }, select: { id: true } }),
+    prisma.accountCoOwner.findMany({
+      where: { userId, ...ACCEPTED, account: { companyId: null } },
+      select: { accountId: true },
+    }),
   ]);
   return [...new Set([...owned.map((a) => a.id), ...coOwned.map((c) => c.accountId)])];
 }
+
+/**
+ * Every account a user may WRITE: baseAccountIds plus the accounts of the
+ * companies they manage. For mutations that filter a batch by account
+ * (categorizing, undoing, re-running auto-categorization) - never for a net
+ * worth or a derived artifact, which would then count a company at 100 %.
+ */
+export async function writableAccountIds(userId: string): Promise<string[]> {
+  const [personal, managed] = await Promise.all([
+    baseAccountIds(userId),
+    prisma.account.findMany({ where: { userId, companyId: { not: null } }, select: { id: true } }),
+  ]);
+  return [...new Set([...personal, ...managed.map((a) => a.id)])];
+}
+
+/**
+ * writableAccountIds split by patrimony: the personal set, then one set per
+ * managed company. For the passes that PAIR accounts with each other -
+ * internal-transfer detection, history-based categorization - since a
+ * transfer from a personal account to the company's is a real movement
+ * between two patrimonies, never an internal one.
+ */
+export async function accountPools(userId: string): Promise<string[][]> {
+  const [personal, managed] = await Promise.all([
+    baseAccountIds(userId),
+    prisma.account.findMany({ where: { userId, companyId: { not: null } }, select: { id: true, companyId: true } }),
+  ]);
+  const byCompany = new Map<string, string[]>();
+  for (const a of managed) {
+    const pool = byCompany.get(a.companyId!) ?? [];
+    pool.push(a.id);
+    byCompany.set(a.companyId!, pool);
+  }
+  return [personal, ...byCompany.values()].filter((pool) => pool.length > 0);
+}
+
+// ── Companies (dev-docs/companies.md) ──────────────────────────────────────
+
+export type CompanyRole = "manager" | "associate";
+
+/**
+ * What this user is to this company: its manager, an associate who accepted
+ * being linked to it, or nothing (null) - a missing company and somebody
+ * else's give the same null, so a caller cannot tell them apart.
+ */
+export async function companyRole(userId: string, companyId: string): Promise<CompanyRole | null> {
+  companyId = assertId(companyId);
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { managerUserId: true } });
+  if (!company) return null;
+  if (company.managerUserId === userId) return "manager";
+  const linked = await prisma.companyAssociate.count({ where: { companyId, userId, linkAcceptedAt: { not: null } } });
+  return linked > 0 ? "associate" : null;
+}
+
+/** Every company mutation's guard: only the manager, same "Not found." otherwise. */
+export async function assertCompanyManager(userId: string, companyId: string): Promise<void> {
+  if ((await companyRole(userId, companyId)) !== "manager") throw new Error("Not found.");
+}
+
+/** The company's own accounts - its scope, for reads guarded by companyRole. */
+export async function companyAccountIds(companyId: string): Promise<string[]> {
+  const rows = await prisma.account.findMany({ where: { companyId: assertId(companyId) }, select: { id: true } });
+  return rows.map((r) => r.id);
+}
+
+/** The viewing cookie's value for a company, beside a grantor's user id. A
+ *  cuid never contains ":", so the two cannot be confused. */
+export const COMPANY_SCOPE_PREFIX = "company:";
 
 /**
  * The accounts a user may currently SEE - their own set, or a grantor's when
@@ -382,10 +458,13 @@ export async function grantedPortfolios(
  */
 export interface ViewContext {
   viewer: Viewer;
-  /** Whose portfolio is displayed - the viewer, or a grantor they may read. */
+  /** Whose portfolio is displayed - the viewer, or a grantor they may read.
+   *  For a company, its manager (categories and settings are a person's). */
   ownerId: string;
   accountIds: string[];
   readOnly: boolean;
+  /** Set when the company scope is displayed rather than a person's. */
+  companyId?: string;
 }
 
 export async function getViewContext(): Promise<ViewContext> {
@@ -394,6 +473,12 @@ export async function getViewContext(): Promise<ViewContext> {
 
   if (!requested || requested === viewer.id) {
     return { viewer, ownerId: viewer.id, accountIds: await baseAccountIds(viewer.id), readOnly: false };
+  }
+
+  if (requested.startsWith(COMPANY_SCOPE_PREFIX)) {
+    return (await companyViewContext(viewer, requested.slice(COMPANY_SCOPE_PREFIX.length))) ?? {
+      viewer, ownerId: viewer.id, accountIds: await baseAccountIds(viewer.id), readOnly: false,
+    };
   }
 
   const grant = await prisma.portfolioGrant.findUnique({
@@ -412,6 +497,31 @@ export async function getViewContext(): Promise<ViewContext> {
     ownerId: requested,
     accountIds: await baseAccountIds(requested),
     readOnly: true,
+  };
+}
+
+/**
+ * A company displayed as a portfolio: its manager reads and writes it (they
+ * own its accounts), an accepted associate reads it. Anyone else - or a
+ * company that no longer exists, or a link not accepted yet - gets null and
+ * falls back to their own portfolio, like a revoked grant.
+ */
+async function companyViewContext(viewer: Viewer, companyId: string): Promise<ViewContext | null> {
+  let role: CompanyRole | null;
+  try {
+    role = await companyRole(viewer.id, companyId);
+  } catch {
+    return null; // a malformed cookie value is a stale selection, not an error
+  }
+  if (!role) return null;
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { managerUserId: true } });
+  if (!company) return null;
+  return {
+    viewer,
+    ownerId: company.managerUserId,
+    accountIds: await companyAccountIds(companyId),
+    readOnly: role !== "manager",
+    companyId,
   };
 }
 
@@ -438,7 +548,7 @@ export async function assertAccountWritable(userId: string, accountId: string): 
  */
 export async function getWritableContext(): Promise<{ userId: string; accountIds: string[] }> {
   const viewer = await getViewer();
-  return { userId: viewer.id, accountIds: await baseAccountIds(viewer.id) };
+  return { userId: viewer.id, accountIds: await writableAccountIds(viewer.id) };
 }
 
 /**

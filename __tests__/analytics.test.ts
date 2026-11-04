@@ -654,3 +654,40 @@ describe("computeAnalytics - year change", () => {
     expect(computeAnalytics(baseInput({ accounts: [livret], allBalances: [at("2026-07-10", 16812_00)] })).yearChange).toBeNull();
   });
 });
+
+describe("computeAnalytics with company shares", () => {
+  // Same rule as the dashboard (lib/domain/company.ts): the share counts once,
+  // as its own bucket, in the KPIs, the goals and the month-end history.
+  const companyShares = [
+    {
+      companyId: "co-1",
+      name: "SCI",
+      parts: 600,
+      totalParts: 1000,
+      companyValueCents: BigInt(180_000_00),
+      valueCents: BigInt(108_000_00),
+      history: [
+        { isoDate: "2026-05-20", valueCents: 100_000_00 },
+        { isoDate: "2026-06-30", valueCents: 108_000_00 },
+      ],
+    },
+  ];
+
+  it("adds the share to net worth and gross assets, in the companies slice", () => {
+    const r = computeAnalytics(baseInput({ companyShares }));
+    expect(r.hasData).toBe(true);
+    expect(r.netWorth).toBe(BigInt(108_000_00));
+    expect(r.grossAssets).toBe(BigInt(108_000_00));
+    expect(r.allocationSlices).toEqual([expect.objectContaining({ key: "companies", value: 108_000_00 })]);
+  });
+
+  it("puts the share in the month-end history, last point of each month", () => {
+    const r = computeAnalytics(baseInput({ companyShares }));
+    // Exposed through the month-on-month rows and the delta built on them.
+    expect(r.performanceRows.map((p) => [p.month, p.netWorth])).toEqual([
+      ["2026-05", 100_000_00],
+      ["2026-06", 108_000_00],
+    ]);
+    expect(r.momDelta).toBe(8_000_00);
+  });
+});
