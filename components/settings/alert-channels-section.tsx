@@ -48,7 +48,9 @@ export function AlertChannelsSection({
 }: Readonly<{
   settings: {
     ntfyTopicUrl: string | null;
-    ntfyAuthToken: string | null;
+    // Never the secret itself, only whether one is stored - the ciphertext must
+    // not reach the browser (see getUserSettings).
+    hasNtfyAuthToken: boolean;
     ntfyEnabled: boolean;
     alertEmailTo: string | null;
     smtpHost: string | null;
@@ -154,10 +156,9 @@ export function AlertChannelsSection({
               <input
                 id="ntfyAuthToken"
                 name="ntfyAuthToken"
-                type="text"
-                autoComplete="off"
-                defaultValue={settings.ntfyAuthToken ?? ""}
-                placeholder="tk_..."
+                type="password"
+                autoComplete="new-password"
+                placeholder={settings.hasNtfyAuthToken ? "••••••••" : "tk_..."}
                 className={inputClass}
               />
             </div>

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
+import { clientIpFromHeaders, trustedProxyCountFromEnv, UNKNOWN_CLIENT } from "@/lib/domain/client-ip";
 
 /**
  * Records the security-relevant things that happen on an instance.
@@ -69,8 +70,16 @@ type AuditInput = {
 async function clientIp(): Promise<string | null> {
   try {
     const h = await headers();
-    const forwarded = h.get("x-forwarded-for");
-    return forwarded?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
+    // Same trusted-proxy logic as the login path (lib/auth.ts), not a raw read
+    // of the first X-Forwarded-For entry: behind no declared proxy the whole
+    // header is attacker-controlled, so the "IP" written here would be whatever
+    // the client typed. TRUSTED_PROXY_COUNT=0 yields "unknown" rather than a
+    // forged address that could frame someone in the audit log.
+    const ip = clientIpFromHeaders(
+      { "x-forwarded-for": h.get("x-forwarded-for") ?? undefined, "x-real-ip": h.get("x-real-ip") ?? undefined },
+      trustedProxyCountFromEnv(process.env.TRUSTED_PROXY_COUNT),
+    );
+    return ip === UNKNOWN_CLIENT ? null : ip;
   } catch {
     // Outside a request scope (a cron, a startup hook): there is no client.
     return null;

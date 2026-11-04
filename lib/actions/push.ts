@@ -1,5 +1,6 @@
 "use server";
 
+import { assertId } from "@/lib/domain/action-input";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { getOrCreateVapidKeys } from "@/lib/services/notifications";
@@ -68,7 +69,7 @@ export async function unsubscribeFromPush(id: string) {
   // deleteMany scoped to the viewer rather than delete-by-id: a Server Action
   // is directly invocable, so an id alone must never remove someone else's
   // device.
-  await prisma.pushSubscription.deleteMany({ where: { id, userId: viewer.id } });
+  await prisma.pushSubscription.deleteMany({ where: { id: assertId(id), userId: viewer.id } });
   revalidatePath("/settings");
 }
 

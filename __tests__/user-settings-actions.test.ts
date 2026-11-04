@@ -87,3 +87,41 @@ describe("updateTaxSettings", () => {
     expect(written.taxRateCrypto).toBeCloseTo(0.314, 6);
   });
 });
+
+// A Server Action's return is serialised to the browser, so getUserSettings
+// must never carry a secret column - audited: it returned the whole row,
+// putting the smtpPassword/ntfyAuthToken ciphertexts in the client payload.
+describe("getUserSettings", () => {
+  it("strips every secret column and exposes only has* booleans", async () => {
+    const { getUserSettings } = await import("@/lib/actions/user-settings");
+    upsertMock.mockResolvedValue({
+      userId: "user-owner",
+      salaryNetCents: BigInt(100),
+      smtpPassword: "enc:v1:SMTP",
+      ntfyAuthToken: "enc:v1:NTFY",
+      vapidPrivateKey: "enc:v1:VAPIDPRIV",
+      vapidPublicKey: "VAPIDPUB",
+    });
+
+    const result = await getUserSettings();
+
+    expect(result).not.toHaveProperty("smtpPassword");
+    expect(result).not.toHaveProperty("ntfyAuthToken");
+    expect(result).not.toHaveProperty("vapidPrivateKey");
+    expect(result).not.toHaveProperty("vapidPublicKey");
+    const serialised = JSON.stringify(result, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+    expect(serialised).not.toContain("enc:v1:");
+    expect(result.hasSmtpPassword).toBe(true);
+    expect(result.hasNtfyAuthToken).toBe(true);
+    // Non-secret fields still come through for the UI.
+    expect(result.salaryNetCents).toBe(BigInt(100));
+  });
+
+  it("reports has* false when no secret is stored", async () => {
+    const { getUserSettings } = await import("@/lib/actions/user-settings");
+    upsertMock.mockResolvedValue({ userId: "user-owner", smtpPassword: null, ntfyAuthToken: null });
+    const result = await getUserSettings();
+    expect(result.hasSmtpPassword).toBe(false);
+    expect(result.hasNtfyAuthToken).toBe(false);
+  });
+});

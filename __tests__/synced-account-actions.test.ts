@@ -8,7 +8,13 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const { db, assertOwnedMock } = vi.hoisted(() => {
   const db = {
-    account: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    account: {
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     ignoredSyncAccount: { upsert: vi.fn(), deleteMany: vi.fn() },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -26,7 +32,7 @@ vi.mock("@/lib/auth-context", () => ({
   assertAccountWritable: vi.fn(async () => {}),
 }));
 
-import { setSyncedAccountType, stopSyncingAccount } from "@/lib/actions/accounts";
+import { setSyncedAccountType, stopSyncingAccount, deleteAccount } from "@/lib/actions/accounts";
 import { resumeSyncingAccount } from "@/lib/actions/institutions";
 
 function form(fields: Record<string, string>): FormData {
@@ -139,5 +145,30 @@ describe("resumeSyncingAccount", () => {
     await resumeSyncingAccount("inst-1", "pro");
     expect(assertOwnedMock).toHaveBeenCalledWith("institution", "inst-1", "user-owner");
     expect(db.ignoredSyncAccount.deleteMany).toHaveBeenCalledWith({ where: { institutionId: "inst-1", nativeId: "pro" } });
+  });
+});
+
+// F22: deleteAccount scopes to the OWNER row, not assertAccountWritable (which
+// also accepts a co-owner). A co-owner deleting the owner's account - and all
+// its history, with no undo - must match zero rows.
+describe("deleteAccount", () => {
+  beforeEach(() => {
+    db.account.deleteMany.mockReset();
+  });
+
+  it("deletes only when the viewer owns the row (deleteMany scoped by userId)", async () => {
+    db.account.deleteMany.mockResolvedValue({ count: 1 });
+    await deleteAccount("acc-1");
+    expect(db.account.deleteMany).toHaveBeenCalledWith({ where: { id: "acc-1", userId: "user-owner" } });
+  });
+
+  it("throws and deletes nothing for a co-owner / foreign account (zero rows matched)", async () => {
+    db.account.deleteMany.mockResolvedValue({ count: 0 });
+    await expect(deleteAccount("someone-elses")).rejects.toThrow("Not found.");
+  });
+
+  it("rejects a non-string id before any query (operator injection)", async () => {
+    await expect(deleteAccount({ not: "x" } as unknown as string)).rejects.toThrow();
+    expect(db.account.deleteMany).not.toHaveBeenCalled();
   });
 });

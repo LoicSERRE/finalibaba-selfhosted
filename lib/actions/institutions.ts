@@ -1,5 +1,6 @@
 "use server";
 
+import { assertId } from "@/lib/domain/action-input";
 import { revalidatePath } from "next/cache";
 import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
 import { prisma } from "@/lib/db/prisma";
@@ -400,6 +401,6 @@ export async function migrateDedicatedSyncToWoob(institutionId: string): Promise
 export async function resumeSyncingAccount(institutionId: string, nativeId: string) {
   const viewer = await getViewer();
   await assertOwned("institution", institutionId, viewer.id);
-  await prisma.ignoredSyncAccount.deleteMany({ where: { institutionId, nativeId } });
+  await prisma.ignoredSyncAccount.deleteMany({ where: { institutionId, nativeId: assertId(nativeId) } });
   revalidatePath("/settings");
 }

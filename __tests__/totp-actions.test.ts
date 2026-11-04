@@ -29,7 +29,7 @@ vi.mock("@/lib/auth-context", () => ({
   getViewer: vi.fn(async () => ({ id: "user-owner", role: "ADMIN", isMonoMode: true })),
 }));
 
-import { confirmTotpSetup, disableTotp, regenerateBackupCodes } from "@/lib/actions/totp";
+import { confirmTotpSetup, disableTotp, regenerateBackupCodes, startTotpSetup } from "@/lib/actions/totp";
 import { generateTotpSecret } from "@/lib/domain/totp";
 
 beforeEach(() => {
@@ -118,5 +118,29 @@ describe("regenerateBackupCodes", () => {
     if (!result.ok) throw new Error("expected the TOTP call to succeed");
     expect(result.backupCodes).toHaveLength(8);
     expect(updateMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("startTotpSetup", () => {
+  it("refuses to re-arm an already-enabled 2FA (would replace the live secret without a code)", async () => {
+    findUniqueMock.mockResolvedValue({ totpEnabled: true });
+
+    const result = await startTotpSetup();
+
+    expect(result).toEqual({ ok: false, error: "already_enabled" });
+    // The new secret is never written over the live one.
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh setup when 2FA is off", async () => {
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: false }); // the enabled-check read
+    findUniqueMock.mockResolvedValueOnce({ username: "alice", displayName: "Alice" }); // the label read
+
+    const result = await startTotpSetup();
+
+    expect("ok" in result).toBe(false);
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ totpEnabled: false }) })
+    );
   });
 });

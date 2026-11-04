@@ -229,6 +229,22 @@ describe("removeAccountCoOwner (H4 cleanup)", () => {
     expect(transactionMock).not.toHaveBeenCalled();
     expect(alertRuleDeleteManyMock).not.toHaveBeenCalled();
   });
+
+  // The exact operator-injection payload proven in the audit (F29): both ids
+  // as Prisma operator objects turned the ownership count into its inverse and
+  // deleted another user's rules plus every co-ownership of the instance. Both
+  // args must be narrowed to strings before any query runs.
+  it.each([
+    [{ not: "x" }, "user-b"],
+    ["acc-1", { not: "x" }],
+  ])("rejects an operator-object id before touching the database (%o, %o)", async (accountId, userId) => {
+    await expect(
+      removeAccountCoOwner(accountId as unknown as string, userId as unknown as string),
+    ).rejects.toThrow();
+    expect(accountCountMock).not.toHaveBeenCalled();
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(coOwnerDeleteManyMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("portfolio grants", () => {

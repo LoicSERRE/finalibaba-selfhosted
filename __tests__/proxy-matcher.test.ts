@@ -75,8 +75,25 @@ describe("proxy matcher - exemptions must not become prefix holes", () => {
     ["/api/v1999/net-worth"],
     ["/icon-512999"],
     ["/sw.js.map"],
+    // The prefix exemptions anchored in the audit (F10): a sibling route whose
+    // name merely starts with an exempt one must NOT inherit the exemption.
+    ["/api/transactionsX"],
+    ["/api/alerts-public"],
+    ["/api/investmentsX"],
+    ["/api/authX"],
+    ["/sharedX"],
   ])("%s is still gated", (path) => {
     expect(isGated(path)).toBe(true);
+  });
+
+  // The real subpaths of those same exemptions must still be public.
+  it.each([
+    ["/api/transactions/auto-categorize"],
+    ["/api/alerts/check"],
+    ["/api/investments/snapshot-balances"],
+    ["/shared/sometoken"],
+  ])("%s stays exempt as a real subpath", (path) => {
+    expect(isGated(path)).toBe(false);
   });
 
   // Exemptions used to be by file EXTENSION, and dynamic segments accept dots,

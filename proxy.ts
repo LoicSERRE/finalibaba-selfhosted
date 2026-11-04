@@ -2,16 +2,31 @@ import { withAuth, type NextRequestWithAuth } from "next-auth/middleware";
 import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { buildContentSecurityPolicy, generateCspNonce } from "@/lib/domain/content-security-policy";
 
+/**
+ * Demo mode is read-only. Returns a 403 for any mutating request, or null to
+ * let it through.
+ *
+ * **Enforced in the top-level middleware, before the auth-exemption check -
+ * not inside `authMiddleware`.** It used to live in the `withAuth` wrapper,
+ * which only runs for auth-GATED paths; an auth-exempt route (`/shared`,
+ * `/invite`, `/api/alerts`...) never reached it, so a Server Action POSTed at
+ * one of those paths ran its mutation on a public demo instance (audited: an
+ * anonymous POST created an Invitation). A Server Action's path is the page it
+ * is bound to, so the exempt pages are a real write surface. The gate is the
+ * HTTP method, which no caller can disguise: every Server Action is a POST.
+ */
+function refuseDemoMutation(req: NextRequest): NextResponse | null {
+  if (process.env.DEMO_MODE === "true" && req.method !== "GET" && req.method !== "HEAD") {
+    return new NextResponse(
+      JSON.stringify({ error: "Mode démo - données en lecture seule." }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  return null;
+}
+
 const authMiddleware = withAuth(
-  function middleware(req) {
-    // Demo mode - block all mutations (Server Actions use POST)
-    if (process.env.DEMO_MODE === "true" && req.method !== "GET") {
-      return new NextResponse(
-        JSON.stringify({ error: "Mode démo - données en lecture seule." }),
-        { status: 403, headers: { "Content-Type": "application/json" } }
-      );
-    }
-  },
+  function middleware() {},
   {
     callbacks: {
       authorized: ({ token }) => {
@@ -49,24 +64,26 @@ const authMiddleware = withAuth(
  * on purpose - they are meant to match subpaths.
  */
 const AUTH_EXEMPT: RegExp[] = [
+  // Every entry is "exact path or a real subpath" (`(?:\/.*)?$`), never a bare
+  // prefix: an unanchored `/api/transactions` also matched `/api/transactionsX`,
+  // so any future route whose name merely starts with an exempt one would have
+  // skipped the session gate. The same mistake once let `/api/v1999` through.
   // NextAuth's own endpoints, and the compose healthcheck.
-  /^\/api\/auth/,
-  /^\/api\/health/,
+  /^\/api\/auth(?:\/.*)?$/,
+  /^\/api\/health(?:\/.*)?$/,
   // Container-to-container callers with no cookie, each gated by a
   // NEXTAUTH_SECRET bearer token of its own. api/realtime/STREAM is
   // deliberately absent: the browser opens that one and it needs the session.
-  /^\/api\/alerts/,
-  /^\/api\/transactions/,
-  /^\/api\/investments/,
-  /^\/api\/realtime\/notify/,
-  // "Exact path or a real subpath", never a bare prefix: an unanchored
-  // alternative let `/api/v1999` through.
+  /^\/api\/alerts(?:\/.*)?$/,
+  /^\/api\/transactions(?:\/.*)?$/,
+  /^\/api\/investments(?:\/.*)?$/,
+  /^\/api\/realtime\/notify(?:\/.*)?$/,
   /^\/api\/v1(?:\/.*)?$/,
   // Token-gated pages that must work with auth on or off. Without `invite`
   // an AUTH_ENABLED instance sent every invitee to a login page they cannot
   // get past, which made the whole flow unreachable.
   /^\/invite(?:\/.*)?$/,
-  /^\/shared/,
+  /^\/shared(?:\/.*)?$/,
   // Build assets.
   /^\/_next\/static/,
   /^\/_next\/image/,
@@ -144,6 +161,12 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
   requestHeaders.set("x-pathname", req.nextUrl.pathname);
   requestHeaders.set("Content-Security-Policy", csp);
   const pass = () => NextResponse.next({ request: { headers: requestHeaders } });
+
+  // Before everything else, including the auth-exemption check below: demo mode
+  // must refuse a write to an auth-exempt path too (a Server Action POSTed at
+  // /shared or /invite). See refuseDemoMutation.
+  const demoRefusal = refuseDemoMutation(req);
+  if (demoRefusal) return withCsp(demoRefusal, csp);
 
   // withAuth never redirects AWAY from /login, so a stale bookmark from a time
   // AUTH_ENABLED was on shows the password form forever. Handled here rather

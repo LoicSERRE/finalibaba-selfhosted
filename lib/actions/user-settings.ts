@@ -6,9 +6,31 @@ import { prisma } from "@/lib/db/prisma";
 import { parseCents } from "@/lib/utils/format";
 import { getViewer } from "@/lib/auth-context";
 
+/**
+ * The viewer's settings, with every secret column stripped and replaced by a
+ * `has*` boolean.
+ *
+ * A Server Action's return value is serialised to the browser, so this must
+ * never carry `smtpPassword`/`ntfyAuthToken`/`vapidPrivateKey` - not even the
+ * `enc:v1:` ciphertext. It used to return the whole row, which put those
+ * ciphertexts in the page the client received; combined with the AES-GCM
+ * format being portable across fields and users, a leaked ciphertext could be
+ * replayed into an attacker's own alert channel and decrypted server-side to
+ * its plaintext (audited chain). The form now shows "configured / leave blank
+ * to keep" from the booleans and never round-trips the secret.
+ */
+const SECRET_SETTINGS_COLUMNS = ["smtpPassword", "ntfyAuthToken", "vapidPrivateKey", "vapidPublicKey"] as const;
+
 export async function getUserSettings() {
   const viewer = await getViewer();
-  return getUserSettingsFor(viewer.id);
+  const row = await getUserSettingsFor(viewer.id);
+  const safe: Record<string, unknown> = { ...row };
+  for (const column of SECRET_SETTINGS_COLUMNS) delete safe[column];
+  return {
+    ...(safe as Omit<typeof row, (typeof SECRET_SETTINGS_COLUMNS)[number]>),
+    hasSmtpPassword: Boolean(row.smtpPassword),
+    hasNtfyAuthToken: Boolean(row.ntfyAuthToken),
+  };
 }
 
 /**
@@ -16,6 +38,8 @@ export async function getUserSettings() {
  * invocable from the browser with attacker-chosen arguments, and this returns
  * the row holding smtpPassword and ntfyAuthToken in plaintext. A
  * userId-parameterised export would hand any user everyone else's credentials.
+ * Server-only callers that genuinely need a secret read the row through prisma
+ * directly (dispatchAlert, getOrCreateVapidKeys), never through this.
  */
 async function getUserSettingsFor(userId: string) {
   return prisma.userSettings.upsert({

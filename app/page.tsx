@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     prisma.account.findMany({
       where: { id: { in: accountIds } },
       include: {
-        institution: true,
+        institution: { select: { id: true, name: true, logoUrl: true } },
         holdings: true,
         history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
       },

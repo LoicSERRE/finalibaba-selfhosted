@@ -977,7 +977,9 @@
       "unknownError": "An unexpected error occurred.",
       "errorInvalidCode": "Incorrect code. Check your phone's clock if this keeps happening.",
       "errorNotEnabled": "Two-factor authentication is not enabled.",
-      "errorNoPendingSetup": "No setup in progress. Start again from the beginning."
+      "errorNoPendingSetup": "No setup in progress. Start again from the beginning.",
+      "errorAlreadyEnabled": "Two-factor is already enabled. Disable it first.",
+      "errorTooManyAttempts": "Too many attempts. Try again in about 15 minutes."
     },
     "appLock": {
       "title": "App lock",

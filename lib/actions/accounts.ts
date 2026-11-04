@@ -4,6 +4,7 @@ import { suggestedSavingsRate } from "@/lib/domain/tax-locale";
 import { revalidateAccount } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertAccountWritable, assertOwned } from "@/lib/auth-context";
+import { assertId } from "@/lib/domain/action-input";
 import { AccountType, TaxTreatment } from "@/app/generated/prisma/enums";
 import { parseCents } from "@/lib/utils/format";
 import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
@@ -108,6 +109,11 @@ export async function createAccount(formData: FormData): Promise<ActionResult<vo
 
   const viewer = await getViewer();
 
+  // The institution must be the viewer's own: without this a member could
+  // attach their account to another user's institution by passing its id (the
+  // picker only offers their own). assertOwned also narrows the id to a string.
+  if (institutionId) await assertOwned("institution", institutionId, viewer.id);
+
   // An explicit rate wins; otherwise the country preset gets one chance to
   // suggest one from the name, and whatever it returns is STORED rather than
   // re-derived on every render. That difference is the point: France is the
@@ -186,9 +192,15 @@ export async function createAccount(formData: FormData): Promise<ActionResult<vo
 }
 
 export async function deleteAccount(id: string) {
+  const accountId = assertId(id);
   const viewer = await getViewer();
-  await assertAccountWritable(viewer.id, id);
-  await prisma.account.delete({ where: { id } });
+  // The OWNER only, not a co-owner: assertAccountWritable also accepts a
+  // co-owner, which is right for edits but not for permanently deleting the
+  // account and its whole history (no undo). deleteMany scoped to the owner so
+  // a co-owner's call matches zero rows and silently no-ops rather than
+  // destroying someone else's data.
+  const { count } = await prisma.account.deleteMany({ where: { id: accountId, userId: viewer.id } });
+  if (count === 0) throw new Error("Not found.");
   revalidateAll();
 }
 

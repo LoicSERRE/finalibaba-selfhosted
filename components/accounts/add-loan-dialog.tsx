@@ -8,9 +8,8 @@ import { Input, Select } from "@/components/ui/input";
 import { createAccount } from "@/lib/actions/accounts";
 import { useTranslations } from "next-intl";
 
-type Institution = { id: string; name: string };
 
-export function AddLoanDialog({ institutions }: Readonly<{ institutions: Institution[] }>) {
+export function AddLoanDialog({ institutions }: Readonly<{ institutions: { id: string; name: string }[] }>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("addLoan");
