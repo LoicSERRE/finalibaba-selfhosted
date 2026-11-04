@@ -1,28 +1,34 @@
 import { ShareLinksSection } from "@/components/settings/share-links-section";
 import { PortfolioSharingSection } from "@/components/settings/portfolio-sharing-section";
+import { PendingSharesSection } from "@/components/settings/pending-shares-section";
 import { UsersSection } from "@/components/settings/users-section";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
 import { getShareLinks } from "@/lib/actions/share-links";
 import { getApiKeys } from "@/lib/actions/api-keys";
 import { listInvitations, listUsers } from "@/lib/actions/users";
-import { listPortfolioGrants } from "@/lib/actions/sharing";
+import { listPendingShares, listPortfolioGrants } from "@/lib/actions/sharing";
 import { OWNER_USER_ID } from "@/lib/auth-context";
 import type { SettingsTabProps } from "./context";
 
 /** Everyone and everything that can see this portfolio from outside it. */
 export async function SharingTab({ viewer, show, isAdmin, isMulti }: SettingsTabProps) {
-  const [shareLinks, apiKeys, grants, users, invitations] = await Promise.all([
+  const [shareLinks, apiKeys, grants, pendingShares, users, invitations] = await Promise.all([
     getShareLinks(),
     getApiKeys(),
     // Portfolio grants and user management mean nothing without a login, so a
     // mono instance does not pay for queries it can never use.
     isMulti ? listPortfolioGrants() : Promise.resolve({ given: [], received: [] }),
+    isMulti ? listPendingShares() : Promise.resolve({ coOwnerships: [], grants: [] }),
     isMulti && isAdmin ? listUsers() : Promise.resolve([]),
     isMulti && isAdmin ? listInvitations() : Promise.resolve([]),
   ]);
 
   return (
     <>
+      {/* First: an invitation is the one thing on this tab waiting on the
+          viewer, and nothing it offers takes effect until answered. */}
+      {show.withAuth && <PendingSharesSection pending={pendingShares} />}
+
       {/* Read-only share links - deliberately NOT gated by AUTH_ENABLED: the
           primary use case is sharing one view externally while AUTH_ENABLED
           stays off for the trusted private network. Hidden in demo mode only. */}

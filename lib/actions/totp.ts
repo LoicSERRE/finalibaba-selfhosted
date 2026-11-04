@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { decryptSecret, encryptSecret } from "@/lib/domain/crypto-at-rest";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer } from "@/lib/auth-context";
+import { getViewer, getViewerForTwoFactorSetup } from "@/lib/auth-context";
 import { consumeAttempt } from "@/lib/services/rate-limit";
 import {
   generateTotpSecret,
@@ -39,9 +39,12 @@ export type TotpFailure = {
   error: "invalid_code" | "not_enabled" | "no_pending_setup" | "already_enabled" | "too_many_attempts";
 };
 
+// startTotpSetup and confirmTotpSetup resolve the user without the instance
+// 2FA policy: they are the way to satisfy it, reached from the gate that
+// app/layout.tsx shows instead of the app. The other two need 2FA already on.
 export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: string } | TotpFailure> {
   const secret = generateTotpSecret();
-  const viewer = await getViewer();
+  const viewer = await getViewerForTwoFactorSetup();
   // Refuse to re-arm an already-active 2FA: this writes a brand-new secret, so
   // without the check anyone with the session could silently replace a live
   // authenticator (and void the real one) without proving they hold it.
@@ -65,7 +68,7 @@ export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: str
 export async function confirmTotpSetup(
   code: string,
 ): Promise<{ ok: true; backupCodes: string[] } | TotpFailure> {
-  const viewer = await getViewer();
+  const viewer = await getViewerForTwoFactorSetup();
   if (!(await consumeTotpAttempt(viewer.id, "confirm"))) return { ok: false, error: "too_many_attempts" };
   const settings = await prisma.user.findUnique({
     where: { id: viewer.id },
@@ -80,7 +83,10 @@ export async function confirmTotpSetup(
     where: { id: viewer.id },
     data: { totpEnabled: true, totpBackupCodes: hashed },
   });
-  revalidatePath("/settings");
+  // No revalidation here, on purpose: under the instance policy this runs
+  // inside the layout's 2FA gate, and re-rendering now would swap that gate -
+  // and the backup codes on it - for the app before they were written down.
+  // The client refreshes once they are dismissed (handleFinishEnable).
   return { ok: true, backupCodes }; // plaintext, shown once - never persisted
 }
 

@@ -16,7 +16,8 @@ import { baseSymbol } from "@/lib/utils/base-currency";
 /**
  * Called by sync/main.py at the end of every automatic 4h run, never on a
  * "Sync now" click. No browser session on that path, so this route is out of
- * proxy.ts's matcher and gates itself on a NEXTAUTH_SECRET bearer token.
+ * proxy.ts's matcher and gates itself on the internal bearer token
+ * (lib/services/internal-auth.ts).
  */
 
 async function checkNetWorthAlert(settings: UserSettingsModel, accountIds: string[]): Promise<boolean> {

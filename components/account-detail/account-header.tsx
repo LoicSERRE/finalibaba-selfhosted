@@ -55,7 +55,7 @@ export function AccountHeader({
   /** Present only for the account's DIRECT owner - a co-owner cannot manage
    *  further co-owners (assertAccountOwner). Undefined hides the control
    *  entirely rather than rendering a button that would only ever error. */
-  coOwners?: { userId: string; username: string | null; displayName: string | null }[];
+  coOwners?: { userId: string; username: string | null; displayName: string | null; pending: boolean }[];
   isFiat: boolean;
   isInvestment: boolean;
   isRealEstate: boolean;

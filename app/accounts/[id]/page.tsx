@@ -118,10 +118,15 @@ export default async function AccountDetailPage({
     ? (
         await prisma.accountCoOwner.findMany({
           where: { accountId: account.id },
-          select: { userId: true, user: { select: { username: true, displayName: true } } },
+          select: { userId: true, acceptedAt: true, user: { select: { username: true, displayName: true } } },
           orderBy: { createdAt: "asc" },
         })
-      ).map((c) => ({ userId: c.userId, username: c.user.username, displayName: c.user.displayName }))
+      ).map((c) => ({
+        userId: c.userId,
+        username: c.user.username,
+        displayName: c.user.displayName,
+        pending: c.acceptedAt === null,
+      }))
     : undefined;
 
   return (

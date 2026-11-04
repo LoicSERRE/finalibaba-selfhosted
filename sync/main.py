@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 
 import woob_config
 from crypto_at_rest import decrypt_institution_row
+from internal_auth import auth_headers, internal_api_token, is_authorized
 from sync_activity import is_running, running, tracked
 from workers import executor
 
@@ -107,8 +108,8 @@ def _notify_owner(institution_id: str) -> None:
     reload, and must never turn a successful sync into a failed one.
     """
     app_url = os.environ.get("APP_SERVICE_URL")
-    secret = os.environ.get("NEXTAUTH_SECRET")
-    if not app_url or not secret:
+    token = internal_api_token()
+    if not app_url or not token:
         return
     try:
         import psycopg2.extras
@@ -124,7 +125,7 @@ def _notify_owner(institution_id: str) -> None:
             return
         requests.post(
             f"{app_url}/api/realtime/notify",
-            headers={"Authorization": f"Bearer {secret}"},
+            headers=auth_headers(),
             json={"userId": owner_id},
             timeout=5,
         )
@@ -222,15 +223,15 @@ def _check_alerts():
     # off / sync failures, all evaluated app-side to reuse its net-worth and
     # loan math instead of re-implementing it here).
     app_url = os.environ.get("APP_SERVICE_URL")
-    secret = os.environ.get("NEXTAUTH_SECRET")
-    if not app_url or not secret:
+    token = internal_api_token()
+    if not app_url or not token:
         log.info("APP_SERVICE_URL or NEXTAUTH_SECRET not set - alert check skipped")
         return
     try:
         import requests
         resp = requests.post(
             f"{app_url}/api/alerts/check",
-            headers={"Authorization": f"Bearer {secret}"},
+            headers=auth_headers(),
             timeout=30,
         )
         resp.raise_for_status()
@@ -246,15 +247,15 @@ def _auto_categorize():
     # Called BEFORE _check_alerts, so a transaction categorised here can make
     # a BUDGET_OVERRUN rule fire in the same cycle rather than one behind.
     app_url = os.environ.get("APP_SERVICE_URL")
-    secret = os.environ.get("NEXTAUTH_SECRET")
-    if not app_url or not secret:
+    token = internal_api_token()
+    if not app_url or not token:
         log.info("APP_SERVICE_URL or NEXTAUTH_SECRET not set - auto-categorize skipped")
         return
     try:
         import requests
         resp = requests.post(
             f"{app_url}/api/transactions/auto-categorize",
-            headers={"Authorization": f"Bearer {secret}"},
+            headers=auth_headers(),
             timeout=30,
         )
         resp.raise_for_status()
@@ -268,15 +269,15 @@ def _snapshot_investment_balances():
     # position's chart stayed on "not enough data" forever. Records today's
     # ALREADY-KNOWN valuation more often; fetches no new prices.
     app_url = os.environ.get("APP_SERVICE_URL")
-    secret = os.environ.get("NEXTAUTH_SECRET")
-    if not app_url or not secret:
+    token = internal_api_token()
+    if not app_url or not token:
         log.info("APP_SERVICE_URL or NEXTAUTH_SECRET not set - investment balance snapshot skipped")
         return
     try:
         import requests
         resp = requests.post(
             f"{app_url}/api/investments/snapshot-balances",
-            headers={"Authorization": f"Bearer {secret}"},
+            headers=auth_headers(),
             timeout=30,
         )
         resp.raise_for_status()
@@ -396,6 +397,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_internal_token(request: Request, call_next):
+    # Every route but the container healthcheck: before this, anything on the
+    # Docker network could start any user's bank sync or answer their pending
+    # 2FA step. The app sends the token from lib/services/internal-auth.ts.
+    if request.url.path != "/health" and not is_authorized(request.headers.get("authorization")):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 @app.post("/sync/lcl")

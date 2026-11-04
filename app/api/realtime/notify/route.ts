@@ -8,7 +8,7 @@ import { OWNER_USER_ID } from "@/lib/domain/users";
  * a "something changed" signal out to any open SSE connections (see
  * app/api/realtime/stream/route.ts). No browser session exists on this call
  * path, so - same as api/alerts/check - it's excluded from proxy.ts's NextAuth
- * matcher and gates itself via the shared NEXTAUTH_SECRET bearer token instead.
+ * matcher and gates itself via the internal bearer token instead.
  *
  * The bus is keyed by userId as of v2.0, but the caller has no notion of users:
  * sync_tr_realtime.py drives the .env-configured Trade Republic integration,

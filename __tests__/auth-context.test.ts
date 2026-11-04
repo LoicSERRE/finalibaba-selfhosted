@@ -26,6 +26,7 @@ const {
   getServerSessionMock,
   cookieGetMock,
   cookiesMock,
+  instanceSettingsFindUniqueMock,
 } = vi.hoisted(() => ({
   userFindUniqueMock: vi.fn(),
   accountFindManyMock: vi.fn(),
@@ -39,6 +40,7 @@ const {
   getServerSessionMock: vi.fn(),
   cookieGetMock: vi.fn(),
   cookiesMock: vi.fn(),
+  instanceSettingsFindUniqueMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -50,6 +52,7 @@ vi.mock("@/lib/db/prisma", () => ({
     category: { count: categoryCountMock },
     goal: { count: goalCountMock },
     transaction: { count: transactionCountMock },
+    instanceSettings: { findUnique: instanceSettingsFindUniqueMock },
   },
 }));
 
@@ -72,6 +75,8 @@ import {
   isDeletedSessionUser,
   DeletedSessionUserError,
   OWNER_USER_ID,
+  getViewerForTwoFactorSetup,
+  isTwoFactorEnrollmentRequired,
 } from "@/lib/auth-context";
 
 const OWNER = { id: OWNER_USER_ID, role: "ADMIN" as const };
@@ -90,10 +95,12 @@ beforeEach(() => {
     transactionCountMock,
     getServerSessionMock,
     cookieGetMock,
+    instanceSettingsFindUniqueMock,
   ]) {
     m.mockReset();
   }
   cookiesMock.mockResolvedValue({ get: cookieGetMock });
+  instanceSettingsFindUniqueMock.mockResolvedValue(null); // no 2FA policy row
   delete process.env.AUTH_ENABLED;
 });
 
@@ -141,6 +148,64 @@ describe("getViewer", () => {
   });
 });
 
+describe("the instance 2FA policy (F17)", () => {
+  // It used to be enforced by app/layout.tsx alone, so a Server Action or an
+  // API route - neither goes through a layout - accepted a password alone.
+  const signedIn = (totpEnabled: boolean) => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue({ user: { id: MEMBER.id } });
+    userFindUniqueMock.mockResolvedValue({ ...MEMBER, sessionsRevokedAt: null, totpEnabled });
+  };
+  const policy = (on: boolean) => instanceSettingsFindUniqueMock.mockResolvedValue({ requireTwoFactor: on });
+
+  it("refuses a user without 2FA when the instance requires it", async () => {
+    signedIn(false);
+    policy(true);
+    const error = await getViewer().catch((e: unknown) => e);
+    expect(isTwoFactorEnrollmentRequired(error)).toBe(true);
+  });
+
+  it("refuses them on every path built on getViewer, not just getViewer", async () => {
+    signedIn(false);
+    policy(true);
+    await expect(getViewContext()).rejects.toThrow(/two-factor/);
+    await expect(requireAdmin()).rejects.toThrow(/two-factor/);
+  });
+
+  it("lets an enrolled user through without even reading the policy", async () => {
+    signedIn(true);
+    policy(true);
+    await expect(getViewer()).resolves.toMatchObject({ id: MEMBER.id });
+    expect(instanceSettingsFindUniqueMock).not.toHaveBeenCalled();
+  });
+
+  it("lets everyone through when the policy is off", async () => {
+    signedIn(false);
+    policy(false);
+    await expect(getViewer()).resolves.toMatchObject({ id: MEMBER.id });
+  });
+
+  it("never applies in mono mode, where there is no login", async () => {
+    userFindUniqueMock.mockResolvedValue(OWNER);
+    policy(true);
+    await expect(getViewer()).resolves.toMatchObject({ id: OWNER_USER_ID, isMonoMode: true });
+  });
+
+  it("leaves the enrolment path and the layout able to resolve the user", async () => {
+    // The two that must work for the condition to be clearable at all.
+    signedIn(false);
+    policy(true);
+    await expect(getViewerForTwoFactorSetup()).resolves.toMatchObject({ id: MEMBER.id });
+    await expect(getPublicViewer()).resolves.toMatchObject({ id: MEMBER.id });
+  });
+
+  it("still refuses an anonymous caller on the enrolment path", async () => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue(null);
+    await expect(getViewerForTwoFactorSetup()).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+});
+
 describe("requireAdmin", () => {
   it("rejects a MEMBER", async () => {
     process.env.AUTH_ENABLED = "true";
@@ -174,7 +239,46 @@ describe("baseAccountIds", () => {
       expect.objectContaining({ where: { userId: "user-b" } })
     );
     expect(coOwnerFindManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "user-b" } })
+      expect.objectContaining({ where: { userId: "user-b", acceptedAt: { not: null } } })
+    );
+  });
+});
+
+describe("a pending share counts for nothing (F6)", () => {
+  // Sharing used to be imposed: typing someone's username put your account in
+  // their net worth, alerts and ledger. Until accepted, a row must be inert in
+  // every access primitive - asserted on the queries, since the mock cannot
+  // tell an accepted row from a pending one by itself.
+  it("keeps a pending co-ownership out of the writable check", async () => {
+    accountCountMock.mockResolvedValue(0);
+    coOwnerCountMock.mockResolvedValue(0);
+    await expect(assertAccountWritable("user-b", "acc-1")).rejects.toThrow("Account not found.");
+    expect(coOwnerCountMock).toHaveBeenCalledWith({
+      where: { accountId: "acc-1", userId: "user-b", acceptedAt: { not: null } },
+    });
+  });
+
+  it("does not let a pending grant switch the viewed portfolio", async () => {
+    grantFindUniqueMock.mockResolvedValue(null);
+    accountFindManyMock.mockResolvedValue([]);
+    coOwnerFindManyMock.mockResolvedValue([]);
+    await viewAccountIds("user-b", "user-a");
+    expect(grantFindUniqueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ acceptedAt: { not: null } }) })
+    );
+  });
+
+  it("filters the read path's grant lookup the same way", async () => {
+    process.env.AUTH_ENABLED = "true";
+    getServerSessionMock.mockResolvedValue({ user: { id: MEMBER.id } });
+    userFindUniqueMock.mockResolvedValue({ ...MEMBER, sessionsRevokedAt: null, totpEnabled: true });
+    cookieGetMock.mockReturnValue({ value: "user-a" });
+    grantFindUniqueMock.mockResolvedValue(null);
+    accountFindManyMock.mockResolvedValue([]);
+    coOwnerFindManyMock.mockResolvedValue([]);
+    await expect(getViewContext()).resolves.toMatchObject({ ownerId: MEMBER.id, readOnly: false });
+    expect(grantFindUniqueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ acceptedAt: { not: null } }) })
     );
   });
 });

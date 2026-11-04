@@ -71,8 +71,8 @@ const AUTH_EXEMPT: RegExp[] = [
   // NextAuth's own endpoints, and the compose healthcheck.
   /^\/api\/auth(?:\/.*)?$/,
   /^\/api\/health(?:\/.*)?$/,
-  // Container-to-container callers with no cookie, each gated by a
-  // NEXTAUTH_SECRET bearer token of its own. api/realtime/STREAM is
+  // Container-to-container callers with no cookie, each gated by the
+  // internal bearer token (lib/services/internal-auth.ts). api/realtime/STREAM is
   // deliberately absent: the browser opens that one and it needs the session.
   /^\/api\/alerts(?:\/.*)?$/,
   /^\/api\/transactions(?:\/.*)?$/,

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getViewer, assertOwned, OWNER_USER_ID } from "@/lib/auth-context";
 import type { WoobField } from "@/lib/domain/woob-fields";
 import { fetchWoobModuleFields } from "@/lib/services/woob-modules";
+import { internalAuthHeaders } from "@/lib/services/internal-auth";
 
 // Internal Docker Compose service-to-service traffic on a private bridge
 // network, never exposed externally - TLS here would need self-signed cert
@@ -49,7 +50,11 @@ function asFailure(e: unknown): { ok: false; error: string } {
 // holding the whole page for two minutes.
 async function fetchSync(path: string, init?: RequestInit, timeoutMs = SYNC_TIMEOUT_MS): Promise<Response> {
   try {
-    return await fetch(`${SYNC_URL}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    return await fetch(`${SYNC_URL}${path}`, {
+      ...init,
+      headers: { ...init?.headers, ...internalAuthHeaders() },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
   } catch (e) {
     if (e instanceof Error && e.name === "TimeoutError") {
       throw new SyncServiceError(
@@ -240,6 +245,7 @@ const WOOB_MODULES_FALLBACK: WoobBankModule[] = [
 export async function getWoobBankModules(): Promise<WoobBankModule[]> {
   try {
     const res = await fetch(`${SYNC_URL}/woob/modules`, {
+      headers: internalAuthHeaders(),
       next: { revalidate: 3600 },
       signal: AbortSignal.timeout(SYNC_TIMEOUT_MS),
     });

@@ -147,20 +147,17 @@ export default async function RootLayout({
   // stays for a signed-in user opening a share link.
   const appLockEnabled = isBareRoute(pathname) ? false : (account?.appLockEnabled ?? false);
 
-  // The instance policy, checked here rather than in a page: this gate has to
-  // hold on every route, and /settings has to stay reachable through it - it
-  // is where the setup lives. Never applies in mono mode, where there is no
-  // login for a second factor to sit behind.
-  // /settings is exempt, and that is not a hole: it is the only page that can
-  // clear the condition. Gating it too made the policy a dead end - the user
-  // was told to go somewhere the gate would not let them go. Everything that
-  // actually shows money stays blocked, so nothing financial is rendered or
-  // even sent.
+  // The instance policy, checked here so no page is rendered for a user who
+  // must enrol first; getViewer refuses the same user in every Server Action
+  // and API route (lib/auth-context.ts). Never applies in mono mode, where
+  // there is no login for a second factor to sit behind.
+  // No route is exempt, /settings included: it used to be, as the place the
+  // setup lived, and it also showed the user's API keys and share links - a
+  // password alone was enough to copy one. The setup now sits in the gate.
   const mustSetUpTotp =
     !!viewer &&
     !viewer.isMonoMode &&
     !account?.totpEnabled &&
-    !pathname.startsWith("/settings") &&
     (await requiresTwoFactor());
 
   return (

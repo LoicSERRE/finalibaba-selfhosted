@@ -198,6 +198,9 @@ model AccountCoOwner {
   userId    String
   role      String   @default("OWNER")
   createdAt DateTime @default(now())
+  // Null while the invitation is pending: the account is in nobody's
+  // portfolio but its owner's until the invited user accepts it (v2.23).
+  acceptedAt DateTime?
 
   @@id([accountId, userId])
 }
@@ -215,6 +218,8 @@ model PortfolioGrant {
   granteeUserId String
   role          String   @default("READ")
   createdAt     DateTime @default(now())
+  // Null while pending, same rule as AccountCoOwner.acceptedAt.
+  acceptedAt    DateTime?
 
   @@id([grantorUserId, granteeUserId])
 }

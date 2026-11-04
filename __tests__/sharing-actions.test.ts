@@ -26,6 +26,8 @@ const {
   getViewerMock,
   cookieSetMock,
   cookieDeleteMock,
+  coOwnerUpdateManyMock,
+  grantUpdateManyMock,
 } = vi.hoisted(() => ({
   accountCountMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
@@ -41,6 +43,8 @@ const {
   getViewerMock: vi.fn(async () => ({ id: "user-a", role: "MEMBER", isMonoMode: false })),
   cookieSetMock: vi.fn(),
   cookieDeleteMock: vi.fn(),
+  coOwnerUpdateManyMock: vi.fn(),
+  grantUpdateManyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -51,6 +55,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: coOwnerFindManyMock,
       upsert: coOwnerUpsertMock,
       deleteMany: coOwnerDeleteManyMock,
+      updateMany: coOwnerUpdateManyMock,
     },
     alertRule: { deleteMany: alertRuleDeleteManyMock },
     goal: { deleteMany: goalDeleteManyMock },
@@ -59,6 +64,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: vi.fn(async () => []),
       upsert: grantUpsertMock,
       deleteMany: grantDeleteManyMock,
+      updateMany: grantUpdateManyMock,
     },
     $transaction: transactionMock,
   },
@@ -79,6 +85,8 @@ import {
   grantPortfolioAccess,
   revokePortfolioGrant,
   setViewingPortfolio,
+  respondToCoOwnership,
+  respondToPortfolioGrant,
 } from "@/lib/actions/sharing";
 
 const formWith = (username: string) => {
@@ -101,6 +109,8 @@ beforeEach(() => {
     grantDeleteManyMock,
     cookieSetMock,
     cookieDeleteMock,
+    coOwnerUpdateManyMock,
+    grantUpdateManyMock,
   ]) {
     m.mockReset();
   }
@@ -282,7 +292,10 @@ describe("setViewingPortfolio (H6)", () => {
 
     expect(grantFindUniqueMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { grantorUserId_granteeUserId: { grantorUserId: "user-b", granteeUserId: "user-a" } },
+        where: {
+          grantorUserId_granteeUserId: { grantorUserId: "user-b", granteeUserId: "user-a" },
+          acceptedAt: { not: null },
+        },
       })
     );
     expect(cookieSetMock).toHaveBeenCalledWith(
@@ -350,5 +363,74 @@ describe("share failures carry a key, never a name", () => {
       ok: false,
       error: "username_required",
     });
+  });
+});
+
+describe("invitations: a share waits for the invited user (F6)", () => {
+  it("creates a co-ownership pending, never accepted on the inviter's say-so", async () => {
+    accountCountMock.mockResolvedValue(1);
+    userFindUniqueMock.mockResolvedValue({ id: "user-b" });
+    await addAccountCoOwner("acc-1", formWith("bob"));
+    const { create } = coOwnerUpsertMock.mock.calls[0][0];
+    expect(create).toEqual({ accountId: "acc-1", userId: "user-b" });
+    expect(create).not.toHaveProperty("acceptedAt");
+  });
+
+  it("creates a portfolio grant pending too", async () => {
+    userFindUniqueMock.mockResolvedValue({ id: "user-b" });
+    await grantPortfolioAccess(formWith("bob"));
+    expect(grantUpsertMock.mock.calls[0][0].create).not.toHaveProperty("acceptedAt");
+  });
+
+  it("accepts only the viewer's own pending co-ownership", async () => {
+    coOwnerUpdateManyMock.mockResolvedValue({ count: 1 });
+    await respondToCoOwnership("acc-1", true);
+    expect(coOwnerUpdateManyMock).toHaveBeenCalledWith({
+      where: { accountId: "acc-1", userId: "user-a", acceptedAt: null },
+      data: { acceptedAt: expect.any(Date) },
+    });
+  });
+
+  it("declines by deleting only that pending row", async () => {
+    coOwnerDeleteManyMock.mockResolvedValue({ count: 1 });
+    await respondToCoOwnership("acc-1", false);
+    expect(coOwnerDeleteManyMock).toHaveBeenCalledWith({
+      where: { accountId: "acc-1", userId: "user-a", acceptedAt: null },
+    });
+    expect(coOwnerUpdateManyMock).not.toHaveBeenCalled();
+  });
+
+  it("says not found when there is nothing pending for the viewer", async () => {
+    // Someone else's invitation, an accepted one, or none at all: same answer.
+    coOwnerUpdateManyMock.mockResolvedValue({ count: 0 });
+    await expect(respondToCoOwnership("acc-1", true)).rejects.toThrow("Not found.");
+    grantDeleteManyMock.mockResolvedValue({ count: 0 });
+    await expect(respondToPortfolioGrant("user-b", false)).rejects.toThrow("Not found.");
+  });
+
+  it("accepts only a grant addressed to the viewer", async () => {
+    grantUpdateManyMock.mockResolvedValue({ count: 1 });
+    await respondToPortfolioGrant("user-b", true);
+    expect(grantUpdateManyMock).toHaveBeenCalledWith({
+      where: { grantorUserId: "user-b", granteeUserId: "user-a", acceptedAt: null },
+      data: { acceptedAt: expect.any(Date) },
+    });
+  });
+
+  it.each([
+    ["an operator object", { not: "x" }],
+    ["an empty string", ""],
+  ])("refuses %s as an id before touching the database", async (_label, bad) => {
+    await expect(respondToCoOwnership(bad as unknown as string, true)).rejects.toThrow();
+    await expect(respondToPortfolioGrant(bad as unknown as string, true)).rejects.toThrow();
+    expect(coOwnerUpdateManyMock).not.toHaveBeenCalled();
+    expect(grantUpdateManyMock).not.toHaveBeenCalled();
+  });
+
+  it("only treats a literal true as acceptance", async () => {
+    // A truthy non-boolean must not accept: the argument comes from the client.
+    coOwnerDeleteManyMock.mockResolvedValue({ count: 1 });
+    await respondToCoOwnership("acc-1", "yes" as unknown as boolean);
+    expect(coOwnerUpdateManyMock).not.toHaveBeenCalled();
   });
 });

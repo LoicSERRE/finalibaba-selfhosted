@@ -136,7 +136,8 @@ async function main() {
   if (joint) {
     await prisma.accountCoOwner.upsert({
       where: { accountId_userId: { accountId: joint.id, userId: member.id } },
-      create: { accountId: joint.id, userId: member.id },
+      // Accepted up front: the seed stands in for both people agreeing.
+      create: { accountId: joint.id, userId: member.id, acceptedAt: new Date() },
       update: {},
     });
     console.log(`Co-ownership: "${joint.name}" is now shared read-write with ${MEMBER_USERNAME}.`);
@@ -150,7 +151,7 @@ async function main() {
     where: {
       grantorUserId_granteeUserId: { grantorUserId: OWNER_USER_ID, granteeUserId: member.id },
     },
-    create: { grantorUserId: OWNER_USER_ID, granteeUserId: member.id },
+    create: { grantorUserId: OWNER_USER_ID, granteeUserId: member.id, acceptedAt: new Date() },
     update: {},
   });
   console.log(`Portfolio share: ${MEMBER_USERNAME} can read the owner's portfolio (read-only).`);

@@ -14,6 +14,7 @@ type CoOwnerRow = {
   userId: string;
   username: string | null;
   displayName: string | null;
+  pending: boolean;
 };
 
 /**
@@ -115,7 +116,10 @@ export function CoOwnersDialog({
           <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)]">
             {coOwners.map((c) => (
               <div key={c.userId} className="flex items-center justify-between gap-3 px-3 py-2.5 flex-wrap">
-                <p className="text-sm text-[var(--foreground)] break-words">{label(c)}</p>
+                <div className="min-w-0">
+                  <p className="text-sm text-[var(--foreground)] break-words">{label(c)}</p>
+                  {c.pending && <p className="text-xs text-[var(--muted)]">{t("pending")}</p>}
+                </div>
                 <DeleteButton
                   onDelete={async () => {
                     await removeAccountCoOwner(accountId, c.userId);
