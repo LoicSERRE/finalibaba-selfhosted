@@ -35,6 +35,11 @@ export function CompanyCard({ card }: Readonly<{ card: CompanyCardData }>) {
         <div className="text-right shrink-0">
           <p className="text-lg font-semibold tabular-nums text-[var(--foreground)] amount">{formatCurrency(card.shareCents, 0)}</p>
           <p className="text-xs text-[var(--muted)]">{t("yourShare")}</p>
+          {card.currentAccountCents > 0 && (
+            <p className="text-xs text-[var(--muted)] amount">
+              {t("includingCurrentAccount", { amount: formatCurrency(card.currentAccountCents, 0) })}
+            </p>
+          )}
         </div>
       )}
     </Link>

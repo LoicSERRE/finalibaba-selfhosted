@@ -1,6 +1,6 @@
 # Companies (SCI first)
 
-Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: step 1 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth) and its interface ("C" below). Steps 2 to 5 are next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
+Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: steps 1 and 2 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth), its interface ("C" below) and the associates' current accounts. Steps 3 to 5 are next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
 
 ## What users actually need
 
@@ -191,7 +191,14 @@ Written as tests in the same PR as each step:
 
 **Deliberate gaps, for later**: `/api/v1/accounts` lists the key owner's accounts only (a share is not an account; it is in `/net-worth`). The personal data export does not include companies yet. On a hand-over, the company's transactions keep the categories of the previous manager (they still display; the new manager re-categorizes with their own).
 
+## Step 2: current accounts (CCA)
+
+- `CompanyAssociate.currentAccountCents` (>= 0, whole cents, checked by `validateCapTable`): what the associate lent the company. Entered in the cap table editor beside the parts.
+- **The company's value** (`netAssetValueCents`): computeDashboard over its accounts - where the lent money already sits - minus the sum of the current accounts, which the company owes back.
+- **A person's figure** (`buildCompanyShare`): their share of that value plus their own current account, a receivable. Across all associates it adds back up to exactly the company's accounts: nothing is counted twice or lost (pinned by a test).
+- History: today's current accounts applied to every past day, like today's holdings until step 5.
+- **Visibility: every associate sees every current account** (decided at step 2). They are in the company's books, and the associates already see each other's parts.
+
 ## Open questions
 
-- Whether an associate may see the other associates' CCA amounts (they are in the SCI's books, but some families may not want it).
 - Whether the discount should differ per associate (it sometimes does, for a minority stake).

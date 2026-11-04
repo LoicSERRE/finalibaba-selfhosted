@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { partsPct } from "@/lib/domain/company";
+import { formatCurrency } from "@/lib/utils/format";
 import type { CompanyPageAssociate } from "@/lib/services/companies-read";
 import { CapTableDialog } from "@/components/companies/cap-table-dialog";
 
@@ -54,8 +55,12 @@ export async function CompanyAssociatesCard({
                 {isManager && a.link === "pending" && <span className="text-xs text-[var(--warning)]"> · {t("invitationSent")}</span>}
               </span>
             </span>
-            <span className="text-xs text-[var(--muted)] shrink-0 tabular-nums">
+            <span className="text-xs text-[var(--muted)] shrink-0 tabular-nums text-right">
               {t("partsAndPct", { parts: a.parts.toLocaleString(locale), pct: partsPct(a.parts, totalParts) })}
+              {/* Every associate's, to every associate: it is in the company's books. */}
+              {a.currentAccountCents > 0 && (
+                <span className="block amount">{t("currentAccountOf", { amount: formatCurrency(a.currentAccountCents, 0) })}</span>
+              )}
             </span>
           </li>
         ))}

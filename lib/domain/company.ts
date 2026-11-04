@@ -16,12 +16,16 @@ import Decimal from "decimal.js";
 export const MAX_TOTAL_PARTS = 100_000_000;
 export const MAX_ASSOCIATES = 50;
 export const MAX_COMPANY_NAME_LENGTH = 120;
+/** 10 billion in the base currency - far above any real current account, far below an overflow. */
+export const MAX_CURRENT_ACCOUNT_CENTS = 1_000_000_000_000;
 
 export interface CapTableRow {
   name: string;
   parts: number;
   /** A user of the instance this associate is linked to, if any. */
   userId?: string | null;
+  /** Their compte courant d'associé, in cents; absent means 0. */
+  currentAccountCents?: number;
 }
 
 export type CapTableError =
@@ -32,10 +36,17 @@ export type CapTableError =
   | "too_many_associates"
   | "parts_invalid"
   | "parts_sum_mismatch"
-  | "duplicate_user";
+  | "duplicate_user"
+  | "current_account_invalid";
 
 function isPositiveInt(n: unknown, max: number): n is number {
   return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= max;
+}
+
+/** A current account is a whole number of cents, never negative: absent is 0. */
+function isCurrentAccount(value: unknown): boolean {
+  if (value === undefined) return true;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_CURRENT_ACCOUNT_CENTS;
 }
 
 export function validateCompanyName(raw: unknown): { ok: true; name: string } | { ok: false; error: CapTableError } {
@@ -62,6 +73,7 @@ export function validateCapTable(totalParts: unknown, rows: unknown): CapTableEr
     const named = validateCompanyName(row.name);
     if (!named.ok) return named.error;
     if (!isPositiveInt(row.parts, MAX_TOTAL_PARTS)) return "parts_invalid";
+    if (!isCurrentAccount(row.currentAccountCents)) return "current_account_invalid";
     sum += row.parts;
     if (row.userId) {
       if (users.has(row.userId)) return "duplicate_user";
@@ -87,36 +99,63 @@ export function shareCents(companyValueCents: bigint, parts: number, totalParts:
   return BigInt(value.toFixed(0));
 }
 
+/**
+ * The company's net asset value (ANR): what its own accounts are worth net of
+ * its loans - computeDashboard over them - minus what it owes its associates
+ * on their current accounts. The money an associate lent is already on the
+ * company's bank account; the current account is the debt that matches it.
+ */
+export function netAssetValueCents(companyNetWorthCents: bigint, totalCurrentAccountsCents: bigint): bigint {
+  return companyNetWorthCents - totalCurrentAccountsCents;
+}
+
 /** One company as it counts in one person's figures. */
 export interface CompanyShare {
   companyId: string;
   name: string;
   parts: number;
   totalParts: number;
-  /** The company's own net value today (ANR), and the person's share of it. */
+  /** The company's net asset value today (ANR, current accounts deducted). */
   companyValueCents: bigint;
+  /** The person's current account in it: a receivable, part of valueCents. */
+  currentAccountCents: bigint;
+  /** What the company is worth to the person: their share of the ANR plus
+   *  their current account. */
   valueCents: bigint;
-  /** The SHARE per day the company has data for, ascending by isoDate. */
+  /** valueCents per day the company has data for, ascending by isoDate. */
   history: { isoDate: string; valueCents: number }[];
 }
 
+/** A company's current accounts: all of them, and the person's own. */
+export interface CurrentAccounts {
+  totalCents: bigint;
+  ownCents: bigint;
+}
+
+const NO_CURRENT_ACCOUNTS: CurrentAccounts = { totalCents: BigInt(0), ownCents: BigInt(0) };
+
+/**
+ * The person's figures for one company. Current accounts are today's amounts
+ * applied to every past day, like the holdings until step 5 dates them.
+ */
 export function buildCompanyShare(
   company: { id: string; name: string; totalParts: number },
   parts: number,
-  companyValueCents: bigint,
+  companyNetWorthCents: bigint,
   companyHistory: { isoDate: string; netWorth: number }[],
+  currentAccounts: CurrentAccounts = NO_CURRENT_ACCOUNTS,
 ): CompanyShare {
+  const valueOf = (netWorth: bigint) =>
+    shareCents(netAssetValueCents(netWorth, currentAccounts.totalCents), parts, company.totalParts) + currentAccounts.ownCents;
   return {
     companyId: company.id,
     name: company.name,
     parts,
     totalParts: company.totalParts,
-    companyValueCents,
-    valueCents: shareCents(companyValueCents, parts, company.totalParts),
-    history: companyHistory.map((p) => ({
-      isoDate: p.isoDate,
-      valueCents: Number(shareCents(BigInt(Math.round(p.netWorth)), parts, company.totalParts)),
-    })),
+    companyValueCents: netAssetValueCents(companyNetWorthCents, currentAccounts.totalCents),
+    currentAccountCents: currentAccounts.ownCents,
+    valueCents: valueOf(companyNetWorthCents),
+    history: companyHistory.map((p) => ({ isoDate: p.isoDate, valueCents: Number(valueOf(BigInt(Math.round(p.netWorth)))) })),
   };
 }
 

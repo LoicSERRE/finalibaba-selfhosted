@@ -1279,6 +1279,10 @@ model CompanyAssociate {
   user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   name           String
   linkAcceptedAt DateTime?
+  // Compte courant d'associé (step 2): what this associate lent the company
+  // and it owes them back - a liability of the company (out of its net asset
+  // value) and a receivable of the associate (in their net worth). >= 0.
+  currentAccountCents BigInt @default(0)
   holdings       CompanyHolding[]
   createdAt      DateTime         @default(now())
 

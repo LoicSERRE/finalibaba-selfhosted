@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   role: null as "manager" | "associate" | null,
-  holdingFindMany: vi.fn(),
+  associateFindFirst: vi.fn(),
+  associateAggregate: vi.fn(),
   associateFindMany: vi.fn(),
   companyFindUniqueOrThrow: vi.fn(),
   accountFindMany: vi.fn(),
@@ -17,8 +18,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    companyHolding: { findMany: h.holdingFindMany },
-    companyAssociate: { findMany: h.associateFindMany },
+    companyAssociate: { findMany: h.associateFindMany, findFirst: h.associateFindFirst, aggregate: h.associateAggregate },
     company: { findUniqueOrThrow: h.companyFindUniqueOrThrow },
     account: { findMany: h.accountFindMany },
     institution: { findMany: h.institutionFindMany },
@@ -42,10 +42,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.companyFindUniqueOrThrow.mockResolvedValue({ id: COMPANY, name: "SCI", kind: "SCI", taxRegime: "IR", totalParts: 1000 });
   h.associateFindMany.mockResolvedValue([
-    { id: "a1", name: "Camille", userId: "user-a", linkAcceptedAt: new Date(), user: { username: "camille" }, holdings: [{ parts: 600 }] },
-    { id: "a2", name: "Marie", userId: "user-b", linkAcceptedAt: new Date(), user: { username: "marie" }, holdings: [{ parts: 400 }] },
+    { id: "a1", name: "Camille", userId: "user-a", linkAcceptedAt: new Date(), currentAccountCents: BigInt(30_000_00), user: { username: "camille" }, holdings: [{ parts: 600 }] },
+    { id: "a2", name: "Marie", userId: "user-b", linkAcceptedAt: new Date(), currentAccountCents: BigInt(20_000_00), user: { username: "marie" }, holdings: [{ parts: 400 }] },
   ]);
-  h.holdingFindMany.mockResolvedValue([{ parts: 400 }]);
+  // Marie's own accepted row, and the company's 50 000 of current accounts.
+  h.associateFindFirst.mockResolvedValue({ currentAccountCents: BigInt(20_000_00), holdings: [{ parts: 400 }] });
+  h.associateAggregate.mockResolvedValue({ _sum: { currentAccountCents: BigInt(50_000_00) } });
   h.accountFindMany.mockResolvedValue([]);
   h.institutionFindMany.mockResolvedValue([]);
   h.computePortfolio.mockResolvedValue({ result: { netWorth: BigInt(180_000_00), history: [], institutions: [], allocationRaw: {} } });
@@ -65,12 +67,17 @@ describe("loadCompanyPage", () => {
     expect(page?.associates.map((a) => a.username)).toEqual([null, null]);
     expect(page?.attachable).toBeNull();
     expect(page?.associates.find((a) => a.isViewer)?.name).toBe("Marie");
-    // Their share, from their ACCEPTED holdings only.
-    expect(h.holdingFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { companyId: COMPANY, fullOwner: { userId: "user-b", linkAcceptedAt: { not: null } } } })
+    // Their stake, from their ACCEPTED row only.
+    expect(h.associateFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: COMPANY, userId: "user-b", linkAcceptedAt: { not: null } } })
     );
-    expect(page?.shareCents).toBe(BigInt(72_000_00));
-    expect(page?.partValueCents).toBe(BigInt(180_00));
+    // ANR = 180 000 - 50 000 of current accounts; 40 % of it is 52 000.
+    expect(page?.anrCents).toBe(BigInt(130_000_00));
+    expect(page?.shareCents).toBe(BigInt(52_000_00));
+    expect(page?.ownCurrentAccountCents).toBe(BigInt(20_000_00));
+    expect(page?.partValueCents).toBe(BigInt(130_00));
+    // Every associate's current account, to every associate (as in the books).
+    expect(page?.associates.map((a) => a.currentAccountCents)).toEqual([30_000_00, 20_000_00]);
   });
 
   it("gives the manager the usernames and what can be attached", async () => {

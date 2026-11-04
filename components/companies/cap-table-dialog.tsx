@@ -1,5 +1,6 @@
 "use client";
 
+import { centsToEuro } from "@/lib/utils/format";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -20,6 +21,7 @@ function rowsFrom(associates: ManagerAssociate[]): CapTableRowDraft[] {
     parts: String(a.parts),
     username: a.username ?? "",
     self: a.isViewer,
+    currentAccount: a.currentAccountCents > 0 ? centsToEuro(a.currentAccountCents).replace(".", ",") : "",
   }));
 }
 

@@ -2062,7 +2062,9 @@
       "back": "Retour",
       "next": "Continuer",
       "create": "Créer la société",
-      "creating": "Création…"
+      "creating": "Création…",
+      "currentAccount": "Compte courant",
+      "currentAccountN": "Compte courant de l'associé {n}"
     },
     "errors": {
       "name_required": "Donne un nom (à la société et à chaque associé).",
@@ -2080,7 +2082,8 @@
       "institution_account": "Ce compte dépend d'une connexion bancaire : rattache la connexion entière.",
       "co_owned": "Un compte en copropriété ne peut pas entrer dans une société.",
       "not_an_associate": "La gérance ne peut passer qu'à un associé relié qui a accepté.",
-      "name_conflict": "Cette personne a déjà une connexion bancaire du même nom."
+      "name_conflict": "Cette personne a déjà une connexion bancaire du même nom.",
+      "current_account_invalid": "Un compte courant est un montant positif ou nul."
     },
     "page": {
       "back": "Comptes",
@@ -2108,7 +2111,10 @@
       "editAssociates": "Modifier",
       "settings": "Réglages",
       "attach": "Rattacher un compte",
-      "associateShare": "{name} : {pct} %"
+      "associateShare": "{name} : {pct} %",
+      "afterCurrentAccounts": "après {amount} de comptes courants d'associés",
+      "plusYourCurrentAccount": "+ ton compte courant de {amount}",
+      "currentAccountOf": "compte courant {amount}"
     },
     "capTable": {
       "title": "Associés et parts",
@@ -2136,6 +2142,7 @@
       "noHandoverCandidate": "Aucun associé relié n'a encore accepté.",
       "delete": "Supprimer la société",
       "deleteConfirm": "Ses comptes reviennent dans ton portefeuille personnel et la table des associés est supprimée."
-    }
+    },
+    "includingCurrentAccount": "dont compte courant {amount}"
   }
 }

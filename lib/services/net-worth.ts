@@ -36,22 +36,33 @@ export async function loadDashboardInput(accountIds: string[]) {
  * agrees to be linked to an associate, the company is nothing to them.
  */
 export async function loadCompanyShares(userId: string, now: Date): Promise<CompanyShare[]> {
-  const holdings = await prisma.companyHolding.findMany({
-    where: { fullOwner: { userId, linkAcceptedAt: { not: null } } },
-    select: { parts: true, company: { select: { id: true, name: true, totalParts: true } } },
+  // The user's own associate rows - one per company, by the (companyId,
+  // userId) unique index - with their parts and current account, plus every
+  // current account of the company: together they owe that much, which comes
+  // off the company's value before anyone's share is taken.
+  const rows = await prisma.companyAssociate.findMany({
+    where: { userId, linkAcceptedAt: { not: null } },
+    select: {
+      currentAccountCents: true,
+      holdings: { select: { parts: true } },
+      company: {
+        select: {
+          id: true,
+          name: true,
+          totalParts: true,
+          associates: { select: { currentAccountCents: true } },
+        },
+      },
+    },
   });
-  const byCompany = new Map<string, { company: { id: string; name: string; totalParts: number }; parts: number }>();
-  for (const h of holdings) {
-    const entry = byCompany.get(h.company.id) ?? { company: h.company, parts: 0 };
-    entry.parts += h.parts;
-    byCompany.set(h.company.id, entry);
-  }
 
   return Promise.all(
-    [...byCompany.values()].map(async ({ company, parts }) => {
+    rows.map(async ({ company, holdings, currentAccountCents }) => {
       const ids = (await prisma.account.findMany({ where: { companyId: company.id }, select: { id: true } })).map((a) => a.id);
       const value = computeDashboard({ ...(await loadDashboardInput(ids)), intlLocale: "en-US", now });
-      return buildCompanyShare(company, parts, value.netWorth, value.history);
+      const parts = holdings.reduce((sum, h) => sum + h.parts, 0);
+      const totalCents = company.associates.reduce((sum, a) => sum + a.currentAccountCents, BigInt(0));
+      return buildCompanyShare(company, parts, value.netWorth, value.history, { totalCents, ownCents: currentAccountCents });
     }),
   );
 }
