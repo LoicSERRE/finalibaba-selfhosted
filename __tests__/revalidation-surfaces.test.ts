@@ -144,6 +144,9 @@ const NO_REVALIDATION_NEEDED: Record<string, string> = {
   // Its only caller sends the browser straight to the bank's OAuth consent
   // page with window.location, so this page is gone before a refresh lands.
   setGocardlessInstitutionId: "caller navigates off-site immediately",
+  // Its backup codes are on screen inside the 2FA gate; a refresh now would
+  // replace the gate before they are written down. The client refreshes after.
+  confirmTotpSetup: "client refreshes once the backup codes are dismissed",
 };
 
 /** Any of the shared helpers, or revalidatePath/revalidateTag directly. */

@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { timingSafeEqual } from "node:crypto";
+import { hkdfSync, timingSafeEqual } from "node:crypto";
 
 /**
  * The shared gate for every container-to-container route: the ones sync/
@@ -8,10 +8,16 @@ import { timingSafeEqual } from "node:crypto";
  * (`/api/alerts/check`, `/api/transactions/auto-categorize`,
  * `/api/investments/snapshot-balances`, `/api/realtime/notify`).
  *
- * `NEXTAUTH_SECRET` doubles as the bearer token rather than introducing a
- * second required secret: it is already mandatory and its leak is already
- * maximally severe (session forgery), so reusing it here does not widen the
- * blast radius. See CLAUDE.md's "Alerts & webhooks".
+ * The bearer is DERIVED from `NEXTAUTH_SECRET` (HKDF, mirrored byte for byte
+ * by sync/internal_auth.py), so there is still no second secret to configure.
+ * It used to be `NEXTAUTH_SECRET` verbatim: every one of these requests then
+ * carried the session-signing key in a header, and anything that saw one - an
+ * APP_SERVICE_URL pointed at the wrong host, a proxy logging headers - could
+ * forge any session. The derived token opens these routes and nothing else.
+ *
+ * The same token goes the other way too (`internalAuthHeaders()` on every call
+ * to the sync service), which had no authentication at all: any container on
+ * the Docker network could start a bank sync or answer a pending 2FA step.
  *
  * Extracted because all four routes carried a byte-identical copy of this
  * function. Four copies of an auth check is a maintenance hazard on its own
@@ -25,8 +31,25 @@ import { timingSafeEqual } from "node:crypto";
  * constant-time compare costs nothing and removes the question - the same
  * reasoning applied to the login timing oracle during the v2.0 security audit.
  */
+export function internalApiToken(): string | null {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) return null;
+  // Fixed salt and info, as in crypto-at-rest.ts: both languages must derive
+  // the same value on every restart. Distinct from that key's inputs, so the
+  // token and the encryption key share no bytes.
+  return Buffer.from(
+    hkdfSync("sha256", Buffer.from(secret, "utf8"), Buffer.from("finalibaba-internal-api"), Buffer.from("bearer-v1"), 32)
+  ).toString("base64url");
+}
+
+/** Headers for a call to the sync service; empty when no secret is set. */
+export function internalAuthHeaders(): Record<string, string> {
+  const token = internalApiToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export function isInternalRequest(req: NextRequest): boolean {
-  const expected = process.env.NEXTAUTH_SECRET;
+  const expected = internalApiToken();
   if (!expected) return false;
 
   const auth = req.headers.get("authorization");

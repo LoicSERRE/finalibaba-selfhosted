@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
 import { OWNER_USER_ID } from "@/lib/domain/users";
 import { assertId, assertIds } from "@/lib/domain/action-input";
+import { requiresTwoFactor } from "@/lib/services/two-factor-policy";
 
 /**
  * Multi-user viewer resolution and access primitives (v2.0) - see CLAUDE.md's
@@ -162,6 +163,26 @@ export function isUnauthenticated(e: unknown): boolean {
   return e instanceof UnauthenticatedError;
 }
 
+/**
+ * Raised when the instance requires 2FA and this user has not set it up yet.
+ *
+ * The policy used to live in app/layout.tsx alone, which swapped the page for
+ * the setup screen - but a Server Action or an API route never goes through a
+ * layout, so a password alone still reached every action, the CSV exports and
+ * the REST API. getViewer now refuses such a user everywhere, and only the
+ * enrolment itself (getViewerForTwoFactorSetup) gets past it.
+ */
+export class TwoFactorEnrollmentRequiredError extends Error {
+  constructor(userId: string) {
+    super(`The instance requires two-factor authentication and ${userId} has not set it up`);
+    this.name = "TwoFactorEnrollmentRequiredError";
+  }
+}
+
+export function isTwoFactorEnrollmentRequired(e: unknown): boolean {
+  return e instanceof TwoFactorEnrollmentRequiredError;
+}
+
 async function ownerViewer(isMonoMode: boolean): Promise<Viewer> {
   const owner = await prisma.user.findUnique({
     where: { id: OWNER_USER_ID },
@@ -183,8 +204,11 @@ async function ownerViewer(isMonoMode: boolean): Promise<Viewer> {
  * throws here: those are not "anonymous", they are a browser that must be
  * signed out.
  */
-async function resolveViewer(): Promise<Viewer | null> {
-  if (!isAuthEnabled()) return ownerViewer(true);
+type ResolvedViewer = { viewer: Viewer; totpEnabled: boolean };
+
+async function resolveViewer(): Promise<ResolvedViewer | null> {
+  // Mono mode has no login for a second factor to sit behind.
+  if (!isAuthEnabled()) return { viewer: await ownerViewer(true), totpEnabled: false };
 
   const session = await getServerSession(authOptions);
   if (!session) return null;
@@ -201,9 +225,9 @@ async function resolveViewer(): Promise<Viewer | null> {
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUserId },
-    // sessionsRevokedAt rides along on the query this already makes, so
-    // checking revocation on every request costs nothing extra.
-    select: { id: true, role: true, sessionsRevokedAt: true },
+    // sessionsRevokedAt and totpEnabled ride along on the query this already
+    // makes, so checking revocation and the 2FA policy costs nothing extra.
+    select: { id: true, role: true, sessionsRevokedAt: true, totpEnabled: true },
   });
   // No fallback here, ever. Anything other than the real row for the id
   // this session names is somebody else's identity.
@@ -216,7 +240,13 @@ async function resolveViewer(): Promise<Viewer | null> {
   if (isSessionRevoked(user.sessionsRevokedAt, issuedAt)) {
     throw new RevokedSessionError(user.id);
   }
-  return { id: user.id, role: user.role, isMonoMode: false };
+  return { viewer: { id: user.id, role: user.role, isMonoMode: false }, totpEnabled: user.totpEnabled };
+}
+
+/** The instance policy applied to one resolved user. The policy row is only
+ *  read for a user without 2FA, so an enrolled user pays nothing for it. */
+async function mustEnrollTwoFactor({ viewer, totpEnabled }: ResolvedViewer): Promise<boolean> {
+  return !viewer.isMonoMode && !totpEnabled && (await requiresTwoFactor());
 }
 
 /**
@@ -227,11 +257,25 @@ async function resolveViewer(): Promise<Viewer | null> {
  * A session naming a deleted user raises DeletedSessionUserError, a revoked
  * one RevokedSessionError; app/layout.tsx catches both and signs the browser
  * out (not a redirect - the layout renders on /login too, so it would loop).
+ * A user the 2FA policy says must enrol first raises
+ * TwoFactorEnrollmentRequiredError.
  */
 export async function getViewer(): Promise<Viewer> {
-  const viewer = await resolveViewer();
-  if (!viewer) throw new UnauthenticatedError();
-  return viewer;
+  const resolved = await resolveViewer();
+  if (!resolved) throw new UnauthenticatedError();
+  if (await mustEnrollTwoFactor(resolved)) throw new TwoFactorEnrollmentRequiredError(resolved.viewer.id);
+  return resolved.viewer;
+}
+
+/**
+ * getViewer without the 2FA policy, for the enrolment actions only
+ * (lib/actions/totp.ts): they are how a user satisfies the policy, so they
+ * cannot be behind it. Everything they do is to the caller's own 2FA state.
+ */
+export async function getViewerForTwoFactorSetup(): Promise<Viewer> {
+  const resolved = await resolveViewer();
+  if (!resolved) throw new UnauthenticatedError();
+  return resolved.viewer;
 }
 
 /**
@@ -242,7 +286,7 @@ export async function getViewer(): Promise<Viewer> {
  * somebody.
  */
 export async function getPublicViewer(): Promise<Viewer | null> {
-  return resolveViewer();
+  return (await resolveViewer())?.viewer ?? null;
 }
 
 export async function requireAdmin(): Promise<Viewer> {
@@ -250,6 +294,16 @@ export async function requireAdmin(): Promise<Viewer> {
   if (viewer.role !== "ADMIN") throw new Error("Admin access required.");
   return viewer;
 }
+
+/**
+ * Only an ACCEPTED co-ownership or grant has any effect. Until v2.23 sharing
+ * was imposed: any member could put one of their accounts into somebody
+ * else's net worth, alerts and ledger, or a grant into their switcher, just by
+ * typing a username. A pending row (acceptedAt null) now counts for nothing
+ * here, so every read built on these primitives ignores it - and nothing
+ * outside this module queries those tables for access.
+ */
+const ACCEPTED = { acceptedAt: { not: null } } as const;
 
 /**
  * The accounts a user OWNS - their own plus any they co-own. This is the set
@@ -265,7 +319,7 @@ export async function requireAdmin(): Promise<Viewer> {
 export async function baseAccountIds(userId: string): Promise<string[]> {
   const [owned, coOwned] = await Promise.all([
     prisma.account.findMany({ where: { userId }, select: { id: true } }),
-    prisma.accountCoOwner.findMany({ where: { userId }, select: { accountId: true } }),
+    prisma.accountCoOwner.findMany({ where: { userId, ...ACCEPTED }, select: { accountId: true } }),
   ]);
   return [...new Set([...owned.map((a) => a.id), ...coOwned.map((c) => c.accountId)])];
 }
@@ -280,7 +334,7 @@ export async function viewAccountIds(userId: string, viewedGrantorId?: string | 
   if (!viewedGrantorId || viewedGrantorId === userId) return baseAccountIds(userId);
 
   const grant = await prisma.portfolioGrant.findUnique({
-    where: { grantorUserId_granteeUserId: { grantorUserId: viewedGrantorId, granteeUserId: userId } },
+    where: { grantorUserId_granteeUserId: { grantorUserId: viewedGrantorId, granteeUserId: userId }, ...ACCEPTED },
     select: { role: true },
   });
   if (!grant) return baseAccountIds(userId); // stale/invalid selection - fall back to own
@@ -301,7 +355,7 @@ export async function grantedPortfolios(
   userId: string
 ): Promise<{ userId: string; label: string }[]> {
   const grants = await prisma.portfolioGrant.findMany({
-    where: { granteeUserId: userId },
+    where: { granteeUserId: userId, ...ACCEPTED },
     select: { grantorUserId: true, grantor: { select: { username: true, displayName: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -343,7 +397,7 @@ export async function getViewContext(): Promise<ViewContext> {
   }
 
   const grant = await prisma.portfolioGrant.findUnique({
-    where: { grantorUserId_granteeUserId: { grantorUserId: requested, granteeUserId: viewer.id } },
+    where: { grantorUserId_granteeUserId: { grantorUserId: requested, granteeUserId: viewer.id }, ...ACCEPTED },
     select: { grantorUserId: true },
   });
   // Revoked or never existed: fall back to the viewer's own portfolio in full
@@ -372,7 +426,7 @@ export async function assertAccountWritable(userId: string, accountId: string): 
   accountId = assertId(accountId);
   const [owned, coOwned] = await Promise.all([
     prisma.account.count({ where: { id: accountId, userId } }),
-    prisma.accountCoOwner.count({ where: { accountId, userId } }),
+    prisma.accountCoOwner.count({ where: { accountId, userId, ...ACCEPTED } }),
   ]);
   if (owned === 0 && coOwned === 0) throw new Error("Account not found.");
 }

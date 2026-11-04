@@ -7,16 +7,23 @@ import type { NextRequest } from "next/server";
 // by that userId, and before it existed an API key read the entire instance
 // regardless of who minted it.
 
-const { findUniqueMock, updateMock } = vi.hoisted(() => ({
+const { findUniqueMock, updateMock, policy } = vi.hoisted(() => ({
   findUniqueMock: vi.fn(),
   updateMock: vi.fn(),
+  policy: { requireTwoFactor: false },
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: { apiKey: { findUnique: findUniqueMock, update: updateMock } },
 }));
 
+vi.mock("@/lib/services/two-factor-policy", () => ({
+  requiresTwoFactor: async () => policy.requireTwoFactor,
+}));
+
 import { authenticateApiKey } from "@/lib/services/api-auth";
+
+const keyRow = (totpEnabled = false) => ({ id: "key-1", userId: "user-b", user: { totpEnabled } });
 
 const reqWith = (headers: Record<string, string>) =>
   ({ headers: { get: (k: string) => headers[k.toLowerCase()] ?? null } }) as unknown as NextRequest;
@@ -24,15 +31,17 @@ const reqWith = (headers: Record<string, string>) =>
 beforeEach(() => {
   findUniqueMock.mockReset();
   updateMock.mockReset().mockResolvedValue({});
+  policy.requireTwoFactor = false;
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  delete process.env.AUTH_ENABLED;
 });
 
 describe("authenticateApiKey", () => {
   it("resolves the key and returns its owner", async () => {
-    findUniqueMock.mockResolvedValue({ id: "key-1", userId: "user-b" });
+    findUniqueMock.mockResolvedValue(keyRow());
 
     await expect(authenticateApiKey(reqWith({ authorization: "Bearer fnlb_abc" }))).resolves.toEqual({
       id: "key-1",
@@ -52,7 +61,7 @@ describe("authenticateApiKey", () => {
   });
 
   it("records lastUsedAt without making the caller wait on it", async () => {
-    findUniqueMock.mockResolvedValue({ id: "key-1", userId: "user-b" });
+    findUniqueMock.mockResolvedValue(keyRow());
 
     await authenticateApiKey(reqWith({ authorization: "Bearer fnlb_abc" }));
 
@@ -63,7 +72,7 @@ describe("authenticateApiKey", () => {
 
   it("still authenticates when the lastUsedAt write fails", async () => {
     // Fire-and-forget by design: bookkeeping must never fail the real request.
-    findUniqueMock.mockResolvedValue({ id: "key-1", userId: "user-b" });
+    findUniqueMock.mockResolvedValue(keyRow());
     updateMock.mockRejectedValue(new Error("db down"));
 
     await expect(
@@ -86,5 +95,36 @@ describe("authenticateApiKey", () => {
   ])("rejects %s without hitting the database", async (_label, headers) => {
     await expect(authenticateApiKey(reqWith(headers))).resolves.toBeNull();
     expect(findUniqueMock).not.toHaveBeenCalled();
+  });
+
+  describe("under the instance 2FA policy", () => {
+    beforeEach(() => {
+      process.env.AUTH_ENABLED = "true";
+      policy.requireTwoFactor = true;
+    });
+
+    it("refuses the key of a user who has not set 2FA up", async () => {
+      // A key minted before the policy was switched on would otherwise stay a
+      // password-only way into everything the policy now protects.
+      findUniqueMock.mockResolvedValue(keyRow(false));
+      await expect(authenticateApiKey(reqWith({ authorization: "Bearer fnlb_abc" }))).resolves.toBeNull();
+      expect(updateMock).not.toHaveBeenCalled();
+    });
+
+    it("accepts the key of a user who has", async () => {
+      findUniqueMock.mockResolvedValue(keyRow(true));
+      await expect(authenticateApiKey(reqWith({ authorization: "Bearer fnlb_abc" }))).resolves.toEqual({
+        id: "key-1",
+        userId: "user-b",
+      });
+    });
+
+    it("does not apply in mono mode, where there is no login to protect", async () => {
+      delete process.env.AUTH_ENABLED;
+      findUniqueMock.mockResolvedValue(keyRow(false));
+      await expect(authenticateApiKey(reqWith({ authorization: "Bearer fnlb_abc" }))).resolves.toMatchObject({
+        userId: "user-b",
+      });
+    });
   });
 });

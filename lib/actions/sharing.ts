@@ -18,6 +18,12 @@ import { assertId } from "@/lib/domain/action-input";
  *
  * Neither widens what a MUTATION may touch: co-ownership puts the account in
  * baseAccountIds, a grant is never consulted for writes at all.
+ *
+ * Both are INVITATIONS since v2.23: created pending (acceptedAt null), with no
+ * effect anywhere until the invited user accepts. They used to apply at once,
+ * so any member could push an account into somebody else's net worth, alerts
+ * and ledger by typing their username. lib/auth-context.ts ignores pending
+ * rows; the respond* actions below are the only way to change that.
  */
 
 /**
@@ -65,7 +71,7 @@ export async function listAccountCoOwners(accountId: string) {
   await assertAccountOwner(accountId, viewer.id);
   const rows = await prisma.accountCoOwner.findMany({
     where: { accountId },
-    select: { userId: true, createdAt: true, user: { select: { username: true, displayName: true } } },
+    select: { userId: true, createdAt: true, acceptedAt: true, user: { select: { username: true, displayName: true } } },
     orderBy: { createdAt: "asc" },
   });
   return rows.map((r) => ({
@@ -73,6 +79,7 @@ export async function listAccountCoOwners(accountId: string) {
     username: r.user.username,
     displayName: r.user.displayName,
     createdAt: r.createdAt,
+    pending: r.acceptedAt === null,
   }));
 }
 
@@ -87,7 +94,8 @@ export async function addAccountCoOwner(
   const userId = resolved.userId;
 
   // Idempotent: re-adding someone already on the account is a no-op rather
-  // than a unique-constraint crash the UI would have to translate.
+  // than a unique-constraint crash the UI would have to translate. Created
+  // pending - acceptedAt is only ever set by the invited user.
   await prisma.accountCoOwner.upsert({
     where: { accountId_userId: { accountId, userId } },
     create: { accountId, userId },
@@ -126,11 +134,17 @@ export async function listPortfolioGrants() {
   const [given, received] = await Promise.all([
     prisma.portfolioGrant.findMany({
       where: { grantorUserId: viewer.id },
-      select: { granteeUserId: true, createdAt: true, grantee: { select: { username: true, displayName: true } } },
+      select: {
+        granteeUserId: true,
+        createdAt: true,
+        acceptedAt: true,
+        grantee: { select: { username: true, displayName: true } },
+      },
       orderBy: { createdAt: "asc" },
     }),
+    // Accepted only: a pending one is listed by listPendingShares instead.
     prisma.portfolioGrant.findMany({
-      where: { granteeUserId: viewer.id },
+      where: { granteeUserId: viewer.id, acceptedAt: { not: null } },
       select: { grantorUserId: true, createdAt: true, grantor: { select: { username: true, displayName: true } } },
       orderBy: { createdAt: "asc" },
     }),
@@ -141,6 +155,7 @@ export async function listPortfolioGrants() {
       username: g.grantee.username,
       displayName: g.grantee.displayName,
       createdAt: g.createdAt,
+      pending: g.acceptedAt === null,
     })),
     received: received.map((g) => ({
       userId: g.grantorUserId,
@@ -198,7 +213,7 @@ export async function setViewingPortfolio(grantorUserId: string | null): Promise
     // already know is invalid, and it lets the switcher fail visibly instead
     // of silently doing nothing.
     const grant = await prisma.portfolioGrant.findUnique({
-      where: { grantorUserId_granteeUserId: { grantorUserId, granteeUserId: viewer.id } },
+      where: { grantorUserId_granteeUserId: { grantorUserId, granteeUserId: viewer.id }, acceptedAt: { not: null } },
       select: { grantorUserId: true },
     });
     if (!grant) throw new Error("Not found.");
@@ -210,6 +225,72 @@ export async function setViewingPortfolio(grantorUserId: string | null): Promise
     });
   }
 
+  revalidatePath("/", "layout");
+}
+
+// ── Invitations addressed to the viewer ────────────────────────────────────
+
+/** What other users have offered the viewer and is waiting for an answer. */
+export async function listPendingShares() {
+  const viewer = await getViewer();
+  const [coOwnerships, grants] = await Promise.all([
+    prisma.accountCoOwner.findMany({
+      where: { userId: viewer.id, acceptedAt: null },
+      select: {
+        accountId: true,
+        account: { select: { name: true, user: { select: { username: true, displayName: true } } } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.portfolioGrant.findMany({
+      where: { granteeUserId: viewer.id, acceptedAt: null },
+      select: { grantorUserId: true, grantor: { select: { username: true, displayName: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  return {
+    coOwnerships: coOwnerships.map((c) => ({
+      accountId: c.accountId,
+      accountName: c.account.name,
+      from: c.account.user.displayName ?? c.account.user.username,
+    })),
+    grants: grants.map((g) => ({
+      grantorUserId: g.grantorUserId,
+      from: g.grantor.displayName ?? g.grantor.username,
+    })),
+  };
+}
+
+/**
+ * Accept or decline a co-ownership offered to the viewer. Only ever touches
+ * the viewer's own PENDING row: accepting cannot be replayed onto anything
+ * else, and declining is not a way to leave an account already accepted
+ * (that stays with the owner, through removeAccountCoOwner and its cleanup).
+ */
+export async function respondToCoOwnership(accountId: string, accept: boolean): Promise<void> {
+  accountId = assertId(accountId);
+  const viewer = await getViewer();
+  const where = { accountId, userId: viewer.id, acceptedAt: null };
+  // `=== true`: the argument is client-supplied, and "yes" or {} must not
+  // count as consent.
+  const { count } = accept === true
+    ? await prisma.accountCoOwner.updateMany({ where, data: { acceptedAt: new Date() } })
+    : await prisma.accountCoOwner.deleteMany({ where });
+  if (count === 0) throw new Error("Not found.");
+  // Accepting puts the account in every page of the viewer's portfolio.
+  revalidatePath("/", "layout");
+}
+
+/** Same rules as respondToCoOwnership, for a read-only portfolio grant. */
+export async function respondToPortfolioGrant(grantorUserId: string, accept: boolean): Promise<void> {
+  grantorUserId = assertId(grantorUserId);
+  const viewer = await getViewer();
+  const where = { grantorUserId, granteeUserId: viewer.id, acceptedAt: null };
+  const { count } = accept === true
+    ? await prisma.portfolioGrant.updateMany({ where, data: { acceptedAt: new Date() } })
+    : await prisma.portfolioGrant.deleteMany({ where });
+  if (count === 0) throw new Error("Not found.");
+  // The sidebar switcher lists accepted grants.
   revalidatePath("/", "layout");
 }
 

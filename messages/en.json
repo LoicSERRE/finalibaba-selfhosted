@@ -87,8 +87,7 @@
     "back": "Back to password",
     "twoFactorRequired": {
       "title": "Two-factor authentication required",
-      "body": "This instance's administrator requires a second factor. Set up an authenticator app from Settings to reach your data.",
-      "action": "Go to Settings"
+      "body": "This instance's administrator requires a second factor. Set up an authenticator app below to reach your data."
     },
     "sessionRevokedTitle": "Session ended",
     "sessionRevokedBody": "All your sessions were signed out. Sign in again with your usual password."
@@ -333,7 +332,8 @@
       "remove": "Remove",
       "removeConfirm": "Remove {name} from this account? Their alert rules and goals tied to it will be deleted.",
       "trigger": "Manage co-owners",
-      "triggerShared": "Shared with {count} person(s) - manage"
+      "triggerShared": "Shared with {count} person(s) - manage",
+      "pending": "Invitation pending - they need to accept it in their settings"
     },
     "ownedBy": "{name}'s account",
     "ownedByHint": "This account belongs to {name}; you co-own it.",
@@ -1242,6 +1242,7 @@
       "granting": "Sharing…",
       "peopleWhoCanSee": "People who can see your portfolio",
       "readOnlyAccess": "Read-only access",
+      "pending": "Invitation waiting to be accepted",
       "revoke": "Revoke",
       "revokeConfirm": "Revoke {name}'s access? The change is immediate.",
       "sharedWithYou": "Portfolios shared with you",
@@ -1250,6 +1251,14 @@
       "errorUsernameRequired": "Enter a username.",
       "errorNoSuchUser": "No user with that name on this instance.",
       "errorThatIsYou": "That is your own account."
+    },
+    "pendingShares": {
+      "title": "Invitations for you",
+      "description": "Nothing appears in your portfolio until you accept.",
+      "coOwnership": "{from} offers to share the account “{account}” with you: it will count in your net worth and you will be able to edit it.",
+      "grant": "{from} offers you read-only access to their portfolio.",
+      "accept": "Accept",
+      "decline": "Decline"
     },
     "account": {
       "title": "My account",

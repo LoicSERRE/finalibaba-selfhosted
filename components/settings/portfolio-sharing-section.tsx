@@ -14,6 +14,8 @@ type GrantRow = {
   username: string | null;
   displayName: string | null;
   createdAt: Date;
+  /** Only on rows the viewer gave: not yet accepted by the other person. */
+  pending?: boolean;
 };
 
 /**
@@ -102,7 +104,7 @@ export function PortfolioSharingSection({
               <div key={g.userId} className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
                 <div className="min-w-0">
                   <p className="text-sm text-[var(--foreground)] break-words">{label(g)}</p>
-                  <p className="text-xs text-[var(--muted)]">{t("readOnlyAccess")}</p>
+                  <p className="text-xs text-[var(--muted)]">{g.pending ? t("pending") : t("readOnlyAccess")}</p>
                 </div>
                 <DeleteButton
                   onDelete={async () => {

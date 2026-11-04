@@ -87,8 +87,7 @@
     "back": "Revenir au mot de passe",
     "twoFactorRequired": {
       "title": "Double authentification requise",
-      "body": "L'administrateur de cette instance impose un second facteur. Configure une application d'authentification depuis les paramètres pour accéder à tes données.",
-      "action": "Aller aux paramètres"
+      "body": "L'administrateur de cette instance impose un second facteur. Configure une application d'authentification ci-dessous pour accéder à tes données."
     },
     "sessionRevokedTitle": "Session terminée",
     "sessionRevokedBody": "Toutes tes sessions ont été déconnectées. Reconnecte-toi avec ton mot de passe habituel."
@@ -333,7 +332,8 @@
       "remove": "Retirer",
       "removeConfirm": "Retirer {name} de ce compte ? Ses alertes et objectifs liés à ce compte seront supprimés.",
       "trigger": "Gérer les copropriétaires",
-      "triggerShared": "Partagé avec {count} personne(s) - gérer"
+      "triggerShared": "Partagé avec {count} personne(s) - gérer",
+      "pending": "Invitation en attente - la personne doit l'accepter dans ses paramètres"
     },
     "ownedBy": "Compte de {name}",
     "ownedByHint": "Ce compte appartient à {name} ; tu en es copropriétaire.",
@@ -1242,6 +1242,7 @@
       "granting": "Partage…",
       "peopleWhoCanSee": "Personnes qui voient ton portefeuille",
       "readOnlyAccess": "Accès en lecture seule",
+      "pending": "Invitation en attente d'acceptation",
       "revoke": "Révoquer",
       "revokeConfirm": "Révoquer l'accès de {name} ? Le changement est immédiat.",
       "sharedWithYou": "Portefeuilles partagés avec toi",
@@ -1250,6 +1251,14 @@
       "errorUsernameRequired": "Saisis un nom d'utilisateur.",
       "errorNoSuchUser": "Aucun utilisateur avec ce nom sur cette instance.",
       "errorThatIsYou": "C'est ton propre compte."
+    },
+    "pendingShares": {
+      "title": "Invitations reçues",
+      "description": "Rien n'apparaît dans ton portefeuille tant que tu n'as pas accepté.",
+      "coOwnership": "{from} te propose de partager le compte « {account} » : il apparaîtra dans ton patrimoine et tu pourras le modifier.",
+      "grant": "{from} te propose de voir son portefeuille, en lecture seule.",
+      "accept": "Accepter",
+      "decline": "Refuser"
     },
     "account": {
       "title": "Mon compte",

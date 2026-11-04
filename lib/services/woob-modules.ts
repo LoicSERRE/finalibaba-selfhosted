@@ -7,6 +7,7 @@
  * createInstitution and setWoobConfig, never by a client.
  */
 import { encryptSecret } from "@/lib/domain/crypto-at-rest";
+import { internalAuthHeaders } from "@/lib/services/internal-auth";
 import {
   isWoobModuleName,
   parseWoobFields,
@@ -33,6 +34,7 @@ export async function fetchWoobModuleFields(module: string): Promise<WoobField[]
   if (!isWoobModuleName(module)) return null;
   try {
     const res = await fetch(`${SYNC_URL}/woob/modules/${module}/fields`, {
+      headers: internalAuthHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(FIELDS_TIMEOUT_MS),
     });

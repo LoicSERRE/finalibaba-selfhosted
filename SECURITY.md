@@ -32,7 +32,7 @@ Issues in scope:
 Out of scope:
 - Vulnerabilities requiring physical access to the host
 - Issues in upstream dependencies not specific to this project
-- The sync service HTTP API is intentionally internal (Docker network only, never expose port 8000 publicly)
+- The sync service HTTP API is intentionally internal (Docker network only, never expose port 8000 publicly). Since v2.23 it also requires the internal bearer token on every endpoint but `/health`, so the network is no longer its only protection
 
 ## Security design notes
 

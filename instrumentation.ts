@@ -43,7 +43,7 @@ export async function register() {
       // It was written that way and the instruction was wrong twice over:
       // `sync/db.py`'s `get_woob_institutions` opens a connection and decrypts
       // per scheduled run rather than caching anything at boot, and it already
-      // receives NEXTAUTH_SECRET (it always did, for the alerts bearer token)
+      // receives NEXTAUTH_SECRET (it always did, for the internal bearer token)
       // so the derived key resolves with no new variable. `docker compose
       // restart` would not re-read the environment from the compose file even
       // if one were needed. Telling people to run a pointless command in the

@@ -25,14 +25,19 @@ vi.mock("@/lib/db/prisma", () => ({
 
 // These actions resolve the current user first; in mono mode that's the
 // instance owner, which is what the mocked rows below stand in for.
+// getViewer is the policy-checked one; the enrolment actions use the other,
+// and the policy test below makes the two disagree to tell them apart.
+const { getViewerMock } = vi.hoisted(() => ({ getViewerMock: vi.fn() }));
 vi.mock("@/lib/auth-context", () => ({
-  getViewer: vi.fn(async () => ({ id: "user-owner", role: "ADMIN", isMonoMode: true })),
+  getViewer: getViewerMock,
+  getViewerForTwoFactorSetup: vi.fn(async () => ({ id: "user-owner", role: "ADMIN", isMonoMode: true })),
 }));
 
 import { confirmTotpSetup, disableTotp, regenerateBackupCodes, startTotpSetup } from "@/lib/actions/totp";
 import { generateTotpSecret } from "@/lib/domain/totp";
 
 beforeEach(() => {
+  getViewerMock.mockReset().mockResolvedValue({ id: "user-owner", role: "ADMIN", isMonoMode: true });
   findUniqueMock.mockReset();
   updateMock.mockReset().mockResolvedValue({});
 });
@@ -142,5 +147,29 @@ describe("startTotpSetup", () => {
     expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ totpEnabled: false }) })
     );
+  });
+});
+
+describe("under the instance 2FA policy", () => {
+  // getViewer refuses a user who has not enrolled yet. The two enrolment
+  // actions must not, or the policy is a dead end; the two that need 2FA
+  // already on must, as any other action does.
+  beforeEach(() => {
+    getViewerMock.mockRejectedValue(new Error("two-factor enrollment required"));
+  });
+
+  it("still lets an unenrolled user start and confirm the setup", async () => {
+    findUniqueMock.mockResolvedValueOnce({ totpEnabled: false });
+    findUniqueMock.mockResolvedValueOnce({ username: "alice", displayName: "Alice" });
+    const started = await startTotpSetup();
+    expect("ok" in started).toBe(false);
+
+    findUniqueMock.mockResolvedValueOnce({ totpSecret: null });
+    await expect(confirmTotpSetup("123456")).resolves.toEqual({ ok: false, error: "no_pending_setup" });
+  });
+
+  it("keeps disabling and regenerating behind the normal check", async () => {
+    await expect(disableTotp("123456")).rejects.toThrow(/two-factor/);
+    await expect(regenerateBackupCodes("123456")).rejects.toThrow(/two-factor/);
   });
 });

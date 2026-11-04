@@ -45,6 +45,7 @@ from db import (
     upsert_account,
     write_sync_log,
 )
+from internal_auth import auth_headers, internal_api_token
 from sync_tr import (
     AuthRequiredError,
     _fetch_and_write_once,
@@ -116,14 +117,13 @@ def _app_call(path: str, timeout: int, payload: dict | None = None) -> None:
     the listener itself, same non-fatal-side-effect reasoning
     _sync_transactions() already applies to its own DB writes."""
     app_url = os.environ.get("APP_SERVICE_URL")
-    secret = os.environ.get("NEXTAUTH_SECRET")
-    if not app_url or not secret:
+    if not app_url or not internal_api_token():
         return
     try:
         import requests
         requests.post(
             f"{app_url}{path}",
-            headers={"Authorization": f"Bearer {secret}"},
+            headers=auth_headers(),
             json=payload,
             timeout=timeout,
         )

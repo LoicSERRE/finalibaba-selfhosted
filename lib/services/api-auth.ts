@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
 import { tokenLookupHash } from "@/lib/domain/crypto-at-rest";
 import { prisma } from "@/lib/db/prisma";
+import { isAuthEnabled } from "@/lib/auth-context";
+import { requiresTwoFactor } from "@/lib/services/two-factor-policy";
 
 // Shared gate for every app/api/v1/* route - see CLAUDE.md's "Public REST
-// API". Deliberately its own lookup, not the NEXTAUTH_SECRET bearer-token
-// pattern app/api/alerts/check/route.ts uses: that secret must stay
+// API". Deliberately its own lookup, not the internal bearer-token
+// pattern app/api/alerts/check/route.ts uses: that token must stay
 // strictly internal (app<->sync containers, same trust level as session
 // forgery), never handed to a third-party tool like Home Assistant. An
 // ApiKey is a separate, individually revocable credential precisely so a
@@ -27,11 +29,16 @@ export async function authenticateApiKey(
   const token = auth.slice("Bearer ".length);
   if (!token) return null;
 
-  const key = await prisma.apiKey.findUnique({
+  const row = await prisma.apiKey.findUnique({
     where: { tokenHash: tokenLookupHash(token) },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, user: { select: { totpEnabled: true } } },
   });
-  if (!key) return null;
+  if (!row) return null;
+  // The instance 2FA policy, which getViewer applies to sessions: a key minted
+  // before the policy was switched on (or by a user who has since turned 2FA
+  // off) must not stay a password-only way into the data.
+  if (isAuthEnabled() && !row.user.totpEnabled && (await requiresTwoFactor())) return null;
+  const key = { id: row.id, userId: row.userId };
 
   // Fire-and-forget: a failed lastUsedAt write shouldn't fail the actual
   // request the caller is waiting on.
