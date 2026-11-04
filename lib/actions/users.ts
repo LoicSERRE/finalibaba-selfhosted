@@ -218,6 +218,12 @@ export async function deleteUser(id: string): Promise<void> {
   if (id === OWNER_USER_ID) throw new Error("The instance owner cannot be deleted.");
   if (id === admin.id) throw new Error("You cannot delete your own account.");
   const victim = await prisma.user.findUnique({ where: { id }, select: { username: true } });
+  // Company.manager is onDelete: Restrict - the delete would fail with a raw
+  // FK error. Said plainly instead: management goes to someone else first,
+  // so the company's accounts never disappear with a user.
+  if ((await prisma.company.count({ where: { managerUserId: id } })) > 0) {
+    throw new Error("This user manages a company: hand its management over or delete it first.");
+  }
   await prisma.user.delete({ where: { id } });
   // Recorded AFTER the delete and with no foreign key, so the trace outlives
   // the row - which is exactly the case where it is worth having.

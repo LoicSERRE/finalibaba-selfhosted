@@ -168,3 +168,65 @@ def test_get_institution_id_does_not_pick_a_members_institution(cur, member):
 
 def test_institution_owner_id_is_none_for_an_unknown_institution(cur):
     assert institution_owner_id(cur, "does-not-exist") is None
+
+
+# ── Companies (dev-docs/companies.md) ───────────────────────────────────────
+
+
+@pytest.fixture
+def company(cur, member):
+    """A company the member manages, owning the member's institution."""
+    company_id = f"test-co-{uuid.uuid4().hex[:8]}"
+    cur.execute(
+        """
+        INSERT INTO "Company" (id, name, kind, "taxRegime", "totalParts", "managerUserId", "createdAt")
+        VALUES (%s, 'SCI test', 'SCI', 'IR', 100, %s, NOW())
+        """,
+        (company_id, member["user_id"]),
+    )
+    cur.execute('UPDATE "Institution" SET "companyId" = %s WHERE id = %s', (company_id, member["institution_id"]))
+    return company_id
+
+
+def _account_company(cur, account_id: str):
+    cur.execute('SELECT "companyId" FROM "Account" WHERE id = %s', (account_id,))
+    return cur.fetchone()["companyId"]
+
+
+def test_a_company_bank_connection_creates_company_accounts(cur, member, company):
+    # Without it the account would land in the manager's PERSONAL net worth at
+    # 100 %, beside the share of the company they already get.
+    account_id = upsert_account(
+        cur,
+        sync_id=f"woob:{member['institution_id']}:FR761234",
+        name="Compte SCI",
+        account_type="CHECKING",
+        institution_id=member["institution_id"],
+    )
+    assert _account_company(cur, account_id) == company
+
+
+def test_moving_the_institution_carries_its_accounts_on_the_next_sync(cur, member, company):
+    kwargs = {
+        "sync_id": f"woob:{member['institution_id']}:FR761234",
+        "name": "Compte SCI",
+        "account_type": "CHECKING",
+        "institution_id": member["institution_id"],
+    }
+    account_id = upsert_account(cur, **kwargs)
+    assert _account_company(cur, account_id) == company
+    cur.execute('UPDATE "Institution" SET "companyId" = NULL WHERE id = %s', (member["institution_id"],))
+
+    assert upsert_account(cur, **kwargs) == account_id
+    assert _account_company(cur, account_id) is None
+
+
+def test_a_personal_bank_connection_creates_personal_accounts(cur, member):
+    account_id = upsert_account(
+        cur,
+        sync_id=f"woob:{member['institution_id']}:FR769999",
+        name="Compte perso",
+        account_type="CHECKING",
+        institution_id=member["institution_id"],
+    )
+    assert _account_company(cur, account_id) is None

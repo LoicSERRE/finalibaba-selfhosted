@@ -34,6 +34,8 @@ import { assertId } from "@/lib/domain/action-input";
  */
 export type ShareFailure = { ok: false; error: "username_required" | "no_such_user" | "that_is_you" };
 export type ShareResult = { ok: true } | ShareFailure;
+/** Co-ownership can also be refused for the account itself. */
+export type CoOwnerResult = ShareResult | { ok: false; error: "company_account" };
 
 /**
  * Returned rather than thrown, like every other expected failure in this
@@ -86,9 +88,14 @@ export async function listAccountCoOwners(accountId: string) {
 export async function addAccountCoOwner(
   accountId: string,
   formData: FormData,
-): Promise<ShareResult> {
+): Promise<CoOwnerResult> {
   const viewer = await getViewer();
   await assertAccountOwner(accountId, viewer.id);
+  // A company's account is shared through the cap table, never co-owned: a
+  // co-owner would count it at 100 % in their own net worth, beside the
+  // share the company already gives the associates.
+  const account = await prisma.account.findUnique({ where: { id: accountId }, select: { companyId: true } });
+  if (account?.companyId) return { ok: false, error: "company_account" };
   const resolved = await resolveUsername(formData.get("username") as string, viewer.id);
   if (!resolved.ok) return resolved;
   const userId = resolved.userId;

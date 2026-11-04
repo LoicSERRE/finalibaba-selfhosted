@@ -4,6 +4,7 @@ import { calcCurrentCapital, hasLoanParams, historyLiabilityCents, isBankReporte
 import { buildDashboardHistory } from "@/lib/domain/dashboard-history";
 import { holdingMarketValue } from "@/lib/domain/analytics";
 import { getInstitutionLogoUrl } from "@/lib/domain/institutions";
+import { shareTotals, type CompanyShare } from "@/lib/domain/company";
 import type { TaxTreatment } from "@/app/generated/prisma/enums";
 
 /**
@@ -60,6 +61,13 @@ export interface DashboardInput {
   intlLocale: string;
   /** Evaluation instant - never read internally via `new Date()`, so this stays pure/deterministic for tests. */
   now: Date;
+  /**
+   * The person's shares of companies (lib/domain/company.ts). The companies'
+   * own accounts are never in `accounts` - baseAccountIds leaves them out -
+   * so a company counts once, at the share held. Absent for a company's own
+   * figures and for any set that is not one person's portfolio.
+   */
+  companyShares?: readonly CompanyShare[];
 }
 
 // ── Output ─────────────────────────────────────────────────────────────────
@@ -102,6 +110,7 @@ export interface DashboardAllocationHistoryPoint {
   crypto: number;
   realEstate: number;
   auto: number;
+  companies: number;
 }
 
 export interface DashboardResult {
@@ -122,7 +131,7 @@ export interface DashboardResult {
 // computeAnalytics - covered by __tests__/dashboard.test.ts.
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function computeDashboard(input: DashboardInput): DashboardResult {
-  const { accounts, allBalances, intlLocale, now } = input;
+  const { accounts, allBalances, intlLocale, now, companyShares = [] } = input;
 
   let grossAssets = BigInt(0);
   let totalLiabilities = BigInt(0);
@@ -135,6 +144,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
     crypto: BigInt(0),
     realEstate: BigInt(0),
     auto: BigInt(0),
+    companies: BigInt(0),
   };
 
   const instMap = new Map<string, DashboardInstitutionGroup>();
@@ -229,6 +239,13 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
     inst.accounts.push({ id: account.id, name: account.name, value, type: account.type });
   }
 
+  // Company shares: an asset when positive, a liability when the company owes
+  // more than it holds - see shareTotals.
+  const shares = shareTotals(companyShares);
+  grossAssets += shares.assetsCents;
+  totalLiabilities += shares.liabilitiesCents;
+  allocation["companies"] += shares.assetsCents;
+
   const netWorth = grossAssets - totalLiabilities - totalLatentTax;
   const totalPassif = totalLiabilities + totalLatentTax;
   const institutions = [...instMap.values()].sort((a, b) => Number(b.total - a.total));
@@ -236,11 +253,11 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
   // ── Daily history ──────────────────────────────────────────────────────
   // The chart series and the 30-day delta - see lib/domain/dashboard-history.ts.
   const { history, allocationHistory, delta30 } = buildDashboardHistory(
-    accounts, allBalances, liabMap, typeMap, intlLocale, now,
+    accounts, allBalances, liabMap, typeMap, intlLocale, now, companyShares,
   );
 
   return {
-    hasAccounts: accounts.length > 0,
+    hasAccounts: accounts.length > 0 || companyShares.length > 0,
     netWorth,
     grossAssets,
     totalPassif,
@@ -253,6 +270,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
       crypto: Number(allocation["crypto"]),
       realEstate: Number(allocation["realEstate"]),
       auto: Number(allocation["auto"]),
+      companies: Number(allocation["companies"]),
     },
     institutions,
     history,

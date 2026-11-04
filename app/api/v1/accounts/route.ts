@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
 import { authenticateApiKey } from "@/lib/services/api-auth";
 import { baseAccountIds } from "@/lib/auth-context";
-import { computeDashboard } from "@/lib/domain/dashboard";
+import { computePortfolio } from "@/lib/services/net-worth";
 import { localeToIntl } from "@/lib/utils/format";
 
 // GET /api/v1/accounts - every account's current value, grouped the same
@@ -20,15 +19,11 @@ export async function GET(req: NextRequest) {
   // granted for reading and could be revoked at any time.
   const accountIds = await baseAccountIds(key.userId);
 
-  const [accounts, allBalances] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds } },
-      include: { institution: true, holdings: true, history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 } },
-    }),
-    prisma.historicalBalance.findMany({ where: { accountId: { in: accountIds } }, orderBy: { recordedAt: "asc" } }),
-  ]);
-
-  const { institutions } = computeDashboard({ accounts, allBalances, intlLocale: localeToIntl("fr"), now: new Date() });
+  // Accounts only: a company share is not an account of the key owner's (the
+  // company's accounts are its manager's, and stay out of baseAccountIds), so
+  // it shows in /net-worth, not here.
+  const { result } = await computePortfolio({ accountIds, shareholderId: null, intlLocale: localeToIntl("fr"), now: new Date() });
+  const { institutions } = result;
 
   const flattened = institutions.flatMap((inst) =>
     inst.accounts.map((account) => ({

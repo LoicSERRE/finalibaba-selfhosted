@@ -47,9 +47,11 @@ const {
   grantUpdateManyMock: vi.fn(),
 }));
 
+const accountFindUniqueMock = vi.hoisted(() => vi.fn(async () => ({ companyId: null as string | null })));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    account: { count: accountCountMock },
+    account: { count: accountCountMock, findUnique: accountFindUniqueMock },
     user: { findUnique: userFindUniqueMock },
     accountCoOwner: {
       findMany: coOwnerFindManyMock,
@@ -432,5 +434,17 @@ describe("invitations: a share waits for the invited user (F6)", () => {
     coOwnerDeleteManyMock.mockResolvedValue({ count: 1 });
     await respondToCoOwnership("acc-1", "yes" as unknown as boolean);
     expect(coOwnerUpdateManyMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("a company account is never co-owned", () => {
+  it("refuses, writing nothing - it is shared through the cap table instead", async () => {
+    // A co-owner would count it at 100 % in their own net worth, beside the
+    // share the company already gives its associates.
+    accountCountMock.mockResolvedValue(1);
+    accountFindUniqueMock.mockResolvedValueOnce({ companyId: "ckcompany00000000000000001" });
+    userFindUniqueMock.mockResolvedValue({ id: "user-b" });
+    await expect(addAccountCoOwner("acc-1", formWith("bob"))).resolves.toEqual({ ok: false, error: "company_account" });
+    expect(coOwnerUpsertMock).not.toHaveBeenCalled();
   });
 });

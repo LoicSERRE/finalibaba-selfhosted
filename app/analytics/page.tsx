@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { getViewContext } from "@/lib/auth-context";
+import { loadCompanyShares } from "@/lib/services/net-worth";
 import { localeToIntl } from "@/lib/utils/format";
 import { FR_PFU_TOTAL_RATE, FR_SOCIAL_LEVIES_RATE } from "@/lib/domain/tax-locale";
 import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
@@ -64,7 +65,7 @@ export default async function AnalyticsPage() {
   const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
   const startOfNextYear = new Date(Date.UTC(currentYear + 1, 0, 1));
 
-  const { ownerId, accountIds, readOnly } = await getViewContext();
+  const { ownerId, accountIds, readOnly, companyId } = await getViewContext();
 
   const [accounts, allBalances, settings, goals, yfData, incomeEventsYtd, msciWorldHistory, sp500History, cac40History, yearTotals] = await Promise.all([
     prisma.account.findMany({
@@ -110,9 +111,13 @@ export default async function AnalyticsPage() {
       .then((categories) => loadPeriodLedger(accountIds, startOfYear, startOfNextYear, categories)),
   ]);
 
+  // A person's company shares, as on their dashboard; none for a company's
+  // own scope (lib/services/net-worth.ts).
+  const companyShares = companyId ? [] : await loadCompanyShares(ownerId, new Date());
   const result = computeAnalytics({
     accounts,
     allBalances,
+    companyShares,
     settings,
     goals,
     yfData,

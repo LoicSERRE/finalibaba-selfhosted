@@ -12,7 +12,7 @@ import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { SharedHoldingsSection } from "@/components/shared/shared-holdings-section";
 import { SharedTransactionsSection } from "@/components/shared/shared-transactions-section";
-import { computeDashboard } from "@/lib/domain/dashboard";
+import { computePortfolio } from "@/lib/services/net-worth";
 import { isShareLinkExpired, buildSharedHoldings } from "@/lib/domain/share-links";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { getTranslations, getLocale } from "next-intl/server";
@@ -51,17 +51,11 @@ export default async function SharedDashboardPage({
   // unscoped, exposing every account in the instance to any token holder.
   const sharedAccountIds = await baseAccountIds(link.userId);
 
-  const [accounts, allBalances, sharedTransactions, t, locale] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: sharedAccountIds } },
-      include: {
-        institution: true,
-        holdings: true,
-        history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
-      },
-      orderBy: { name: "asc" },
-    }),
-    prisma.historicalBalance.findMany({ where: { accountId: { in: sharedAccountIds } }, orderBy: { recordedAt: "asc" } }),
+  const locale = await getLocale();
+  const [portfolio, sharedTransactions, t] = await Promise.all([
+    // The owner's company shares are part of their net worth, so they are
+    // in the link too - as one figure per company, never its accounts.
+    computePortfolio({ accountIds: sharedAccountIds, shareholderId: link.userId, intlLocale: localeToIntl(locale), now: new Date() }),
     // Skip the query entirely when the link doesn't opt into it - no reason
     // to pull real transaction rows out of the DB for a link that will never
     // render them.
@@ -74,8 +68,8 @@ export default async function SharedDashboardPage({
         })
       : Promise.resolve([]),
     getTranslations(),
-    getLocale(),
   ]);
+  const { accounts } = portfolio.input;
 
   const {
     hasAccounts,
@@ -89,7 +83,7 @@ export default async function SharedDashboardPage({
     history,
     allocationHistory,
     delta30,
-  } = computeDashboard({ accounts, allBalances, intlLocale: localeToIntl(locale), now: new Date() });
+  } = portfolio.result;
 
   const allocationSlices: AllocationSlice[] = [
     { name: t("allocation.cash"), value: allocationRaw.cash, color: ALLOCATION_CATEGORY_COLORS.cash },
@@ -98,6 +92,7 @@ export default async function SharedDashboardPage({
     { name: t("allocation.crypto"), value: allocationRaw.crypto, color: ALLOCATION_CATEGORY_COLORS.crypto },
     { name: t("allocation.realEstate"), value: allocationRaw.realEstate, color: ALLOCATION_CATEGORY_COLORS.realEstate },
     { name: t("allocation.auto"), value: allocationRaw.auto, color: ALLOCATION_CATEGORY_COLORS.auto },
+    { name: t("allocation.companies"), value: allocationRaw.companies, color: ALLOCATION_CATEGORY_COLORS.companies },
   ];
 
   return (

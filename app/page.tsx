@@ -5,7 +5,7 @@ import { getViewContext } from "@/lib/auth-context";
 import { localeToIntl } from "@/lib/utils/format";
 import { type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
-import { computeDashboard } from "@/lib/domain/dashboard";
+import { computePortfolio } from "@/lib/services/net-worth";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { getTranslations, getLocale } from "next-intl/server";
 import { upcomingOccurrences } from "@/lib/domain/upcoming";
@@ -20,25 +20,17 @@ export default async function DashboardPage() {
   // Every query on this page is scoped to the accounts this viewer may see
   // (their own plus co-owned ones). In mono mode that resolves to the
   // instance owner, i.e. everything - identical to pre-v2.0 behavior.
-  const { viewer, accountIds, readOnly } = await getViewContext();
+  const { viewer, ownerId, accountIds, readOnly, companyId } = await getViewContext();
 
-  const [accounts, allBalances, t, locale] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds } },
-      include: {
-        institution: { select: { id: true, name: true, logoUrl: true } },
-        holdings: true,
-        history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 1 },
-      },
-      orderBy: { name: "asc" },
-    }),
-    prisma.historicalBalance.findMany({
-      where: { accountId: { in: accountIds } },
-      orderBy: { recordedAt: "asc" },
-    }),
-    getTranslations(),
-    getLocale(),
-  ]);
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  // A person's portfolio carries their company shares; a company's own scope
+  // carries none (a company does not hold companies here).
+  const { result } = await computePortfolio({
+    accountIds,
+    shareholderId: companyId ? null : ownerId,
+    intlLocale: localeToIntl(locale),
+    now: new Date(),
+  });
   const series = await prisma.recurringTransaction.findMany({
     where: { accountId: { in: accountIds }, active: true, dismissedAt: null },
     select: { id: true, label: true, amountCents: true, amountVaries: true, frequency: true, intervalCount: true, anchorDate: true },
@@ -58,7 +50,7 @@ export default async function DashboardPage() {
     history,
     allocationHistory,
     delta30,
-  } = computeDashboard({ accounts, allBalances, intlLocale: localeToIntl(locale), now: new Date() });
+  } = result;
 
   // Not grossAssets > 0 - a LOAN-only portfolio has real data (a mortgage,
   // real payments) but zero gross assets by design (pure liability, no
@@ -80,6 +72,7 @@ export default async function DashboardPage() {
     { name: t("allocation.crypto"), value: allocationRaw.crypto, color: ALLOCATION_CATEGORY_COLORS.crypto },
     { name: t("allocation.realEstate"), value: allocationRaw.realEstate, color: ALLOCATION_CATEGORY_COLORS.realEstate },
     { name: t("allocation.auto"), value: allocationRaw.auto, color: ALLOCATION_CATEGORY_COLORS.auto },
+    { name: t("allocation.companies"), value: allocationRaw.companies, color: ALLOCATION_CATEGORY_COLORS.companies },
   ];
 
   return (

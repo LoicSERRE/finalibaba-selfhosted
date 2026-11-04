@@ -3,7 +3,7 @@
 import { revalidateTransactions } from "@/lib/actions/revalidate";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer, assertTransactionsWritable, assertOwned, baseAccountIds } from "@/lib/auth-context";
+import { getViewer, assertTransactionsWritable, assertOwned, writableAccountIds } from "@/lib/auth-context";
 import { rememberUndo } from "@/lib/services/undo-store";
 import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
 import { parseBulkIds } from "@/lib/domain/transactions-ledger";
@@ -88,7 +88,7 @@ export async function setInternalTransferFlag(transactionId: string, flagged: bo
   // the counterpart was never recorded anywhere, so there is nothing to
   // flag alongside it.
   if (!flagged && tx.internalTransferPairId) {
-    const writableIds = await baseAccountIds(viewer.id);
+    const writableIds = await writableAccountIds(viewer.id);
     await prisma.transaction.updateMany({
       where: {
         id: tx.internalTransferPairId,

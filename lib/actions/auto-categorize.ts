@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidateTransactions } from "@/lib/actions/revalidate";
-import { getViewer, baseAccountIds } from "@/lib/auth-context";
+import { getViewer, accountPools } from "@/lib/auth-context";
 import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
 
 // Session-resolving wrappers around lib/services/auto-categorize-runner.ts.
@@ -10,14 +10,19 @@ import { autoCategorizeForUser } from "@/lib/services/auto-categorize-runner";
 // invocable from the browser with attacker-chosen arguments - see that
 // file's own header.
 //
-// `baseAccountIds` (own + co-owned), not `viewAccountIds`: categorization
-// writes, so a read-only guest viewing someone else's portfolio must never
-// have their pass reach into it.
+// `accountPools` (own + co-owned, then each managed company), never
+// `viewAccountIds`: categorization writes, so a read-only guest viewing
+// someone else's portfolio must never have their pass reach into it. One
+// pass per pool, so a transfer between a person and their company is never
+// paired as internal (accountPools).
 
 export async function autoCategorizeTransactions(accountId?: string): Promise<{ categorized: number }> {
   const viewer = await getViewer();
-  const accountIds = await baseAccountIds(viewer.id);
-  return autoCategorizeForUser(viewer.id, accountIds, accountId);
+  const pools = await accountPools(viewer.id);
+  const selected = accountId ? pools.filter((pool) => pool.includes(accountId)) : pools;
+  let categorized = 0;
+  for (const pool of selected) categorized += (await autoCategorizeForUser(viewer.id, pool, accountId)).categorized;
+  return { categorized };
 }
 
 export async function runAutoCategorizeNow() {

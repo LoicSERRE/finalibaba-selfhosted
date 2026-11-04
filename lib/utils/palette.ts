@@ -43,6 +43,9 @@ export const ALLOCATION_CATEGORY_COLORS: Record<string, string> = {
   crypto: "#f59e0b",
   realEstate: "#a1665e",
   auto: "#ec4899",
+  // Shares of companies (SCI...): what the person owns is parts, not the
+  // company's buildings or cash, so it is its own bucket.
+  companies: "#0ea5e9",
 };
 
 // Full sector-exposure breakdown (v1.16, components/analytics/sector-exposure-section.tsx)

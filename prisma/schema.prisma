@@ -107,6 +107,8 @@ model User {
   invitationsCreated Invitation[]
   grantsGiven        PortfolioGrant[]    @relation("grantor")
   grantsReceived     PortfolioGrant[]    @relation("grantee")
+  managedCompanies   Company[]
+  companyAssociates  CompanyAssociate[]
 }
 
 // Single-use, admin-generated invitation (see CLAUDE.md - the admin never
@@ -261,6 +263,11 @@ model Institution {
   userId                  String    @default("user-owner")
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   ignoredSyncAccounts     IgnoredSyncAccount[]
+  // The company this bank connection belongs to (dev-docs/companies.md).
+  // Every account under it carries the same companyId - sync/db.py keeps
+  // them aligned - and userId is then the company's manager.
+  companyId               String?
+  company                 Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@unique([userId, name])
   @@index([userId])
@@ -384,8 +391,14 @@ model Account {
   userId                String                 @default("user-owner")
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   coOwners              AccountCoOwner[]
+  // Set when the account is part of a company's patrimony rather than its
+  // owner's own: it then leaves the owner's personal net worth (their share
+  // of the company counts instead) and userId is the company's manager.
+  companyId             String?
+  company               Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([companyId])
 }
 
 model Holding {
@@ -1213,4 +1226,75 @@ model IgnoredSyncAccount {
   createdAt     DateTime    @default(now())
 
   @@id([institutionId, nativeId])
+}
+
+// ── Companies (dev-docs/companies.md) ──────────────────────────────────────
+//
+// A company is never a User: no login, no session, no key, no invitation can
+// target it. It is a cap table plus a set of accounts its manager owns.
+
+enum CompanyKind {
+  SCI
+  HOLDING
+  OTHER
+}
+
+enum CompanyTaxRegime {
+  IR
+  IS
+}
+
+model Company {
+  id            String             @id @default(cuid())
+  name          String
+  kind          CompanyKind        @default(SCI)
+  taxRegime     CompanyTaxRegime   @default(IR)
+  // From the statutes. The holdings' parts always add up to it exactly.
+  totalParts    Int
+  // The one user who maintains it. Restrict, not Cascade: deleting that user
+  // must not take the company's accounts with them - the deletion is refused
+  // until management is handed over or the company deleted.
+  managerUserId String
+  manager       User               @relation(fields: [managerUserId], references: [id], onDelete: Restrict)
+  associates    CompanyAssociate[]
+  holdings      CompanyHolding[]
+  accounts      Account[]
+  institutions  Institution[]
+  createdAt     DateTime           @default(now())
+
+  @@index([managerUserId])
+}
+
+// A person in the cap table: a bare name (a spouse who never logs in), or
+// linked to a user of this instance. A link is an invitation, like a
+// co-ownership: until the user accepts it (linkAcceptedAt) they neither see
+// the company nor get its share in their net worth.
+model CompanyAssociate {
+  id             String           @id @default(cuid())
+  companyId      String
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // SetNull when that user is deleted: the name stays, the cap table still
+  // adds up.
+  userId         String?
+  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name           String
+  linkAcceptedAt DateTime?
+  holdings       CompanyHolding[]
+  createdAt      DateTime         @default(now())
+
+  @@unique([companyId, userId])
+  @@index([userId])
+}
+
+// A block of parts. Full ownership only for now; usufruct and bare ownership
+// come with step 3 of dev-docs/companies.md.
+model CompanyHolding {
+  id          String           @id @default(cuid())
+  companyId   String
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parts       Int
+  fullOwnerId String
+  fullOwner   CompanyAssociate @relation(fields: [fullOwnerId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
 }

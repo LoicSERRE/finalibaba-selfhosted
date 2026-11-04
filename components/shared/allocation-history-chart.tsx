@@ -23,11 +23,12 @@ type DataPoint = {
   crypto: number;
   realEstate: number;
   auto: number;
+  companies: number;
 };
 
-// Same 6 keys/order as app/page.tsx's allocationSlices - keeps the stacked
+// Same keys/order as app/page.tsx's allocationSlices - keeps the stacked
 // order and legend order matching the pie chart right next to it.
-const CATEGORIES = ["cash", "savings", "investments", "crypto", "realEstate", "auto"] as const;
+const CATEGORIES = ["cash", "savings", "investments", "crypto", "realEstate", "auto", "companies"] as const;
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("fr-FR", {
@@ -100,7 +101,9 @@ export function AllocationHistoryChart({ data }: Readonly<{ data: DataPoint[] }>
             formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
           />
           <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted)" }} />
-          {CATEGORIES.map((key) => (
+          {/* "companies" only for someone who holds company shares: an always-empty
+              legend entry would be noise for everyone else. */}
+          {CATEGORIES.filter((key) => key !== "companies" || data.some((d) => d.companies > 0)).map((key) => (
             <Area
               key={key}
               type="monotone"
