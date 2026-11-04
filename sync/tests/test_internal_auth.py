@@ -10,7 +10,8 @@ import internal_auth
 from internal_auth import auth_headers, internal_api_token, is_authorized
 
 SECRET = "s" * 43
-TOKEN = "loE5GJCCqu2DXj9JVJCxDnqDVuu7_FnzwoJ210JJbL4"
+# Derived from the dummy SECRET above, so it opens nothing.
+TOKEN = "loE5GJCCqu2DXj9JVJCxDnqDVuu7_FnzwoJ210JJbL4"  # gitleaks:allow
 
 
 @pytest.fixture(autouse=True)

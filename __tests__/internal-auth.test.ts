@@ -13,8 +13,9 @@ const reqWith = (headers: Record<string, string>) =>
 
 const SECRET = "s".repeat(43);
 // HKDF of SECRET. sync/tests/test_internal_auth.py pins the same string: the
-// two containers must agree on it or every internal call is refused.
-const TOKEN = "loE5GJCCqu2DXj9JVJCxDnqDVuu7_FnzwoJ210JJbL4";
+// two containers must agree on it or every internal call is refused. Derived
+// from the dummy SECRET above, so it opens nothing - hence the allow marker.
+const TOKEN = "loE5GJCCqu2DXj9JVJCxDnqDVuu7_FnzwoJ210JJbL4"; // gitleaks:allow
 
 beforeEach(() => {
   process.env.NEXTAUTH_SECRET = SECRET;
