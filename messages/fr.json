@@ -977,7 +977,9 @@
       "unknownError": "Une erreur inattendue s'est produite.",
       "errorInvalidCode": "Code incorrect. Vérifie l'heure de ton téléphone si le problème persiste.",
       "errorNotEnabled": "La double authentification n'est pas activée.",
-      "errorNoPendingSetup": "Aucune configuration en cours. Recommence depuis le début."
+      "errorNoPendingSetup": "Aucune configuration en cours. Recommence depuis le début.",
+      "errorAlreadyEnabled": "La double authentification est déjà active. Désactive-la d'abord.",
+      "errorTooManyAttempts": "Trop de tentatives. Réessaie dans un quart d'heure."
     },
     "appLock": {
       "title": "Verrouillage de l'appli",

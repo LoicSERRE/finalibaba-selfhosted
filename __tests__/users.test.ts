@@ -31,6 +31,12 @@ describe("normalizeUsername", () => {
   it("leaves an already-normalized name untouched", () => {
     expect(normalizeUsername("loic")).toBe("loic");
   });
+
+  it("applies NFKC so a look-alike cannot be a distinct name", () => {
+    // Full-width "ｌｏｉｃ" normalises to the plain ASCII form, so it can't coexist
+    // as a second account that looks identical in the share-by-username list.
+    expect(normalizeUsername("ｌｏｉｃ")).toBe("loic");
+  });
 });
 
 describe("validateCredentials", () => {
@@ -62,5 +68,19 @@ describe("validateCredentials", () => {
     const username = "a".repeat(MIN_USERNAME_LENGTH);
     const password = "a".repeat(MIN_PASSWORD_LENGTH);
     expect(validateCredentials(username, password)).toEqual({ ok: true });
+  });
+
+  it("rejects a username with characters outside the safe set", () => {
+    // A Cyrillic look-alike survives NFKC as a non-Latin character, so the
+    // charset rule is what actually keeps impersonating names out.
+    expect(validateCredentials("lоic", "correct-horse-battery")).toEqual({
+      ok: false,
+      error: "username_invalid",
+    });
+    expect(validateCredentials("has space", "correct-horse-battery").ok).toBe(false);
+  });
+
+  it("rejects a password longer than bcrypt's 72-byte limit rather than silently truncating it", () => {
+    expect(validateCredentials("loic", "a".repeat(73))).toEqual({ ok: false, error: "password_too_long" });
   });
 });

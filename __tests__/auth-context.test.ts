@@ -125,18 +125,14 @@ describe("getViewer", () => {
     );
   });
 
-  it("maps a pre-v2 session with no userId onto the owner instead of logging it out", async () => {
+  it("DENIES a signed session that carries no userId, never widening it to the owner", async () => {
     process.env.AUTH_ENABLED = "true";
-    // The old JWT only ever carried sub: "owner" - a browser holding one
-    // across the upgrade must keep working rather than 500 or bounce to login.
+    // A token with no id would only be a pre-v2 JWT (sub: "owner", no id), and
+    // those expired long ago. Mapping it to the owner handed full admin to any
+    // id-less token; denial (a fresh login mints a proper one) is the rule.
     getServerSessionMock.mockResolvedValue({ user: {} });
-    userFindUniqueMock.mockResolvedValue(OWNER);
 
-    await expect(getViewer()).resolves.toEqual({
-      id: OWNER_USER_ID,
-      role: "ADMIN",
-      isMonoMode: false,
-    });
+    await expect(getViewer()).rejects.toThrow();
   });
 
   it("throws a diagnosable error when the owner row is missing entirely", async () => {
@@ -292,6 +288,32 @@ describe("assertTransactionsWritable", () => {
     await expect(assertTransactionsWritable("user-b", ["t1", "t1", "foreign"])).rejects.toThrow(
       "Not found."
     );
+  });
+});
+
+// The operator-injection class (audited F29): an id argument arriving as a
+// Prisma operator object ({not:"x"}) turned an ownership count into its
+// inverse. The guards must narrow the id to a string and throw BEFORE any
+// query runs, so the payload never reaches Prisma at all.
+describe("guards reject a non-string id before querying (operator injection)", () => {
+  const OPERATOR = { not: "x" } as unknown as string;
+
+  it("assertAccountWritable throws and never counts", async () => {
+    await expect(assertAccountWritable("user-b", OPERATOR)).rejects.toThrow();
+    expect(accountCountMock).not.toHaveBeenCalled();
+    expect(coOwnerCountMock).not.toHaveBeenCalled();
+  });
+
+  it("assertOwned throws and never counts", async () => {
+    await expect(assertOwned("category", OPERATOR, "user-b")).rejects.toThrow();
+    expect(categoryCountMock).not.toHaveBeenCalled();
+  });
+
+  it("assertTransactionsWritable throws and never counts when an id is an object", async () => {
+    await expect(
+      assertTransactionsWritable("user-b", ["t1", OPERATOR])
+    ).rejects.toThrow();
+    expect(transactionCountMock).not.toHaveBeenCalled();
   });
 });
 

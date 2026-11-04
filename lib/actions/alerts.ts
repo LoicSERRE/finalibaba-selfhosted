@@ -1,10 +1,27 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { encryptSecret } from "@/lib/domain/crypto-at-rest";
+import { encryptSecret, isEncrypted } from "@/lib/domain/crypto-at-rest";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
+
+/**
+ * A secret typed into a form, or null for "leave unchanged".
+ *
+ * Blank is "unchanged" (the field never round-trips the stored value). A value
+ * that already looks like our `enc:v1:` ciphertext is refused outright: a real
+ * person never types one, and accepting it was the middle link of the audited
+ * exfiltration chain - a ciphertext leaked from one field/user could be stored
+ * as the attacker's own channel secret and then decrypted and sent out. encrypt
+ * only ever runs on genuine plaintext now.
+ */
+function secretFormInput(raw: FormDataEntryValue | null): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed === "" || isEncrypted(trimmed)) return null;
+  return trimmed;
+}
 
 // No getAlertSettings() here - lib/actions/user-settings.ts's
 // getUserSettings() already fetches the same singleton row with every
@@ -20,7 +37,6 @@ export async function updateAlertChannels(formData: FormData) {
   const str = (name: string) => ((formData.get(name) as string) || "").trim() || null;
 
   const ntfyTopicUrl = str("ntfyTopicUrl");
-  const ntfyAuthToken = str("ntfyAuthToken");
   const alertEmailTo = str("alertEmailTo");
   const smtpHost = str("smtpHost");
   const smtpPortRaw = str("smtpPort");
@@ -34,20 +50,13 @@ export async function updateAlertChannels(formData: FormData) {
   const ntfyEnabled = formData.get("ntfyEnabled") === "on";
   const emailAlertsEnabled = formData.get("emailAlertsEnabled") === "on";
 
-  // Blank means "leave unchanged", not "clear it" - unlike every other
-  // field here, this one is never pre-filled with the real stored value in
-  // the form (a plaintext password shouldn't round-trip back into the
-  // browser on every page load), so a blank submit almost always means "I
-  // didn't touch this field", not "remove my password".
-  const smtpPasswordInput = (formData.get("smtpPassword") as string) || "";
+  // Both secrets: blank means "leave unchanged" (the field never pre-fills the
+  // stored value), and only a genuine new plaintext is encrypted and written.
+  const ntfyAuthToken = encryptSecret(secretFormInput(formData.get("ntfyAuthToken")));
+  const smtpPassword = encryptSecret(secretFormInput(formData.get("smtpPassword")));
 
-  // Both credentials are encrypted at rest. They are the two the post-v2.0
-  // audit already flagged as raised in stakes by multi-user, since one user
-  // reading another's row means reading somebody else's mail credentials -
-  // it closed the app-level path and left the database one open.
   const data = {
     ntfyTopicUrl,
-    ntfyAuthToken: encryptSecret(ntfyAuthToken),
     ntfyEnabled,
     alertEmailTo,
     smtpHost,
@@ -56,13 +65,16 @@ export async function updateAlertChannels(formData: FormData) {
     smtpFrom,
     emailAlertsEnabled,
   };
-  const smtpPassword = encryptSecret(smtpPasswordInput);
 
   const viewer = await getViewer();
   await prisma.userSettings.upsert({
     where: { userId: viewer.id },
-    create: { userId: viewer.id, ...data, smtpPassword },
-    update: smtpPassword ? { ...data, smtpPassword } : data,
+    create: { userId: viewer.id, ...data, ntfyAuthToken, smtpPassword },
+    update: {
+      ...data,
+      ...(ntfyAuthToken ? { ntfyAuthToken } : {}),
+      ...(smtpPassword ? { smtpPassword } : {}),
+    },
   });
 
   revalidatePath("/settings");

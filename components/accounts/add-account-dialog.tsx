@@ -11,7 +11,6 @@ import { ACCOUNT_CURRENCIES, currencyAllowedFor } from "@/lib/domain/currency";
 import { baseCurrency } from "@/lib/utils/base-currency";
 import { useTranslations } from "next-intl";
 
-type Institution = { id: string; name: string };
 
 // These suggestions are French-specific (PEA/CTO), independent of the
 // broader country-preset system in tax-locale.ts - see that module's own
@@ -24,7 +23,7 @@ export function AddAccountDialog({
   institutions,
   defaultType,
 }: Readonly<{
-  institutions: Institution[];
+  institutions: { id: string; name: string }[];
   defaultType?: string;
 }>) {
   const [open, setOpen] = useState(false);

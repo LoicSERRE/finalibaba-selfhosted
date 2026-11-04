@@ -60,7 +60,7 @@ export default async function AccountsPage({
       prisma.account.findMany({
         where: { id: { in: accountIds }, type: { in: ["CHECKING", "SAVINGS", "MEAL_VOUCHER"] } },
         include: {
-          institution: true,
+          institution: { select: { id: true, name: true, logoUrl: true } },
           history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 14 },
         },
         orderBy: [{ institution: { name: "asc" } }, { name: "asc" }],
@@ -68,27 +68,33 @@ export default async function AccountsPage({
       prisma.account.findMany({
         where: { id: { in: accountIds }, type: { in: ["INVESTMENT", "CRYPTO"] } },
         include: {
-          institution: true,
+          institution: { select: { id: true, name: true, logoUrl: true } },
           holdings: { orderBy: { ticker: "asc" } },
         },
         orderBy: [{ type: "asc" }, { name: "asc" }],
       }),
       prisma.account.findMany({
         where: { id: { in: accountIds }, type: "REAL_ESTATE" },
-        include: { institution: true },
+        include: { institution: { select: { id: true, name: true, logoUrl: true } } },
         orderBy: { name: "asc" },
       }),
       prisma.account.findMany({
         where: { id: { in: accountIds }, type: "AUTOMOBILE" },
-        include: { institution: true },
+        include: { institution: { select: { id: true, name: true, logoUrl: true } } },
         orderBy: { name: "asc" },
       }),
       prisma.account.findMany({
         where: { id: { in: accountIds }, type: "LOAN" },
-        include: { institution: true },
+        include: { institution: { select: { id: true, name: true, logoUrl: true } } },
         orderBy: { name: "asc" },
       }),
-      prisma.institution.findMany({ where: { userId: ownerId }, orderBy: { name: "asc" } }),
+      // Only id + name reach the client dialogs - never the woob*/tr*/gocardless*
+      // credential columns of this row. See dev-docs/multi-user-and-security.md.
+      prisma.institution.findMany({
+        where: { userId: ownerId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
     ]);
 
   const now = new Date();

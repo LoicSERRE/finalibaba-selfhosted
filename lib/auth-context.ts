@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db/prisma";
 import { OWNER_USER_ID } from "@/lib/domain/users";
+import { assertId, assertIds } from "@/lib/domain/action-input";
 
 /**
  * Multi-user viewer resolution and access primitives (v2.0) - see CLAUDE.md's
@@ -190,12 +191,12 @@ async function resolveViewer(): Promise<Viewer | null> {
 
   const sessionUserId = (session.user as { id?: string } | undefined)?.id;
   if (!sessionUserId) {
-    // A SIGNED session that carries no user id: a pre-v2 JWT still live in a
-    // browser from before the upgrade (it only carried `sub: "owner"`). The
-    // jwt callback stamps userId onto every token it sees, so this is legacy
-    // only - but it is a real, verified token, which is what separates it
-    // from the anonymous case above.
-    return ownerViewer(false);
+    // A SIGNED session that carries no user id would only be a pre-v2 JWT
+    // (it carried `sub: "owner"` and no id). Those expired long ago (30-day
+    // maxAge), so rather than widen such a token to the OWNER - handing full
+    // admin to any token that happens to lack an id - deny it: a fresh login
+    // mints a proper one. Deny or narrow, never widen.
+    return null;
   }
 
   const user = await prisma.user.findUnique({
@@ -368,6 +369,7 @@ export async function getViewContext(): Promise<ViewContext> {
  * button is never an access control.
  */
 export async function assertAccountWritable(userId: string, accountId: string): Promise<void> {
+  accountId = assertId(accountId);
   const [owned, coOwned] = await Promise.all([
     prisma.account.count({ where: { id: accountId, userId } }),
     prisma.accountCoOwner.count({ where: { accountId, userId } }),
@@ -407,6 +409,7 @@ export async function assertOwned(
   id: string,
   userId: string
 ): Promise<void> {
+  id = assertId(id);
   // Each branch is its own delegate call: Prisma's per-model types don't
   // unify into a single indexed call without casting away the safety that
   // makes these guards worth having.
@@ -435,10 +438,11 @@ export async function assertOwned(
  * forged id smuggled into an array can't ride along with legitimate ones.
  */
 export async function assertTransactionsWritable(userId: string, transactionIds: string[]): Promise<void> {
-  if (transactionIds.length === 0) return;
+  const ids = assertIds(transactionIds);
+  if (ids.length === 0) return;
   const accountIds = await baseAccountIds(userId);
   const reachable = await prisma.transaction.count({
-    where: { id: { in: transactionIds }, accountId: { in: accountIds } },
+    where: { id: { in: ids }, accountId: { in: accountIds } },
   });
-  if (reachable !== new Set(transactionIds).size) throw new Error("Not found.");
+  if (reachable !== ids.length) throw new Error("Not found.");
 }

@@ -47,6 +47,7 @@ beforeEach(() => {
   h.state.failEveryWrite = false;
   h.state.noRequest = false;
   h.state.headers = new Map();
+  delete process.env.TRUSTED_PROXY_COUNT;
 });
 
 describe("a failure to record must not become a failure to act", () => {
@@ -70,13 +71,25 @@ describe("a failure to record must not become a failure to act", () => {
 });
 
 describe("the IP recorded as evidence", () => {
-  it("is the client's, not the last proxy in the chain", async () => {
+  it("records null when no proxy is trusted, rather than a forgeable X-Forwarded-For", async () => {
+    // Without TRUSTED_PROXY_COUNT the whole header is attacker-controlled, so
+    // recording any of it would let a client write a chosen IP into the log.
     h.state.headers.set("x-forwarded-for", "203.0.113.7, 10.0.0.1, 172.18.0.4");
     await recordAuditEvent({ action: AUDIT.loginFailed });
-    expect(h.rows[0].ip).toBe("203.0.113.7");
+    expect(h.rows[0].ip).toBeNull();
   });
 
-  it("falls back to x-real-ip, and to null rather than an empty string", async () => {
+  it("takes the client entry the trusted-proxy depth points to", async () => {
+    // Same logic as the login path: with one trusted proxy the real client is
+    // the entry that proxy appended (the rightmost).
+    process.env.TRUSTED_PROXY_COUNT = "1";
+    h.state.headers.set("x-forwarded-for", "203.0.113.7, 10.0.0.1, 172.18.0.4");
+    await recordAuditEvent({ action: AUDIT.loginFailed });
+    expect(h.rows[0].ip).toBe("172.18.0.4");
+  });
+
+  it("falls back to x-real-ip when trusted, and to null for a blank header", async () => {
+    process.env.TRUSTED_PROXY_COUNT = "1";
     h.state.headers.set("x-real-ip", "198.51.100.9");
     await recordAuditEvent({ action: AUDIT.loginFailed });
     expect(h.rows[0].ip).toBe("198.51.100.9");

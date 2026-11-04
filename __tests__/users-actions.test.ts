@@ -22,9 +22,12 @@ const {
   userCreateMock,
   userDeleteMock,
   userFindManyMock,
+  userCountMock,
+  accountCountMock,
   invitationFindUniqueMock,
   invitationCreateMock,
   invitationUpdateMock,
+  invitationUpdateManyMock,
   invitationDeleteMock,
   invitationFindManyMock,
   transactionMock,
@@ -38,9 +41,12 @@ const {
   userCreateMock: vi.fn(),
   userDeleteMock: vi.fn(),
   userFindManyMock: vi.fn(),
+  userCountMock: vi.fn(() => 0),
+  accountCountMock: vi.fn(() => 0),
   invitationFindUniqueMock: vi.fn(),
   invitationCreateMock: vi.fn(),
   invitationUpdateMock: vi.fn(),
+  invitationUpdateManyMock: vi.fn(),
   invitationDeleteMock: vi.fn(),
   invitationFindManyMock: vi.fn(),
   transactionMock: vi.fn(),
@@ -58,11 +64,16 @@ vi.mock("@/lib/db/prisma", () => ({
       create: userCreateMock,
       delete: userDeleteMock,
       findMany: userFindManyMock,
+      count: userCountMock,
+    },
+    account: {
+      count: accountCountMock,
     },
     invitation: {
       findUnique: invitationFindUniqueMock,
       create: invitationCreateMock,
       update: invitationUpdateMock,
+      updateMany: invitationUpdateManyMock,
       delete: invitationDeleteMock,
       findMany: invitationFindManyMock,
     },
@@ -203,38 +214,49 @@ describe("acceptInvitation", () => {
     transactionMock.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
-          invitation: { findUnique: invitationFindUniqueMock, update: invitationUpdateMock },
+          invitation: { findUnique: invitationFindUniqueMock, updateMany: invitationUpdateManyMock },
           user: { create: userCreateMock },
         })
     );
 
-  it("creates a MEMBER and consumes the token in the same transaction", async () => {
+  it("creates a MEMBER and consumes the token atomically in the same transaction", async () => {
     runTransaction();
     invitationFindUniqueMock.mockResolvedValue({
       id: "inv-1",
-      usedAt: null,
       expiresAt: new Date(Date.now() + 60_000),
     });
+    // The conditional consume wins the row (count 1) before the user is made.
+    invitationUpdateManyMock.mockResolvedValue({ count: 1 });
     userCreateMock.mockResolvedValue({});
-    invitationUpdateMock.mockResolvedValue({});
 
     await acceptInvitation("tok", form({ username: "Bob", password: "longenough1" }));
 
     // Never ADMIN: an invitation must not be able to mint a second admin.
     expect(userCreateMock.mock.calls[0][0].data.role).toBe("MEMBER");
     expect(userCreateMock.mock.calls[0][0].data.username).toBe("bob");
-    expect(invitationUpdateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "inv-1" } })
+    // Consumed conditionally on usedAt: null - the row lock serializes a
+    // double-open so only one redemption wins.
+    expect(invitationUpdateManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "inv-1", usedAt: null } })
     );
-    // Both writes go through one $transaction, so a link opened twice at once
-    // cannot mint two accounts.
     expect(transactionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts without creating a user when the token was already consumed by a concurrent redemption", async () => {
+    runTransaction();
+    invitationFindUniqueMock.mockResolvedValue({ id: "inv-1", expiresAt: new Date(Date.now() + 60_000) });
+    // The other racer got there first: the conditional update matches 0 rows.
+    invitationUpdateManyMock.mockResolvedValue({ count: 0 });
+
+    await expect(
+      acceptInvitation("tok", form({ username: "bob", password: "longenough1" }))
+    ).rejects.toThrow("invalid_invitation");
+    expect(userCreateMock).not.toHaveBeenCalled();
   });
 
   it.each([
     ["unknown", null],
-    ["already used", { id: "i", usedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) }],
-    ["expired", { id: "i", usedAt: null, expiresAt: new Date(Date.now() - 60_000) }],
+    ["expired", { id: "i", expiresAt: new Date(Date.now() - 60_000) }],
   ])("rejects an %s invitation without creating anyone", async (_label, invitation) => {
     runTransaction();
     invitationFindUniqueMock.mockResolvedValue(invitation);

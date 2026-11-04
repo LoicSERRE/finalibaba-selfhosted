@@ -178,6 +178,10 @@ export type RealtimeStatus = {
 };
 
 export async function getRealtimeStatus(): Promise<RealtimeStatus | null> {
+  // Requires a session: this returns every institution's listener state,
+  // including the ids of other users' Trade Republic connections, so it must
+  // not be reachable unauthenticated.
+  await getViewer();
   try {
     const res = await fetchSync("/realtime/status", undefined, REALTIME_STATUS_TIMEOUT_MS);
     if (!res.ok) return null;

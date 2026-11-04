@@ -58,7 +58,9 @@ export default async function AccountDetailPage({
     prisma.account.findFirst({
       where: { id, AND: { id: { in: accountIds } } },
       include: {
-        institution: true,
+        // userId is read server-side only (stopSyncingHref ownership check),
+        // never passed to a client component - no credential column is selected.
+        institution: { select: { id: true, name: true, logoUrl: true, userId: true } },
         history: { orderBy: [{ recordedAt: "desc" }, { id: "desc" }], take: 120 },
         holdings: { orderBy: { ticker: "asc" } },
         interestRateHistory: { orderBy: { until: "asc" } },

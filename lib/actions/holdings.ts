@@ -1,5 +1,6 @@
 "use server";
 
+import { assertId } from "@/lib/domain/action-input";
 import { revalidateHolding } from "@/lib/actions/revalidate";
 import { refreshAccountBalance } from "@/lib/services/account-balance";
 import { prisma } from "@/lib/db/prisma";
@@ -140,7 +141,7 @@ export async function deleteHolding(id: string, accountId: string) {
   await assertAccountWritable(viewer.id, accountId);
   // deleteMany scoped to the account, not delete-by-id: without it a valid
   // accountId of one's own would authorize deleting any holding id at all.
-  const { count } = await prisma.holding.deleteMany({ where: { id, accountId } });
+  const { count } = await prisma.holding.deleteMany({ where: { id: assertId(id), accountId } });
   if (count === 0) throw new Error("Position introuvable.");
   await refreshAccountBalance(accountId);
   revalidateHolding(accountId);

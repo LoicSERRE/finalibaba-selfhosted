@@ -29,6 +29,8 @@ const FAILURE_KEYS = {
   invalid_code: "errorInvalidCode",
   not_enabled: "errorNotEnabled",
   no_pending_setup: "errorNoPendingSetup",
+  already_enabled: "errorAlreadyEnabled",
+  too_many_attempts: "errorTooManyAttempts",
 } as const;
 
 export function TwoFactorSection({ totpEnabled }: Readonly<{ totpEnabled: boolean }>) {
@@ -59,6 +61,11 @@ export function TwoFactorSection({ totpEnabled }: Readonly<{ totpEnabled: boolea
     setEnableError(null);
     try {
       const result = await startTotpSetup();
+      if ("ok" in result) {
+        setEnableError(t(FAILURE_KEYS[result.error]));
+        setEnableStep("idle");
+        return;
+      }
       setQrDataUrl(result.qrDataUrl);
       setSecret(result.secret);
       setEnableStep("awaiting_confirmation");

@@ -67,6 +67,21 @@ export async function ownerNeedsAccountSetup(): Promise<boolean> {
 export async function bootstrapOwner(formData: FormData): Promise<void> {
   if (!(await needsBootstrap())) throw new Error("Already set up.");
 
+  // Bootstrap is trust-on-first-use: whoever submits first becomes the ADMIN
+  // owner. That is acceptable only on an EMPTY instance. If data already
+  // exists (an instance that turned AUTH_ENABLED on after running open, say),
+  // an anonymous visitor claiming the owner would seize someone else's data,
+  // so refuse and send the operator to the AUTH_PASSWORD_HASH env path instead.
+  const [accountCount, extraUsers] = await Promise.all([
+    prisma.account.count(),
+    prisma.user.count({ where: { id: { not: OWNER_USER_ID } } }),
+  ]);
+  if (accountCount > 0 || extraUsers > 0) {
+    throw new Error(
+      "This instance already holds data. Set AUTH_PASSWORD_HASH in the environment to secure the owner account instead of the setup screen.",
+    );
+  }
+
   const rawUsername = (formData.get("username") as string) || "";
   const password = (formData.get("password") as string) || "";
   const check = validateCredentials(rawUsername, password);
@@ -165,21 +180,29 @@ export async function acceptInvitation(token: string, formData: FormData): Promi
   await prisma.$transaction(async (tx) => {
     const invitation = await tx.invitation.findUnique({
       where: { tokenHash: tokenLookupHash(token) },
-      select: { id: true, usedAt: true, expiresAt: true },
+      select: { id: true, expiresAt: true },
     });
-    const spent = invitation?.usedAt !== null;
-    const expired = (invitation?.expiresAt ?? new Date(0)) <= new Date();
-    if (spent || expired) {
+    if (!invitation || invitation.expiresAt <= new Date()) {
       throw new Error("invalid_invitation");
     }
+    // Consume the token FIRST, conditionally on it still being unused: the
+    // row-level lock on this updateMany serializes two concurrent redemptions,
+    // so exactly one sees count 1 and the other sees 0 and aborts before any
+    // user is created. A read-then-write (the previous shape) let both reads
+    // pass and both create a user from one single-use link.
+    const consumed = await tx.invitation.updateMany({
+      where: { id: invitation.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (consumed.count !== 1) throw new Error("invalid_invitation");
+
     await tx.user.create({
       data: { username, displayName: rawUsername.trim(), passwordHash, role: "MEMBER" },
     });
     await recordAuditEvent({
       action: AUDIT.invitationRedeemed, actorLabel: username,
-      targetType: "Invitation", targetId: invitation!.id,
+      targetType: "Invitation", targetId: invitation.id,
     });
-    await tx.invitation.update({ where: { id: invitation.id }, data: { usedAt: new Date() } });
   });
 }
 

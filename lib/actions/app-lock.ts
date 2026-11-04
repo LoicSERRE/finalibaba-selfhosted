@@ -1,5 +1,6 @@
 "use server";
 
+import { assertId } from "@/lib/domain/action-input";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import {
@@ -238,7 +239,7 @@ export async function removeAppLockCredential(id: string) {
     // deleteMany scoped to the viewer, not delete-by-id: a Server Action is
     // directly invocable, so an id alone must never be enough to remove
     // another user's authenticator.
-    const { count } = await tx.appLockCredential.deleteMany({ where: { id, userId: viewer.id } });
+    const { count } = await tx.appLockCredential.deleteMany({ where: { id: assertId(id), userId: viewer.id } });
     if (count === 0) throw new Error("Device not found.");
     const remaining = await tx.appLockCredential.count({ where: { userId: viewer.id } });
     if (remaining === 0) {

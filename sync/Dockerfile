@@ -7,9 +7,14 @@
 # for a lint-driven cleanup pass).
 FROM python:3.14-slim
 
-# System deps for woob (lxml, etc.)
+# System deps for woob (lxml, etc.). gpgv stays in the final image (it is not
+# in the purge list below): `woob config update` fetches the bank modules at
+# every start and verifies their signatures with it - without gpgv present it
+# prints "Cannot find gpg or gpgv" and installs them UNVERIFIED, so a tampered
+# module repository could ship code into this container. The sync service holds
+# NEXTAUTH_SECRET, so that is a path to a forged app session.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ libffi-dev libssl-dev libxml2-dev libxslt1-dev git \
+    gcc g++ libffi-dev libssl-dev libxml2-dev libxslt1-dev git gpgv \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -5,6 +5,7 @@ import { decryptSecret, encryptSecret } from "@/lib/domain/crypto-at-rest";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer } from "@/lib/auth-context";
+import { consumeAttempt } from "@/lib/services/rate-limit";
 import {
   generateTotpSecret,
   generateTotpUri,
@@ -13,6 +14,14 @@ import {
   hashBackupCodes,
   matchBackupCode,
 } from "@/lib/domain/totp";
+
+// A code-checking action (confirm/disable/regenerate) is a 6-digit guess
+// behind a live session. Without a brake, a stolen-but-unlocked session could
+// brute-force the 2FA secret. Bounded per user+action, same limiter as login.
+const TOTP_MAX_ATTEMPTS = 10;
+async function consumeTotpAttempt(userId: string, scope: string): Promise<boolean> {
+  return consumeAttempt(`totp|${scope}|${userId}`, TOTP_MAX_ATTEMPTS);
+}
 
 // Separate from lib/actions/user-settings.ts - this is a multi-step
 // interactive setup/teardown flow, not a single form-submit-and-revalidate
@@ -25,13 +34,22 @@ import {
 // a wrong code from a broken flow. Next's own guidance is to model expected
 // errors as return values; see lib/actions/sync.ts for the same treatment.
 // Keys are stable strings rather than sentences so the UI can translate them.
-export type TotpFailure = { ok: false; error: "invalid_code" | "not_enabled" | "no_pending_setup" };
+export type TotpFailure = {
+  ok: false;
+  error: "invalid_code" | "not_enabled" | "no_pending_setup" | "already_enabled" | "too_many_attempts";
+};
 
-export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: string }> {
+export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: string } | TotpFailure> {
   const secret = generateTotpSecret();
+  const viewer = await getViewer();
+  // Refuse to re-arm an already-active 2FA: this writes a brand-new secret, so
+  // without the check anyone with the session could silently replace a live
+  // authenticator (and void the real one) without proving they hold it.
+  // Turning 2FA off first goes through disableTotp, which does require a code.
+  const current = await prisma.user.findUnique({ where: { id: viewer.id }, select: { totpEnabled: true } });
+  if (current?.totpEnabled) return { ok: false, error: "already_enabled" };
   // totpEnabled stays false until confirmTotpSetup verifies a live code -
   // overwriting any abandoned prior attempt here is safe for that reason.
-  const viewer = await getViewer();
   await prisma.user.update({
     where: { id: viewer.id },
     data: { totpSecret: encryptSecret(secret), totpEnabled: false },
@@ -48,6 +66,7 @@ export async function confirmTotpSetup(
   code: string,
 ): Promise<{ ok: true; backupCodes: string[] } | TotpFailure> {
   const viewer = await getViewer();
+  if (!(await consumeTotpAttempt(viewer.id, "confirm"))) return { ok: false, error: "too_many_attempts" };
   const settings = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: { totpSecret: true },
@@ -67,6 +86,7 @@ export async function confirmTotpSetup(
 
 export async function disableTotp(code: string): Promise<{ ok: true } | TotpFailure> {
   const viewer = await getViewer();
+  if (!(await consumeTotpAttempt(viewer.id, "disable"))) return { ok: false, error: "too_many_attempts" };
   const settings = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: { totpEnabled: true, totpSecret: true, totpBackupCodes: true },
@@ -90,6 +110,7 @@ export async function regenerateBackupCodes(
   code: string,
 ): Promise<{ ok: true; backupCodes: string[] } | TotpFailure> {
   const viewer = await getViewer();
+  if (!(await consumeTotpAttempt(viewer.id, "regen"))) return { ok: false, error: "too_many_attempts" };
   const settings = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: { totpEnabled: true, totpSecret: true },

@@ -26,22 +26,45 @@ export const OWNER_USER_ID = "user-owner";
  * fail to log in over a capital letter they don't remember typing.
  */
 export function normalizeUsername(raw: string): string {
-  return raw.trim().toLowerCase();
+  // NFKC first: without it a look-alike (a Cyrillic "а", a full-width "ａ")
+  // normalises to a different string from the Latin one it is drawn to
+  // resemble, so two visually identical usernames could coexist and one person
+  // be impersonated in the share-by-username flow. The charset is then
+  // restricted (see USERNAME_RE) so only unambiguous characters are accepted.
+  return raw.normalize("NFKC").trim().toLowerCase();
 }
 
 /** Minimum viable credentials for the bootstrap/invitation screens. */
 export const MIN_USERNAME_LENGTH = 3;
 export const MIN_PASSWORD_LENGTH = 8;
+// bcrypt silently truncates past 72 BYTES; refuse longer so nobody believes a
+// 90-character passphrase is fully checked when only its first 72 bytes are.
+export const MAX_PASSWORD_BYTES = 72;
+// Lower-case letters, digits and a few separators only - no look-alike scripts,
+// no whitespace, nothing that renders ambiguously next to another name.
+export const USERNAME_RE = /^[a-z0-9._-]+$/;
 
 export function validateCredentials(
   username: string,
   password: string
-): { ok: true } | { ok: false; error: "username_too_short" | "password_too_short" } {
-  if (normalizeUsername(username).length < MIN_USERNAME_LENGTH) {
+): {
+  ok: true;
+} | {
+  ok: false;
+  error: "username_too_short" | "username_invalid" | "password_too_short" | "password_too_long";
+} {
+  const normalized = normalizeUsername(username);
+  if (normalized.length < MIN_USERNAME_LENGTH) {
     return { ok: false, error: "username_too_short" };
+  }
+  if (!USERNAME_RE.test(normalized)) {
+    return { ok: false, error: "username_invalid" };
   }
   if (password.length < MIN_PASSWORD_LENGTH) {
     return { ok: false, error: "password_too_short" };
+  }
+  if (Buffer.byteLength(password, "utf8") > MAX_PASSWORD_BYTES) {
+    return { ok: false, error: "password_too_long" };
   }
   return { ok: true };
 }

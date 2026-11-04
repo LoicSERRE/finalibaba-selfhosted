@@ -6,6 +6,7 @@ import { revalidateAccount } from "@/lib/actions/revalidate";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, VIEWING_PORTFOLIO_COOKIE } from "@/lib/auth-context";
 import { normalizeUsername } from "@/lib/domain/users";
+import { assertId } from "@/lib/domain/action-input";
 
 /**
  * Two sharing mechanisms, deliberately not two settings of one:
@@ -55,7 +56,7 @@ async function resolveUsername(
  * this". Not assertAccountWritable, which also passes for co-owners.
  */
 async function assertAccountOwner(accountId: string, userId: string): Promise<void> {
-  const count = await prisma.account.count({ where: { id: accountId, userId } });
+  const count = await prisma.account.count({ where: { id: assertId(accountId), userId } });
   if (count === 0) throw new Error("Not found.");
 }
 
@@ -105,13 +106,15 @@ export async function addAccountCoOwner(
  * Scoped to the removed user's OWN rows on THIS account, nothing else.
  */
 export async function removeAccountCoOwner(accountId: string, userId: string): Promise<void> {
+  accountId = assertId(accountId);
+  const coOwnerId = assertId(userId);
   const viewer = await getViewer();
   await assertAccountOwner(accountId, viewer.id);
 
   await prisma.$transaction([
-    prisma.alertRule.deleteMany({ where: { userId, accountId } }),
-    prisma.goal.deleteMany({ where: { userId, accountId } }),
-    prisma.accountCoOwner.deleteMany({ where: { accountId, userId } }),
+    prisma.alertRule.deleteMany({ where: { userId: coOwnerId, accountId } }),
+    prisma.goal.deleteMany({ where: { userId: coOwnerId, accountId } }),
+    prisma.accountCoOwner.deleteMany({ where: { accountId, userId: coOwnerId } }),
   ]);
   revalidateAccount(accountId);
 }
@@ -172,7 +175,7 @@ export async function grantPortfolioAccess(formData: FormData): Promise<ShareRes
 export async function revokePortfolioGrant(granteeUserId: string): Promise<void> {
   const viewer = await getViewer();
   await prisma.portfolioGrant.deleteMany({
-    where: { grantorUserId: viewer.id, granteeUserId },
+    where: { grantorUserId: viewer.id, granteeUserId: assertId(granteeUserId) },
   });
   revalidatePath("/settings");
 }
@@ -190,6 +193,7 @@ export async function setViewingPortfolio(grantorUserId: string | null): Promise
   if (!grantorUserId || grantorUserId === viewer.id) {
     jar.delete(VIEWING_PORTFOLIO_COOKIE);
   } else {
+    grantorUserId = assertId(grantorUserId);
     // Checked here too, not just on read - no reason to persist a value we
     // already know is invalid, and it lets the switcher fail visibly instead
     // of silently doing nothing.
