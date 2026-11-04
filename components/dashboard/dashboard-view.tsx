@@ -1,3 +1,4 @@
+import { COMPANY_ENTRY_TYPE } from "@/lib/domain/company";
 import Link from "next/link";
 import type { getTranslations } from "next-intl/server";
 import { formatCurrency } from "@/lib/utils/format";
@@ -25,6 +26,11 @@ type T = Awaited<ReturnType<typeof getTranslations>>;
  * per-account Link into /accounts/[id], a page the share-link route must
  * never lead to) in favor of a plain row.
  */
+// A company share links to the company's page, every other row to its account.
+function entryHref(entry: { id: string; type: string }): string {
+  return entry.type === COMPANY_ENTRY_TYPE ? `/companies/${entry.id}` : `/accounts/${entry.id}`;
+}
+
 export function DashboardView({
   t,
   netWorth,
@@ -194,7 +200,7 @@ export function DashboardView({
                     interactive ? (
                       <Link
                         key={account.id}
-                        href={`/accounts/${account.id}`}
+                        href={entryHref(account)}
                         className="flex items-center justify-between text-xs group min-h-[44px] -mx-2 px-2 rounded-lg hover:bg-[var(--surface-elevated)] active:bg-[var(--border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
                       >
                         <span className="text-[var(--muted)] group-hover:text-[var(--foreground)] transition-colors">

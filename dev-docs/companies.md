@@ -1,6 +1,6 @@
 # Companies (SCI first)
 
-Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: step 1 in progress** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth) is built; its interface is the next PR. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
+Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: step 1 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth) and its interface ("C" below). Steps 2 to 5 are next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
 
 ## What users actually need
 
@@ -186,6 +186,8 @@ Written as tests in the same PR as each step:
 - **The company scope** is the viewing cookie with a `company:` prefix (`getViewContext`): writable for the manager, read-only for an accepted associate, the viewer's own portfolio for anyone else.
 - **Mutations** (`lib/actions/companies.ts`) all start with `assertCompanyManager`. The cap table is saved as a whole in one transaction. An account under a bank connection moves with its institution (`setInstitutionCompany`), a manual one on its own (`setAccountCompany`); a co-owned account can do neither, and a company account cannot be co-owned. `deleteUser` refuses a manager (the FK is Restrict).
 - **Sync**: `sync/db.py` gives a new account its institution's `companyId` and realigns it on every sync, like `userId`.
+
+**The interface** (`components/companies/`, `app/companies/[id]/page.tsx`): the Accounts page lists the viewer's companies (`CompaniesSection`, from `lib/services/companies-read.ts`) and their pending links with Accept / Decline, and holds "Nouvelle société" (`CreateCompanyDialog`, three steps; the cap table editor is shared with the page). The company page re-checks the role itself and leaves the manager's tools - usernames, what can be attached, settings, hand-over, deletion - out of an associate's data, not just out of the markup. A company's account opens from its page (`companyAccountAccess` on the account page: write for the manager, read for an associate); it is never offered co-ownership. The switcher lists the companies (mono mode too), and in a company's scope the dashboard and Accounts page carry a banner with the way back; the add-account dialogs then send the company's id, which the server checks. The dashboard's account list adds a "Sociétés" group of shares (`withCompaniesGroup`), so it adds up to the net worth above it.
 
 **Deliberate gaps, for later**: `/api/v1/accounts` lists the key owner's accounts only (a share is not an account; it is in `/net-worth`). The personal data export does not include companies yet. On a hand-over, the company's transactions keep the categories of the previous manager (they still display; the new manager re-categorizes with their own).
 

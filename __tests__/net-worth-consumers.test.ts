@@ -73,6 +73,8 @@ describe("every net worth goes through the company-aware loaders", () => {
         .filter((call) => call.slice(0, call.indexOf("}")).includes("shareholderId: null"))
         .map(() => f.path)
     );
-    expect(nulls).toEqual(["app/api/v1/accounts/route.ts"]);
+    // The accounts list (a share is not an account) and a company's own
+    // value (a company holds no companies here).
+    expect(nulls).toEqual(["app/api/v1/accounts/route.ts", "lib/services/companies-read.ts"]);
   });
 });

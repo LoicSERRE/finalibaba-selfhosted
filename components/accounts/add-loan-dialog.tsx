@@ -9,7 +9,10 @@ import { createAccount } from "@/lib/actions/accounts";
 import { useTranslations } from "next-intl";
 
 
-export function AddLoanDialog({ institutions }: Readonly<{ institutions: { id: string; name: string }[] }>) {
+export function AddLoanDialog({
+  institutions,
+  companyId,
+}: Readonly<{ institutions: { id: string; name: string }[]; companyId?: string }>) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const t = useTranslations("addLoan");
@@ -37,6 +40,9 @@ export function AddLoanDialog({ institutions }: Readonly<{ institutions: { id: s
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* In a company's scope: the account is the company's. The server checks
+            the viewer manages it (companyForNewAccount). */}
+        {companyId && <input type="hidden" name="companyId" value={companyId} />}
         <input type="hidden" name="type" value="LOAN" />
 
         <Input

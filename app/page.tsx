@@ -6,6 +6,8 @@ import { localeToIntl } from "@/lib/utils/format";
 import { type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { computePortfolio } from "@/lib/services/net-worth";
+import { withCompaniesGroup } from "@/lib/domain/company";
+import { ViewingCompanyBanner } from "@/components/companies/company-view-actions";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
 import { getTranslations, getLocale } from "next-intl/server";
 import { upcomingOccurrences } from "@/lib/domain/upcoming";
@@ -25,7 +27,7 @@ export default async function DashboardPage() {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   // A person's portfolio carries their company shares; a company's own scope
   // carries none (a company does not hold companies here).
-  const { result } = await computePortfolio({
+  const { input, result } = await computePortfolio({
     accountIds,
     shareholderId: companyId ? null : ownerId,
     intlLocale: localeToIntl(locale),
@@ -62,7 +64,8 @@ export default async function DashboardPage() {
   // First-run checklist (v2.17): the viewer's own setup only, never on a
   // granted portfolio. With no account it replaces the empty dashboard;
   // otherwise it sits on top until done or hidden on this device.
-  const steps = readOnly ? null : firstRunSteps(await loadFirstRunFacts(viewer.id, accountIds));
+  // Nor on a company's scope: the checklist is about setting up your own.
+  const steps = readOnly || companyId ? null : firstRunSteps(await loadFirstRunFacts(viewer.id, accountIds));
   const variant = checklistVariant(steps, hasAccounts, (await cookies()).get(FIRST_RUN_COOKIE)?.value === "1");
 
   const allocationSlices: AllocationSlice[] = [
@@ -75,32 +78,44 @@ export default async function DashboardPage() {
     { name: t("allocation.companies"), value: allocationRaw.companies, color: ALLOCATION_CATEGORY_COLORS.companies },
   ];
 
+  const scopedCompany = companyId
+    ? await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
+    : null;
+
   return (
-    <DashboardView
-      t={t}
-      netWorth={netWorth}
-      grossAssets={grossAssets}
-      totalPassif={totalPassif}
-      totalLiabilities={totalLiabilities}
-      totalLatentTax={totalLatentTax}
-      delta30={delta30}
-      hasData={hasData}
-      history={history}
-      allocationSlices={allocationSlices}
-      allocationHistory={allocationHistory}
-      institutions={institutions}
-      upcoming={
-        <>
-          {variant === "compact" && steps && <FirstRunChecklist t={t} steps={steps} variant="compact" />}
-          <UpcomingCard t={t} upcoming={upcoming} intlLocale={localeToIntl(locale)} />
-        </>
-      }
-      empty={variant === "full" && steps ? <FirstRunChecklist t={t} steps={steps} variant="full" /> : <DashboardEmptyState />}
-      // The per-account links into /accounts/[id] stay live for a granted
-      // portfolio - that page is scoped by the same view context and renders
-      // read-only too. interactive=false is for the anonymous /shared/[token]
-      // route, which must not expose them at all.
-      interactive
-    />
+    <>
+      {/* The company scope is app-wide: say so where the figures are. */}
+      {scopedCompany && (
+        <div className="max-w-4xl mx-auto mb-6">
+          <ViewingCompanyBanner name={scopedCompany.name} readOnly={readOnly} />
+        </div>
+      )}
+      <DashboardView
+        t={t}
+        netWorth={netWorth}
+        grossAssets={grossAssets}
+        totalPassif={totalPassif}
+        totalLiabilities={totalLiabilities}
+        totalLatentTax={totalLatentTax}
+        delta30={delta30}
+        hasData={hasData}
+        history={history}
+        allocationSlices={allocationSlices}
+        allocationHistory={allocationHistory}
+        institutions={withCompaniesGroup(institutions, input.companyShares, t("companies.sectionTitle"))}
+        upcoming={
+          <>
+            {variant === "compact" && steps && <FirstRunChecklist t={t} steps={steps} variant="compact" />}
+            <UpcomingCard t={t} upcoming={upcoming} intlLocale={localeToIntl(locale)} />
+          </>
+        }
+        empty={variant === "full" && steps ? <FirstRunChecklist t={t} steps={steps} variant="full" /> : <DashboardEmptyState />}
+        // The per-account links into /accounts/[id] stay live for a granted
+        // portfolio - that page is scoped by the same view context and renders
+        // read-only too. interactive=false is for the anonymous /shared/[token]
+        // route, which must not expose them at all.
+        interactive
+      />
+    </>
   );
 }

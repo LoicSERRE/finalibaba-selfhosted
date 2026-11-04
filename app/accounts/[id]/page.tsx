@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { getViewContext, isAuthEnabled } from "@/lib/auth-context";
+import { companyAccountAccess, getViewContext, isAuthEnabled } from "@/lib/auth-context";
 import { listTags } from "@/lib/services/transaction-tags";
 import { localeToIntl } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
@@ -52,7 +52,21 @@ export default async function AccountDetailPage({
   // render ANY account id handed to it. Resolving through the viewer's own
   // visible set means someone else's account 404s exactly like a nonexistent
   // one, leaking nothing about whether it exists.
-  const { viewer, ownerId, accountIds, readOnly } = await getViewContext();
+  const ctx = await getViewContext();
+  const { viewer } = ctx;
+  let { ownerId, accountIds, readOnly } = ctx;
+  // A company's account, opened from the company page while the person's own
+  // portfolio is the scope: its manager may edit it, an associate who
+  // accepted their link may read it (companyAccountAccess). Anyone else
+  // still gets notFound() below, as for any account outside their scope.
+  if (!accountIds.includes(id)) {
+    const access = await companyAccountAccess(viewer.id, id).catch(() => null);
+    if (access) {
+      accountIds = [id];
+      ownerId = access.managerUserId;
+      readOnly = access.role !== "manager";
+    }
+  }
 
   const [account, categories] = await Promise.all([
     prisma.account.findFirst({
@@ -98,7 +112,9 @@ export default async function AccountDetailPage({
   // can't add further co-owners - see assertAccountOwner), and only with auth
   // on, since mono mode has nobody to share with. Fetched here rather than in
   // the Promise.all above because it depends on knowing the account exists.
-  const isDirectOwner = isAuthEnabled() && !readOnly && account.userId === viewer.id;
+  // Never on a company's account: it is shared through the company's cap
+  // table, and addAccountCoOwner refuses it anyway.
+  const isDirectOwner = isAuthEnabled() && !readOnly && account.userId === viewer.id && !account.companyId;
   // Whose account this is, when that is not the person looking. A co-owned
   // account appears in the co-owner's portfolio with nothing naming its owner,
   // so on a family instance you cannot tell whose it is - reported exactly

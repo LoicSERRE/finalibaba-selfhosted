@@ -20,6 +20,7 @@ export function LoanTab({
   institutions,
   rows,
   readOnly = false,
+  companyId,
 }: Readonly<{
   t: T;
   td: T;
@@ -28,12 +29,14 @@ export function LoanTab({
   rows: LoanRow[];
   /** True when a granted (read-only) portfolio is on screen. */
   readOnly?: boolean;
+  /** Set in a company\'s scope: new accounts are the company\'s. */
+  companyId?: string;
 }>) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
         {!readOnly && (
-        <AddLoanDialog institutions={institutions} />
+        <AddLoanDialog institutions={institutions} companyId={companyId} />
         )}
       </div>
       {rows.length === 0 ? (

@@ -173,3 +173,53 @@ export function mergedKeys(
   // ISO "YYYY-MM-DD" / "YYYY-MM": lexicographic order is chronological.
   return [...all].sort(); // NOSONAR
 }
+
+// ── Cap table editing (the forms) ─────────────────────────────────────────
+
+/**
+ * Where a cap table being typed stands, for the live total under the form.
+ * Lenient on purpose - a half-typed row counts as 0 - while validateCapTable
+ * stays the strict check the server runs on submit.
+ */
+export function capTableDraft(totalParts: number, parts: readonly number[]): {
+  allocated: number;
+  remaining: number;
+  complete: boolean;
+} {
+  const allocated = parts.reduce((sum, p) => sum + (Number.isInteger(p) && p > 0 ? p : 0), 0);
+  const total = Number.isInteger(totalParts) && totalParts > 0 ? totalParts : 0;
+  return { allocated, remaining: total - allocated, complete: total > 0 && allocated === total };
+}
+
+/** A holding as a percentage of the company, one decimal, for display. */
+export function partsPct(parts: number, totalParts: number): number {
+  if (totalParts <= 0) return 0;
+  return Math.round((parts / totalParts) * 1000) / 10;
+}
+
+// ── The dashboard's account list ──────────────────────────────────────────
+
+/** The account type a company share carries in the dashboard's account list. */
+export const COMPANY_ENTRY_TYPE = "COMPANY";
+
+/**
+ * The account list grouped by institution, plus one "companies" group with a
+ * row per share - so the list adds up to the net worth above it rather than
+ * leaving the shares out. The rows point at the company, not at an account.
+ */
+export function withCompaniesGroup<G extends { name: string | null; logoUrl: string | null; total: bigint; accounts: { id: string; name: string; value: bigint; type: string }[] }>(
+  institutions: G[],
+  shares: readonly CompanyShare[],
+  label: string,
+): (G | { name: string; logoUrl: null; total: bigint; accounts: { id: string; name: string; value: bigint; type: string }[] })[] {
+  if (shares.length === 0) return institutions;
+  return [
+    ...institutions,
+    {
+      name: label,
+      logoUrl: null,
+      total: shares.reduce((sum, s) => sum + s.valueCents, BigInt(0)),
+      accounts: shares.map((s) => ({ id: s.companyId, name: s.name, value: s.valueCents, type: COMPANY_ENTRY_TYPE })),
+    },
+  ];
+}

@@ -16,18 +16,21 @@ export function AutomobileTab({
   institutions,
   rows,
   readOnly = false,
+  companyId,
 }: Readonly<{
   t: T;
   institutions: { id: string; name: string }[];
   rows: AutomobileRow[];
   /** True when a granted (read-only) portfolio is on screen. */
   readOnly?: boolean;
+  /** Set in a company\'s scope: new accounts are the company\'s. */
+  companyId?: string;
 }>) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
         {!readOnly && (
-        <AddAutomobileDialog institutions={institutions} />
+        <AddAutomobileDialog institutions={institutions} companyId={companyId} />
         )}
       </div>
 
