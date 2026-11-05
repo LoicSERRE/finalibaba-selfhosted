@@ -7,7 +7,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   role: null as "manager" | "associate" | null,
-  associateFindFirst: vi.fn(),
   associateAggregate: vi.fn(),
   associateFindMany: vi.fn(),
   companyFindUniqueOrThrow: vi.fn(),
@@ -18,7 +17,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    companyAssociate: { findMany: h.associateFindMany, findFirst: h.associateFindFirst, aggregate: h.associateAggregate },
+    companyAssociate: { findMany: h.associateFindMany, aggregate: h.associateAggregate },
     company: { findUniqueOrThrow: h.companyFindUniqueOrThrow },
     account: { findMany: h.accountFindMany },
     institution: { findMany: h.institutionFindMany },
@@ -40,13 +39,19 @@ const NOW = new Date("2026-11-05T12:00:00Z");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.companyFindUniqueOrThrow.mockResolvedValue({ id: COMPANY, name: "SCI", kind: "SCI", taxRegime: "IR", totalParts: 1000 });
-  h.associateFindMany.mockResolvedValue([
-    { id: "a1", name: "Camille", userId: "user-a", linkAcceptedAt: new Date(), currentAccountCents: BigInt(30_000_00), user: { username: "camille" }, holdings: [{ parts: 600 }] },
-    { id: "a2", name: "Marie", userId: "user-b", linkAcceptedAt: new Date(), currentAccountCents: BigInt(20_000_00), user: { username: "marie" }, holdings: [{ parts: 400 }] },
-  ]);
-  // Marie's own accepted row, and the company's 50 000 of current accounts.
-  h.associateFindFirst.mockResolvedValue({ currentAccountCents: BigInt(20_000_00), holdings: [{ parts: 400 }] });
+  // The cap table in one read: Camille 600 parts, Marie 400, 50 000 of
+  // current accounts between them.
+  h.companyFindUniqueOrThrow.mockResolvedValue({
+    id: COMPANY, name: "SCI", kind: "SCI", taxRegime: "IR", totalParts: 1000, discountPct: null,
+    associates: [
+      { id: "a1", name: "Camille", userId: "user-a", linkAcceptedAt: new Date(), currentAccountCents: BigInt(30_000_00), birthDate: new Date("1980-05-01T00:00:00Z"), user: { username: "camille" } },
+      { id: "a2", name: "Marie", userId: "user-b", linkAcceptedAt: new Date(), currentAccountCents: BigInt(20_000_00), birthDate: null, user: { username: "marie" } },
+    ],
+    holdings: [
+      { parts: 600, fullOwnerId: "a1", usufructuaryId: null, bareOwnerId: null },
+      { parts: 400, fullOwnerId: "a2", usufructuaryId: null, bareOwnerId: null },
+    ],
+  });
   h.associateAggregate.mockResolvedValue({ _sum: { currentAccountCents: BigInt(50_000_00) } });
   h.accountFindMany.mockResolvedValue([]);
   h.institutionFindMany.mockResolvedValue([]);
@@ -57,7 +62,7 @@ describe("loadCompanyPage", () => {
   it("gives an outsider nothing, and reads nothing for them", async () => {
     h.role = null;
     await expect(loadCompanyPage("user-z", COMPANY, "fr-FR", NOW)).resolves.toBeNull();
-    expect(h.associateFindMany).not.toHaveBeenCalled();
+    expect(h.companyFindUniqueOrThrow).not.toHaveBeenCalled();
     expect(h.computePortfolio).not.toHaveBeenCalled();
   });
 
@@ -65,13 +70,10 @@ describe("loadCompanyPage", () => {
     h.role = "associate";
     const page = await loadCompanyPage("user-b", COMPANY, "fr-FR", NOW);
     expect(page?.associates.map((a) => a.username)).toEqual([null, null]);
+    // Birth dates are the manager's to see, like the usernames.
+    expect(page?.associates.map((a) => a.birthDate)).toEqual([null, null]);
     expect(page?.attachable).toBeNull();
     expect(page?.associates.find((a) => a.isViewer)?.name).toBe("Marie");
-    // Their stake, from their ACCEPTED row only.
-    expect(h.associateFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { companyId: COMPANY, userId: "user-b", linkAcceptedAt: { not: null } } })
-    );
-    // ANR = 180 000 - 50 000 of current accounts; 40 % of it is 52 000.
     expect(page?.anrCents).toBe(BigInt(130_000_00));
     expect(page?.shareCents).toBe(BigInt(52_000_00));
     expect(page?.ownCurrentAccountCents).toBe(BigInt(20_000_00));
@@ -84,6 +86,7 @@ describe("loadCompanyPage", () => {
     h.role = "manager";
     const page = await loadCompanyPage("user-a", COMPANY, "fr-FR", NOW);
     expect(page?.associates.map((a) => a.username)).toEqual(["camille", "marie"]);
+    expect(page?.associates[0].birthDate).toBe("1980-05-01");
     expect(page?.attachable).not.toBeNull();
     // Only the manager's own, company-less, non-co-owned manual accounts.
     expect(h.accountFindMany).toHaveBeenCalledWith(
@@ -103,5 +106,27 @@ describe("loadPendingCompanyLinks", () => {
     h.associateFindMany.mockResolvedValue([]);
     await loadPendingCompanyLinks("user-b");
     expect(h.associateFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user-b", linkAcceptedAt: null } }));
+  });
+});
+
+describe("démembrement on the company page (step 3)", () => {
+  it("shows an usufructuary's economic weight, not the parts they have a right on", async () => {
+    h.role = "associate";
+    h.associateAggregate.mockResolvedValue({ _sum: { currentAccountCents: BigInt(0) } });
+    h.companyFindUniqueOrThrow.mockResolvedValue({
+      id: COMPANY, name: "SCI", kind: "SCI", taxRegime: "IR", totalParts: 1000, discountPct: null,
+      associates: [
+        { id: "p", name: "Parent", userId: "user-b", linkAcceptedAt: new Date(), currentAccountCents: BigInt(0), birthDate: new Date("1956-01-01T00:00:00Z"), user: null },
+        { id: "c", name: "Enfant", userId: null, linkAcceptedAt: null, currentAccountCents: BigInt(0), birthDate: null, user: null },
+      ],
+      holdings: [{ parts: 1000, fullOwnerId: null, usufructuaryId: "p", bareOwnerId: "c" }],
+    });
+    const page = await loadCompanyPage("user-b", COMPANY, "fr-FR", NOW); // parent is 70: 40 / 60
+    expect(page?.partsHeld).toBe(1000);
+    expect(page?.viewerWeight).toBeCloseTo(0.4, 10);
+    expect(page?.shareCents).toBe(BigInt(72_000_00)); // 40 % of 180 000
+    expect(page?.associates.map((a) => [a.usufructParts, a.bareParts])).toEqual([[1000, 0], [0, 1000]]);
+    // The blocks are the manager's editor's: an associate gets none.
+    expect(page?.dismemberments).toEqual([]);
   });
 });

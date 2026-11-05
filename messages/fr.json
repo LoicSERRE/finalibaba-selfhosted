@@ -2064,7 +2064,18 @@
       "create": "Créer la société",
       "creating": "Création…",
       "currentAccount": "Compte courant",
-      "currentAccountN": "Compte courant de l'associé {n}"
+      "currentAccountN": "Compte courant de l'associé {n}",
+      "fullParts": "Parts (pleine propriété)",
+      "birthDate": "Date de naissance",
+      "birthDateN": "Date de naissance de l'associé {n}",
+      "dismemberments": "Démembrements",
+      "dismembermentsHint": "Des parts dont l'usufruit et la nue-propriété appartiennent à deux associés différents. L'usufruit est valorisé selon l'âge de l'usufruitier (barème de l'article 669 du CGI) : sa date de naissance est nécessaire.",
+      "dismembermentN": "Démembrement {n}",
+      "dismembermentPartsN": "Parts du démembrement {n}",
+      "usufructuary": "Usufruitier",
+      "bareOwner": "Nu-propriétaire",
+      "removeDismembermentN": "Retirer le démembrement {n}",
+      "addDismemberment": "Ajouter un démembrement"
     },
     "errors": {
       "name_required": "Donne un nom (à la société et à chaque associé).",
@@ -2083,7 +2094,12 @@
       "co_owned": "Un compte en copropriété ne peut pas entrer dans une société.",
       "not_an_associate": "La gérance ne peut passer qu'à un associé relié qui a accepté.",
       "name_conflict": "Cette personne a déjà une connexion bancaire du même nom.",
-      "current_account_invalid": "Un compte courant est un montant positif ou nul."
+      "current_account_invalid": "Un compte courant est un montant positif ou nul.",
+      "birth_date_invalid": "Cette date de naissance n'est pas valide.",
+      "birth_date_required": "Un usufruitier doit avoir une date de naissance : son âge fixe la valeur de l'usufruit.",
+      "dismemberment_invalid": "Un démembrement doit porter sur au moins une part, entre deux associés différents.",
+      "associate_without_parts": "Chaque associé doit détenir des parts, en pleine propriété ou par un démembrement.",
+      "discount_invalid": "La décote est un pourcentage entre 0 et 100 (exclu)."
     },
     "page": {
       "back": "Comptes",
@@ -2114,7 +2130,10 @@
       "associateShare": "{name} : {pct} %",
       "afterCurrentAccounts": "après {amount} de comptes courants d'associés",
       "plusYourCurrentAccount": "+ ton compte courant de {amount}",
-      "currentAccountOf": "compte courant {amount}"
+      "currentAccountOf": "compte courant {amount}",
+      "afterDiscount": "après décote de {pct} % : {amount}",
+      "usufructOf": "usufruit de {parts} parts",
+      "bareOwnershipOf": "nue-propriété de {parts} parts"
     },
     "capTable": {
       "title": "Associés et parts",
@@ -2141,7 +2160,9 @@
       "handoverButton": "Passer la gérance",
       "noHandoverCandidate": "Aucun associé relié n'a encore accepté.",
       "delete": "Supprimer la société",
-      "deleteConfirm": "Ses comptes reviennent dans ton portefeuille personnel et la table des associés est supprimée."
+      "deleteConfirm": "Ses comptes reviennent dans ton portefeuille personnel et la table des associés est supprimée.",
+      "discount": "Décote sur les parts (%)",
+      "discountHint": "Pour l'illiquidité des parts, souvent entre 10 et 20 %. S'applique à la valeur des parts, pas aux comptes courants."
     },
     "includingCurrentAccount": "dont compte courant {amount}"
   }

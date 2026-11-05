@@ -12,6 +12,7 @@ export type CompanyCardData = {
   role: "manager" | "associate";
   partsHeld: number;
   totalParts: number;
+  weight: number;
   valueCents: number;
   shareCents: number;
   currentAccountCents: number;

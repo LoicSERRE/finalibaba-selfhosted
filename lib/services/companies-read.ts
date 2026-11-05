@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/db/prisma";
 import { companyAccountIds, companyRole, viewerCompanies, type CompanyRole } from "@/lib/auth-context";
 import { computePortfolio } from "@/lib/services/net-worth";
-import { netAssetValueCents, shareCents } from "@/lib/domain/company";
+import {
+  fullStake,
+  netAssetValueCents,
+  partsInStake,
+  stakeOfAssociate,
+  stakeValueCents,
+  weightedParts,
+  type Stake,
+} from "@/lib/domain/company";
 
 /**
  * What the company screens read (dev-docs/companies.md, interface "C"). A
@@ -9,19 +17,46 @@ import { netAssetValueCents, shareCents } from "@/lib/domain/company";
  * with the viewer they resolved, and it re-checks the role itself.
  */
 
+/** The cap table as stored: the company's terms, its associates, its blocks. */
+async function loadCapTable(companyId: string) {
+  return prisma.company.findUniqueOrThrow({
+    where: { id: companyId },
+    select: {
+      id: true,
+      name: true,
+      kind: true,
+      taxRegime: true,
+      totalParts: true,
+      discountPct: true,
+      associates: {
+        select: {
+          id: true,
+          name: true,
+          userId: true,
+          linkAcceptedAt: true,
+          currentAccountCents: true,
+          birthDate: true,
+          user: { select: { username: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+      holdings: { select: { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } },
+    },
+  });
+}
+type CapTable = Awaited<ReturnType<typeof loadCapTable>>;
+
+const birthDatesOf = (table: CapTable) => new Map(table.associates.map((a) => [a.id, a.birthDate]));
+
 /**
  * What this user holds in the company through an ACCEPTED link - the same
- * rule as their net worth: their parts and their current account.
+ * rule as their net worth: their stake (full, usufruct, bare) and their
+ * current account.
  */
-async function viewerStake(userId: string, companyId: string): Promise<{ parts: number; currentAccountCents: bigint }> {
-  const row = await prisma.companyAssociate.findFirst({
-    where: { companyId, userId, linkAcceptedAt: { not: null } },
-    select: { currentAccountCents: true, holdings: { select: { parts: true } } },
-  });
-  return {
-    parts: row?.holdings.reduce((sum, h) => sum + h.parts, 0) ?? 0,
-    currentAccountCents: row?.currentAccountCents ?? BigInt(0),
-  };
+function viewerStake(table: CapTable, userId: string): { stake: Stake; currentAccountCents: bigint } {
+  const row = table.associates.find((a) => a.userId === userId && a.linkAcceptedAt !== null);
+  if (!row) return { stake: fullStake(0), currentAccountCents: BigInt(0) };
+  return { stake: stakeOfAssociate(row.id, table.holdings, birthDatesOf(table)), currentAccountCents: row.currentAccountCents };
 }
 
 /**
@@ -44,6 +79,9 @@ export interface CompanyCard {
   role: CompanyRole;
   partsHeld: number;
   totalParts: number;
+  /** The viewer's economic weight in the company today, 0-1: an usufruct
+   *  counts at its scale value, not as the whole block. */
+  weight: number;
   /** The company's net asset value (current accounts deducted). */
   valueCents: bigint;
   /** Its worth to the viewer: their share of that value plus their current account. */
@@ -57,20 +95,18 @@ export async function loadCompanyCards(userId: string, now: Date): Promise<Compa
   const companies = await viewerCompanies(userId);
   return Promise.all(
     companies.map(async (c) => {
-      const [company, stake, value] = await Promise.all([
-        prisma.company.findUniqueOrThrow({ where: { id: c.id }, select: { totalParts: true } }),
-        viewerStake(userId, c.id),
-        companyValue(c.id, "en-US", now),
-      ]);
+      const [table, value] = await Promise.all([loadCapTable(c.id), companyValue(c.id, "en-US", now)]);
+      const { stake, currentAccountCents } = viewerStake(table, userId);
       return {
         id: c.id,
         name: c.name,
         role: c.role,
-        partsHeld: stake.parts,
-        totalParts: company.totalParts,
+        partsHeld: partsInStake(stake),
+        totalParts: table.totalParts,
+        weight: weightedParts(stake, now).div(table.totalParts).toNumber(),
         valueCents: value.anrCents,
-        shareCents: shareCents(value.anrCents, stake.parts, company.totalParts) + stake.currentAccountCents,
-        currentAccountCents: stake.currentAccountCents,
+        shareCents: stakeValueCents(value.anrCents, stake, table.totalParts, table.discountPct, now) + currentAccountCents,
+        currentAccountCents,
       };
     }),
   );
@@ -118,6 +154,21 @@ export interface CompanyPageAssociate {
   /** Their current account, in cents. Every associate sees every one, as in
    *  the company's own books (a family's choice, dev-docs/companies.md). */
   currentAccountCents: number;
+  /** Parts held as usufructuary and as bare owner (step 3); `parts` above is
+   *  full ownership only. */
+  usufructParts: number;
+  bareParts: number;
+  /** Their weight in the company today, 0-1 - what the parts bar draws. */
+  weight: number;
+  /** "YYYY-MM-DD", for the manager's editor only - like the usernames. */
+  birthDate: string | null;
+}
+
+/** A démembrement block, for the manager's editor. */
+export interface CompanyPageDismemberment {
+  parts: number;
+  usufructuaryId: string;
+  bareOwnerId: string;
 }
 
 /**
@@ -131,48 +182,46 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
   if (!role) return null;
   const isManager = role === "manager";
 
-  const [company, associates, stake, value] = await Promise.all([
-    prisma.company.findUniqueOrThrow({
-      where: { id: companyId },
-      select: { id: true, name: true, kind: true, taxRegime: true, totalParts: true },
-    }),
-    prisma.companyAssociate.findMany({
-      where: { companyId },
-      select: {
-        id: true,
-        name: true,
-        userId: true,
-        linkAcceptedAt: true,
-        currentAccountCents: true,
-        user: { select: { username: true } },
-        holdings: { select: { parts: true } },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-    viewerStake(userId, companyId),
-    companyValue(companyId, intlLocale, now),
-  ]);
+  const [table, value] = await Promise.all([loadCapTable(companyId), companyValue(companyId, intlLocale, now)]);
+  const { id, name, kind, taxRegime, totalParts, discountPct } = table;
+  const company = { id, name, kind, taxRegime, totalParts, discountPct };
+  const viewer = viewerStake(table, userId);
+  const birthDates = birthDatesOf(table);
 
-  const rows: CompanyPageAssociate[] = associates.map((a) => ({
-    id: a.id,
-    name: a.name,
-    parts: a.holdings.reduce((sum, h) => sum + h.parts, 0),
-    isViewer: a.userId === userId,
-    link: a.userId ? (a.linkAcceptedAt ? "accepted" : "pending") : null,
-    username: isManager ? (a.user?.username ?? null) : null,
-    currentAccountCents: Number(a.currentAccountCents),
-  }));
+  const rows: CompanyPageAssociate[] = table.associates.map((a) => {
+    const stake = stakeOfAssociate(a.id, table.holdings, birthDates);
+    return {
+      id: a.id,
+      name: a.name,
+      parts: stake.fullParts,
+      usufructParts: stake.usufructs.reduce((s, u) => s + u.parts, 0),
+      bareParts: stake.bareOwnerships.reduce((s, b) => s + b.parts, 0),
+      weight: weightedParts(stake, now).div(totalParts).toNumber(),
+      isViewer: a.userId === userId,
+      link: a.userId ? (a.linkAcceptedAt ? "accepted" : "pending") : null,
+      username: isManager ? (a.user?.username ?? null) : null,
+      currentAccountCents: Number(a.currentAccountCents),
+      birthDate: isManager && a.birthDate ? a.birthDate.toISOString().slice(0, 10) : null,
+    };
+  });
+  const dismemberments: CompanyPageDismemberment[] = table.holdings.flatMap((h) =>
+    h.usufructuaryId && h.bareOwnerId ? [{ parts: h.parts, usufructuaryId: h.usufructuaryId, bareOwnerId: h.bareOwnerId }] : [],
+  );
 
   return {
     company,
     role,
     associates: rows,
-    partsHeld: stake.parts,
+    dismemberments: isManager ? dismemberments : [],
+    partsHeld: partsInStake(viewer.stake),
+    viewerWeight: weightedParts(viewer.stake, now).div(totalParts).toNumber(),
     anrCents: value.anrCents,
     currentAccountsCents: value.currentAccountsCents,
-    ownCurrentAccountCents: stake.currentAccountCents,
-    partValueCents: shareCents(value.anrCents, 1, company.totalParts),
-    shareCents: shareCents(value.anrCents, stake.parts, company.totalParts),
+    ownCurrentAccountCents: viewer.currentAccountCents,
+    // A part before the discount, and after it when there is one.
+    partValueCents: stakeValueCents(value.anrCents, fullStake(1), totalParts, null, now),
+    discountedPartValueCents: discountPct ? stakeValueCents(value.anrCents, fullStake(1), totalParts, discountPct, now) : null,
+    shareCents: stakeValueCents(value.anrCents, viewer.stake, totalParts, discountPct, now),
     result: value.result,
     // The net asset value per day: the accounts' history less today's current
     // accounts, so the curve ends on the figure above it.

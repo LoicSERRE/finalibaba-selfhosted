@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createCompany, setAccountCompany, setInstitutionCompany, type CompanyFailure } from "@/lib/actions/companies";
 import { capTableDraft } from "@/lib/domain/company";
-import { CapTableEditor, newRowKey, toCapTableInput, type CapTableRowDraft } from "@/components/companies/cap-table-editor";
+import { CapTableEditor } from "@/components/companies/cap-table-editor";
+import { draftParts, emptyRow, toCapTableInput, type CapTableRowDraft, type DismembermentDraft } from "@/components/companies/cap-table-draft";
 
 export type AttachableItems = {
   accounts: { id: string; name: string }[];
@@ -38,9 +39,8 @@ export function CreateCompanyDialog({ attachable }: Readonly<{ attachable: Attac
   const [kind, setKind] = useState<(typeof KINDS)[number]>("SCI");
   const [taxRegime, setTaxRegime] = useState<(typeof REGIMES)[number]>("IR");
   const [totalParts, setTotalParts] = useState("1000");
-  const [rows, setRows] = useState<CapTableRowDraft[]>(() => [
-    { key: newRowKey(), name: "", parts: "", username: "", self: true, currentAccount: "" },
-  ]);
+  const [rows, setRows] = useState<CapTableRowDraft[]>(() => [emptyRow(true)]);
+  const [blocks, setBlocks] = useState<DismembermentDraft[]>([]);
   const [accountIds, setAccountIds] = useState<Set<string>>(new Set());
   const [institutionIds, setInstitutionIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export function CreateCompanyDialog({ attachable }: Readonly<{ attachable: Attac
 
   const total = Number(totalParts);
   const canContinue =
-    step === 1 ? name.trim() !== "" && Number.isInteger(total) && total > 0 : capTableDraft(total, rows.map((r) => Number(r.parts))).complete;
+    step === 1 ? name.trim() !== "" && Number.isInteger(total) && total > 0 : capTableDraft(total, draftParts(rows, blocks)).complete;
 
   function reset() {
     setStep(1);
@@ -66,7 +66,7 @@ export function CreateCompanyDialog({ attachable }: Readonly<{ attachable: Attac
     setSaving(true);
     setError(null);
     try {
-      const result = await createCompany({ name, kind, taxRegime, totalParts: total, associates: toCapTableInput(rows) });
+      const result = await createCompany({ name, kind, taxRegime, totalParts: total, ...toCapTableInput(rows, blocks) });
       if (!result.ok) {
         setError(t(`errors.${result.error}`));
         // Back to the step the failure is about.
@@ -150,7 +150,9 @@ export function CreateCompanyDialog({ attachable }: Readonly<{ attachable: Attac
           </div>
         )}
 
-        {step === 2 && <CapTableEditor totalParts={total} rows={rows} onRowsChange={setRows} />}
+        {step === 2 && (
+          <CapTableEditor totalParts={total} rows={rows} onRowsChange={setRows} blocks={blocks} onBlocksChange={setBlocks} />
+        )}
 
         {step === 3 && (
           <div className="space-y-4">

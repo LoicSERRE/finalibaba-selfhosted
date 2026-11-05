@@ -1251,6 +1251,9 @@ model Company {
   taxRegime     CompanyTaxRegime   @default(IR)
   // From the statutes. The holdings' parts always add up to it exactly.
   totalParts    Int
+  // Illiquidity discount on the associates' parts, 0 to <1 (step 3). Applies
+  // to the value of the parts only, never to a current account.
+  discountPct   Float?
   // The one user who maintains it. Restrict, not Cascade: deleting that user
   // must not take the company's accounts with them - the deletion is refused
   // until management is handed over or the company deleted.
@@ -1283,22 +1286,32 @@ model CompanyAssociate {
   // and it owes them back - a liability of the company (out of its net asset
   // value) and a receivable of the associate (in their net worth). >= 0.
   currentAccountCents BigInt @default(0)
+  // Needed as an usufructuary (step 3): the usufruct's value follows their age
+  // (art. 669 I CGI), at every date of a history.
+  birthDate      DateTime?
   holdings       CompanyHolding[]
+  usufructs      CompanyHolding[] @relation("usufructuary")
+  bareOwnerships CompanyHolding[] @relation("bareOwner")
   createdAt      DateTime         @default(now())
 
   @@unique([companyId, userId])
   @@index([userId])
 }
 
-// A block of parts. Full ownership only for now; usufruct and bare ownership
-// come with step 3 of dev-docs/companies.md.
+// A block of parts: owned outright by one associate (fullOwnerId), or split
+// (démembrement) between an usufructuary and a bare owner - two different
+// associates. Never a mix: the migration adds a CHECK constraint for it.
 model CompanyHolding {
-  id          String           @id @default(cuid())
-  companyId   String
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  parts       Int
-  fullOwnerId String
-  fullOwner   CompanyAssociate @relation(fields: [fullOwnerId], references: [id], onDelete: Cascade)
+  id             String            @id @default(cuid())
+  companyId      String
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parts          Int
+  fullOwnerId    String?
+  fullOwner      CompanyAssociate? @relation(fields: [fullOwnerId], references: [id], onDelete: Cascade)
+  usufructuaryId String?
+  usufructuary   CompanyAssociate? @relation("usufructuary", fields: [usufructuaryId], references: [id], onDelete: Cascade)
+  bareOwnerId    String?
+  bareOwner      CompanyAssociate? @relation("bareOwner", fields: [bareOwnerId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
 }

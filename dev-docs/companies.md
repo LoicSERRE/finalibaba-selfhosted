@@ -1,6 +1,6 @@
 # Companies (SCI first)
 
-Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: steps 1 and 2 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth), its interface ("C" below) and the associates' current accounts. Steps 3 to 5 are next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
+Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: steps 1 to 3 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth), its interface ("C" below), the associates' current accounts, démembrement and the discount. Steps 4 and 5 are next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
 
 ## What users actually need
 
@@ -198,6 +198,14 @@ Written as tests in the same PR as each step:
 - **A person's figure** (`buildCompanyShare`): their share of that value plus their own current account, a receivable. Across all associates it adds back up to exactly the company's accounts: nothing is counted twice or lost (pinned by a test).
 - History: today's current accounts applied to every past day, like today's holdings until step 5.
 - **Visibility: every associate sees every current account** (decided at step 2). They are in the company's books, and the associates already see each other's parts.
+
+## Step 3: démembrement and discount
+
+- **Blocks**: a `CompanyHolding` is owned outright (`fullOwnerId`) or split between an `usufructuaryId` and a `bareOwnerId`, two different associates. A database CHECK constraint holds the shape (migration `20261105180000_company_dismemberment`) under the server's own check (`validateCapTable`, which also counts each block once in the total and wants every associate to hold something).
+- **The scale** (`usufructPct`, art. 669 I CGI): 90 % under 21, then 10 points less per started decade, 10 % from 91. The usufruct counts for that share of the block and the bare ownership for the rest, so the two always add up to the whole block (pinned by a test). An usufructuary must have a birth date (`CompanyAssociate.birthDate`); the age is taken **at each history date**, so a bare ownership gains value on the usufructuary's birthdays. A stake (`Stake`, `stakeOfAssociate`) carries the birth dates its value depends on.
+- **Discount** (`Company.discountPct`, 0 to under 1, a percentage in the settings): applied to the value of the parts, never to a current account, which is a receivable.
+- **What is shown**: a person's share and its percentage are their **economic weight** (an usufruct of every part at 70 is 40 %, not 100 %); the cap table lists each associate's full, usufruct and bare-ownership parts, and its bar draws the weights. A part's value is shown before and after the discount. Birth dates, like usernames, are the manager's only.
+- **Not done**: temporary usufruct (art. 669 II, 23 % per started 10-year period), "if asked".
 
 ## Open questions
 

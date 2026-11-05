@@ -32,16 +32,21 @@ function cash(id: string, cents: number) {
   };
 }
 
-/** The user's associate row in a 1000-part SCI whose bank account holds 180 000. */
-function row(parts: number[], ownCents: number, allCents: number[]) {
+/** The user's associate row ("me") in a 1000-part SCI whose bank account holds 180 000. */
+function row(parts: number[], ownCents: number, allCents: number[], extra: Partial<{ discountPct: number; holdings: object[]; associates: object[] }> = {}) {
   return {
+    id: "me",
     currentAccountCents: BigInt(ownCents),
-    holdings: parts.map((p) => ({ parts: p })),
     company: {
       id: "co-1",
       name: "SCI",
       totalParts: 1000,
-      associates: allCents.map((c) => ({ currentAccountCents: BigInt(c) })),
+      discountPct: extra.discountPct ?? null,
+      associates:
+        extra.associates ??
+        allCents.map((c, i) => ({ id: i === 0 ? "me" : `other-${i}`, currentAccountCents: BigInt(c), birthDate: null })),
+      holdings:
+        extra.holdings ?? parts.map((p) => ({ parts: p, fullOwnerId: "me", usufructuaryId: null, bareOwnerId: null })),
     },
   };
 }
@@ -94,5 +99,27 @@ describe("computePortfolio", () => {
     const { result } = await computePortfolio({ accountIds: ["sci-bank"], shareholderId: null, intlLocale: "fr-FR", now: NOW });
     expect(h.associateFindMany).not.toHaveBeenCalled();
     expect(result.netWorth).toBe(BigInt(180_000_00));
+  });
+});
+
+describe("démembrement and discount (step 3)", () => {
+  it("values an usufruct by the usufructuary's age today, and its bare ownership by the rest", async () => {
+    // Born 1956-01-01: 70 on 2026-07-28 -> usufruct 40 % (art. 669 I CGI).
+    const associates = [
+      { id: "me", currentAccountCents: BigInt(0), birthDate: new Date("1956-01-01T00:00:00Z") },
+      { id: "child", currentAccountCents: BigInt(0), birthDate: null },
+    ];
+    const holdings = [{ parts: 1000, fullOwnerId: null, usufructuaryId: "me", bareOwnerId: "child" }];
+    h.associateFindMany.mockResolvedValue([row([], 0, [0, 0], { associates, holdings })]);
+    const [share] = await loadCompanyShares("user-a", NOW);
+    expect(share.valueCents).toBe(BigInt(72_000_00)); // 40 % of 180 000
+    expect(share.parts).toBe(1000);
+  });
+
+  it("applies the discount to the parts, never to the current account", async () => {
+    h.associateFindMany.mockResolvedValue([row([600], 30_000_00, [30_000_00, 20_000_00], { discountPct: 0.2 })]);
+    const [share] = await loadCompanyShares("user-a", NOW);
+    // ANR 130 000, 60 % = 78 000, less 20 % = 62 400, plus the 30 000 lent.
+    expect(share.valueCents).toBe(BigInt(62_400_00 + 30_000_00));
   });
 });

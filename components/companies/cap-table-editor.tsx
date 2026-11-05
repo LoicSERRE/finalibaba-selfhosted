@@ -3,40 +3,11 @@
 import { Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { capTableDraft, partsPct } from "@/lib/domain/company";
-import { parseCents } from "@/lib/utils/format";
+import { DismembermentsEditor } from "@/components/companies/dismemberments-editor";
+import { draftParts, emptyRow, type CapTableRowDraft, type DismembermentDraft } from "@/components/companies/cap-table-draft";
 
-/** One row being edited. `parts` stays a string while typed. */
-export type CapTableRowDraft = {
-  key: string;
-  id?: string;
-  name: string;
-  parts: string;
-  username: string;
-  /** The person editing: linked to themselves, no username to type. */
-  self: boolean;
-  /** Their current account, as typed in the base currency ("12500,50"). */
-  currentAccount: string;
-};
-
-let nextKey = 0;
-export function newRowKey(): string {
-  nextKey += 1;
-  return `row-${nextKey}`;
-}
-
-/** The rows as the Server Actions take them - validated again over there. */
-export function toCapTableInput(rows: CapTableRowDraft[]) {
-  return rows.map((r) => ({
-    ...(r.id ? { id: r.id } : {}),
-    name: r.name.trim(),
-    parts: Number(r.parts),
-    username: r.self ? null : r.username.trim() || null,
-    self: r.self,
-    // Negative or malformed stays as typed: the server refuses it with a
-    // message, rather than this quietly turning it into 0.
-    currentAccountCents: r.currentAccount.trim() ? Number(parseCents(r.currentAccount)) : 0,
-  }));
-}
+export { emptyRow, newRowKey, toCapTableInput } from "@/components/companies/cap-table-draft";
+export type { CapTableRowDraft, DismembermentDraft } from "@/components/companies/cap-table-draft";
 
 const labelClass = "flex flex-col gap-1 text-xs text-[var(--muted)]";
 
@@ -52,9 +23,22 @@ export function CapTableEditor({
   totalParts,
   rows,
   onRowsChange,
-}: Readonly<{ totalParts: number; rows: CapTableRowDraft[]; onRowsChange: (rows: CapTableRowDraft[]) => void }>) {
+  blocks,
+  onBlocksChange,
+}: Readonly<{
+  totalParts: number;
+  rows: CapTableRowDraft[];
+  onRowsChange: (rows: CapTableRowDraft[]) => void;
+  blocks: DismembermentDraft[];
+  onBlocksChange: (blocks: DismembermentDraft[]) => void;
+}>) {
   const t = useTranslations("companies.wizard");
-  const draft = capTableDraft(totalParts, rows.map((r) => Number(r.parts)));
+  const draft = capTableDraft(totalParts, draftParts(rows, blocks));
+  // Removing an associate removes the blocks that named them.
+  const remove = (key: string) => {
+    onRowsChange(rows.filter((r) => r.key !== key));
+    onBlocksChange(blocks.filter((b) => b.usufructuaryKey !== key && b.bareOwnerKey !== key));
+  };
 
   const update = (key: string, patch: Partial<CapTableRowDraft>) =>
     onRowsChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -78,7 +62,7 @@ export function CapTableEditor({
               />
             </label>
             <label className={labelClass}>
-              {t("parts")}
+              {t("fullParts")}
               <input
                 aria-label={t("partsN", { n: i + 1 })}
                 inputMode="numeric"
@@ -89,7 +73,7 @@ export function CapTableEditor({
             </label>
             <button
               type="button"
-              onClick={() => onRowsChange(rows.filter((r) => r.key !== row.key))}
+              onClick={() => remove(row.key)}
               disabled={rows.length === 1}
               aria-label={t("removeAssociate", { n: i + 1 })}
               className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-elevated)] disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
@@ -126,19 +110,30 @@ export function CapTableEditor({
                 />
               </label>
             )}
+            <label className={labelClass}>
+              {t("birthDate")}
+              <input
+                type="date"
+                aria-label={t("birthDateN", { n: i + 1 })}
+                value={row.birthDate}
+                onChange={(e) => update(row.key, { birthDate: e.target.value })}
+                className={inputClass}
+              />
+            </label>
           </div>
         </fieldset>
       ))}
       <button
         type="button"
         onClick={() =>
-          onRowsChange([...rows, { key: newRowKey(), name: "", parts: "", username: "", self: false, currentAccount: "" }])
+          onRowsChange([...rows, emptyRow()])
         }
         className="inline-flex items-center gap-1.5 min-h-11 text-sm text-[var(--accent-text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded"
       >
         <Plus size={14} aria-hidden="true" />
         {t("addAssociate")}
       </button>
+      <DismembermentsEditor rows={rows} blocks={blocks} onBlocksChange={onBlocksChange} />
       <div
         className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${
           draft.complete

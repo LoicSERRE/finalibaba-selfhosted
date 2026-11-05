@@ -15,7 +15,12 @@ export type ManagerAssociate = {
   isViewer: boolean;
   link: "accepted" | "pending" | null;
   currentAccountCents: number;
+  /** "YYYY-MM-DD", for the editor - an usufructuary's age values the usufruct. */
+  birthDate: string | null;
 };
+
+/** A stored démembrement block, its sides by associate id. */
+export type ManagerDismemberment = { parts: number; usufructuaryId: string; bareOwnerId: string };
 
 /** A returned failure as the sentence to show, or null for a success. */
 export function useFailureText() {

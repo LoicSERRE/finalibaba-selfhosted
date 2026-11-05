@@ -11,6 +11,12 @@ import { Settings } from "lucide-react";
 import { deleteCompany, transferCompanyManagement, updateCompany, type CompanyFailure } from "@/lib/actions/companies";
 import { useFailureText, type ManagerAssociate } from "@/components/companies/manager-shared";
 
+/** "15" or "15,5" (a percentage) to the ratio the server takes; malformed stays NaN, which it refuses. */
+function discountRatio(typed: string): number | null {
+  const trimmed = typed.trim().replace(",", ".");
+  return trimmed ? Number(trimmed) / 100 : null;
+}
+
 const KINDS = ["SCI", "HOLDING", "OTHER"] as const;
 const REGIMES = ["IR", "IS"] as const;
 const selectClass =
@@ -20,7 +26,7 @@ export function CompanySettingsDialog({
   company,
   associates,
 }: Readonly<{
-  company: { id: string; name: string; kind: string; taxRegime: string };
+  company: { id: string; name: string; kind: string; taxRegime: string; discountPct: number | null };
   associates: ManagerAssociate[];
 }>) {
   const t = useTranslations("companies");
@@ -31,6 +37,8 @@ export function CompanySettingsDialog({
   const [name, setName] = useState(company.name);
   const [kind, setKind] = useState(company.kind);
   const [taxRegime, setTaxRegime] = useState(company.taxRegime);
+  // Typed as a percentage ("15"), stored as a ratio (0.15).
+  const [discount, setDiscount] = useState(company.discountPct ? String(Math.round(company.discountPct * 1000) / 10) : "");
   const candidates = associates.filter((a) => a.link === "accepted" && !a.isViewer);
   const [nextManager, setNextManager] = useState(candidates[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +91,23 @@ export function CompanySettingsDialog({
               </select>
             </div>
           </div>
+          <Input
+            label={ts("discount")}
+            hint={ts("discountHint")}
+            inputMode="decimal"
+            value={discount}
+            onChange={(e) => setDiscount(e.target.value)}
+            placeholder="0"
+          />
           <div className="flex justify-end">
             <Button
               disabled={busy}
-              onClick={() => run(() => updateCompany(company.id, { name, kind, taxRegime }), () => { setOpen(false); router.refresh(); })}
+              onClick={() =>
+                run(
+                  () => updateCompany(company.id, { name, kind, taxRegime, discountPct: discountRatio(discount) }),
+                  () => { setOpen(false); router.refresh(); },
+                )
+              }
             >
               {ts("save")}
             </Button>

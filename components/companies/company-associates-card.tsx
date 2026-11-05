@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { partsPct } from "@/lib/domain/company";
 import { formatCurrency } from "@/lib/utils/format";
-import type { CompanyPageAssociate } from "@/lib/services/companies-read";
+import type { CompanyPageAssociate, CompanyPageDismemberment } from "@/lib/services/companies-read";
 import { CapTableDialog } from "@/components/companies/cap-table-dialog";
 
 // One colour per associate in the parts bar - distinct in lightness, not hue
@@ -17,12 +17,14 @@ export async function CompanyAssociatesCard({
   companyId,
   totalParts,
   associates,
+  dismemberments,
   isManager,
   locale,
 }: Readonly<{
   companyId: string;
   totalParts: number;
   associates: CompanyPageAssociate[];
+  dismemberments: CompanyPageDismemberment[];
   isManager: boolean;
   locale: string;
 }>) {
@@ -30,18 +32,22 @@ export async function CompanyAssociatesCard({
   const color = (i: number) => ASSOCIATE_COLORS[i % ASSOCIATE_COLORS.length];
   const barLabel = [
     t("associatesBar"),
-    associates.map((a) => t("associateShare", { name: a.name, pct: partsPct(a.parts, totalParts) })).join(", "),
+    associates.map((a) => t("associateShare", { name: a.name, pct: Math.round(a.weight * 1000) / 10 })).join(", "),
   ].join(" : ");
 
   return (
     <section className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-3" aria-labelledby="company-associates">
       <div className="flex items-center justify-between gap-2">
         <h2 id="company-associates" className="text-sm font-medium text-[var(--foreground)]">{t("associates")}</h2>
-        {isManager && <CapTableDialog companyId={companyId} totalParts={totalParts} associates={associates} />}
+        {isManager && (
+          <CapTableDialog companyId={companyId} totalParts={totalParts} associates={associates} dismemberments={dismemberments} />
+        )}
       </div>
       <div className="flex h-2.5 rounded-full overflow-hidden" role="img" aria-label={barLabel}>
         {associates.map((a, i) => (
-          <div key={a.id} style={{ width: `${partsPct(a.parts, totalParts)}%`, background: color(i) }} />
+          // Today's economic weight: an usufruct counts at its scale value, the
+          // bare ownership for the rest (lib/domain/company.ts).
+          <div key={a.id} style={{ width: `${a.weight * 100}%`, background: color(i) }} />
         ))}
       </div>
       <ul className="divide-y divide-[var(--border)]">
@@ -56,7 +62,9 @@ export async function CompanyAssociatesCard({
               </span>
             </span>
             <span className="text-xs text-[var(--muted)] shrink-0 tabular-nums text-right">
-              {t("partsAndPct", { parts: a.parts.toLocaleString(locale), pct: partsPct(a.parts, totalParts) })}
+              {a.parts > 0 && t("partsAndPct", { parts: a.parts.toLocaleString(locale), pct: partsPct(a.parts, totalParts) })}
+              {a.usufructParts > 0 && <span className="block">{t("usufructOf", { parts: a.usufructParts.toLocaleString(locale) })}</span>}
+              {a.bareParts > 0 && <span className="block">{t("bareOwnershipOf", { parts: a.bareParts.toLocaleString(locale) })}</span>}
               {/* Every associate's, to every associate: it is in the company's books. */}
               {a.currentAccountCents > 0 && (
                 <span className="block amount">{t("currentAccountOf", { amount: formatCurrency(a.currentAccountCents, 0) })}</span>

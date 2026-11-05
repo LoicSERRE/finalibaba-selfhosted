@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildCompanyShare,
   netAssetValueCents,
+  ageAt,
+  usufructPct,
+  weightedParts,
+  stakeValueCents,
+  stakeOfAssociate,
+  fullStake,
+  parseBirthDate,
   capTableDraft,
   withCompaniesGroup,
   partsPct,
@@ -71,7 +78,7 @@ describe("validateCapTable", () => {
     ["no associates", 100, [], "no_associates"],
     ["associates that are not a list", 100, { name: "A", parts: 100 }, "no_associates"],
     ["a blank name", 100, [{ name: "  ", parts: 100 }], "name_required"],
-    ["zero parts", 100, [{ name: "A", parts: 0 }, { name: "B", parts: 100 }], "parts_invalid"],
+    ["an associate who holds nothing at all", 100, [{ name: "A", parts: 0 }, { name: "B", parts: 100 }], "associate_without_parts"],
     ["negative parts", 100, [{ name: "A", parts: -50 }, { name: "B", parts: 150 }], "parts_invalid"],
     ["parts sent as a string", 100, [{ name: "A", parts: "100" }], "parts_invalid"],
     ["parts that fall short", 1000, [{ name: "A", parts: 600 }, { name: "B", parts: 399 }], "parts_sum_mismatch"],
@@ -281,5 +288,109 @@ describe("current accounts (comptes courants d'associés)", () => {
   it("change nothing when there are none", () => {
     const s = buildCompanyShare(company, 600, BigInt(180_000_00), []);
     expect(s).toMatchObject({ companyValueCents: BigInt(180_000_00), currentAccountCents: BigInt(0), valueCents: BigInt(108_000_00) });
+  });
+});
+
+describe("démembrement (step 3, art. 669 I CGI)", () => {
+  const born = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+
+  it.each([
+    [0, 0.9], [20, 0.9], [21, 0.8], [30, 0.8], [31, 0.7], [40, 0.7], [41, 0.6], [50, 0.6],
+    [51, 0.5], [60, 0.5], [61, 0.4], [70, 0.4], [71, 0.3], [80, 0.3], [81, 0.2], [90, 0.2], [91, 0.1], [105, 0.1],
+  ])("values an usufruct at %i years old at %f of full ownership", (age, pct) => {
+    expect(usufructPct(age)).toBe(pct);
+  });
+
+  it("counts age in full years, birthday included", () => {
+    expect(ageAt(born("1956-07-28"), new Date("2026-07-27T12:00:00Z"))).toBe(69);
+    expect(ageAt(born("1956-07-28"), new Date("2026-07-28T12:00:00Z"))).toBe(70);
+  });
+
+  const parent = { id: "p", birth: born("1956-01-01") };
+  const blocks = [{ parts: 1000, fullOwnerId: null, usufructuaryId: "p", bareOwnerId: "c" }];
+  const births = new Map([["p", parent.birth], ["c", null]]);
+
+  it("splits one block between usufruct and bare ownership, adding up to the whole", () => {
+    const at = new Date("2026-07-28T12:00:00Z"); // parent is 70: 40 / 60
+    const usufruct = weightedParts(stakeOfAssociate("p", blocks, births), at);
+    const bare = weightedParts(stakeOfAssociate("c", blocks, births), at);
+    expect(usufruct.toNumber()).toBe(400);
+    expect(bare.toNumber()).toBe(600);
+    expect(usufruct.plus(bare).toNumber()).toBe(1000);
+  });
+
+  it("moves value from usufruct to bare ownership as the usufructuary ages", () => {
+    const before = stakeValueCents(BigInt(100_000_00), stakeOfAssociate("c", blocks, births), 1000, null, new Date("2026-12-31T12:00:00Z"));
+    const after = stakeValueCents(BigInt(100_000_00), stakeOfAssociate("c", blocks, births), 1000, null, new Date("2027-01-01T12:00:00Z"));
+    expect(before).toBe(BigInt(60_000_00)); // parent 70: bare ownership 60 %
+    expect(after).toBe(BigInt(70_000_00)); // parent 71: bare ownership 70 %
+  });
+
+  it("uses each history day's age, not today's", () => {
+    const s = buildCompanyShare(
+      { id: "co", name: "SCI", totalParts: 1000 },
+      stakeOfAssociate("c", blocks, births),
+      BigInt(100_000_00),
+      [{ isoDate: "2026-06-01", netWorth: 100_000_00 }, { isoDate: "2027-06-01", netWorth: 100_000_00 }],
+      undefined,
+      new Date("2027-06-01T12:00:00Z"),
+    );
+    expect(s.history.map((p) => p.valueCents)).toEqual([60_000_00, 70_000_00]);
+  });
+
+  it("refuses to value a démembrement without being told which day it is", () => {
+    expect(() =>
+      buildCompanyShare({ id: "co", name: "SCI", totalParts: 1000 }, stakeOfAssociate("c", blocks, births), BigInt(1), []),
+    ).toThrow(/asOf/);
+  });
+
+  it("applies the discount to the parts only", () => {
+    expect(stakeValueCents(BigInt(100_000_00), fullStake(1000), 1000, 0.15, new Date())).toBe(BigInt(85_000_00));
+    const s = buildCompanyShare({ id: "co", name: "SCI", totalParts: 1000, discountPct: 0.15 }, 1000, BigInt(150_000_00), [], {
+      totalCents: BigInt(50_000_00),
+      ownCents: BigInt(50_000_00),
+    });
+    // ANR 100 000, less 15 % = 85 000, plus the 50 000 current account in full.
+    expect(s.valueCents).toBe(BigInt(135_000_00));
+  });
+
+  describe("in the cap table", () => {
+    const rows = [
+      { name: "Parent", parts: 0, birthDate: "1956-01-01" },
+      { name: "Enfant", parts: 0 },
+    ];
+
+    it("accepts parts held only through a démembrement block", () => {
+      expect(validateCapTable(1000, rows, [{ parts: 1000, usufructuary: 0, bareOwner: 1 }])).toBeNull();
+    });
+
+    it("counts a block once in the total", () => {
+      expect(validateCapTable(1000, rows, [{ parts: 999, usufructuary: 0, bareOwner: 1 }])).toBe("parts_sum_mismatch");
+    });
+
+    it.each([
+      ["the same associate on both sides", [{ parts: 1000, usufructuary: 0, bareOwner: 0 }], "dismemberment_invalid"],
+      ["an index out of the rows", [{ parts: 1000, usufructuary: 0, bareOwner: 2 }], "dismemberment_invalid"],
+      ["an index sent as a string", [{ parts: 1000, usufructuary: "0", bareOwner: 1 }], "dismemberment_invalid"],
+      ["zero parts", [{ parts: 0, usufructuary: 0, bareOwner: 1 }], "dismemberment_invalid"],
+      ["blocks that are not a list", { parts: 1000 }, "dismemberment_invalid"],
+    ])("refuses %s", (_label, dm, error) => {
+      expect(validateCapTable(1000, rows, dm)).toBe(error);
+    });
+
+    it("requires the usufructuary's birth date, not the bare owner's", () => {
+      expect(validateCapTable(1000, [{ name: "P", parts: 0 }, { name: "E", parts: 0, birthDate: "2000-01-01" }], [
+        { parts: 1000, usufructuary: 0, bareOwner: 1 },
+      ])).toBe("birth_date_required");
+    });
+
+    it.each(["1956-02-30", "56-01-01", "1850-01-01", "not a date"])("refuses the birth date %s", (birthDate) => {
+      expect(validateCapTable(10, [{ name: "A", parts: 10, birthDate }])).toBe("birth_date_invalid");
+    });
+
+    it("parses a real day only", () => {
+      expect(parseBirthDate("1956-01-01")?.toISOString()).toBe("1956-01-01T00:00:00.000Z");
+      expect(parseBirthDate("1956-02-30")).toBeNull();
+    });
   });
 });
