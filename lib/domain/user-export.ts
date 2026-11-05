@@ -106,6 +106,8 @@ export type AccountExport = {
   manualValueCents: string | null;
   liabilityCents: string | null;
   purchasePriceCents: string | null;
+  /** A company building's net book value, under corporate tax (v2.23). */
+  bookValueCents: string | null;
   insuranceMonthlyCents: string | null;
   investmentSubtype: string | null;
   investmentStartDate: string | null;
@@ -296,6 +298,7 @@ export function buildUserExport(input: UserExportInput): UserExport {
       manualValueCents: cents(a.manualValueCents as bigint),
       liabilityCents: cents(a.liabilityCents as bigint),
       purchasePriceCents: cents(a.purchasePriceCents as bigint),
+      bookValueCents: cents(a.bookValueCents as bigint),
       insuranceMonthlyCents: cents(a.insuranceMonthlyCents as bigint),
       investmentSubtype: (a.investmentSubtype as string) ?? null,
       investmentStartDate: iso(a.investmentStartDate as Date),

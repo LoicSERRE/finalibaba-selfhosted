@@ -299,6 +299,10 @@ model Account {
   manualValueCents      BigInt?
   liabilityCents        BigInt?
   purchasePriceCents    BigInt? // AUTOMOBILE: original purchase price
+  // REAL_ESTATE of a company under corporate tax (IS): its net book value
+  // (valeur nette comptable - cost less depreciation, from the balance sheet),
+  // the base its latent gain is taxed from (dev-docs/companies.md, step 4).
+  bookValueCents        BigInt?
   insuranceMonthlyCents BigInt? // AUTOMOBILE + LOAN: monthly insurance premium
   investmentSubtype     String? // "PEA" | "CTO" - only for INVESTMENT type
   investmentStartDate   DateTime? // Investment start date (manual entry)

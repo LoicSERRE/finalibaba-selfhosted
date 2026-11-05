@@ -1,6 +1,6 @@
 # Companies (SCI first)
 
-Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: steps 1 to 3 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth), its interface ("C" below), the associates' current accounts, démembrement and the discount. Steps 4 and 5 are next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
+Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: steps 1 to 4 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth), its interface ("C" below), the associates' current accounts, démembrement and the discount, and the tax regime. Step 5 is next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
 
 ## What users actually need
 
@@ -206,6 +206,13 @@ Written as tests in the same PR as each step:
 - **Discount** (`Company.discountPct`, 0 to under 1, a percentage in the settings): applied to the value of the parts, never to a current account, which is a receivable.
 - **What is shown**: a person's share and its percentage are their **economic weight** (an usufruct of every part at 70 is 40 %, not 100 %); the cap table lists each associate's full, usufruct and bare-ownership parts, and its bar draws the weights. A part's value is shown before and after the discount. Birth dates, like usernames, are the manager's only.
 - **Not done**: temporary usufruct (art. 669 II, 23 % per started 10-year period), "if asked".
+
+## Step 4: the tax regime
+
+- **IR**: the company is transparent - its gains are taxed at the associates', at rates that depend on each of them - so nothing is deducted at its level and its figures stay as computeDashboard makes them. The company page says so.
+- **IS**: the company pays the tax itself. computeDashboard's per-account latent tax (a person's PEA/CTO rates) does not apply to it; **corporate tax on its whole latent gain** does (`companyNetWorthForRegime`), at 15 % up to 42 500 then 25 % (`corporateTaxCents` - the SME reduced rate, stated as such on the page since nothing here can check the conditions). One result: a loss on one asset offsets a gain on another.
+- **The gain on a building** is measured from its **net book value** (`Account.bookValueCents`, cost less depreciation, from the balance sheet), not its purchase price: under IS buildings are depreciated, and the taxable gain is the sale price less that value. The manager enters it on the company page (`setBuildingBookValue`); a building without one is left out of the gain, and the page says so. Holdings count with their cost basis (`DashboardResult.investmentGainCents`).
+- Today's tax is applied to every past day (`companyValueForRegime`), like the current accounts. Exported with the personal data (`bookValueCents`).
 
 ## Open questions
 

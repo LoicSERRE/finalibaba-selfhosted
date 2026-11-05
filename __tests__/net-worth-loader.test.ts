@@ -33,7 +33,7 @@ function cash(id: string, cents: number) {
 }
 
 /** The user's associate row ("me") in a 1000-part SCI whose bank account holds 180 000. */
-function row(parts: number[], ownCents: number, allCents: number[], extra: Partial<{ discountPct: number; holdings: object[]; associates: object[] }> = {}) {
+function row(parts: number[], ownCents: number, allCents: number[], extra: Partial<{ discountPct: number; taxRegime: string; holdings: object[]; associates: object[] }> = {}) {
   return {
     id: "me",
     currentAccountCents: BigInt(ownCents),
@@ -42,6 +42,7 @@ function row(parts: number[], ownCents: number, allCents: number[], extra: Parti
       name: "SCI",
       totalParts: 1000,
       discountPct: extra.discountPct ?? null,
+      taxRegime: extra.taxRegime ?? "IR",
       associates:
         extra.associates ??
         allCents.map((c, i) => ({ id: i === 0 ? "me" : `other-${i}`, currentAccountCents: BigInt(c), birthDate: null })),
@@ -121,5 +122,28 @@ describe("démembrement and discount (step 3)", () => {
     const [share] = await loadCompanyShares("user-a", NOW);
     // ANR 130 000, 60 % = 78 000, less 20 % = 62 400, plus the 30 000 lent.
     expect(share.valueCents).toBe(BigInt(62_400_00 + 30_000_00));
+  });
+});
+
+describe("tax regime (step 4)", () => {
+  it("takes corporate tax off an IS company's value before the share", async () => {
+    // The company's bank account holds 180 000 and nothing else has a gain:
+    // no latent gain, no corporate tax - the share is unchanged.
+    h.associateFindMany.mockResolvedValue([row([600], 0, [0], { taxRegime: "IS" })]);
+    const [share] = await loadCompanyShares("user-a", NOW);
+    expect(share.valueCents).toBe(BigInt(108_000_00));
+  });
+
+  it("counts a building's gain over its book value under IS", async () => {
+    h.accountFindMany.mockImplementation(async ({ where, select }: { where: { companyId?: string; id?: { in: string[] } }; select?: unknown }) => {
+      if (select) return where.companyId === "co-1" ? [{ id: "flat" }] : [];
+      return (where.id?.in ?? []).map((id) => ({
+        ...cash(id, 0), type: "REAL_ESTATE", manualValueCents: BigInt(240_000_00), bookValueCents: BigInt(200_000_00), history: [],
+      }));
+    });
+    h.associateFindMany.mockResolvedValue([row([1000], 0, [0], { taxRegime: "IS" })]);
+    const [share] = await loadCompanyShares("user-a", NOW);
+    // 240 000 less IS on a 40 000 gain (6 375 + 0 = 15 % of 40 000 = 6 000).
+    expect(share.valueCents).toBe(BigInt(240_000_00 - 6_000_00));
   });
 });

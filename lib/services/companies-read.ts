@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { companyAccountIds, companyRole, viewerCompanies, type CompanyRole } from "@/lib/auth-context";
 import { computePortfolio } from "@/lib/services/net-worth";
 import {
+  companyValueForRegime,
   fullStake,
   netAssetValueCents,
   partsInStake,
@@ -63,14 +64,23 @@ function viewerStake(table: CapTable, userId: string): { stake: Stake; currentAc
  * The company's own figures over its own accounts, and its net asset value:
  * those figures minus what it owes its associates on their current accounts.
  */
-async function companyValue(companyId: string, intlLocale: string, now: Date) {
+async function companyValue(companyId: string, regime: "IR" | "IS", intlLocale: string, now: Date) {
   const [accountIds, currentAccounts] = await Promise.all([
     companyAccountIds(companyId),
     prisma.companyAssociate.aggregate({ where: { companyId }, _sum: { currentAccountCents: true } }),
   ]);
-  const { result } = await computePortfolio({ accountIds, shareholderId: null, intlLocale, now });
+  const { input, result } = await computePortfolio({ accountIds, shareholderId: null, intlLocale, now });
+  // Its regime's latent tax (step 4): the same rule the associates' net worth uses.
+  const regimed = companyValueForRegime(result, regime, input.accounts);
   const currentAccountsCents = currentAccounts._sum.currentAccountCents ?? BigInt(0);
-  return { accountIds, result, currentAccountsCents, anrCents: netAssetValueCents(result.netWorth, currentAccountsCents) };
+  return {
+    accountIds,
+    result,
+    accounts: input.accounts,
+    regimed,
+    currentAccountsCents,
+    anrCents: netAssetValueCents(regimed.netWorth, currentAccountsCents),
+  };
 }
 
 export interface CompanyCard {
@@ -95,7 +105,8 @@ export async function loadCompanyCards(userId: string, now: Date): Promise<Compa
   const companies = await viewerCompanies(userId);
   return Promise.all(
     companies.map(async (c) => {
-      const [table, value] = await Promise.all([loadCapTable(c.id), companyValue(c.id, "en-US", now)]);
+      const table = await loadCapTable(c.id);
+      const value = await companyValue(c.id, table.taxRegime, "en-US", now);
       const { stake, currentAccountCents } = viewerStake(table, userId);
       return {
         id: c.id,
@@ -182,7 +193,8 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
   if (!role) return null;
   const isManager = role === "manager";
 
-  const [table, value] = await Promise.all([loadCapTable(companyId), companyValue(companyId, intlLocale, now)]);
+  const table = await loadCapTable(companyId);
+  const value = await companyValue(companyId, table.taxRegime, intlLocale, now);
   const { id, name, kind, taxRegime, totalParts, discountPct } = table;
   const company = { id, name, kind, taxRegime, totalParts, discountPct };
   const viewer = viewerStake(table, userId);
@@ -225,7 +237,18 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
     result: value.result,
     // The net asset value per day: the accounts' history less today's current
     // accounts, so the curve ends on the figure above it.
-    anrHistory: value.result.history.map((p) => ({ ...p, netWorth: p.netWorth - Number(value.currentAccountsCents) })),
+    anrHistory: value.regimed.history.map((p) => ({ ...p, netWorth: p.netWorth - Number(value.currentAccountsCents) })),
+    // Step 4: the latent tax its regime gives it, and for IS what it is taken on.
+    latentTaxCents: value.regimed.latentTaxCents,
+    taxableGainCents: value.regimed.taxableGainCents,
+    buildings: value.accounts
+      .filter((a) => a.type === "REAL_ESTATE")
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        valueCents: Number(a.manualValueCents ?? BigInt(0)),
+        bookValueCents: a.bookValueCents === null ? null : Number(a.bookValueCents),
+      })),
     attachable: isManager ? await loadAttachable(userId, companyId) : null,
   };
 }

@@ -2099,7 +2099,8 @@
       "birth_date_required": "Un usufruitier doit avoir une date de naissance : son âge fixe la valeur de l'usufruit.",
       "dismemberment_invalid": "Un démembrement doit porter sur au moins une part, entre deux associés différents.",
       "associate_without_parts": "Chaque associé doit détenir des parts, en pleine propriété ou par un démembrement.",
-      "discount_invalid": "La décote est un pourcentage entre 0 et 100 (exclu)."
+      "discount_invalid": "La décote est un pourcentage entre 0 et 100 (exclu).",
+      "book_value_invalid": "La valeur nette comptable est un montant positif ou nul."
     },
     "page": {
       "back": "Comptes",
@@ -2133,7 +2134,8 @@
       "currentAccountOf": "compte courant {amount}",
       "afterDiscount": "après décote de {pct} % : {amount}",
       "usufructOf": "usufruit de {parts} parts",
-      "bareOwnershipOf": "nue-propriété de {parts} parts"
+      "bareOwnershipOf": "nue-propriété de {parts} parts",
+      "afterCorporateTax": "après {amount} d'impôt latent (IS)"
     },
     "capTable": {
       "title": "Associés et parts",
@@ -2164,6 +2166,18 @@
       "discount": "Décote sur les parts (%)",
       "discountHint": "Pour l'illiquidité des parts, souvent entre 10 et 20 %. S'applique à la valeur des parts, pas aux comptes courants."
     },
-    "includingCurrentAccount": "dont compte courant {amount}"
+    "includingCurrentAccount": "dont compte courant {amount}",
+    "tax": {
+      "title": "Fiscalité",
+      "irBody": "Société à l'IR : elle est transparente. Ses plus-values sont imposées chez les associés, selon la situation de chacun, donc aucun impôt latent n'est déduit à son niveau.",
+      "isLatentTax": "Impôt latent (IS)",
+      "isOnGain": "sur une plus-value latente de {amount}, biens et placements compensés",
+      "isScale": "15 % jusqu'à 42 500 € puis 25 % (taux réduit des PME, si la société en remplit les conditions).",
+      "noBookValue": "valeur {value} · valeur nette comptable non renseignée : plus-value non comptée",
+      "buildingGain": "valeur {value} · valeur nette comptable {book} · plus-value {gain}",
+      "bookValueOf": "Valeur nette comptable de {name}",
+      "bookValuePlaceholder": "Valeur nette comptable",
+      "save": "Enregistrer"
+    }
   }
 }

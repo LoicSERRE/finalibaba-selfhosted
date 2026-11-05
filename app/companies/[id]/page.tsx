@@ -14,6 +14,7 @@ import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/
 import { AttachAccountsDialog } from "@/components/companies/attach-accounts-dialog";
 import { CompanyAssociatesCard } from "@/components/companies/company-associates-card";
 import { CompanyKpis } from "@/components/companies/company-kpis";
+import { CompanyTaxCard } from "@/components/companies/company-tax-card";
 import { CompanySettingsDialog } from "@/components/companies/company-settings-dialog";
 import { LeaveCompanyButton, OpenAsPortfolioButton } from "@/components/companies/company-view-actions";
 
@@ -87,12 +88,21 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
         discountPct={company.discountPct}
         anrCents={data.anrCents}
         currentAccountsCents={data.currentAccountsCents}
+        corporateTaxCents={company.taxRegime === "IS" ? data.latentTaxCents : BigInt(0)}
         partsHeld={data.partsHeld}
         viewerWeight={data.viewerWeight}
         shareCents={data.shareCents}
         ownCurrentAccountCents={data.ownCurrentAccountCents}
         partValueCents={data.partValueCents}
         discountedPartValueCents={data.discountedPartValueCents}
+      />
+
+      <CompanyTaxCard
+        regime={company.taxRegime}
+        latentTaxCents={data.latentTaxCents}
+        taxableGainCents={data.taxableGainCents}
+        buildings={data.buildings}
+        isManager={isManager}
       />
 
       {result.history.length > 0 && (

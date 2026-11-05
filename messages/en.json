@@ -2099,7 +2099,8 @@
       "birth_date_required": "An usufructuary needs a date of birth: their age sets the usufruct's value.",
       "dismemberment_invalid": "A split covers at least one part, between two different associates.",
       "associate_without_parts": "Every associate must hold parts, outright or through a split.",
-      "discount_invalid": "The discount is a percentage from 0 to under 100."
+      "discount_invalid": "The discount is a percentage from 0 to under 100.",
+      "book_value_invalid": "The net book value is an amount of zero or more."
     },
     "page": {
       "back": "Accounts",
@@ -2133,7 +2134,8 @@
       "currentAccountOf": "current account {amount}",
       "afterDiscount": "after a {pct}% discount: {amount}",
       "usufructOf": "usufruct of {parts} parts",
-      "bareOwnershipOf": "bare ownership of {parts} parts"
+      "bareOwnershipOf": "bare ownership of {parts} parts",
+      "afterCorporateTax": "after {amount} of latent corporate tax"
     },
     "capTable": {
       "title": "Associates and parts",
@@ -2164,6 +2166,18 @@
       "discount": "Discount on the parts (%)",
       "discountHint": "For the parts' illiquidity, often 10 to 20%. Applies to the parts' value, not to current accounts."
     },
-    "includingCurrentAccount": "including current account {amount}"
+    "includingCurrentAccount": "including current account {amount}",
+    "tax": {
+      "title": "Tax",
+      "irBody": "Income-tax company (IR): it is transparent. Its gains are taxed at its associates', depending on each of them, so no latent tax is deducted at its level.",
+      "isLatentTax": "Latent corporate tax (IS)",
+      "isOnGain": "on a latent gain of {amount}, property and investments netted",
+      "isScale": "15% up to 42,500 € then 25% (the SME reduced rate, if the company meets its conditions).",
+      "noBookValue": "value {value} · net book value not entered: gain not counted",
+      "buildingGain": "value {value} · net book value {book} · gain {gain}",
+      "bookValueOf": "{name} net book value",
+      "bookValuePlaceholder": "Net book value",
+      "save": "Save"
+    }
   }
 }

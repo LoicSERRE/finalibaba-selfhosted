@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildCompanyShare,
   netAssetValueCents,
+  corporateTaxCents,
+  latentGainCents,
+  companyTaxBase,
+  companyNetWorthForRegime,
+  companyValueForRegime,
   ageAt,
   usufructPct,
   weightedParts,
@@ -392,5 +397,70 @@ describe("démembrement (step 3, art. 669 I CGI)", () => {
       expect(parseBirthDate("1956-01-01")?.toISOString()).toBe("1956-01-01T00:00:00.000Z");
       expect(parseBirthDate("1956-02-30")).toBeNull();
     });
+  });
+});
+
+describe("tax regime (step 4)", () => {
+  it("taxes a gain at 15 % up to 42 500, then 25 %", () => {
+    expect(corporateTaxCents(BigInt(0))).toBe(BigInt(0));
+    expect(corporateTaxCents(BigInt(-10_000_00))).toBe(BigInt(0));
+    expect(corporateTaxCents(BigInt(10_000_00))).toBe(BigInt(1_500_00));
+    expect(corporateTaxCents(BigInt(42_500_00))).toBe(BigInt(6_375_00));
+    // 42 500 at 15 % + 57 500 at 25 %.
+    expect(corporateTaxCents(BigInt(100_000_00))).toBe(BigInt(6_375_00 + 14_375_00));
+  });
+
+  it("measures a building's gain from its net book value, and leaves one without it out", () => {
+    const base = companyTaxBase(
+      [
+        { type: "REAL_ESTATE", manualValueCents: BigInt(240_000_00), bookValueCents: BigInt(150_000_00) },
+        { type: "REAL_ESTATE", manualValueCents: BigInt(100_000_00), bookValueCents: null },
+        { type: "CHECKING", manualValueCents: null },
+      ],
+      BigInt(0),
+    );
+    expect(latentGainCents(base)).toBe(BigInt(90_000_00));
+  });
+
+  it("offsets a loss on one asset against a gain on another, as one result", () => {
+    const base = companyTaxBase(
+      [{ type: "REAL_ESTATE", manualValueCents: BigInt(100_000_00), bookValueCents: BigInt(120_000_00) }],
+      BigInt(50_000_00),
+    );
+    expect(latentGainCents(base)).toBe(BigInt(30_000_00)); // +50 000 on holdings, -20 000 on the building
+  });
+
+  const figures = { netWorth: BigInt(180_000_00), totalLatentTax: BigInt(3_000_00) };
+  const base = companyTaxBase(
+    [{ type: "REAL_ESTATE", manualValueCents: BigInt(240_000_00), bookValueCents: BigInt(200_000_00) }],
+    BigInt(10_000_00),
+  );
+
+  it("leaves an IR company's figures as computed - its gains are taxed at the associates'", () => {
+    expect(companyNetWorthForRegime(figures, "IR", base)).toEqual({
+      netWorthCents: BigInt(180_000_00),
+      latentTaxCents: BigInt(3_000_00),
+      taxableGainCents: null,
+    });
+  });
+
+  it("replaces a person's per-account latent tax by corporate tax on the whole gain under IS", () => {
+    // Gain 40 000 + 10 000 = 50 000: 6 375 + 1 875 = 8 250 of IS, instead of
+    // the 3 000 the accounts' own rates gave.
+    expect(companyNetWorthForRegime(figures, "IS", base)).toEqual({
+      netWorthCents: BigInt(180_000_00 + 3_000_00 - 8_250_00),
+      latentTaxCents: BigInt(8_250_00),
+      taxableGainCents: BigInt(50_000_00),
+    });
+  });
+
+  it("moves the history by today's adjustment", () => {
+    const v = companyValueForRegime(
+      { ...figures, investmentGainCents: BigInt(10_000_00), history: [{ date: "", isoDate: "2026-01-01", netWorth: 170_000_00 }] },
+      "IS",
+      [{ type: "REAL_ESTATE", manualValueCents: BigInt(240_000_00), bookValueCents: BigInt(200_000_00) }],
+    );
+    expect(v.netWorth).toBe(BigInt(174_750_00));
+    expect(v.history[0].netWorth).toBe(170_000_00 + 3_000_00 - 8_250_00);
   });
 });

@@ -10,6 +10,7 @@ export async function CompanyKpis({
   discountPct,
   anrCents,
   currentAccountsCents,
+  corporateTaxCents,
   partsHeld,
   viewerWeight,
   shareCents,
@@ -20,6 +21,8 @@ export async function CompanyKpis({
   discountPct: number | null;
   anrCents: bigint;
   currentAccountsCents: bigint;
+  /** Under IS, the corporate tax on the latent gain, already out of anrCents. */
+  corporateTaxCents: bigint;
   partsHeld: number;
   /** The viewer's economic weight, 0-1 - what the share's percentage shows. */
   viewerWeight: number;
@@ -34,6 +37,11 @@ export async function CompanyKpis({
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
         <p className="text-xs text-[var(--muted)]">{t("page.anr")}</p>
         <p className="text-2xl font-semibold tabular-nums text-[var(--accent)] mt-1 amount">{formatCurrency(anrCents, 0)}</p>
+        {corporateTaxCents > BigInt(0) && (
+          <p className="text-xs text-[var(--muted)] mt-1 amount">
+            {t("page.afterCorporateTax", { amount: formatCurrency(corporateTaxCents, 0) })}
+          </p>
+        )}
         {currentAccountsCents > BigInt(0) && (
           <p className="text-xs text-[var(--muted)] mt-1 amount">
             {t("page.afterCurrentAccounts", { amount: formatCurrency(currentAccountsCents, 0) })}

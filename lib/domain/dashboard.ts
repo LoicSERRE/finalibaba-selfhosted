@@ -120,6 +120,9 @@ export interface DashboardResult {
   totalPassif: bigint;
   totalLiabilities: bigint;
   totalLatentTax: bigint;
+  /** Unrealised gain on the holdings that have a cost basis, losses netted:
+   *  what a company under corporate tax pays its latent tax on. */
+  investmentGainCents: bigint;
   allocationRaw: Record<string, number>;
   institutions: DashboardInstitutionGroup[];
   history: DashboardHistoryPoint[];
@@ -136,6 +139,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
   let grossAssets = BigInt(0);
   let totalLiabilities = BigInt(0);
   let totalLatentTax = BigInt(0);
+  let investmentGainCents = BigInt(0);
 
   const allocation: Record<string, bigint> = {
     cash: BigInt(0),
@@ -188,6 +192,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
         }
         return sum + mv;
       }, BigInt(0));
+      if (hasBasis) investmentGainCents += accountGain;
       // Latent tax on net gain
       if (hasBasis) {
         const taxRate = getAccountTaxRate(account);
@@ -263,6 +268,7 @@ export function computeDashboard(input: DashboardInput): DashboardResult {
     totalPassif,
     totalLiabilities,
     totalLatentTax,
+    investmentGainCents,
     allocationRaw: {
       cash: Number(allocation["cash"]),
       savings: Number(allocation["savings"]),

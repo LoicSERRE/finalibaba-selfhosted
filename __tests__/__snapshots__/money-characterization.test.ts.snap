@@ -1133,6 +1133,7 @@ exports[`computeDashboard, pinned whole > produces exactly the figures it produc
       "total": "18919314n",
     },
   ],
+  "investmentGainCents": "408450n",
   "netWorth": "789352n",
   "totalLatentTax": "129962n",
   "totalLiabilities": "33233743n",
