@@ -20,6 +20,7 @@ export async function CompanyAssociatesCard({
   dismemberments,
   isManager,
   locale,
+  currentFrom,
 }: Readonly<{
   companyId: string;
   totalParts: number;
@@ -27,6 +28,8 @@ export async function CompanyAssociatesCard({
   dismemberments: CompanyPageDismemberment[];
   isManager: boolean;
   locale: string;
+  /** When the cap table in force today started, "YYYY-MM-DD". */
+  currentFrom: string;
 }>) {
   const t = await getTranslations("companies.page");
   const color = (i: number) => ASSOCIATE_COLORS[i % ASSOCIATE_COLORS.length];
@@ -40,7 +43,13 @@ export async function CompanyAssociatesCard({
       <div className="flex items-center justify-between gap-2">
         <h2 id="company-associates" className="text-sm font-medium text-[var(--foreground)]">{t("associates")}</h2>
         {isManager && (
-          <CapTableDialog companyId={companyId} totalParts={totalParts} associates={associates} dismemberments={dismemberments} />
+          <CapTableDialog
+            companyId={companyId}
+            totalParts={totalParts}
+            associates={associates}
+            dismemberments={dismemberments}
+            currentFrom={currentFrom}
+          />
         )}
       </div>
       <div className="flex h-2.5 rounded-full overflow-hidden" role="img" aria-label={barLabel}>

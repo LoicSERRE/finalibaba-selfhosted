@@ -15,6 +15,7 @@ import { AttachAccountsDialog } from "@/components/companies/attach-accounts-dia
 import { CompanyAssociatesCard } from "@/components/companies/company-associates-card";
 import { CompanyKpis } from "@/components/companies/company-kpis";
 import { CompanyTaxCard } from "@/components/companies/company-tax-card";
+import { CapTableHistoryCard } from "@/components/companies/cap-table-history-card";
 import { CompanySettingsDialog } from "@/components/companies/company-settings-dialog";
 import { LeaveCompanyButton, OpenAsPortfolioButton } from "@/components/companies/company-view-actions";
 
@@ -155,8 +156,11 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
           dismemberments={data.dismemberments}
           isManager={isManager}
           locale={locale}
+          currentFrom={data.currentFrom}
         />
       </div>
+
+      <CapTableHistoryCard companyId={company.id} versions={data.versions} isManager={isManager} intlLocale={localeToIntl(locale)} />
     </div>
   );
 }

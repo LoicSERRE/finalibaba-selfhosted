@@ -31,6 +31,7 @@ const {
   companyAssociateCountMock,
   accountFindUniqueMock,
   companyFindManyMock,
+  versionFindFirstMock,
 } = vi.hoisted(() => ({
   userFindUniqueMock: vi.fn(),
   accountFindManyMock: vi.fn(),
@@ -49,6 +50,7 @@ const {
   companyAssociateCountMock: vi.fn(),
   accountFindUniqueMock: vi.fn(),
   companyFindManyMock: vi.fn(),
+  versionFindFirstMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -63,6 +65,7 @@ vi.mock("@/lib/db/prisma", () => ({
     instanceSettings: { findUnique: instanceSettingsFindUniqueMock },
     company: { findUnique: companyFindUniqueMock, findMany: companyFindManyMock },
     companyAssociate: { count: companyAssociateCountMock },
+    companyCapTableVersion: { findFirst: versionFindFirstMock },
   },
 }));
 
@@ -116,9 +119,12 @@ beforeEach(() => {
     companyAssociateCountMock,
     accountFindUniqueMock,
     companyFindManyMock,
+    versionFindFirstMock,
   ]) {
     m.mockReset();
   }
+  // Every company has a cap table in force (step 5).
+  versionFindFirstMock.mockResolvedValue({ id: "v-now" });
   cookiesMock.mockResolvedValue({ get: cookieGetMock });
   instanceSettingsFindUniqueMock.mockResolvedValue(null); // no 2FA policy row
   delete process.env.AUTH_ENABLED;
@@ -682,8 +688,34 @@ describe("companies (dev-docs/companies.md)", () => {
       companyAssociateCountMock.mockResolvedValue(1);
       await expect(companyRole("user-b", COMPANY)).resolves.toBe("associate");
       expect(companyAssociateCountMock).toHaveBeenCalledWith({
-        where: { companyId: COMPANY, userId: "user-b", linkAcceptedAt: { not: null } },
+        where: {
+          companyId: COMPANY,
+          userId: "user-b",
+          linkAcceptedAt: { not: null },
+          // Named by the cap table in force today (step 5).
+          OR: [
+            { holdings: { some: { versionId: "v-now" } } },
+            { usufructs: { some: { versionId: "v-now" } } },
+            { bareOwnerships: { some: { versionId: "v-now" } } },
+          ],
+        },
       });
+    });
+
+    it("takes the latest version started by today, else the earliest one", async () => {
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      companyAssociateCountMock.mockResolvedValue(1);
+      versionFindFirstMock.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "v-first" });
+      await companyRole("user-b", COMPANY);
+      expect(versionFindFirstMock.mock.calls[0][0]).toMatchObject({ where: { companyId: COMPANY, effectiveFrom: { lte: expect.any(Date) } }, orderBy: { effectiveFrom: "desc" } });
+      expect(versionFindFirstMock.mock.calls[1][0]).toMatchObject({ where: { companyId: COMPANY }, orderBy: { effectiveFrom: "asc" } });
+      expect(companyAssociateCountMock.mock.calls[0][0].where.OR[0]).toEqual({ holdings: { some: { versionId: "v-first" } } });
+    });
+
+    it("is null for a former associate: today's cap table does not name them", async () => {
+      companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+      companyAssociateCountMock.mockResolvedValue(0); // their link is accepted, their parts are only in older versions
+      await expect(companyRole("user-b", COMPANY)).resolves.toBeNull();
     });
 
     it("is null for an outsider and for a pending link alike", async () => {
@@ -805,6 +837,8 @@ describe("company reads for the interface", () => {
   });
 
   it("viewerCompanies lists managed companies and ACCEPTED links only", async () => {
+    companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+    companyAssociateCountMock.mockResolvedValue(1);
     companyFindManyMock.mockResolvedValue([
       { id: "c1", name: "A", managerUserId: "user-b" },
       { id: "c2", name: "B", managerUserId: "user-a" },
@@ -820,5 +854,12 @@ describe("company reads for the interface", () => {
         },
       })
     );
+  });
+
+  it("viewerCompanies leaves out a company the user has left (step 5)", async () => {
+    companyFindUniqueMock.mockResolvedValue({ managerUserId: "user-a" });
+    companyAssociateCountMock.mockResolvedValue(0);
+    companyFindManyMock.mockResolvedValue([{ id: "c2", name: "B", managerUserId: "user-a" }]);
+    await expect(viewerCompanies("user-b")).resolves.toEqual([]);
   });
 });

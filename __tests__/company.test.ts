@@ -7,6 +7,8 @@ import {
   companyTaxBase,
   companyNetWorthForRegime,
   companyValueForRegime,
+  versionIndexOn,
+  stakeTimeline,
   ageAt,
   usufructPct,
   weightedParts,
@@ -462,5 +464,82 @@ describe("tax regime (step 4)", () => {
     );
     expect(v.netWorth).toBe(BigInt(174_750_00));
     expect(v.history[0].netWorth).toBe(170_000_00 + 3_000_00 - 8_250_00);
+  });
+});
+
+describe("dated cap tables (step 5)", () => {
+  const v = (from: string, totalParts: number, holdings: { parts: number; fullOwnerId: string }[]) => ({
+    effectiveFrom: new Date(`${from}T00:00:00Z`),
+    totalParts,
+    holdings: holdings.map((x) => ({ ...x, usufructuaryId: null, bareOwnerId: null })),
+  });
+  // Marie holds 600 of 1000, then cedes 200 to Léo on 2025-03-01.
+  const versions = [
+    v("2024-01-01", 1000, [{ parts: 600, fullOwnerId: "marie" }, { parts: 400, fullOwnerId: "camille" }]),
+    v("2025-03-01", 1000, [{ parts: 400, fullOwnerId: "marie" }, { parts: 400, fullOwnerId: "camille" }, { parts: 200, fullOwnerId: "leo" }]),
+  ];
+
+  it("takes the latest version started on the day, and the first for any day before them all", () => {
+    expect(versionIndexOn(versions, new Date("2025-02-28T12:00:00Z"))).toBe(0);
+    expect(versionIndexOn(versions, new Date("2025-03-01T00:00:00Z"))).toBe(1);
+    expect(versionIndexOn(versions, new Date("2026-11-05T12:00:00Z"))).toBe(1);
+    expect(versionIndexOn(versions, new Date("2020-06-01T12:00:00Z"))).toBe(0);
+  });
+
+  it("values each past day with the parts held that day", () => {
+    const history = [
+      { isoDate: "2025-02-15", netWorth: 100_000_00 },
+      { isoDate: "2025-03-15", netWorth: 100_000_00 },
+    ];
+    const marie = buildCompanyShare(
+      { id: "c", name: "SCI", totalParts: 1000 },
+      stakeTimeline("marie", versions, new Map()),
+      BigInt(100_000_00), history, undefined, new Date("2026-11-05T12:00:00Z"),
+    );
+    expect(marie.history.map((p) => p.valueCents)).toEqual([60_000_00, 40_000_00]);
+    expect(marie.parts).toBe(400);
+    expect(marie.valueCents).toBe(BigInt(40_000_00));
+    // Léo held nothing before the cession, and then his 200.
+    const leo = buildCompanyShare(
+      { id: "c", name: "SCI", totalParts: 1000 },
+      stakeTimeline("leo", versions, new Map()),
+      BigInt(100_000_00), history, undefined, new Date("2026-11-05T12:00:00Z"),
+    );
+    expect(leo.history.map((p) => p.valueCents)).toEqual([0, 20_000_00]);
+  });
+
+  it("follows a change of the total number of parts", () => {
+    const capital = [versions[0], v("2025-03-01", 2000, [{ parts: 1600, fullOwnerId: "marie" }, { parts: 400, fullOwnerId: "camille" }])];
+    const share = buildCompanyShare(
+      { id: "c", name: "SCI", totalParts: 2000 },
+      stakeTimeline("marie", capital, new Map()),
+      BigInt(100_000_00), [{ isoDate: "2025-01-15", netWorth: 100_000_00 }], undefined, new Date("2026-11-05T12:00:00Z"),
+    );
+    expect(share.history[0].valueCents).toBe(60_000_00); // 600 / 1000 then
+    expect(share.valueCents).toBe(BigInt(80_000_00)); // 1600 / 2000 now
+    expect(share.totalParts).toBe(2000);
+  });
+
+  it("is worth nothing from the day someone ceded everything", () => {
+    const exit = [versions[0], v("2025-03-01", 1000, [{ parts: 1000, fullOwnerId: "camille" }])];
+    const share = buildCompanyShare(
+      { id: "c", name: "SCI", totalParts: 1000 },
+      stakeTimeline("marie", exit, new Map()),
+      BigInt(100_000_00), [{ isoDate: "2025-01-15", netWorth: 100_000_00 }], undefined, new Date("2026-11-05T12:00:00Z"),
+    );
+    expect(share.history[0].valueCents).toBe(60_000_00);
+    expect(share.valueCents).toBe(BigInt(0));
+    expect(share.parts).toBe(0);
+  });
+
+  it("needs to be told which day today is for a dated stake", () => {
+    expect(() =>
+      buildCompanyShare({ id: "c", name: "SCI", totalParts: 1000 }, stakeTimeline("marie", versions, new Map()), BigInt(0), []),
+    ).toThrow(/asOf/);
+  });
+
+  it("leaves a company held nothing in today out of today's list", () => {
+    const gone = { companyId: "c", name: "SCI", parts: 0, totalParts: 1000, companyValueCents: BigInt(1), currentAccountCents: BigInt(0), valueCents: BigInt(0), history: [] };
+    expect(withCompaniesGroup([], [gone], "Sociétés")).toEqual([]);
   });
 });

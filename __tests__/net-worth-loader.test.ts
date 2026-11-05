@@ -46,8 +46,15 @@ function row(parts: number[], ownCents: number, allCents: number[], extra: Parti
       associates:
         extra.associates ??
         allCents.map((c, i) => ({ id: i === 0 ? "me" : `other-${i}`, currentAccountCents: BigInt(c), birthDate: null })),
-      holdings:
-        extra.holdings ?? parts.map((p) => ({ parts: p, fullOwnerId: "me", usufructuaryId: null, bareOwnerId: null })),
+      // One cap table, as every company had before step 5.
+      versions: [
+        {
+          effectiveFrom: new Date("2020-01-01T00:00:00Z"),
+          totalParts: 1000,
+          holdings:
+            extra.holdings ?? parts.map((p) => ({ parts: p, fullOwnerId: "me", usufructuaryId: null, bareOwnerId: null })),
+        },
+      ],
     },
   };
 }
@@ -145,5 +152,33 @@ describe("tax regime (step 4)", () => {
     const [share] = await loadCompanyShares("user-a", NOW);
     // 240 000 less IS on a 40 000 gain (6 375 + 0 = 15 % of 40 000 = 6 000).
     expect(share.valueCents).toBe(BigInt(240_000_00 - 6_000_00));
+  });
+});
+
+describe("dated cap tables (step 5)", () => {
+  it("values the shareholder's past with the parts they held then", async () => {
+    // 1000 of 1000 until 2026-06-01 (NOW is 2026-07-28), then 500 after a donation.
+    const r = row([1000], 0, [0]);
+    r.company.versions.push({
+      effectiveFrom: new Date("2026-06-01T00:00:00Z"),
+      totalParts: 1000,
+      holdings: [
+        { parts: 500, fullOwnerId: "me", usufructuaryId: null, bareOwnerId: null },
+        { parts: 500, fullOwnerId: "other-1", usufructuaryId: null, bareOwnerId: null },
+      ],
+    });
+    h.balanceFindMany.mockResolvedValue([
+      { accountId: "sci-bank", balanceCents: BigInt(180_000_00), recordedAt: new Date("2026-01-10T12:00:00Z") },
+      { accountId: "sci-bank", balanceCents: BigInt(180_000_00), recordedAt: new Date("2026-06-10T12:00:00Z") },
+    ]);
+    h.associateFindMany.mockResolvedValue([r]);
+    const [share] = await loadCompanyShares("user-a", NOW);
+    expect(share.valueCents).toBe(BigInt(90_000_00));
+    const before = share.history.filter((p) => p.isoDate < "2026-06-01" && p.valueCents > 0);
+    const after = share.history.filter((p) => p.isoDate >= "2026-06-01");
+    expect(before.length).toBeGreaterThan(0);
+    expect(after.length).toBeGreaterThan(0);
+    expect(new Set(before.map((p) => p.valueCents))).toEqual(new Set([180_000_00]));
+    expect(new Set(after.map((p) => p.valueCents))).toEqual(new Set([90_000_00]));
   });
 });

@@ -381,8 +381,37 @@ export async function companyRole(userId: string, companyId: string): Promise<Co
   const company = await prisma.company.findUnique({ where: { id: companyId }, select: { managerUserId: true } });
   if (!company) return null;
   if (company.managerUserId === userId) return "manager";
-  const linked = await prisma.companyAssociate.count({ where: { companyId, userId, linkAcceptedAt: { not: null } } });
+  // An associate is someone the cap table in force TODAY names (step 5): an
+  // associate who ceded everything they held loses access on the day it took
+  // effect, even though older versions still record their parts.
+  const versionId = await currentCapTableVersionId(companyId);
+  if (!versionId) return null;
+  const inVersion = { some: { versionId } };
+  const linked = await prisma.companyAssociate.count({
+    where: {
+      companyId,
+      userId,
+      linkAcceptedAt: { not: null },
+      OR: [{ holdings: inVersion }, { usufructs: inVersion }, { bareOwnerships: inVersion }],
+    },
+  });
   return linked > 0 ? "associate" : null;
+}
+
+/** The cap table version in force today: the latest started, else the earliest. */
+export async function currentCapTableVersionId(companyId: string): Promise<string | null> {
+  const started = await prisma.companyCapTableVersion.findFirst({
+    where: { companyId, effectiveFrom: { lte: new Date() } },
+    orderBy: { effectiveFrom: "desc" },
+    select: { id: true },
+  });
+  if (started) return started.id;
+  const first = await prisma.companyCapTableVersion.findFirst({
+    where: { companyId },
+    orderBy: { effectiveFrom: "asc" },
+    select: { id: true },
+  });
+  return first?.id ?? null;
 }
 
 /** Every company mutation's guard: only the manager, same "Not found." otherwise. */
@@ -424,7 +453,13 @@ export async function viewerCompanies(userId: string): Promise<{ id: string; nam
     select: { id: true, name: true, managerUserId: true },
     orderBy: { name: "asc" },
   });
-  return rows.map((c) => ({ id: c.id, name: c.name, role: c.managerUserId === userId ? "manager" : "associate" }));
+  // The same rule as companyRole, so a former associate is not listed a
+  // company they can no longer open.
+  const roles = await Promise.all(rows.map((c) => (c.managerUserId === userId ? "manager" : companyRole(userId, c.id))));
+  return rows.flatMap((c, i) => {
+    const role = roles[i];
+    return role ? [{ id: c.id, name: c.name, role }] : [];
+  });
 }
 
 /** The viewing cookie's value for a company, beside a grantor's user id. A

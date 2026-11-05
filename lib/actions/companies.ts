@@ -20,7 +20,9 @@ import {
   validateCompanyName,
   type CapTableError,
   type DismembermentRow,
+  CAP_TABLE_ORIGIN,
 } from "@/lib/domain/company";
+import { parseChange, settleVersions, targetVersionId } from "@/lib/services/cap-table-versions";
 import { CompanyKind, CompanyTaxRegime } from "@/app/generated/prisma/enums";
 
 /**
@@ -50,7 +52,10 @@ export type CompanyFailure = {
     | "not_an_associate"
     | "name_conflict"
     | "discount_invalid"
-    | "book_value_invalid";
+    | "book_value_invalid"
+    | "effective_date_invalid"
+    | "change_kind_invalid"
+    | "last_version";
 };
 
 type AssociateInput = {
@@ -127,14 +132,16 @@ async function resolveAssociates(
  */
 function holdingRows(
   companyId: string,
+  versionId: string,
   rows: ResolvedAssociate[],
   associateIds: string[],
   dismemberments: DismembermentRow[],
 ) {
   return [
-    ...rows.flatMap((row, i) => (row.parts > 0 ? [{ companyId, parts: row.parts, fullOwnerId: associateIds[i] }] : [])),
+    ...rows.flatMap((row, i) => (row.parts > 0 ? [{ companyId, versionId, parts: row.parts, fullOwnerId: associateIds[i] }] : [])),
     ...dismemberments.map((d) => ({
       companyId,
+      versionId,
       parts: d.parts,
       usufructuaryId: associateIds[d.usufructuary],
       bareOwnerId: associateIds[d.bareOwner],
@@ -143,6 +150,25 @@ function holdingRows(
 }
 
 const birthDateOf = (row: ResolvedAssociate) => parseBirthDate(row.birthDate);
+
+/**
+ * A new row naming a user who is already a FORMER associate (in an older
+ * version only) is that associate coming back: the same row, so the
+ * (companyId, userId) unique index holds and their history stays one person.
+ */
+function withFormerAssociates(
+  rows: ResolvedAssociate[],
+  existing: readonly { id: string; userId: string | null }[],
+): ResolvedAssociate[] {
+  const named = new Set(rows.flatMap((r) => (r.id ? [r.id] : [])));
+  return rows.map((row) => {
+    if (row.id || !row.userId) return row;
+    const former = existing.find((a) => a.userId === row.userId && !named.has(a.id));
+    if (!former) return row;
+    named.add(former.id);
+    return { ...row, id: former.id };
+  });
+}
 
 function validateKindAndRegime(kind: unknown, taxRegime: unknown): CompanyFailure | null {
   if (typeof kind !== "string" || !KINDS.has(kind)) return { ok: false, error: "kind_invalid" };
@@ -193,7 +219,12 @@ export async function createCompany(input: {
       });
       associateIds.push(associate.id);
     }
-    for (const data of holdingRows(created.id, resolved.rows, associateIds, dismemberments)) {
+    // Its first dated cap table (step 5), standing since the origin: a
+    // cession or donation recorded later, at any date, comes after it.
+    const version = await tx.companyCapTableVersion.create({
+      data: { companyId: created.id, effectiveFrom: CAP_TABLE_ORIGIN, totalParts: input.totalParts, kind: "CREATION" },
+    });
+    for (const data of holdingRows(created.id, version.id, resolved.rows, associateIds, dismemberments)) {
       await tx.companyHolding.create({ data });
     }
     return created;
@@ -244,6 +275,9 @@ export async function saveCapTable(
     totalParts: number;
     associates: AssociateInput[];
     dismemberments?: DismembermentRow[];
+    /** Absent: a correction of the cap table in force. Otherwise a dated
+     *  change (step 5): { kind, effectiveFrom "YYYY-MM-DD", enteredAs }. */
+    change?: unknown;
   },
 ): Promise<{ ok: true } | CompanyFailure> {
   companyId = assertId(companyId);
@@ -254,6 +288,8 @@ export async function saveCapTable(
   const dismemberments = input.dismemberments ?? [];
   const capTableError = validateCapTable(input.totalParts, resolved.rows, dismemberments);
   if (capTableError) return { ok: false, error: capTableError };
+  const parsed = parseChange(input.change);
+  if (!parsed.ok) return parsed;
 
   const existing = await prisma.companyAssociate.findMany({
     where: { companyId },
@@ -262,16 +298,15 @@ export async function saveCapTable(
   const byId = new Map(existing.map((a) => [a.id, a]));
   // An id from another company (or none at all) is not this cap table's row.
   for (const row of resolved.rows) if (row.id && !byId.has(row.id)) throw new Error("Not found.");
-  const keptIds = resolved.rows.flatMap((r) => (r.id ? [r.id] : []));
+  const rows = withFormerAssociates(resolved.rows, existing);
+  const keptIds = rows.flatMap((r) => (r.id ? [r.id] : []));
 
   await prisma.$transaction(async (tx) => {
-    await tx.companyHolding.deleteMany({ where: { companyId } });
-    await tx.companyAssociate.deleteMany({ where: { companyId, id: { notIn: keptIds } } });
     // Unlink every kept row first: two rows swapping users would otherwise
     // trip the (companyId, userId) unique index halfway through.
     await tx.companyAssociate.updateMany({ where: { companyId, id: { in: keptIds } }, data: { userId: null } });
     const associateIds: string[] = [];
-    for (const row of resolved.rows) {
+    for (const row of rows) {
       const previous = row.id ? byId.get(row.id) : undefined;
       const sameLink = previous !== undefined && previous.userId === row.userId;
       let linkAcceptedAt: Date | null = null;
@@ -289,10 +324,34 @@ export async function saveCapTable(
         : await tx.companyAssociate.create({ data: { ...data, companyId } });
       associateIds.push(associate.id);
     }
-    for (const data of holdingRows(companyId, resolved.rows, associateIds, dismemberments)) {
+    // The version this save is about (a correction, or a change on a date);
+    // every other version stays as it was.
+    const versionId = await targetVersionId(tx, companyId, parsed.change, input.totalParts);
+    await tx.companyHolding.deleteMany({ where: { versionId } });
+    for (const data of holdingRows(companyId, versionId, rows, associateIds, dismemberments)) {
       await tx.companyHolding.create({ data });
     }
-    await tx.company.update({ where: { id: companyId }, data: { totalParts: input.totalParts } });
+    await settleVersions(tx, companyId);
+  });
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * Deletes one dated cap table - an entry recorded by mistake. Never the last
+ * one: a company always has a cap table. Associates it alone named go with it.
+ */
+export async function deleteCapTableVersion(companyId: string, versionId: string): Promise<{ ok: true } | CompanyFailure> {
+  companyId = assertId(companyId);
+  versionId = assertId(versionId);
+  const viewer = await getViewer();
+  await assertCompanyManager(viewer.id, companyId);
+  const version = await prisma.companyCapTableVersion.findFirst({ where: { id: versionId, companyId }, select: { id: true } });
+  if (!version) throw new Error("Not found.");
+  if ((await prisma.companyCapTableVersion.count({ where: { companyId } })) <= 1) return { ok: false, error: "last_version" };
+  await prisma.$transaction(async (tx) => {
+    await tx.companyCapTableVersion.delete({ where: { id: versionId } });
+    await settleVersions(tx, companyId);
   });
   revalidatePath("/", "layout");
   return { ok: true };
@@ -418,7 +477,10 @@ export async function transferCompanyManagement(
     where: { id: associateId, companyId, linkAcceptedAt: { not: null }, userId: { not: null } },
     select: { userId: true },
   });
-  if (!next?.userId || next.userId === viewer.id) return { ok: false, error: "not_an_associate" };
+  // An associate of today's cap table (step 5), not someone who has left.
+  if (!next?.userId || next.userId === viewer.id || (await companyRole(next.userId, companyId)) !== "associate") {
+    return { ok: false, error: "not_an_associate" };
+  }
   const nextUserId = next.userId;
   const accountIds = await companyAccountIds(companyId);
 

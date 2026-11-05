@@ -2100,7 +2100,10 @@
       "dismemberment_invalid": "A split covers at least one part, between two different associates.",
       "associate_without_parts": "Every associate must hold parts, outright or through a split.",
       "discount_invalid": "The discount is a percentage from 0 to under 100.",
-      "book_value_invalid": "The net book value is an amount of zero or more."
+      "book_value_invalid": "The net book value is an amount of zero or more.",
+      "effective_date_invalid": "The effective date must be today or a past day.",
+      "last_version": "A company always keeps at least one cap table.",
+      "change_kind_invalid": "Unknown kind of change."
     },
     "page": {
       "back": "Accounts",
@@ -2140,7 +2143,26 @@
     "capTable": {
       "title": "Associates and parts",
       "save": "Save",
-      "saving": "Saving…"
+      "saving": "Saving…",
+      "kindLabel": "Kind of change",
+      "kindOption": {
+        "CORRECTION": "Correct the current cap table",
+        "CESSION": "Transfer of parts",
+        "DONATION": "Gift of parts",
+        "CAPITAL_CHANGE": "Capital increase or reduction"
+      },
+      "correctionHint": "Fixes the cap table in force, without touching its history.",
+      "effectiveFrom": "Effective date",
+      "olderThanCurrent": "The cap table of {date} stays in force today: this one will only apply until then.",
+      "enteredAsLabel": "The parts entered below are",
+      "enteredAs": {
+        "after": "the ones after this change",
+        "before": "the ones before this change"
+      },
+      "enteredAsHint": {
+        "after": "The change happens on that date; before it, the earlier parts stay.",
+        "before": "To fill in the past: the current cap table stays in force from that date, this one covers the period before it."
+      }
     },
     "attachDialog": {
       "title": "Company accounts",
@@ -2178,6 +2200,25 @@
       "bookValueOf": "{name} net book value",
       "bookValuePlaceholder": "Net book value",
       "save": "Save"
+    },
+    "history": {
+      "title": "Cap table history",
+      "hint": "Each past day is valued with the cap table in force that day.",
+      "kind": {
+        "CREATION": "Creation",
+        "CESSION": "Transfer",
+        "DONATION": "Gift",
+        "CAPITAL_CHANGE": "Capital change",
+        "CORRECTION": "Correction"
+      },
+      "current": "in force",
+      "parts": "{count, plural, one {# part} other {# parts}}",
+      "usufruct": "{count, number} in usufruct",
+      "bare": "{count, number} in bare ownership",
+      "total": "{count, number} parts in all",
+      "delete": "Delete this cap table",
+      "deleteDescription": "The days it covered will be valued with the previous cap table. An associate who appears only in this one will be removed from the company.",
+      "origin": "Since the origin"
     }
   }
 }

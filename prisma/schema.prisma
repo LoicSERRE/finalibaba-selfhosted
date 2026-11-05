@@ -1248,6 +1248,15 @@ enum CompanyTaxRegime {
   IS
 }
 
+// Why a cap table changed (step 5) - shown in its history, nothing computed from it.
+enum CapTableChangeKind {
+  CREATION
+  CESSION
+  DONATION
+  CAPITAL_CHANGE
+  CORRECTION
+}
+
 model Company {
   id            String             @id @default(cuid())
   name          String
@@ -1265,6 +1274,7 @@ model Company {
   manager       User               @relation(fields: [managerUserId], references: [id], onDelete: Restrict)
   associates    CompanyAssociate[]
   holdings      CompanyHolding[]
+  versions      CompanyCapTableVersion[]
   accounts      Account[]
   institutions  Institution[]
   createdAt     DateTime           @default(now())
@@ -1309,6 +1319,9 @@ model CompanyHolding {
   id             String            @id @default(cuid())
   companyId      String
   company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // The dated cap table it belongs to (step 5).
+  versionId      String
+  version        CompanyCapTableVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   parts          Int
   fullOwnerId    String?
   fullOwner      CompanyAssociate? @relation(fields: [fullOwnerId], references: [id], onDelete: Cascade)
@@ -1318,4 +1331,22 @@ model CompanyHolding {
   bareOwner      CompanyAssociate? @relation("bareOwner", fields: [bareOwnerId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
+  @@index([versionId])
+}
+
+// The cap table as it stood from one date (step 5): a cession, a donation or
+// a change of capital is a new version, so a past day is valued with the
+// parts held that day. The version in force on a day is the latest one that
+// started on or before it; the earliest one also stands for any day before it.
+model CompanyCapTableVersion {
+  id            String             @id @default(cuid())
+  companyId     String
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  effectiveFrom DateTime
+  totalParts    Int
+  kind          CapTableChangeKind @default(CORRECTION)
+  holdings      CompanyHolding[]
+  createdAt     DateTime           @default(now())
+
+  @@unique([companyId, effectiveFrom])
 }

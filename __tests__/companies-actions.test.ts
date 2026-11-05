@@ -22,6 +22,7 @@ const h = vi.hoisted(() => {
     company: { create: fn(), update: fn(), delete: fn() },
     associate: { create: fn(), update: fn(), updateMany: fn(), deleteMany: fn(), findMany: fn(), findFirst: fn() },
     holding: { create: fn(), deleteMany: fn() },
+    version: { create: fn(), upsert: fn(), update: fn(), findFirst: fn(), findUnique: fn(), count: fn(), delete: fn() },
     account: { findFirst: fn(), findUnique: fn(), update: fn(), updateMany: fn() },
     institution: { findUnique: fn(), update: fn(), updateMany: fn() },
     coOwner: { count: fn() },
@@ -37,6 +38,7 @@ vi.mock("@/lib/db/prisma", () => {
     company: h.company,
     companyAssociate: h.associate,
     companyHolding: h.holding,
+    companyCapTableVersion: h.version,
     account: h.account,
     institution: h.institution,
     accountCoOwner: h.coOwner,
@@ -80,9 +82,13 @@ beforeEach(() => {
   // Interactive and batch forms: run the callback against the same mocks.
   h.transaction.mockImplementation(async (arg: unknown) =>
     typeof arg === "function" ? (arg as (tx: unknown) => unknown)({
-      company: h.company, companyAssociate: h.associate, companyHolding: h.holding,
+      company: h.company, companyAssociate: h.associate, companyHolding: h.holding, companyCapTableVersion: h.version,
     }) : Promise.all(arg as unknown[]),
   );
+  // One dated cap table, "v1", the one in force (step 5).
+  h.version.create.mockResolvedValue({ id: "v1" });
+  h.version.upsert.mockResolvedValue({ id: "v1" });
+  h.version.findFirst.mockResolvedValue({ id: "v1", totalParts: 1000 });
   h.company.create.mockResolvedValue({ id: COMPANY });
   let n = 0;
   h.associate.create.mockImplementation(async () => ({ id: `assoc-${++n}` }));
@@ -145,6 +151,7 @@ describe("every manager action refuses an associate and an outsider alike", () =
     ["saveCapTable", () => actions.saveCapTable(COMPANY, { totalParts: 10, associates: [{ name: "A", parts: 10 }] })],
     ["transferCompanyManagement", () => actions.transferCompanyManagement(COMPANY, "ckassoc0000000000000000001")],
     ["deleteCompany", () => actions.deleteCompany(COMPANY)],
+    ["deleteCapTableVersion", () => actions.deleteCapTableVersion(COMPANY, "ckversion00000000000000001")],
     ["setAccountCompany into it", () => actions.setAccountCompany("ckaccount00000000000000001", COMPANY)],
     ["setInstitutionCompany into it", () => actions.setInstitutionCompany("inst-own", COMPANY)],
   ];
@@ -380,7 +387,7 @@ describe("démembrement and discount in the actions (step 3)", () => {
     });
     expect(h.associate.create.mock.calls[0][0].data.birthDate?.toISOString()).toBe("1956-01-01T00:00:00.000Z");
     expect(h.holding.create.mock.calls.map((c) => c[0].data)).toEqual([
-      { companyId: COMPANY, parts: 1000, usufructuaryId: "assoc-1", bareOwnerId: "assoc-2" },
+      { companyId: COMPANY, versionId: "v1", parts: 1000, usufructuaryId: "assoc-1", bareOwnerId: "assoc-2" },
     ]);
   });
 
@@ -442,5 +449,104 @@ describe("setBuildingBookValue (step 4)", () => {
     h.account.findUnique.mockResolvedValue({ companyId: COMPANY, type: "REAL_ESTATE" });
     await expect(actions.setBuildingBookValue(BUILDING, amount as number)).resolves.toEqual({ ok: false, error: "book_value_invalid" });
     expect(h.account.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("dated cap tables (step 5)", () => {
+  const A1 = "ckassoc0000000000000000001";
+  const rows = [
+    { id: A1, name: "Marie", parts: 400, username: "marie" },
+    { name: "Léo", parts: 600 },
+  ];
+  const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+
+  beforeEach(() => {
+    h.associate.findMany.mockResolvedValue([{ id: A1, userId: "user-b", linkAcceptedAt: new Date("2026-01-01") }]);
+  });
+
+  it("dates a new company's first cap table from the origin, so any change comes after it", async () => {
+    await actions.createCompany(valid());
+    expect(h.version.create).toHaveBeenCalledWith({
+      data: { companyId: COMPANY, effectiveFrom: day("1900-01-01"), totalParts: 1000, kind: "CREATION" },
+    });
+  });
+
+  it("corrects the cap table in force when no change is given", async () => {
+    await expect(actions.saveCapTable(COMPANY, { totalParts: 1000, associates: rows })).resolves.toEqual({ ok: true });
+    expect(h.version.update).toHaveBeenCalledWith({ where: { id: "v1" }, data: { totalParts: 1000 } });
+    expect(h.version.upsert).not.toHaveBeenCalled();
+    // Only that version's holdings are replaced - never the company's others.
+    expect(h.holding.deleteMany).toHaveBeenCalledWith({ where: { versionId: "v1" } });
+    expect(h.holding.create.mock.calls.every((c) => c[0].data.versionId === "v1")).toBe(true);
+  });
+
+  it("records a cession as a version from its date", async () => {
+    await actions.saveCapTable(COMPANY, {
+      totalParts: 1000,
+      associates: rows,
+      change: { kind: "CESSION", effectiveFrom: "2025-03-01", enteredAs: "after" },
+    });
+    expect(h.version.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: { companyId: COMPANY, effectiveFrom: day("2025-03-01"), totalParts: 1000, kind: "CESSION" } }),
+    );
+  });
+
+  it.each([
+    ["a future day", { kind: "CESSION", effectiveFrom: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10) }, "effective_date_invalid"],
+    ["an impossible day", { kind: "CESSION", effectiveFrom: "2025-02-30" }, "effective_date_invalid"],
+    ["an unknown kind", { kind: "THEFT", effectiveFrom: "2025-03-01" }, "change_kind_invalid"],
+  ])("refuses %s before writing anything", async (_label, change, error) => {
+    await expect(actions.saveCapTable(COMPANY, { totalParts: 1000, associates: rows, change })).resolves.toEqual({ ok: false, error });
+    expect(h.transaction).not.toHaveBeenCalled();
+    expect(h.holding.create).not.toHaveBeenCalled();
+  });
+
+  it("takes back a former associate's own row when they are named again", async () => {
+    await actions.saveCapTable(COMPANY, { totalParts: 1000, associates: [{ name: "Marie", parts: 1000, username: "marie" }] });
+    expect(h.associate.create).not.toHaveBeenCalled();
+    expect(h.associate.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: A1 } }));
+  });
+
+  it("settles the versions after a save: today's total, the leavers, the associates no version names", async () => {
+    h.version.findFirst.mockResolvedValue({ id: "v1", totalParts: 2000 });
+    await actions.saveCapTable(COMPANY, { totalParts: 1000, associates: rows });
+    expect(h.company.update).toHaveBeenCalledWith({ where: { id: COMPANY }, data: { totalParts: 2000 } });
+    expect(h.associate.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { currentAccountCents: BigInt(0) } }));
+    expect(h.associate.deleteMany).toHaveBeenCalledWith({
+      where: { companyId: COMPANY, holdings: { none: {} }, usufructs: { none: {} }, bareOwnerships: { none: {} } },
+    });
+  });
+
+  describe("deleteCapTableVersion", () => {
+    const V = "ckversion00000000000000001";
+
+    it("refuses a version of another company with the same Not found.", async () => {
+      h.version.findFirst.mockResolvedValue(null);
+      await expect(actions.deleteCapTableVersion(COMPANY, V)).rejects.toThrow("Not found.");
+      expect(h.version.findFirst).toHaveBeenCalledWith({ where: { id: V, companyId: COMPANY }, select: { id: true } });
+      expect(h.version.delete).not.toHaveBeenCalled();
+    });
+
+    it("never deletes the last one", async () => {
+      h.version.count.mockResolvedValue(1);
+      await expect(actions.deleteCapTableVersion(COMPANY, V)).resolves.toEqual({ ok: false, error: "last_version" });
+      expect(h.version.delete).not.toHaveBeenCalled();
+    });
+
+    it("deletes it, and whoever only it named", async () => {
+      h.version.count.mockResolvedValue(2);
+      await expect(actions.deleteCapTableVersion(COMPANY, V)).resolves.toEqual({ ok: true });
+      expect(h.version.delete).toHaveBeenCalledWith({ where: { id: V } });
+      expect(h.associate.deleteMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ holdings: { none: {} } }) }));
+    });
+  });
+
+  it("never hands the management over to a former associate", async () => {
+    h.associate.findFirst.mockResolvedValue({ userId: "user-c" }); // accepted link, no parts today
+    await expect(actions.transferCompanyManagement(COMPANY, "ckassoc0000000000000000002")).resolves.toEqual({
+      ok: false,
+      error: "not_an_associate",
+    });
+    expect(h.company.update).not.toHaveBeenCalled();
   });
 });
