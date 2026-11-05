@@ -14,7 +14,13 @@ import {
 } from "@/lib/auth-context";
 import { assertId, assertOptionalId } from "@/lib/domain/action-input";
 import { normalizeUsername } from "@/lib/domain/users";
-import { validateCapTable, validateCompanyName, type CapTableError } from "@/lib/domain/company";
+import {
+  parseBirthDate,
+  validateCapTable,
+  validateCompanyName,
+  type CapTableError,
+  type DismembermentRow,
+} from "@/lib/domain/company";
 import { CompanyKind, CompanyTaxRegime } from "@/app/generated/prisma/enums";
 
 /**
@@ -42,7 +48,18 @@ export type CompanyFailure = {
     | "institution_account"
     | "co_owned"
     | "not_an_associate"
-    | "name_conflict";
+    | "name_conflict"
+    | "discount_invalid";
+};
+
+type AssociateInput = {
+  id?: string;
+  name: string;
+  parts: number;
+  username?: string | null;
+  self?: boolean;
+  currentAccountCents?: number;
+  birthDate?: string | null;
 };
 
 const KINDS = new Set<string>(Object.values(CompanyKind));
@@ -57,6 +74,7 @@ type ResolvedAssociate = {
   acceptedNow: boolean;
   /** Checked by validateCapTable before anything is written. */
   currentAccountCents?: number;
+  birthDate?: string | null;
 };
 
 /**
@@ -95,10 +113,35 @@ async function resolveAssociates(
       userId,
       acceptedNow: userId === viewerId,
       currentAccountCents: r.currentAccountCents as number | undefined,
+      birthDate: r.birthDate as string | null | undefined,
     });
   }
   return { ok: true, rows };
 }
+
+/**
+ * The blocks of a cap table already checked by validateCapTable: one in full
+ * ownership per associate holding parts that way, and one per démembrement,
+ * its two sides given by their index in `associateIds`.
+ */
+function holdingRows(
+  companyId: string,
+  rows: ResolvedAssociate[],
+  associateIds: string[],
+  dismemberments: DismembermentRow[],
+) {
+  return [
+    ...rows.flatMap((row, i) => (row.parts > 0 ? [{ companyId, parts: row.parts, fullOwnerId: associateIds[i] }] : [])),
+    ...dismemberments.map((d) => ({
+      companyId,
+      parts: d.parts,
+      usufructuaryId: associateIds[d.usufructuary],
+      bareOwnerId: associateIds[d.bareOwner],
+    })),
+  ];
+}
+
+const birthDateOf = (row: ResolvedAssociate) => parseBirthDate(row.birthDate);
 
 function validateKindAndRegime(kind: unknown, taxRegime: unknown): CompanyFailure | null {
   if (typeof kind !== "string" || !KINDS.has(kind)) return { ok: false, error: "kind_invalid" };
@@ -111,7 +154,8 @@ export async function createCompany(input: {
   kind: string;
   taxRegime: string;
   totalParts: number;
-  associates: { name: string; parts: number; username?: string | null; self?: boolean; currentAccountCents?: number }[];
+  associates: AssociateInput[];
+  dismemberments?: DismembermentRow[];
 }): Promise<{ ok: true; companyId: string } | CompanyFailure> {
   const viewer = await getViewer();
   const named = validateCompanyName(input?.name);
@@ -120,7 +164,8 @@ export async function createCompany(input: {
   if (invalid) return invalid;
   const resolved = await resolveAssociates(viewer.id, input.associates);
   if (!resolved.ok) return resolved;
-  const capTableError = validateCapTable(input.totalParts, resolved.rows);
+  const dismemberments = input.dismemberments ?? [];
+  const capTableError = validateCapTable(input.totalParts, resolved.rows, dismemberments);
   if (capTableError) return { ok: false, error: capTableError };
 
   const company = await prisma.$transaction(async (tx) => {
@@ -133,6 +178,7 @@ export async function createCompany(input: {
         managerUserId: viewer.id,
       },
     });
+    const associateIds: string[] = [];
     for (const row of resolved.rows) {
       const associate = await tx.companyAssociate.create({
         data: {
@@ -141,9 +187,13 @@ export async function createCompany(input: {
           userId: row.userId,
           linkAcceptedAt: row.acceptedNow ? new Date() : null,
           currentAccountCents: BigInt(row.currentAccountCents ?? 0),
+          birthDate: birthDateOf(row),
         },
       });
-      await tx.companyHolding.create({ data: { companyId: created.id, parts: row.parts, fullOwnerId: associate.id } });
+      associateIds.push(associate.id);
+    }
+    for (const data of holdingRows(created.id, resolved.rows, associateIds, dismemberments)) {
+      await tx.companyHolding.create({ data });
     }
     return created;
   });
@@ -153,7 +203,7 @@ export async function createCompany(input: {
 
 export async function updateCompany(
   companyId: string,
-  input: { name: string; kind: string; taxRegime: string },
+  input: { name: string; kind: string; taxRegime: string; discountPct?: number | null },
 ): Promise<{ ok: true } | CompanyFailure> {
   companyId = assertId(companyId);
   const viewer = await getViewer();
@@ -162,9 +212,20 @@ export async function updateCompany(
   if (!named.ok) return named;
   const invalid = validateKindAndRegime(input.kind, input.taxRegime);
   if (invalid) return invalid;
+  // An illiquidity discount on the parts (step 3): a ratio, 0 included, under
+  // 1. Absent or null means none.
+  const discount = input.discountPct ?? null;
+  if (discount !== null && (typeof discount !== "number" || !Number.isFinite(discount) || discount < 0 || discount >= 1)) {
+    return { ok: false, error: "discount_invalid" };
+  }
   await prisma.company.update({
     where: { id: companyId },
-    data: { name: named.name, kind: input.kind as CompanyKind, taxRegime: input.taxRegime as CompanyTaxRegime },
+    data: {
+      name: named.name,
+      kind: input.kind as CompanyKind,
+      taxRegime: input.taxRegime as CompanyTaxRegime,
+      discountPct: discount === 0 ? null : discount,
+    },
   });
   revalidatePath("/", "layout");
   return { ok: true };
@@ -180,14 +241,8 @@ export async function saveCapTable(
   companyId: string,
   input: {
     totalParts: number;
-    associates: {
-      id?: string;
-      name: string;
-      parts: number;
-      username?: string | null;
-      self?: boolean;
-      currentAccountCents?: number;
-    }[];
+    associates: AssociateInput[];
+    dismemberments?: DismembermentRow[];
   },
 ): Promise<{ ok: true } | CompanyFailure> {
   companyId = assertId(companyId);
@@ -195,7 +250,8 @@ export async function saveCapTable(
   await assertCompanyManager(viewer.id, companyId);
   const resolved = await resolveAssociates(viewer.id, input?.associates);
   if (!resolved.ok) return resolved;
-  const capTableError = validateCapTable(input.totalParts, resolved.rows);
+  const dismemberments = input.dismemberments ?? [];
+  const capTableError = validateCapTable(input.totalParts, resolved.rows, dismemberments);
   if (capTableError) return { ok: false, error: capTableError };
 
   const existing = await prisma.companyAssociate.findMany({
@@ -213,6 +269,7 @@ export async function saveCapTable(
     // Unlink every kept row first: two rows swapping users would otherwise
     // trip the (companyId, userId) unique index halfway through.
     await tx.companyAssociate.updateMany({ where: { companyId, id: { in: keptIds } }, data: { userId: null } });
+    const associateIds: string[] = [];
     for (const row of resolved.rows) {
       const previous = row.id ? byId.get(row.id) : undefined;
       const sameLink = previous !== undefined && previous.userId === row.userId;
@@ -224,11 +281,15 @@ export async function saveCapTable(
         userId: row.userId,
         linkAcceptedAt,
         currentAccountCents: BigInt(row.currentAccountCents ?? 0),
+        birthDate: birthDateOf(row),
       };
       const associate = row.id
         ? await tx.companyAssociate.update({ where: { id: row.id }, data })
         : await tx.companyAssociate.create({ data: { ...data, companyId } });
-      await tx.companyHolding.create({ data: { companyId, parts: row.parts, fullOwnerId: associate.id } });
+      associateIds.push(associate.id);
+    }
+    for (const data of holdingRows(companyId, resolved.rows, associateIds, dismemberments)) {
+      await tx.companyHolding.create({ data });
     }
     await tx.company.update({ where: { id: companyId }, data: { totalParts: input.totalParts } });
   });

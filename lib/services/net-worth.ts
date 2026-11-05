@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { computeDashboard } from "@/lib/domain/dashboard";
-import { buildCompanyShare, type CompanyShare } from "@/lib/domain/company";
+import { buildCompanyShare, stakeOfAssociate, type CompanyShare } from "@/lib/domain/company";
 
 /**
  * The one loader behind every net worth the app shows or sends: the
@@ -43,26 +43,30 @@ export async function loadCompanyShares(userId: string, now: Date): Promise<Comp
   const rows = await prisma.companyAssociate.findMany({
     where: { userId, linkAcceptedAt: { not: null } },
     select: {
+      id: true,
       currentAccountCents: true,
-      holdings: { select: { parts: true } },
       company: {
         select: {
           id: true,
           name: true,
           totalParts: true,
-          associates: { select: { currentAccountCents: true } },
+          discountPct: true,
+          associates: { select: { id: true, currentAccountCents: true, birthDate: true } },
+          holdings: { select: { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } },
         },
       },
     },
   });
 
   return Promise.all(
-    rows.map(async ({ company, holdings, currentAccountCents }) => {
+    rows.map(async ({ id: associateId, company, currentAccountCents }) => {
       const ids = (await prisma.account.findMany({ where: { companyId: company.id }, select: { id: true } })).map((a) => a.id);
       const value = computeDashboard({ ...(await loadDashboardInput(ids)), intlLocale: "en-US", now });
-      const parts = holdings.reduce((sum, h) => sum + h.parts, 0);
+      // Full ownership, usufruct and bare ownership alike: the stake carries
+      // the birth dates its value depends on (art. 669 I CGI).
+      const stake = stakeOfAssociate(associateId, company.holdings, new Map(company.associates.map((a) => [a.id, a.birthDate])));
       const totalCents = company.associates.reduce((sum, a) => sum + a.currentAccountCents, BigInt(0));
-      return buildCompanyShare(company, parts, value.netWorth, value.history, { totalCents, ownCents: currentAccountCents });
+      return buildCompanyShare(company, stake, value.netWorth, value.history, { totalCents, ownCents: currentAccountCents }, now);
     }),
   );
 }

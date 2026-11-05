@@ -6,7 +6,6 @@ import { ArrowLeft } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/lib/auth-context";
 import { assertId, isInvalidActionInput } from "@/lib/domain/action-input";
-import { partsPct } from "@/lib/domain/company";
 import { loadCompanyPage } from "@/lib/services/companies-read";
 import { formatCurrency, localeToIntl } from "@/lib/utils/format";
 import { ALLOCATION_CATEGORY_COLORS } from "@/lib/utils/palette";
@@ -14,6 +13,7 @@ import { NetWorthChart } from "@/components/shared/net-worth-chart";
 import { AssetAllocationChart, type AllocationSlice } from "@/components/shared/asset-allocation-chart";
 import { AttachAccountsDialog } from "@/components/companies/attach-accounts-dialog";
 import { CompanyAssociatesCard } from "@/components/companies/company-associates-card";
+import { CompanyKpis } from "@/components/companies/company-kpis";
 import { CompanySettingsDialog } from "@/components/companies/company-settings-dialog";
 import { LeaveCompanyButton, OpenAsPortfolioButton } from "@/components/companies/company-view-actions";
 
@@ -83,37 +83,17 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-          <p className="text-xs text-[var(--muted)]">{t("page.anr")}</p>
-          <p className="text-2xl font-semibold tabular-nums text-[var(--accent)] mt-1 amount">{formatCurrency(data.anrCents, 0)}</p>
-          {data.currentAccountsCents > BigInt(0) && (
-            <p className="text-xs text-[var(--muted)] mt-1 amount">
-              {t("page.afterCurrentAccounts", { amount: formatCurrency(data.currentAccountsCents, 0) })}
-            </p>
-          )}
-        </div>
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-          {data.partsHeld > 0 ? (
-            <>
-              <p className="text-xs text-[var(--muted)]">{t("page.yourShareLabel", { pct: partsPct(data.partsHeld, company.totalParts) })}</p>
-              <p className="text-2xl font-semibold tabular-nums text-[var(--foreground)] mt-1 amount">{formatCurrency(data.shareCents, 0)}</p>
-              <p className="text-xs text-[var(--muted)] mt-1">{t("page.yourShareHint")}</p>
-              {data.ownCurrentAccountCents > BigInt(0) && (
-                <p className="text-xs text-[var(--muted)] mt-0.5 amount">
-                  {t("page.plusYourCurrentAccount", { amount: formatCurrency(data.ownCurrentAccountCents, 0) })}
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-[var(--muted)]">{t("page.noShare")}</p>
-          )}
-        </div>
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-          <p className="text-xs text-[var(--muted)]">{t("page.partValue")}</p>
-          <p className="text-2xl font-semibold tabular-nums text-[var(--foreground)] mt-1 amount">{formatCurrency(data.partValueCents, 2)}</p>
-        </div>
-      </div>
+      <CompanyKpis
+        discountPct={company.discountPct}
+        anrCents={data.anrCents}
+        currentAccountsCents={data.currentAccountsCents}
+        partsHeld={data.partsHeld}
+        viewerWeight={data.viewerWeight}
+        shareCents={data.shareCents}
+        ownCurrentAccountCents={data.ownCurrentAccountCents}
+        partValueCents={data.partValueCents}
+        discountedPartValueCents={data.discountedPartValueCents}
+      />
 
       {result.history.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -162,6 +142,7 @@ export default async function CompanyPage({ params }: Readonly<{ params: Promise
           companyId={company.id}
           totalParts={company.totalParts}
           associates={associates}
+          dismemberments={data.dismemberments}
           isManager={isManager}
           locale={locale}
         />

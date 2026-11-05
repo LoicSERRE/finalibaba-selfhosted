@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { formatCurrency } from "@/lib/utils/format";
-import { partsPct } from "@/lib/domain/company";
 import type { CompanyCardData } from "@/components/companies/companies-section";
 
 /** A company on the Accounts page: its net assets and the viewer's share. */
@@ -26,7 +25,9 @@ export function CompanyCard({ card }: Readonly<{ card: CompanyCardData }>) {
           {t.rich(holds ? "cardSummary" : "cardManagerOnly", {
             // The figure inside the sentence, marked so discretion mode hides it.
             amount: (chunks) => <span className="amount">{chunks}</span>,
-            pct: partsPct(card.partsHeld, card.totalParts),
+            // Economic weight, not a part count: an usufruct of every part is
+            // worth its scale value (lib/domain/company.ts).
+            pct: Math.round(card.weight * 1000) / 10,
             value: formatCurrency(card.valueCents, 0),
           })}
         </p>

@@ -2064,7 +2064,18 @@
       "create": "Create the company",
       "creating": "Creating…",
       "currentAccount": "Current account",
-      "currentAccountN": "Associate {n} current account"
+      "currentAccountN": "Associate {n} current account",
+      "fullParts": "Parts (full ownership)",
+      "birthDate": "Date of birth",
+      "birthDateN": "Associate {n} date of birth",
+      "dismemberments": "Split ownership",
+      "dismembermentsHint": "Parts whose usufruct and bare ownership belong to two different associates. The usufruct is valued by the usufructuary's age (French art. 669 CGI scale): their date of birth is needed.",
+      "dismembermentN": "Split {n}",
+      "dismembermentPartsN": "Split {n} parts",
+      "usufructuary": "Usufructuary",
+      "bareOwner": "Bare owner",
+      "removeDismembermentN": "Remove split {n}",
+      "addDismemberment": "Add a split"
     },
     "errors": {
       "name_required": "Give a name (to the company and to every associate).",
@@ -2083,7 +2094,12 @@
       "co_owned": "A co-owned account cannot go into a company.",
       "not_an_associate": "Management can only go to a linked associate who accepted.",
       "name_conflict": "That person already has a bank connection with the same name.",
-      "current_account_invalid": "A current account is an amount of zero or more."
+      "current_account_invalid": "A current account is an amount of zero or more.",
+      "birth_date_invalid": "That date of birth is not valid.",
+      "birth_date_required": "An usufructuary needs a date of birth: their age sets the usufruct's value.",
+      "dismemberment_invalid": "A split covers at least one part, between two different associates.",
+      "associate_without_parts": "Every associate must hold parts, outright or through a split.",
+      "discount_invalid": "The discount is a percentage from 0 to under 100."
     },
     "page": {
       "back": "Accounts",
@@ -2114,7 +2130,10 @@
       "associateShare": "{name}: {pct}%",
       "afterCurrentAccounts": "after {amount} of associates' current accounts",
       "plusYourCurrentAccount": "+ your current account of {amount}",
-      "currentAccountOf": "current account {amount}"
+      "currentAccountOf": "current account {amount}",
+      "afterDiscount": "after a {pct}% discount: {amount}",
+      "usufructOf": "usufruct of {parts} parts",
+      "bareOwnershipOf": "bare ownership of {parts} parts"
     },
     "capTable": {
       "title": "Associates and parts",
@@ -2141,7 +2160,9 @@
       "handoverButton": "Hand over",
       "noHandoverCandidate": "No linked associate has accepted yet.",
       "delete": "Delete the company",
-      "deleteConfirm": "Its accounts go back to your personal portfolio and the cap table is deleted."
+      "deleteConfirm": "Its accounts go back to your personal portfolio and the cap table is deleted.",
+      "discount": "Discount on the parts (%)",
+      "discountHint": "For the parts' illiquidity, often 10 to 20%. Applies to the parts' value, not to current accounts."
     },
     "includingCurrentAccount": "including current account {amount}"
   }

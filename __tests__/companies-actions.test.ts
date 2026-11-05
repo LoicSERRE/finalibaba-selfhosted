@@ -364,3 +364,51 @@ describe("current accounts in the cap table", () => {
     expect(h.associate.update.mock.calls[0][0].data.currentAccountCents).toBe(BigInt(12_345));
   });
 });
+
+describe("démembrement and discount in the actions (step 3)", () => {
+  it("stores a block on both sides and the usufructuary's birth date", async () => {
+    await actions.createCompany({
+      name: "SCI Famille",
+      kind: "SCI",
+      taxRegime: "IR",
+      totalParts: 1000,
+      associates: [
+        { name: "Parent", parts: 0, self: true, birthDate: "1956-01-01" },
+        { name: "Enfant", parts: 0 },
+      ],
+      dismemberments: [{ parts: 1000, usufructuary: 0, bareOwner: 1 }],
+    });
+    expect(h.associate.create.mock.calls[0][0].data.birthDate?.toISOString()).toBe("1956-01-01T00:00:00.000Z");
+    expect(h.holding.create.mock.calls.map((c) => c[0].data)).toEqual([
+      { companyId: COMPANY, parts: 1000, usufructuaryId: "assoc-1", bareOwnerId: "assoc-2" },
+    ]);
+  });
+
+  it("refuses a block without the usufructuary's birth date, writing nothing", async () => {
+    await expect(
+      actions.createCompany({
+        name: "SCI",
+        kind: "SCI",
+        taxRegime: "IR",
+        totalParts: 10,
+        associates: [{ name: "P", parts: 0, self: true }, { name: "E", parts: 0 }],
+        dismemberments: [{ parts: 10, usufructuary: 0, bareOwner: 1 }],
+      }),
+    ).resolves.toEqual({ ok: false, error: "birth_date_required" });
+    expect(h.company.create).not.toHaveBeenCalled();
+  });
+
+  it.each([[-0.1], [1], [1.5], [Number.NaN], ["0.2"]])("refuses the discount %s", async (discountPct) => {
+    await expect(
+      actions.updateCompany(COMPANY, { name: "X", kind: "SCI", taxRegime: "IR", discountPct: discountPct as number }),
+    ).resolves.toEqual({ ok: false, error: "discount_invalid" });
+    expect(h.company.update).not.toHaveBeenCalled();
+  });
+
+  it("stores a valid discount, and none for 0", async () => {
+    await actions.updateCompany(COMPANY, { name: "X", kind: "SCI", taxRegime: "IR", discountPct: 0.15 });
+    expect(h.company.update.mock.calls[0][0].data.discountPct).toBeCloseTo(0.15, 10);
+    await actions.updateCompany(COMPANY, { name: "X", kind: "SCI", taxRegime: "IR", discountPct: 0 });
+    expect(h.company.update.mock.calls[1][0].data.discountPct).toBeNull();
+  });
+});

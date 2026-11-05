@@ -9,8 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pencil } from "lucide-react";
 import { saveCapTable } from "@/lib/actions/companies";
-import { CapTableEditor, newRowKey, toCapTableInput, type CapTableRowDraft } from "@/components/companies/cap-table-editor";
-import { useFailureText, type ManagerAssociate } from "@/components/companies/manager-shared";
+import { CapTableEditor } from "@/components/companies/cap-table-editor";
+import {
+  newRowKey,
+  toCapTableInput,
+  type CapTableRowDraft,
+  type DismembermentDraft,
+} from "@/components/companies/cap-table-draft";
+import { useFailureText, type ManagerAssociate, type ManagerDismemberment } from "@/components/companies/manager-shared";
 
 /** The manager's cap table editor, on the company page. */
 function rowsFrom(associates: ManagerAssociate[]): CapTableRowDraft[] {
@@ -22,6 +28,18 @@ function rowsFrom(associates: ManagerAssociate[]): CapTableRowDraft[] {
     username: a.username ?? "",
     self: a.isViewer,
     currentAccount: a.currentAccountCents > 0 ? centsToEuro(a.currentAccountCents).replace(".", ",") : "",
+    birthDate: a.birthDate ?? "",
+  }));
+}
+
+/** The stored blocks, naming their sides by the rows' keys. */
+function blocksFrom(rows: CapTableRowDraft[], dismemberments: ManagerDismemberment[]): DismembermentDraft[] {
+  const keyOf = new Map(rows.map((r) => [r.id, r.key]));
+  return dismemberments.map((d) => ({
+    key: newRowKey(),
+    parts: String(d.parts),
+    usufructuaryKey: keyOf.get(d.usufructuaryId) ?? "",
+    bareOwnerKey: keyOf.get(d.bareOwnerId) ?? "",
   }));
 }
 
@@ -29,7 +47,8 @@ export function CapTableDialog({
   companyId,
   totalParts: initialTotal,
   associates,
-}: Readonly<{ companyId: string; totalParts: number; associates: ManagerAssociate[] }>) {
+  dismemberments,
+}: Readonly<{ companyId: string; totalParts: number; associates: ManagerAssociate[]; dismemberments: ManagerDismemberment[] }>) {
   const t = useTranslations("companies");
   const router = useRouter();
   const failureText = useFailureText();
@@ -37,6 +56,7 @@ export function CapTableDialog({
   const [open, setOpen] = useState(false);
   const [totalParts, setTotalParts] = useState(String(initialTotal));
   const [rows, setRows] = useState(initialRows);
+  const [blocks, setBlocks] = useState(() => blocksFrom(rows, dismemberments));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -44,7 +64,7 @@ export function CapTableDialog({
     setSaving(true);
     setError(null);
     try {
-      const result = await saveCapTable(companyId, { totalParts: Number(totalParts), associates: toCapTableInput(rows) });
+      const result = await saveCapTable(companyId, { totalParts: Number(totalParts), ...toCapTableInput(rows, blocks) });
       const failure = failureText(result);
       if (failure) {
         setError(failure);
@@ -63,7 +83,9 @@ export function CapTableDialog({
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
-          setRows(initialRows());
+          const fresh = initialRows();
+          setRows(fresh);
+          setBlocks(blocksFrom(fresh, dismemberments));
           setTotalParts(String(initialTotal));
           setError(null);
         }
@@ -83,7 +105,7 @@ export function CapTableDialog({
           value={totalParts}
           onChange={(e) => setTotalParts(e.target.value.replace(/\D/g, ""))}
         />
-        <CapTableEditor totalParts={Number(totalParts)} rows={rows} onRowsChange={setRows} />
+        <CapTableEditor totalParts={Number(totalParts)} rows={rows} onRowsChange={setRows} blocks={blocks} onBlocksChange={setBlocks} />
         {error && <p role="alert" className="text-sm text-[var(--negative-text)]">{error}</p>}
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving}>
