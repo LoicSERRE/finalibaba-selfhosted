@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import type { DashboardResult } from "@/lib/domain/dashboard";
 
 /**
  * Companies (SCI first) - the one valuation module (dev-docs/companies.md,
@@ -458,4 +459,95 @@ export function withCompaniesGroup(institutions: AccountGroup[], shares: readonl
       accounts: shares.map((s) => ({ id: s.companyId, name: s.name, value: s.valueCents, type: COMPANY_ENTRY_TYPE })),
     },
   ];
+}
+
+// ── Tax regime (step 4) ────────────────────────────────────────────────────
+
+/**
+ * French corporate tax (IS) on a gain: 15 % up to 42 500 of profit, 25 %
+ * above. The reduced rate is the SME one (turnover under 10 million, capital
+ * paid up and three quarters held by people) - what a family SCI almost
+ * always meets; nothing here can check it, so it is stated where shown.
+ */
+export const IS_REDUCED_RATE = 0.15;
+export const IS_STANDARD_RATE = 0.25;
+export const IS_REDUCED_CEILING_CENTS = BigInt(42_500_00);
+
+export function corporateTaxCents(gainCents: bigint): bigint {
+  if (gainCents <= BigInt(0)) return BigInt(0);
+  const reduced = gainCents < IS_REDUCED_CEILING_CENTS ? gainCents : IS_REDUCED_CEILING_CENTS;
+  const tax = new Decimal(reduced.toString())
+    .mul(IS_REDUCED_RATE)
+    .plus(new Decimal((gainCents - reduced).toString()).mul(IS_STANDARD_RATE))
+    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  return BigInt(tax.toFixed(0));
+}
+
+/** What a company's latent gain is made of. */
+export interface CompanyTaxBase {
+  /** Holdings with a cost basis, losses netted (DashboardResult.investmentGainCents). */
+  investmentGainCents: bigint;
+  /** Its buildings: market value, and net book value when entered. A building
+   *  without a book value is left out - there is nothing to measure it from. */
+  buildings: { valueCents: bigint; bookValueCents: bigint | null }[];
+}
+
+export function companyTaxBase(
+  accounts: readonly { type: string; manualValueCents: bigint | null; bookValueCents?: bigint | null }[],
+  investmentGainCents: bigint,
+): CompanyTaxBase {
+  return {
+    investmentGainCents,
+    buildings: accounts
+      .filter((a) => a.type === "REAL_ESTATE")
+      .map((a) => ({ valueCents: a.manualValueCents ?? BigInt(0), bookValueCents: a.bookValueCents ?? null })),
+  };
+}
+
+/** The gain a sale of everything today would realise. Under IS it is one
+ *  result: a loss on one asset offsets a gain on another. */
+export function latentGainCents(base: CompanyTaxBase): bigint {
+  return base.buildings.reduce(
+    (sum, b) => (b.bookValueCents === null ? sum : sum + b.valueCents - b.bookValueCents),
+    base.investmentGainCents,
+  );
+}
+
+/**
+ * The company's net worth for its regime, before current accounts.
+ *
+ * - IR: transparent - its gains are taxed at the associates', at rates that
+ *   depend on each of them. The figures stay as computeDashboard made them.
+ * - IS: the company pays the tax itself. computeDashboard's per-account
+ *   latent tax (the rates of a person's PEA or CTO) does not apply to it; the
+ *   corporate tax on its whole latent gain does, buildings included.
+ */
+export function companyNetWorthForRegime(
+  figures: { netWorth: bigint; totalLatentTax: bigint },
+  regime: "IR" | "IS",
+  base: CompanyTaxBase,
+): { netWorthCents: bigint; latentTaxCents: bigint; taxableGainCents: bigint | null } {
+  // IS only when it says IS: anything else keeps the figures as computed.
+  if (regime !== "IS") return { netWorthCents: figures.netWorth, latentTaxCents: figures.totalLatentTax, taxableGainCents: null };
+  const gain = latentGainCents(base);
+  const tax = corporateTaxCents(gain);
+  return { netWorthCents: figures.netWorth + figures.totalLatentTax - tax, latentTaxCents: tax, taxableGainCents: gain };
+}
+
+/**
+ * A company's own figures, its regime's latent tax applied: the net worth and
+ * the history moved by today's adjustment, like the current accounts.
+ */
+export function companyValueForRegime(
+  raw: Pick<DashboardResult, "netWorth" | "totalLatentTax" | "investmentGainCents" | "history">,
+  regime: "IR" | "IS",
+  accounts: readonly { type: string; manualValueCents: bigint | null; bookValueCents?: bigint | null }[],
+) {
+  const adjusted = companyNetWorthForRegime(raw, regime, companyTaxBase(accounts, raw.investmentGainCents));
+  const offset = Number(adjusted.netWorthCents - raw.netWorth);
+  return {
+    ...adjusted,
+    netWorth: adjusted.netWorthCents,
+    history: raw.history.map((p) => ({ ...p, netWorth: p.netWorth + offset })),
+  };
 }

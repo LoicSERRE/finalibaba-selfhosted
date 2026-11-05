@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { computeDashboard } from "@/lib/domain/dashboard";
-import { buildCompanyShare, stakeOfAssociate, type CompanyShare } from "@/lib/domain/company";
+import { buildCompanyShare, companyValueForRegime, stakeOfAssociate, type CompanyShare } from "@/lib/domain/company";
 
 /**
  * The one loader behind every net worth the app shows or sends: the
@@ -51,6 +51,7 @@ export async function loadCompanyShares(userId: string, now: Date): Promise<Comp
           name: true,
           totalParts: true,
           discountPct: true,
+          taxRegime: true,
           associates: { select: { id: true, currentAccountCents: true, birthDate: true } },
           holdings: { select: { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } },
         },
@@ -61,7 +62,12 @@ export async function loadCompanyShares(userId: string, now: Date): Promise<Comp
   return Promise.all(
     rows.map(async ({ id: associateId, company, currentAccountCents }) => {
       const ids = (await prisma.account.findMany({ where: { companyId: company.id }, select: { id: true } })).map((a) => a.id);
-      const value = computeDashboard({ ...(await loadDashboardInput(ids)), intlLocale: "en-US", now });
+      const input = await loadDashboardInput(ids);
+      const raw = computeDashboard({ ...input, intlLocale: "en-US", now });
+      // Its regime decides the latent tax: IS takes corporate tax on the whole
+      // latent gain, buildings included (step 4). Today's adjustment is applied
+      // to every past day, like the current accounts.
+      const value = companyValueForRegime(raw, company.taxRegime, input.accounts);
       // Full ownership, usufruct and bare ownership alike: the stake carries
       // the birth dates its value depends on (art. 669 I CGI).
       const stake = stakeOfAssociate(associateId, company.holdings, new Map(company.associates.map((a) => [a.id, a.birthDate])));

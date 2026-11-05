@@ -49,7 +49,8 @@ export type CompanyFailure = {
     | "co_owned"
     | "not_an_associate"
     | "name_conflict"
-    | "discount_invalid";
+    | "discount_invalid"
+    | "book_value_invalid";
 };
 
 type AssociateInput = {
@@ -341,6 +342,35 @@ export async function setAccountCompany(accountId: string, companyId: string | n
   if (account._count.coOwners > 0) return { ok: false, error: "co_owned" };
 
   await prisma.account.update({ where: { id: accountId }, data: { companyId: target } });
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * A company building's net book value (step 4) - cost less depreciation, from
+ * the balance sheet - which its latent gain under corporate tax is measured
+ * from. Only a REAL_ESTATE account of a company, only by its manager; null
+ * clears it (the building then has no measurable gain).
+ */
+export async function setBuildingBookValue(
+  accountId: string,
+  bookValueCents: number | null,
+): Promise<{ ok: true } | CompanyFailure> {
+  accountId = assertId(accountId);
+  const viewer = await getViewer();
+  const account = await prisma.account.findUnique({ where: { id: accountId }, select: { companyId: true, type: true } });
+  if (!account?.companyId || account.type !== "REAL_ESTATE") throw new Error("Not found.");
+  await assertCompanyManager(viewer.id, account.companyId);
+  if (
+    bookValueCents !== null &&
+    (typeof bookValueCents !== "number" || !Number.isSafeInteger(bookValueCents) || bookValueCents < 0)
+  ) {
+    return { ok: false, error: "book_value_invalid" };
+  }
+  await prisma.account.update({
+    where: { id: accountId },
+    data: { bookValueCents: bookValueCents === null ? null : BigInt(bookValueCents) },
+  });
   revalidatePath("/", "layout");
   return { ok: true };
 }

@@ -47,6 +47,7 @@ describe("every column is either exported or explicitly not", () => {
       "manualValueCents",
       "liabilityCents",
       "purchasePriceCents",
+      "bookValueCents",
       "insuranceMonthlyCents",
       "investmentSubtype",
       "investmentStartDate",

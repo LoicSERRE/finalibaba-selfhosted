@@ -55,7 +55,10 @@ beforeEach(() => {
   h.associateAggregate.mockResolvedValue({ _sum: { currentAccountCents: BigInt(50_000_00) } });
   h.accountFindMany.mockResolvedValue([]);
   h.institutionFindMany.mockResolvedValue([]);
-  h.computePortfolio.mockResolvedValue({ result: { netWorth: BigInt(180_000_00), history: [], institutions: [], allocationRaw: {} } });
+  h.computePortfolio.mockResolvedValue({
+    input: { accounts: [] },
+    result: { netWorth: BigInt(180_000_00), totalLatentTax: BigInt(0), investmentGainCents: BigInt(0), history: [], institutions: [], allocationRaw: {} },
+  });
 });
 
 describe("loadCompanyPage", () => {

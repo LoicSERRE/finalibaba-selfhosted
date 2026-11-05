@@ -22,7 +22,7 @@ const h = vi.hoisted(() => {
     company: { create: fn(), update: fn(), delete: fn() },
     associate: { create: fn(), update: fn(), updateMany: fn(), deleteMany: fn(), findMany: fn(), findFirst: fn() },
     holding: { create: fn(), deleteMany: fn() },
-    account: { findFirst: fn(), update: fn(), updateMany: fn() },
+    account: { findFirst: fn(), findUnique: fn(), update: fn(), updateMany: fn() },
     institution: { findUnique: fn(), update: fn(), updateMany: fn() },
     coOwner: { count: fn() },
     alertRule: { deleteMany: fn() },
@@ -410,5 +410,37 @@ describe("démembrement and discount in the actions (step 3)", () => {
     expect(h.company.update.mock.calls[0][0].data.discountPct).toBeCloseTo(0.15, 10);
     await actions.updateCompany(COMPANY, { name: "X", kind: "SCI", taxRegime: "IR", discountPct: 0 });
     expect(h.company.update.mock.calls[1][0].data.discountPct).toBeNull();
+  });
+});
+
+describe("setBuildingBookValue (step 4)", () => {
+  const BUILDING = "ckaccount00000000000000009";
+
+  it("stores the manager's figure, in cents", async () => {
+    h.account.findUnique.mockResolvedValue({ companyId: COMPANY, type: "REAL_ESTATE" });
+    await expect(actions.setBuildingBookValue(BUILDING, 150_000_00)).resolves.toEqual({ ok: true });
+    expect(h.account.update).toHaveBeenCalledWith({ where: { id: BUILDING }, data: { bookValueCents: BigInt(150_000_00) } });
+  });
+
+  it("refuses an associate and an outsider alike", async () => {
+    h.account.findUnique.mockResolvedValue({ companyId: COMPANY, type: "REAL_ESTATE" });
+    h.viewer.id = "user-b";
+    await expect(actions.setBuildingBookValue(BUILDING, 1)).rejects.toThrow("Not found.");
+    h.viewer.id = "user-z";
+    await expect(actions.setBuildingBookValue(BUILDING, 1)).rejects.toThrow("Not found.");
+    expect(h.account.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses anything but a company's building", async () => {
+    h.account.findUnique.mockResolvedValue({ companyId: null, type: "REAL_ESTATE" });
+    await expect(actions.setBuildingBookValue(BUILDING, 1)).rejects.toThrow("Not found.");
+    h.account.findUnique.mockResolvedValue({ companyId: COMPANY, type: "CHECKING" });
+    await expect(actions.setBuildingBookValue(BUILDING, 1)).rejects.toThrow("Not found.");
+  });
+
+  it.each([[-1], [10.5], ["100"]])("refuses the amount %s", async (amount) => {
+    h.account.findUnique.mockResolvedValue({ companyId: COMPANY, type: "REAL_ESTATE" });
+    await expect(actions.setBuildingBookValue(BUILDING, amount as number)).resolves.toEqual({ ok: false, error: "book_value_invalid" });
+    expect(h.account.update).not.toHaveBeenCalled();
   });
 });
