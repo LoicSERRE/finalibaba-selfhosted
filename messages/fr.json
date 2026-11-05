@@ -2100,7 +2100,10 @@
       "dismemberment_invalid": "Un démembrement doit porter sur au moins une part, entre deux associés différents.",
       "associate_without_parts": "Chaque associé doit détenir des parts, en pleine propriété ou par un démembrement.",
       "discount_invalid": "La décote est un pourcentage entre 0 et 100 (exclu).",
-      "book_value_invalid": "La valeur nette comptable est un montant positif ou nul."
+      "book_value_invalid": "La valeur nette comptable est un montant positif ou nul.",
+      "effective_date_invalid": "La date d'effet doit être aujourd'hui ou un jour passé.",
+      "last_version": "Une société garde toujours au moins une répartition.",
+      "change_kind_invalid": "Nature de changement inconnue."
     },
     "page": {
       "back": "Comptes",
@@ -2140,7 +2143,26 @@
     "capTable": {
       "title": "Associés et parts",
       "save": "Enregistrer",
-      "saving": "Enregistrement…"
+      "saving": "Enregistrement…",
+      "kindLabel": "Nature du changement",
+      "kindOption": {
+        "CORRECTION": "Corriger la répartition actuelle",
+        "CESSION": "Cession de parts",
+        "DONATION": "Donation de parts",
+        "CAPITAL_CHANGE": "Augmentation ou réduction de capital"
+      },
+      "correctionHint": "Rectifie la répartition en vigueur, sans toucher à l'historique.",
+      "effectiveFrom": "Date d'effet",
+      "olderThanCurrent": "La répartition du {date} reste en vigueur aujourd'hui : celle-ci ne vaudra que jusqu'à cette date.",
+      "enteredAsLabel": "Les parts saisies ci-dessous sont",
+      "enteredAs": {
+        "after": "celles après ce changement",
+        "before": "celles d'avant ce changement"
+      },
+      "enteredAsHint": {
+        "after": "Le changement se fait à cette date ; avant, les parts d'avant restent.",
+        "before": "Pour compléter le passé : la répartition actuelle reste en vigueur depuis cette date, celle-ci vaut pour la période d'avant."
+      }
     },
     "attachDialog": {
       "title": "Comptes de la société",
@@ -2178,6 +2200,25 @@
       "bookValueOf": "Valeur nette comptable de {name}",
       "bookValuePlaceholder": "Valeur nette comptable",
       "save": "Enregistrer"
+    },
+    "history": {
+      "title": "Historique des parts",
+      "hint": "Chaque jour passé est valorisé avec la répartition en vigueur ce jour-là.",
+      "kind": {
+        "CREATION": "Création",
+        "CESSION": "Cession",
+        "DONATION": "Donation",
+        "CAPITAL_CHANGE": "Changement de capital",
+        "CORRECTION": "Correction"
+      },
+      "current": "en vigueur",
+      "parts": "{count, plural, one {# part} other {# parts}}",
+      "usufruct": "{count, number} en usufruit",
+      "bare": "{count, number} en nue-propriété",
+      "total": "{count, number} parts au total",
+      "delete": "Supprimer cette répartition",
+      "deleteDescription": "Les jours qu'elle couvrait seront valorisés avec la répartition précédente. Un associé qui n'apparaît que dans celle-ci sera retiré de la société.",
+      "origin": "Depuis l'origine"
     }
   }
 }

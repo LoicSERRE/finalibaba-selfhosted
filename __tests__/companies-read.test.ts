@@ -27,6 +27,7 @@ vi.mock("@/lib/db/prisma", () => ({
 vi.mock("@/lib/auth-context", () => ({
   companyRole: async () => h.role,
   companyAccountIds: async () => ["sci-bank"],
+  currentCapTableVersionId: async () => "v-current",
   viewerCompanies: async () => [],
 }));
 
@@ -35,6 +36,14 @@ vi.mock("@/lib/services/net-worth", () => ({ computePortfolio: h.computePortfoli
 const { loadCompanyPage, loadPendingCompanyLinks } = await import("@/lib/services/companies-read");
 
 const COMPANY = "ckcompany00000000000000001";
+
+type HoldingFixture = { parts: number; fullOwnerId: string | null; usufructuaryId: string | null; bareOwnerId: string | null };
+let versionSeq = 0;
+/** A dated cap table (step 5); the default is the only one, from long ago. */
+function version(totalParts: number, holdings: HoldingFixture[], from = "2020-01-01", kind = "CREATION") {
+  versionSeq += 1;
+  return { id: `v${versionSeq}`, effectiveFrom: new Date(`${from}T00:00:00Z`), totalParts, kind, holdings };
+}
 const NOW = new Date("2026-11-05T12:00:00Z");
 
 beforeEach(() => {
@@ -47,10 +56,10 @@ beforeEach(() => {
       { id: "a1", name: "Camille", userId: "user-a", linkAcceptedAt: new Date(), currentAccountCents: BigInt(30_000_00), birthDate: new Date("1980-05-01T00:00:00Z"), user: { username: "camille" } },
       { id: "a2", name: "Marie", userId: "user-b", linkAcceptedAt: new Date(), currentAccountCents: BigInt(20_000_00), birthDate: null, user: { username: "marie" } },
     ],
-    holdings: [
+    versions: [version(1000, [
       { parts: 600, fullOwnerId: "a1", usufructuaryId: null, bareOwnerId: null },
       { parts: 400, fullOwnerId: "a2", usufructuaryId: null, bareOwnerId: null },
-    ],
+    ])],
   });
   h.associateAggregate.mockResolvedValue({ _sum: { currentAccountCents: BigInt(50_000_00) } });
   h.accountFindMany.mockResolvedValue([]);
@@ -122,7 +131,7 @@ describe("démembrement on the company page (step 3)", () => {
         { id: "p", name: "Parent", userId: "user-b", linkAcceptedAt: new Date(), currentAccountCents: BigInt(0), birthDate: new Date("1956-01-01T00:00:00Z"), user: null },
         { id: "c", name: "Enfant", userId: null, linkAcceptedAt: null, currentAccountCents: BigInt(0), birthDate: null, user: null },
       ],
-      holdings: [{ parts: 1000, fullOwnerId: null, usufructuaryId: "p", bareOwnerId: "c" }],
+      versions: [version(1000, [{ parts: 1000, fullOwnerId: null, usufructuaryId: "p", bareOwnerId: "c" }])],
     });
     const page = await loadCompanyPage("user-b", COMPANY, "fr-FR", NOW); // parent is 70: 40 / 60
     expect(page?.partsHeld).toBe(1000);
@@ -131,5 +140,67 @@ describe("démembrement on the company page (step 3)", () => {
     expect(page?.associates.map((a) => [a.usufructParts, a.bareParts])).toEqual([[1000, 0], [0, 1000]]);
     // The blocks are the manager's editor's: an associate gets none.
     expect(page?.dismemberments).toEqual([]);
+  });
+});
+
+describe("dated cap tables on the company page (step 5)", () => {
+  beforeEach(() => {
+    h.role = "manager";
+    // Marie ceded her 400 parts to Léo on 2025-03-01; she is in the old version only.
+    h.companyFindUniqueOrThrow.mockResolvedValue({
+      id: COMPANY, name: "SCI", kind: "SCI", taxRegime: "IR", totalParts: 1000, discountPct: null,
+      associates: [
+        { id: "a1", name: "Camille", userId: "user-a", linkAcceptedAt: new Date(), currentAccountCents: BigInt(0), birthDate: null, user: null },
+        { id: "a2", name: "Marie", userId: "user-b", linkAcceptedAt: new Date(), currentAccountCents: BigInt(0), birthDate: null, user: null },
+        { id: "a3", name: "Léo", userId: null, linkAcceptedAt: null, currentAccountCents: BigInt(0), birthDate: null, user: null },
+      ],
+      versions: [
+        version(1000, [
+          { parts: 600, fullOwnerId: "a1", usufructuaryId: null, bareOwnerId: null },
+          { parts: 400, fullOwnerId: "a2", usufructuaryId: null, bareOwnerId: null },
+        ], "2024-01-01"),
+        version(1000, [
+          { parts: 600, fullOwnerId: "a1", usufructuaryId: null, bareOwnerId: null },
+          { parts: 400, fullOwnerId: "a3", usufructuaryId: null, bareOwnerId: null },
+        ], "2025-03-01", "CESSION"),
+      ],
+    });
+    h.associateAggregate.mockResolvedValue({ _sum: { currentAccountCents: BigInt(0) } });
+  });
+
+  it("shows the cap table in force today, without who has left", async () => {
+    const page = await loadCompanyPage("user-a", COMPANY, "fr-FR", NOW);
+    expect(page?.associates.map((a) => [a.name, a.parts])).toEqual([["Camille", 600], ["Léo", 400]]);
+  });
+
+  it("lists every version, newest first, with who held what", async () => {
+    const page = await loadCompanyPage("user-a", COMPANY, "fr-FR", NOW);
+    expect(page?.versions.map((v) => [v.effectiveFrom, v.kind, v.isCurrent])).toEqual([
+      ["2025-03-01", "CESSION", true],
+      ["2024-01-01", "CREATION", false],
+    ]);
+    expect(page?.versions[1].holders.map((x) => [x.name, x.parts])).toEqual([["Camille", 600], ["Marie", 400]]);
+  });
+
+  it("reads a version the day it started, and the first one for earlier days", async () => {
+    const before = await loadCompanyPage("user-a", COMPANY, "fr-FR", new Date("2023-06-01T12:00:00Z"));
+    expect(before?.associates.map((a) => a.name)).toEqual(["Camille", "Marie"]);
+    const onTheDay = await loadCompanyPage("user-a", COMPANY, "fr-FR", new Date("2025-03-01T00:00:00Z"));
+    expect(onTheDay?.associates.map((a) => a.name)).toEqual(["Camille", "Léo"]);
+  });
+});
+
+describe("pending links (step 5)", () => {
+  it("count the parts today's cap table gives, not every version's", async () => {
+    h.associateFindMany.mockResolvedValue([
+      {
+        id: "a3",
+        companyId: COMPANY,
+        holdings: [{ parts: 100, versionId: "v-old" }, { parts: 400, versionId: "v-current" }],
+        company: { name: "SCI", totalParts: 1000, manager: { displayName: null, username: "camille" } },
+      },
+    ]);
+    const [link] = await loadPendingCompanyLinks("user-c");
+    expect(link.parts).toBe(400);
   });
 });

@@ -1,6 +1,6 @@
 # Companies (SCI first)
 
-Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: steps 1 to 4 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth), its interface ("C" below), the associates' current accounts, démembrement and the discount, and the tax regime. Step 5 is next. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
+Design for owning wealth through a company - a French SCI first, the same mechanism for a family holding or any other company later. Requested in [discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50). **Status: steps 1 to 5 built** - the engine (data model, valuation, access, manager actions, sync, the share in every net worth), its interface ("C" below), the associates' current accounts, démembrement and the discount, the tax regime, and dated cap tables. It landed after the two security-audit batches, on an access layer that had been verified rather than assumed.
 
 ## What users actually need
 
@@ -115,7 +115,7 @@ Plus `Account.companyId String?` and `Institution.companyId String?` (the compan
 | Associate linked to a user | read-only | read-only | read-only | yes |
 | Anyone else | not found (same answer as a company that does not exist) | not found | not found | - |
 
-- An associate's read access comes from their `CompanyAssociate` row, checked on every request like a `PortfolioGrant`. Removing them from the cap table removes it at once.
+- An associate's read access comes from their `CompanyAssociate` row **named by the cap table in force today** (step 5), checked on every request like a `PortfolioGrant`. Removing them from the cap table, or a cession of everything they held, removes it from the day it takes effect.
 - Derived artifacts (share links, API keys, alert rules, exports) stay personal in step 1: they carry the viewer's own portfolio and their *share* of each company, never a company's accounts. Company-scoped artifacts, if ever, are manager-only and a later decision.
 - Handing over management: only to a linked associate, by the current manager; it moves `managerUserId`, the company's accounts' `userId` and its institutions' `userId` in one transaction (the sync then realigns ownership as it already does from the institution's owner).
 - Mono-user mode (`AUTH_ENABLED` unset): everything resolves to the owner, who is the manager of every company; associates are names.
@@ -137,7 +137,7 @@ personal net worth        = own accounts (company accounts excluded) + Σ holdin
 - **Excluding company accounts from personal scope happens once**, in `baseAccountIds`, so the manager's dashboard, analytics, exports, API, alerts and share links stop counting the company at 100 % without each being edited - and a test pins that a manager's net worth equals their own accounts plus their share, not plus the company.
 - **Then the share is added where a net worth is computed.** Today that is: `lib/domain/dashboard.ts` and `dashboard-history.ts` (dashboard, shared links), `lib/domain/analytics*.ts` and `projection.ts`, `app/api/v1/net-worth*` and `accounts`, `lib/domain/alerts.ts` with `lib/services/alerts/custom-rules.ts` (net worth thresholds), `lib/domain/user-export.ts` and the markdown exports. Each receives the holdings from one loader and adds them through `lib/domain/company.ts`; a test lists these entry points and fails if a new net-worth consumer appears without the share.
 - **Negative ANR** (an SCI that owes more than it holds) is shown as is; an associate's share can be negative - that is the economic reality of the loan they stand behind.
-- **History** uses today's holdings for every past day until step 5 dates them; the company's own history is exact from day one.
+- **History** values each past day with the cap table in force that day (step 5); the company's own history is exact from day one.
 - **Allocation**: shares appear as their own bucket ("Sociétés"), not spread into real estate / cash, because what the person owns is parts.
 - **Latent tax** on the company's gains follows its regime (step 4); until then the company's holdings carry the same per-account tax treatment as anyone's.
 
@@ -213,6 +213,20 @@ Written as tests in the same PR as each step:
 - **IS**: the company pays the tax itself. computeDashboard's per-account latent tax (a person's PEA/CTO rates) does not apply to it; **corporate tax on its whole latent gain** does (`companyNetWorthForRegime`), at 15 % up to 42 500 then 25 % (`corporateTaxCents` - the SME reduced rate, stated as such on the page since nothing here can check the conditions). One result: a loss on one asset offsets a gain on another.
 - **The gain on a building** is measured from its **net book value** (`Account.bookValueCents`, cost less depreciation, from the balance sheet), not its purchase price: under IS buildings are depreciated, and the taxable gain is the sale price less that value. The manager enters it on the company page (`setBuildingBookValue`); a building without one is left out of the gain, and the page says so. Holdings count with their cost basis (`DashboardResult.investmentGainCents`).
 - Today's tax is applied to every past day (`companyValueForRegime`), like the current accounts. Exported with the personal data (`bookValueCents`).
+
+## Step 5: dated cap tables
+
+- **A cap table is a series of versions** (`CompanyCapTableVersion`: `effectiveFrom`, `totalParts`, `kind`), each with its own `CompanyHolding` rows. The version in force on a day is the latest that started on or before it; the earliest also stands for every day before it (`versionIndexOn`).
+- **The first one stands since the origin** (`CAP_TABLE_ORIGIN`, 1900-01-01, shown as "Depuis l'origine"), not from the day it was entered: otherwise the commonest case - an SCI entered today, with a donation last June to record - would put the June version *before* the one entered today, and today's parts would be the old ones. The migration gave every existing cap table that date: nothing moved.
+- **Saving** (`saveCapTable`, version logic in `lib/services/cap-table-versions.ts`):
+  - no `change`: a correction of the version in force today, its kind kept;
+  - a change (cession, donation, change of capital, on a real day after the origin and never in the future) with the parts entered **after** it: the version starting that day, created or rewritten. One dated before the version in force only covers the days until it, which the editor says;
+  - a change with the parts entered **before** it, to fill in the past: the day becomes a boundary (a version starting then with what was in force that day, unless one already starts then), and the version just before it takes the parts entered - a new origin one if there is none.
+- `deleteCapTableVersion` removes one recorded by mistake, never the last, with a confirmation dialog rather than an undo: it can remove an associate and their access.
+- **Valuation**: a share is a timeline of stakes (`stakeTimeline`), each day of the history valued with that day's parts and total. Someone who ceded everything is worth 0 from that day, still their parts before it in their own history, and the company leaves their list of today's accounts (`withCompaniesGroup`).
+- **People, not versions**: `CompanyAssociate` rows (name, link, birth date, current account) belong to the company, not to a version. An associate no version names any more is deleted; one named again is the same row (`withFormerAssociates`, so the `(companyId, userId)` index holds). Current accounts stay undated, today's applied to the whole history: someone today's cap table leaves out has theirs cleared, as it is repaid on exit.
+- **Access** follows today's version: `companyRole`, `viewerCompanies` and the management hand-over only count associates it names.
+- The company page shows today's cap table and, once there is more than one version, their history newest first.
 
 ## Open questions
 

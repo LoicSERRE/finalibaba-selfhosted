@@ -307,6 +307,67 @@ export function stakeValueCents(anrCents: bigint, stake: Stake, totalParts: numb
   return BigInt(value.toFixed(0));
 }
 
+// ── Dated cap tables (step 5) ──────────────────────────────────────────────
+
+/**
+ * The date a company's first cap table stands from: before anything that can
+ * be dated, so every change recorded later - even one years back - comes
+ * after it. Also what the migration gave every existing cap table.
+ */
+export const CAP_TABLE_ORIGIN = new Date("1900-01-01T00:00:00.000Z");
+
+/** A cap table as it stood from one date. */
+export interface CapTableVersion {
+  effectiveFrom: Date;
+  totalParts: number;
+  holdings: HoldingRow[];
+}
+
+/**
+ * Which version is in force on `at`: the latest that started on or before it,
+ * and the earliest for any day before them all - the cap table as first
+ * entered stands for the company's past until something older is recorded.
+ * `versions` ascending by effectiveFrom, never empty; returns its index.
+ */
+export function versionIndexOn(versions: readonly { effectiveFrom: Date }[], at: Date): number {
+  let found = 0;
+  versions.forEach((v, i) => {
+    if (v.effectiveFrom.getTime() <= at.getTime()) found = i;
+  });
+  return found;
+}
+
+/** One person's stake in each version, ascending - what a dated share is valued from. */
+export interface StakeTimelineEntry {
+  effectiveFrom: Date;
+  totalParts: number;
+  stake: Stake;
+}
+export type StakeTimeline = StakeTimelineEntry[];
+
+export function stakeTimeline(
+  associateId: string,
+  versions: readonly CapTableVersion[],
+  birthDates: ReadonlyMap<string, Date | null>,
+): StakeTimeline {
+  return versions.map((v) => ({
+    effectiveFrom: v.effectiveFrom,
+    totalParts: v.totalParts,
+    stake: stakeOfAssociate(associateId, v.holdings, birthDates),
+  }));
+}
+
+function toTimeline(held: number | Stake | StakeTimeline, totalParts: number): StakeTimeline {
+  if (Array.isArray(held)) return held;
+  const stake = typeof held === "number" ? fullStake(held) : held;
+  return [{ effectiveFrom: new Date(0), totalParts, stake }];
+}
+
+/** The timeline's entry in force on `at`, by the same rule as the versions. */
+function entryOn(timeline: StakeTimeline, at: Date): StakeTimelineEntry {
+  return timeline[versionIndexOn(timeline, at)];
+}
+
 /** A company's current accounts: all of them, and the person's own. */
 export interface CurrentAccounts {
   totalCents: bigint;
@@ -323,27 +384,33 @@ const NO_CURRENT_ACCOUNTS: CurrentAccounts = { totalCents: BigInt(0), ownCents: 
  */
 export function buildCompanyShare(
   company: { id: string; name: string; totalParts: number; discountPct?: number | null },
-  held: number | Stake,
+  held: number | Stake | StakeTimeline,
   companyNetWorthCents: bigint,
   companyHistory: { isoDate: string; netWorth: number }[],
   currentAccounts: CurrentAccounts = NO_CURRENT_ACCOUNTS,
   asOf?: Date,
 ): CompanyShare {
-  const stake = typeof held === "number" ? fullStake(held) : held;
-  // Today's value of an usufruct depends on today's age: the caller says
-  // which day "today" is, rather than this reading a clock.
-  const hasBlocks = stake.usufructs.length + stake.bareOwnerships.length > 0;
-  if (hasBlocks && !asOf) throw new Error("buildCompanyShare needs asOf for a stake with démembrement blocks.");
+  const timeline = toTimeline(held, company.totalParts);
+  // Today's value of an usufruct depends on today's age, and which version is
+  // in force on today's date: the caller says which day "today" is, rather
+  // than this reading a clock.
+  const needsDate = timeline.length > 1 || timeline.some((e) => e.stake.usufructs.length + e.stake.bareOwnerships.length > 0);
+  if (needsDate && !asOf) throw new Error("buildCompanyShare needs asOf for a dated or dismembered stake.");
   const today = asOf ?? new Date(0);
   const discount = company.discountPct ?? null;
-  const valueOf = (netWorth: bigint, at: Date) =>
-    stakeValueCents(netAssetValueCents(netWorth, currentAccounts.totalCents), stake, company.totalParts, discount, at) +
-    currentAccounts.ownCents;
+  const valueOf = (netWorth: bigint, at: Date) => {
+    const entry = entryOn(timeline, at);
+    return (
+      stakeValueCents(netAssetValueCents(netWorth, currentAccounts.totalCents), entry.stake, entry.totalParts, discount, at) +
+      currentAccounts.ownCents
+    );
+  };
+  const now = entryOn(timeline, today);
   return {
     companyId: company.id,
     name: company.name,
-    parts: partsInStake(stake),
-    totalParts: company.totalParts,
+    parts: partsInStake(now.stake),
+    totalParts: now.totalParts,
     companyValueCents: netAssetValueCents(companyNetWorthCents, currentAccounts.totalCents),
     currentAccountCents: currentAccounts.ownCents,
     valueCents: valueOf(companyNetWorthCents, today),
@@ -448,7 +515,10 @@ export interface AccountGroup {
   accounts: { id: string; name: string; value: bigint; type: string }[];
 }
 
-export function withCompaniesGroup(institutions: AccountGroup[], shares: readonly CompanyShare[], label: string): AccountGroup[] {
+export function withCompaniesGroup(institutions: AccountGroup[], allShares: readonly CompanyShare[], label: string): AccountGroup[] {
+  // A company the person no longer holds anything in today still counts in
+  // their history, but is no row of today's list (and they cannot open it).
+  const shares = allShares.filter((s) => s.parts > 0 || s.currentAccountCents > BigInt(0));
   if (shares.length === 0) return institutions;
   return [
     ...institutions,

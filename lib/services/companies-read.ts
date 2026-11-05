@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db/prisma";
-import { companyAccountIds, companyRole, viewerCompanies, type CompanyRole } from "@/lib/auth-context";
+import { companyAccountIds, companyRole, currentCapTableVersionId, viewerCompanies, type CompanyRole } from "@/lib/auth-context";
 import { computePortfolio } from "@/lib/services/net-worth";
 import {
+  CAP_TABLE_ORIGIN,
   companyValueForRegime,
   fullStake,
   netAssetValueCents,
@@ -9,6 +10,7 @@ import {
   stakeOfAssociate,
   stakeValueCents,
   weightedParts,
+  versionIndexOn,
   type Stake,
 } from "@/lib/domain/company";
 
@@ -18,8 +20,30 @@ import {
  * with the viewer they resolved, and it re-checks the role itself.
  */
 
-/** The cap table as stored: the company's terms, its associates, its blocks. */
-async function loadCapTable(companyId: string) {
+const HOLDING_SELECT = { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } as const;
+
+/**
+ * The cap table in force on `now` (step 5) - its parts, its blocks and the
+ * associates it names - with every dated version beside it for the history.
+ * An associate who left (in older versions only) is not one of today's rows.
+ */
+async function loadCapTable(companyId: string, now: Date) {
+  const { versions, associates, ...company } = await loadStoredCapTable(companyId);
+  const current = versions[versionIndexOn(versions, now)];
+  const named = new Set(current.holdings.flatMap((h) => [h.fullOwnerId, h.usufructuaryId, h.bareOwnerId]));
+  return {
+    ...company,
+    totalParts: current.totalParts,
+    holdings: current.holdings,
+    associates: associates.filter((a) => named.has(a.id)),
+    allAssociates: associates,
+    versions,
+    currentVersionId: current.id,
+    currentFrom: current.effectiveFrom.toISOString().slice(0, 10),
+  };
+}
+
+async function loadStoredCapTable(companyId: string) {
   return prisma.company.findUniqueOrThrow({
     where: { id: companyId },
     select: {
@@ -41,7 +65,10 @@ async function loadCapTable(companyId: string) {
         },
         orderBy: { createdAt: "asc" },
       },
-      holdings: { select: { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } },
+      versions: {
+        select: { id: true, effectiveFrom: true, totalParts: true, kind: true, holdings: { select: HOLDING_SELECT } },
+        orderBy: { effectiveFrom: "asc" },
+      },
     },
   });
 }
@@ -105,7 +132,7 @@ export async function loadCompanyCards(userId: string, now: Date): Promise<Compa
   const companies = await viewerCompanies(userId);
   return Promise.all(
     companies.map(async (c) => {
-      const table = await loadCapTable(c.id);
+      const table = await loadCapTable(c.id, now);
       const value = await companyValue(c.id, table.taxRegime, "en-US", now);
       const { stake, currentAccountCents } = viewerStake(table, userId);
       return {
@@ -137,18 +164,21 @@ export async function loadPendingCompanyLinks(userId: string): Promise<PendingCo
     where: { userId, linkAcceptedAt: null },
     select: {
       id: true,
-      holdings: { select: { parts: true } },
+      companyId: true,
+      holdings: { select: { parts: true, versionId: true } },
       company: {
         select: { name: true, totalParts: true, manager: { select: { displayName: true, username: true } } },
       },
     },
     orderBy: { createdAt: "asc" },
   });
-  return rows.map((r) => ({
+  const current = await Promise.all(rows.map((r) => currentCapTableVersionId(r.companyId)));
+  return rows.map((r, i) => ({
     associateId: r.id,
     companyName: r.company.name,
     from: r.company.manager.displayName ?? r.company.manager.username,
-    parts: r.holdings.reduce((sum, h) => sum + h.parts, 0),
+    // What today's cap table gives them, not every version's parts summed.
+    parts: r.holdings.filter((h) => h.versionId === current[i]).reduce((sum, h) => sum + h.parts, 0),
     totalParts: r.company.totalParts,
   }));
 }
@@ -193,7 +223,7 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
   if (!role) return null;
   const isManager = role === "manager";
 
-  const table = await loadCapTable(companyId);
+  const table = await loadCapTable(companyId, now);
   const value = await companyValue(companyId, table.taxRegime, intlLocale, now);
   const { id, name, kind, taxRegime, totalParts, discountPct } = table;
   const company = { id, name, kind, taxRegime, totalParts, discountPct };
@@ -249,8 +279,47 @@ export async function loadCompanyPage(userId: string, companyId: string, intlLoc
         valueCents: Number(a.manualValueCents ?? BigInt(0)),
         bookValueCents: a.bookValueCents === null ? null : Number(a.bookValueCents),
       })),
+    // Step 5: every dated cap table, newest first - the company's books -
+    // and when today's started, which a correction rewrites.
+    versions: capTableHistory(table),
+    currentFrom: table.currentFrom,
     attachable: isManager ? await loadAttachable(userId, companyId) : null,
   };
+}
+
+export interface CapTableHistoryEntry {
+  id: string;
+  /** "YYYY-MM-DD" */
+  effectiveFrom: string;
+  /** Standing since the origin (CAP_TABLE_ORIGIN): no date to show. */
+  fromOrigin: boolean;
+  kind: "CREATION" | "CESSION" | "DONATION" | "CAPITAL_CHANGE" | "CORRECTION";
+  totalParts: number;
+  isCurrent: boolean;
+  /** Who held what in it, in the cap table's order: full ownership, and the
+   *  parts held as usufructuary and as bare owner. */
+  holders: { name: string; parts: number; usufructParts: number; bareParts: number }[];
+}
+
+function capTableHistory(table: CapTable): CapTableHistoryEntry[] {
+  return table.versions
+    .map((v) => ({
+      id: v.id,
+      effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
+      fromOrigin: v.effectiveFrom.getTime() <= CAP_TABLE_ORIGIN.getTime(),
+      kind: v.kind,
+      totalParts: v.totalParts,
+      isCurrent: v.id === table.currentVersionId,
+      holders: table.allAssociates.flatMap((a) => {
+        const stake = stakeOfAssociate(a.id, v.holdings, new Map());
+        const usufructParts = stake.usufructs.reduce((s, u) => s + u.parts, 0);
+        const bareParts = stake.bareOwnerships.reduce((s, b) => s + b.parts, 0);
+        return stake.fullParts + usufructParts + bareParts > 0
+          ? [{ name: a.name, parts: stake.fullParts, usufructParts, bareParts }]
+          : [];
+      }),
+    }))
+    .reverse();
 }
 
 /**

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { computeDashboard } from "@/lib/domain/dashboard";
-import { buildCompanyShare, companyValueForRegime, stakeOfAssociate, type CompanyShare } from "@/lib/domain/company";
+import { buildCompanyShare, companyValueForRegime, stakeTimeline, type CompanyShare } from "@/lib/domain/company";
 
 /**
  * The one loader behind every net worth the app shows or sends: the
@@ -53,7 +53,16 @@ export async function loadCompanyShares(userId: string, now: Date): Promise<Comp
           discountPct: true,
           taxRegime: true,
           associates: { select: { id: true, currentAccountCents: true, birthDate: true } },
-          holdings: { select: { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } },
+          // Every dated cap table (step 5): a past day is valued with the
+          // parts held that day.
+          versions: {
+            select: {
+              effectiveFrom: true,
+              totalParts: true,
+              holdings: { select: { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } },
+            },
+            orderBy: { effectiveFrom: "asc" },
+          },
         },
       },
     },
@@ -68,9 +77,11 @@ export async function loadCompanyShares(userId: string, now: Date): Promise<Comp
       // latent gain, buildings included (step 4). Today's adjustment is applied
       // to every past day, like the current accounts.
       const value = companyValueForRegime(raw, company.taxRegime, input.accounts);
-      // Full ownership, usufruct and bare ownership alike: the stake carries
-      // the birth dates its value depends on (art. 669 I CGI).
-      const stake = stakeOfAssociate(associateId, company.holdings, new Map(company.associates.map((a) => [a.id, a.birthDate])));
+      // Full ownership, usufruct and bare ownership alike, version by version:
+      // the stake carries the birth dates its value depends on (art. 669 I
+      // CGI). Someone who ceded everything is worth 0 from that day on, and
+      // still their parts before it.
+      const stake = stakeTimeline(associateId, company.versions, new Map(company.associates.map((a) => [a.id, a.birthDate])));
       const totalCents = company.associates.reduce((sum, a) => sum + a.currentAccountCents, BigInt(0));
       return buildCompanyShare(company, stake, value.netWorth, value.history, { totalCents, ownCents: currentAccountCents }, now);
     }),
