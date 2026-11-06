@@ -25,6 +25,21 @@ function refuseDemoMutation(req: NextRequest): NextResponse | null {
   return null;
 }
 
+/**
+ * The public token pages take no writes - enforced here, not left to the
+ * actions. A Server Action is a POST to whichever page it is called at, and
+ * with AUTH_ENABLED off every request is the owner, so a page reachable
+ * without the app (a share link's documented use: no app password needed)
+ * must not be a way in to the owner's actions. `/shared` never takes a write.
+ * `/invite` takes one (accepting) only with auth on, the only mode
+ * invitations exist in.
+ */
+export function refusesPublicPageWrite(pathname: string, method: string, authEnabled: boolean): boolean {
+  if (method === "GET" || method === "HEAD") return false;
+  if (/^\/shared(?:\/.*)?$/.test(pathname)) return true;
+  return !authEnabled && /^\/invite(?:\/.*)?$/.test(pathname);
+}
+
 const authMiddleware = withAuth(
   function middleware() {},
   {
@@ -167,6 +182,10 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
   // /shared or /invite). See refuseDemoMutation.
   const demoRefusal = refuseDemoMutation(req);
   if (demoRefusal) return withCsp(demoRefusal, csp);
+  // Same place, same reason: before the exemption below lets the path through.
+  if (refusesPublicPageWrite(req.nextUrl.pathname, req.method, process.env.AUTH_ENABLED === "true")) {
+    return withCsp(new NextResponse(null, { status: 405, headers: { Allow: "GET, HEAD" } }), csp);
+  }
 
   // withAuth never redirects AWAY from /login, so a stale bookmark from a time
   // AUTH_ENABLED was on shows the password form forever. Handled here rather

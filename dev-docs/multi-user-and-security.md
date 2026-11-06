@@ -450,6 +450,10 @@ inside `app/shared/[token]/page.tsx` is the page's own, independent gate
 (`notFound()` uniformly for "doesn't exist" and "expired", no signal to an
 anonymous visitor about which). That page sets `robots: { index: false,
 follow: false }` since the URL may be reachable from the public internet.
+**The public token pages are read-only at the middleware** (`refusesPublicPageWrite`
+in `proxy.ts`, 405 for anything but GET/HEAD): a Server Action is a POST to the
+page it is called at, and with `AUTH_ENABLED` off it runs as the owner, so
+`/shared` takes no write at all and `/invite` takes one only with auth on.
 
 The dashboard's JSX was extracted into `components/dashboard/dashboard-view.tsx`
 (a pure presentational component, `interactive` prop) so `app/page.tsx` and
