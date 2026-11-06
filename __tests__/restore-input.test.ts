@@ -4,7 +4,7 @@ import { restrictedRestoreInput } from "@/lib/domain/restore-input";
 // What psql reads in an in-app restore: restricted mode first, so the file's
 // backslash commands (\! runs a shell) are refused. That psql really refuses
 // them under \restrict was checked against psql 16.15 when this was written.
-const KEY = "0123456789abcdef0123456789abcdef";
+const KEY = "0123456789abcdef0123456789abcdef"; // gitleaks:allow - a fixed test key, not a secret
 const run = (sql: string) => restrictedRestoreInput(Buffer.from(sql, "latin1"), KEY).toString("latin1");
 
 describe("restrictedRestoreInput", () => {
