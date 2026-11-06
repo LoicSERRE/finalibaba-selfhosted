@@ -13,26 +13,11 @@ Flow :
      → Retourne {"accounts": N}
 """
 import logging
-import os
-from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 # État en mémoire entre start et complete
 _pending: dict | None = None  # {"w": Woob instance}
-
-
-def _configure_woob():
-    config_dir = Path.home() / ".config" / "woob"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    backends_file = config_dir / "backends"
-    backends_file.write_text(
-        "[lcl]\n"
-        "_module = lcl\n"
-        f"login = {os.environ['LCL_LOGIN']}\n"
-        f"password = {os.environ['LCL_PASSWORD']}\n"
-    )
-    backends_file.chmod(0o600)
 
 
 def _safe_deinit(w):
@@ -66,7 +51,6 @@ def _iter_accounts(w):
 def start_setup() -> dict:
     global _pending
     _cleanup()
-    _configure_woob()
 
     from woob.exceptions import (
         AppValidation,
@@ -80,7 +64,10 @@ def start_setup() -> dict:
     from sync_woob import make_woob
 
     w = make_woob()
-    w.load_backends(modules=["lcl"])
+    # In memory, never Woob's backends file (sync_lcl.load_lcl_backend).
+    from sync_lcl import load_lcl_backend
+
+    load_lcl_backend(w)
 
     try:
         accounts = _iter_accounts(w)
