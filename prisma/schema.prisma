@@ -76,6 +76,9 @@ model User {
   totpSecret       String?
   totpEnabled      Boolean  @default(false)
   totpBackupCodes  String[] @default([])
+  // The 30-second step of the last TOTP code accepted: a code is good once
+  // (RFC 6238 §5.2), so one seen over a shoulder cannot open a second session.
+  totpLastStep     Int?
 
   /// Every session issued before this instant is refused, without deleting
   /// the account. The only previous way to end somebody's session was to

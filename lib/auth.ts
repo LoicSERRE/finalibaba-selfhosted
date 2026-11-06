@@ -6,7 +6,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { verifyTotpCode, matchBackupCode } from "@/lib/domain/totp";
+import { consumeBackupCode, consumeTotpCode } from "@/lib/services/two-factor";
 import { OWNER_USER_ID } from "@/lib/domain/users";
 import { TOTP_REQUIRED } from "@/lib/domain/auth-constants";
 import { clientIpFromHeaders, trustedProxyCountFromEnv } from "@/lib/domain/client-ip";
@@ -100,18 +100,9 @@ async function resolveUser(username: string | undefined, password: string): Prom
  */
 async function verifySecondFactor(user: AuthUser, code: string): Promise<boolean> {
   if (!user.totpEnabled || !user.totpSecret) return true;
-
-  if (await verifyTotpCode(decryptSecret(user.totpSecret)!, code)) return true;
-
-  const backupIndex = await matchBackupCode(code, user.totpBackupCodes);
-  if (backupIndex === -1) return false;
-
-  // Consume the backup code so it can't be reused.
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { totpBackupCodes: user.totpBackupCodes.filter((_, i) => i !== backupIndex) },
-  });
-  return true;
+  // Each code once: a TOTP code's step, a backup code itself (lib/services/two-factor.ts).
+  if (await consumeTotpCode(user.id, decryptSecret(user.totpSecret)!, code)) return true;
+  return consumeBackupCode(user.id, code, user.totpBackupCodes);
 }
 
 export const authOptions: NextAuthOptions = {

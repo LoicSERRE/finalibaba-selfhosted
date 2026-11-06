@@ -6,9 +6,13 @@ import { generate as generateTotpToken } from "otplib";
 // paths and the success data shape, not startTotpSetup's QR generation.
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const { findUniqueMock, updateMock } = vi.hoisted(() => ({
+const { findUniqueMock, updateMock, updateManyMock, lastStep } = vi.hoisted(() => ({
   findUniqueMock: vi.fn(),
   updateMock: vi.fn(),
+  // The conditional write that spends a code (lib/services/two-factor.ts):
+  // a step at or under the last accepted one is refused.
+  updateManyMock: vi.fn(),
+  lastStep: { value: null as number | null },
 }));
 
 // TOTP lives on the User row as of v2.0 (per-user 2FA), not the old
@@ -18,6 +22,7 @@ vi.mock("@/lib/db/prisma", () => ({
     user: {
       findUnique: findUniqueMock,
       update: updateMock,
+      updateMany: updateManyMock,
       upsert: vi.fn(),
     },
   },
@@ -40,6 +45,14 @@ beforeEach(() => {
   getViewerMock.mockReset().mockResolvedValue({ id: "user-owner", role: "ADMIN", isMonoMode: true });
   findUniqueMock.mockReset();
   updateMock.mockReset().mockResolvedValue({});
+  lastStep.value = null;
+  updateManyMock.mockReset().mockImplementation(
+    async ({ where, data }: { where: { OR?: [unknown, { totpLastStep: { lt: number } }] }; data: { totpLastStep?: number } }) => {
+      if (where.OR && lastStep.value !== null && lastStep.value >= where.OR[1].totpLastStep.lt) return { count: 0 };
+      if (data.totpLastStep !== undefined) lastStep.value = data.totpLastStep;
+      return { count: 1 };
+    },
+  );
 });
 
 afterEach(() => {
@@ -124,6 +137,15 @@ describe("regenerateBackupCodes", () => {
     expect(result.backupCodes).toHaveLength(8);
     expect(updateMock).toHaveBeenCalledTimes(1);
   });
+
+  it("refuses a code already spent - at login or by an earlier call", async () => {
+    const secret = generateTotpSecret();
+    const token = await generateTotpToken({ secret });
+    findUniqueMock.mockResolvedValue({ totpEnabled: true, totpSecret: secret });
+    await expect(regenerateBackupCodes(token)).resolves.toMatchObject({ ok: true });
+    await expect(regenerateBackupCodes(token)).resolves.toEqual({ ok: false, error: "invalid_code" });
+    expect(updateMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("startTotpSetup", () => {
@@ -145,7 +167,8 @@ describe("startTotpSetup", () => {
 
     expect("ok" in result).toBe(false);
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ totpEnabled: false }) })
+      // A new secret starts with no code spent.
+      expect.objectContaining({ data: expect.objectContaining({ totpEnabled: false, totpLastStep: null }) })
     );
   });
 });

@@ -15,7 +15,15 @@ export function generateTotpUri(secret: string, accountLabel: string): string {
 // client/server clock drift. 30s of slack either side is the conventional
 // TOTP tolerance every authenticator app already expects servers to allow.
 export async function verifyTotpCode(secret: string, token: string): Promise<boolean> {
-  if (!token) return false;
+  return (await matchTotpStep(secret, token)) !== null;
+}
+
+/**
+ * The 30-second step a valid code belongs to, or null - what a verifier needs
+ * to accept each code only once (lib/services/two-factor.ts).
+ */
+export async function matchTotpStep(secret: string, token: string): Promise<number | null> {
+  if (!token) return null;
   try {
     // otplib's verify() THROWS (not just returns { valid: false }) for a
     // token that isn't exactly 6 digits - e.g. a backup code shaped
@@ -24,9 +32,10 @@ export async function verifyTotpCode(secret: string, token: string): Promise<boo
     // a login attempt with a backup code would 500 instead of falling
     // through to the backup-code check.
     const result = await verify({ secret, token, epochTolerance: 30 });
-    return result.valid;
+    // A TOTP result carries its step; otplib's type is shared with HOTP's.
+    return result.valid && "timeStep" in result ? result.timeStep : null;
   } catch {
-    return false;
+    return null;
   }
 }
 

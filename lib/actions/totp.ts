@@ -6,14 +6,8 @@ import QRCode from "qrcode";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer, getViewerForTwoFactorSetup } from "@/lib/auth-context";
 import { consumeAttempt } from "@/lib/services/rate-limit";
-import {
-  generateTotpSecret,
-  generateTotpUri,
-  verifyTotpCode,
-  generateBackupCodes,
-  hashBackupCodes,
-  matchBackupCode,
-} from "@/lib/domain/totp";
+import { generateTotpSecret, generateTotpUri, generateBackupCodes, hashBackupCodes } from "@/lib/domain/totp";
+import { consumeBackupCode, consumeTotpCode } from "@/lib/services/two-factor";
 
 // A code-checking action (confirm/disable/regenerate) is a 6-digit guess
 // behind a live session. Without a brake, a stolen-but-unlocked session could
@@ -55,7 +49,7 @@ export async function startTotpSetup(): Promise<{ qrDataUrl: string; secret: str
   // overwriting any abandoned prior attempt here is safe for that reason.
   await prisma.user.update({
     where: { id: viewer.id },
-    data: { totpSecret: encryptSecret(secret), totpEnabled: false },
+    data: { totpSecret: encryptSecret(secret), totpEnabled: false, totpLastStep: null },
   });
   const label = await prisma.user
     .findUnique({ where: { id: viewer.id }, select: { username: true, displayName: true } })
@@ -75,7 +69,8 @@ export async function confirmTotpSetup(
     select: { totpSecret: true },
   });
   if (!settings?.totpSecret) return { ok: false, error: "no_pending_setup" };
-  if (!(await verifyTotpCode(decryptSecret(settings.totpSecret)!, code))) return { ok: false, error: "invalid_code" };
+  // Spent like a login's: the code that switches 2FA on cannot then log in.
+  if (!(await consumeTotpCode(viewer.id, decryptSecret(settings.totpSecret)!, code))) return { ok: false, error: "invalid_code" };
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);
@@ -100,8 +95,8 @@ export async function disableTotp(code: string): Promise<{ ok: true } | TotpFail
   if (!settings?.totpEnabled || !settings.totpSecret) return { ok: false, error: "not_enabled" };
 
   const ok =
-    (await verifyTotpCode(decryptSecret(settings.totpSecret)!, code)) ||
-    (await matchBackupCode(code, settings.totpBackupCodes)) !== -1;
+    (await consumeTotpCode(viewer.id, decryptSecret(settings.totpSecret)!, code)) ||
+    (await consumeBackupCode(viewer.id, code, settings.totpBackupCodes));
   if (!ok) return { ok: false, error: "invalid_code" };
 
   await prisma.user.update({
@@ -125,7 +120,7 @@ export async function regenerateBackupCodes(
   // A live TOTP code only, never a backup code here - otherwise a single
   // backup code could mint itself an endless supply of replacements
   // without ever proving possession of the authenticator app.
-  if (!(await verifyTotpCode(decryptSecret(settings.totpSecret)!, code))) return { ok: false, error: "invalid_code" };
+  if (!(await consumeTotpCode(viewer.id, decryptSecret(settings.totpSecret)!, code))) return { ok: false, error: "invalid_code" };
 
   const backupCodes = generateBackupCodes();
   const hashed = await hashBackupCodes(backupCodes);
