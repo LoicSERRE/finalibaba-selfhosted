@@ -45,7 +45,10 @@ const inputClass =
 
 export function AlertChannelsSection({
   settings,
+  canUseInstanceRelay,
 }: Readonly<{
+  /** The instance's own `mail` relay is the admin's (lib/services/smtp-relay-policy.ts). */
+  canUseInstanceRelay: boolean;
   settings: {
     ntfyTopicUrl: string | null;
     // Never the secret itself, only whether one is stored - the ciphertext must
@@ -210,8 +213,9 @@ export function AlertChannelsSection({
               <option value="custom">{t("emailPresetCustom")}</option>
               <option value="gmail">Gmail</option>
               <option value="outlook">Outlook / Office 365</option>
-              <option value="selfhosted">{t("emailPresetSelfhosted")}</option>
+              {canUseInstanceRelay && <option value="selfhosted">{t("emailPresetSelfhosted")}</option>}
             </select>
+            {!canUseInstanceRelay && <p className="text-xs text-[var(--muted)]">{t("instanceRelayAdminOnly")}</p>}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

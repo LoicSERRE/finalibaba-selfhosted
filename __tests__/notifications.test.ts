@@ -23,6 +23,11 @@ const { findManyMock, deleteManyMock, sendNotificationMock, setVapidDetailsMock,
   instanceFindUniqueMock: vi.fn(async () => ({ vapidPublicKey: "pub", vapidPrivateKey: "priv" })),
 }));
 
+// Whose SMTP host may be used is its own test (smtp-relay-policy.test.ts);
+// here it says yes unless a test says otherwise.
+const relay = vi.hoisted(() => ({ allowed: true }));
+vi.mock("@/lib/services/smtp-relay-policy", () => ({ smtpHostAllowedFor: async () => relay.allowed }));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     pushSubscription: { findMany: findManyMock, deleteMany: deleteManyMock },
@@ -51,6 +56,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   sendMailMock.mockReset();
+  relay.allowed = true;
   createTransportMock.mockClear();
   findManyMock.mockReset();
   deleteManyMock.mockReset();
@@ -267,6 +273,31 @@ describe("dispatchAlert", () => {
       "body"
     );
     expect(sendMailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no email through a host the relay policy refuses this user", async () => {
+    relay.allowed = false;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await dispatchAlert(
+      {
+        ntfyTopicUrl: null,
+        ntfyAuthToken: null,
+        ntfyEnabled: true,
+        alertEmailTo: "victim@example.com",
+        smtpHost: "mail",
+        smtpPort: 25,
+        smtpUser: null,
+        smtpPassword: null,
+        smtpFrom: "alerts@instance.example",
+        emailAlertsEnabled: true,
+        webPushEnabled: false,
+        userId: "user-member",
+      },
+      "title",
+      "body"
+    );
+    expect(createTransportMock).not.toHaveBeenCalled();
+    expect(sendMailMock).not.toHaveBeenCalled();
   });
 
   it("skips ntfy when configured but disabled via ntfyEnabled: false", async () => {

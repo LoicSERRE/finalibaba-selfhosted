@@ -4,6 +4,7 @@ import nodemailer from "nodemailer";
 import * as webPush from "web-push";
 import { renderAlertEmailHtml } from "@/lib/services/email-template";
 import { prisma } from "@/lib/db/prisma";
+import { smtpHostAllowedFor } from "@/lib/services/smtp-relay-policy";
 
 type AlertChannelSettings = {
   ntfyTopicUrl: string | null;
@@ -173,21 +174,26 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
   }
 
   if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom && settings.emailAlertsEnabled) {
-    jobs.push(
-      sendEmail(
-        {
-          host: settings.smtpHost,
-          port: settings.smtpPort,
-          user: settings.smtpUser,
-          password: decryptSecret(settings.smtpPassword),
-          from: settings.smtpFrom,
-          to: settings.alertEmailTo,
-        },
-        title,
-        body,
-        renderAlertEmailHtml(title, body)
-      )
-    );
+    // The instance's own relay is the admin's (lib/services/smtp-relay-policy.ts).
+    if (await smtpHostAllowedFor(settings.userId, settings.smtpHost)) {
+      jobs.push(
+        sendEmail(
+          {
+            host: settings.smtpHost,
+            port: settings.smtpPort,
+            user: settings.smtpUser,
+            password: decryptSecret(settings.smtpPassword),
+            from: settings.smtpFrom,
+            to: settings.alertEmailTo,
+          },
+          title,
+          body,
+          renderAlertEmailHtml(title, body)
+        )
+      );
+    } else {
+      console.warn("Alert email not sent: this SMTP host is the instance's own network, reserved to the admin");
+    }
   }
 
   // sendWebPush resolves the instance VAPID keypair and this user's own

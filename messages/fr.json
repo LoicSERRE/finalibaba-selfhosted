@@ -1092,7 +1092,8 @@
       "smtpPasswordHint": "Pour Gmail ou Outlook, utilise un mot de passe d'application (pas ton mot de passe principal) : ils l'exigent pour l'accès SMTP tiers.",
       "smtpFrom": "Adresse d'expédition",
       "smtpFromHint": "Pour Gmail ou Outlook, doit être la même adresse que l'utilisateur SMTP, sinon le message est rejeté ou modifié. Pour le serveur mail auto-hébergé, laisse utilisateur et mot de passe vides : la confiance passe par le réseau Docker interne, pas par des identifiants.",
-      "emailHint": "Laisse l'adresse ou le serveur SMTP vide pour désactiver les alertes par email."
+      "emailHint": "Laisse l'adresse ou le serveur SMTP vide pour désactiver les alertes par email.",
+      "instanceRelayAdminOnly": "Le serveur mail de l'instance est réservé à l'administrateur : pour recevoir tes alertes par e-mail, utilise ton propre fournisseur (Gmail, Outlook…)."
     },
     "webPush": {
       "title": "Notifications push",

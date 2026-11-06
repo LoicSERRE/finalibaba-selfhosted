@@ -14,7 +14,7 @@ import type { SettingsTabProps } from "./context";
  * rules). Every section here is hidden in demo mode: a demo instance must
  * not send real notifications.
  */
-export async function NotificationsTab({ viewer }: SettingsTabProps) {
+export async function NotificationsTab({ viewer, isAdmin }: SettingsTabProps) {
   // The rule pickers feed per-user alert rules, so the viewer's OWN accounts.
   const accountIds = await baseAccountIds(viewer.id);
   const [userSettings, pushStatus, alertRules, fiatAccounts, investmentAccounts, budgetCategories] = await Promise.all([
@@ -58,6 +58,7 @@ export async function NotificationsTab({ viewer }: SettingsTabProps) {
       <AlertChannelsSection
         key={`${userSettings.ntfyTopicUrl}-${userSettings.ntfyEnabled}-${userSettings.emailAlertsEnabled}-${userSettings.smtpHost}-${userSettings.smtpPort}`}
         settings={userSettings}
+        canUseInstanceRelay={isAdmin}
       />
       {/* A third channel, but its own section: "configuring" it is a subscribe
           action on this browser, not a text field to type into and save. */}

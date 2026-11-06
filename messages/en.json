@@ -1092,7 +1092,8 @@
       "smtpPasswordHint": "For Gmail or Outlook, use an app password (not your main account password) - they require one for third-party SMTP access.",
       "smtpFrom": "From address",
       "smtpFromHint": "For Gmail or Outlook, must match the SMTP user address, or the message gets rejected or rewritten. For the self-hosted mail server, leave user and password blank - trust comes from the internal Docker network, not credentials.",
-      "emailHint": "Leave the address or SMTP host blank to disable email alerts."
+      "emailHint": "Leave the address or SMTP host blank to disable email alerts.",
+      "instanceRelayAdminOnly": "The instance's mail server is reserved to the admin: to get your alerts by email, use a provider of your own (Gmail, Outlook…)."
     },
     "webPush": {
       "title": "Push notifications",
