@@ -13,6 +13,7 @@ import { autoCategorizeTransactions } from "@/lib/actions/auto-categorize";
 import { amountColumns } from "@/lib/domain/currency";
 import { ratesToBaseForDays } from "@/lib/services/exchange-rate";
 import { normalizeLabelForCategorization, isGenericTransferLabel } from "@/lib/domain/auto-categorize";
+import { parseCsvDate } from "@/lib/domain/csv-import";
 
 type ImportRow = { date: string; label: string; amountCents: number };
 
@@ -23,15 +24,23 @@ export async function importTransactions(
   // assertManualAccountEligible below now also checks ownership, but the guard
   // is repeated here so this entry point can't be re-wired later to a
   // different eligibility check and silently lose it.
-  if (rows.length === 0) return { imported: 0 };
   const { currency } = await assertManualAccountEligible(accountId);
+  // What the dialog already checks, checked again: a Server Action takes
+  // whatever it is sent. A row without a real day, a text label or a finite
+  // amount is left out, the date normalised the way the balance import does.
+  const valid = (Array.isArray(rows) ? rows : []).flatMap((r) => {
+    const date = typeof r?.date === "string" ? parseCsvDate(r.date) : null;
+    if (!date || typeof r.label !== "string" || !Number.isFinite(r.amountCents)) return [];
+    return [{ date, label: r.label, amountCents: r.amountCents }];
+  });
+  if (valid.length === 0) return { imported: 0 };
 
   // Amounts are in the account's currency, each converted at its own day's
   // rate - all or nothing, like the balance import.
-  const rates = await ratesToBaseForDays(currency, rows.map((r) => r.date));
+  const rates = await ratesToBaseForDays(currency, valid.map((r) => r.date));
   if ([...rates.values()].some((rate) => rate === null)) return { imported: 0, error: "rate_unavailable" };
 
-  const data = rows.map((r) => ({
+  const data = valid.map((r) => ({
     accountId,
     syncId: `csv_${randomUUID()}`,
     // Noon UTC keeps the date stable across timezones instead of risking a
