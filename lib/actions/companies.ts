@@ -81,6 +81,9 @@ type ResolvedAssociate = {
   /** Checked by validateCapTable before anything is written. */
   currentAccountCents?: number;
   birthDate?: string | null;
+  /** A former associate named again (withFormerAssociates): their row, but
+   *  not their old consent. */
+  returning?: boolean;
 };
 
 /**
@@ -155,6 +158,8 @@ const birthDateOf = (row: ResolvedAssociate) => parseBirthDate(row.birthDate);
  * A new row naming a user who is already a FORMER associate (in an older
  * version only) is that associate coming back: the same row, so the
  * (companyId, userId) unique index holds and their history stays one person.
+ * Not the same consent: they accepted the company as it was, and being
+ * brought back in is a new invitation (`returning`), like any other link.
  */
 function withFormerAssociates(
   rows: ResolvedAssociate[],
@@ -166,7 +171,7 @@ function withFormerAssociates(
     const former = existing.find((a) => a.userId === row.userId && !named.has(a.id));
     if (!former) return row;
     named.add(former.id);
-    return { ...row, id: former.id };
+    return { ...row, id: former.id, returning: true };
   });
 }
 
@@ -308,7 +313,7 @@ export async function saveCapTable(
     const associateIds: string[] = [];
     for (const row of rows) {
       const previous = row.id ? byId.get(row.id) : undefined;
-      const sameLink = previous !== undefined && previous.userId === row.userId;
+      const sameLink = previous !== undefined && previous.userId === row.userId && !row.returning;
       let linkAcceptedAt: Date | null = null;
       if (row.acceptedNow) linkAcceptedAt = previous?.linkAcceptedAt ?? new Date();
       else if (sameLink) linkAcceptedAt = previous.linkAcceptedAt;
