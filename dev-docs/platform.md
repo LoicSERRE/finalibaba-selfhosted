@@ -134,6 +134,8 @@ Two paths, both wrap `pg_dump`/`psql` (full DB dump - schema + data, never a han
 
 Both directions use `pg_dump --clean --if-exists` (so restore drops/recreates objects first) and `psql --single-transaction` (restore is all-or-nothing, no partial state on error). Never echo raw `pg_dump`/`psql` stderr to the client - log it server-side and return a generic error message, per the exception-exposure fix in commit `1ae43c0`.
 
+**The in-app restore runs `psql` in restricted mode** (`lib/domain/restore-input.ts`): psql executes backslash commands from its input, and `\!`/`\o |cmd` reach a shell in the `app` container, beside its secrets. The upload is fed after a `\restrict <random key>` line (PostgreSQL 16.10+, CVE-2025-8714's fix), under which every backslash command but `\unrestrict` with that key is refused; pg_dump's own `\restrict`/`\unrestrict` lines are dropped, since ours would refuse them. COPY data and quoted strings are untouched. `psql` also gets only `PATH`/`NODE_ENV`/`PGPASSWORD`, never the app's environment. Needs a 16.10+ client, which `postgresql16-client` is (16.15 when this was added). Plain SQL in a restore still runs as the database role - that is what a restore is - so a file from someone else is still restored only after reading it.
+
 Implementation notes (post-v1.2.0 audit fixes):
 
 - **A local `pg_dump` older than the server produces an EMPTY file and exit code 1**, and a test that then greps it for secrets reports "no secrets found" - which is how the first verification of backup encryption passed while measuring nothing. `wc -c` the dump before believing anything about its contents. The app image pins `postgresql16-client` precisely so this cannot happen in production; a dev machine on Ubuntu 22.04 has 14.
