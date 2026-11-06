@@ -313,22 +313,47 @@ LEGACY = (
 )
 
 
-def test_the_institution_sections_left_by_earlier_versions_are_removed(tmp_path):
+def test_every_section_this_service_wrote_is_removed(tmp_path):
+    # The .env LCL sync was the last to write there; it loads in memory now
+    # too (sync_lcl.load_lcl_backend), so its section goes with the others.
     path = tmp_path / "backends"
-    path.write_text(LEGACY)
-    assert woob_config.purge_legacy_backends(path) == 2
+    path.write_text(LEGACY + "[someone_elses]\n_module = x\n")
+    assert woob_config.purge_legacy_backends(path) == 3
     text = path.read_text()
-    assert "123456" not in text and "inst_" not in text
-    assert "[lcl]\n_module = lcl\nlogin = env-user\npassword = env-pw\n" == text, "the .env LCL section stays"
+    assert "123456" not in text and "inst_" not in text and "env-pw" not in text
+    assert text == "[someone_elses]\n_module = x\n", "a section this service did not name stays"
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_the_purge_is_a_no_op_once_done(tmp_path):
     path = tmp_path / "backends"
-    path.write_text("[lcl]\n_module = lcl\n")
+    path.write_text("[someone_elses]\n_module = x\n")
     before = path.stat().st_mtime_ns
     assert woob_config.purge_legacy_backends(path) == 0
     assert path.stat().st_mtime_ns == before
+
+
+def lcl_like():
+    return BackendConfig(
+        ValueBackendPassword("login", label="Identifiant", masked=False),
+        ValueBackendPassword("password", label="Code personnel"),
+    )
+
+
+def test_the_env_lcl_backend_is_built_in_memory(monkeypatch, tmp_path):
+    import sync_lcl
+
+    # Where the old code wrote it: ~/.config/woob/backends.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    backends = tmp_path / ".config" / "woob" / "backends"
+    monkeypatch.setenv("LCL_LOGIN", "env-user")
+    monkeypatch.setenv("LCL_PASSWORD", SECRET)
+    w = RecordingWoob(lcl_like())
+    sync_lcl.load_lcl_backend(w)
+    assert w.calls[0]["module"] == "lcl" and w.calls[0]["name"] == "lcl"
+    assert w.calls[0]["params"]["password"] == SECRET
+    assert not backends.exists()
+    assert not hasattr(sync_lcl, "_configure_woob")
 
 
 def test_no_backends_file_is_fine(tmp_path):
