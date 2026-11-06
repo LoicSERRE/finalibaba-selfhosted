@@ -501,10 +501,21 @@ describe("dated cap tables (step 5)", () => {
     expect(h.holding.create).not.toHaveBeenCalled();
   });
 
-  it("takes back a former associate's own row when they are named again", async () => {
+  it("takes back a former associate's own row when they are named again, as a new invitation", async () => {
     await actions.saveCapTable(COMPANY, { totalParts: 1000, associates: [{ name: "Marie", parts: 1000, username: "marie" }] });
     expect(h.associate.create).not.toHaveBeenCalled();
-    expect(h.associate.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: A1 } }));
+    // Their row - but not their old acceptance: they are asked again.
+    expect(h.associate.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: A1 }, data: expect.objectContaining({ userId: "user-b", linkAcceptedAt: null }) }),
+    );
+  });
+
+  it("keeps the manager's own acceptance when they come back themselves", async () => {
+    h.associate.findMany.mockResolvedValue([{ id: A1, userId: MANAGER, linkAcceptedAt: new Date("2026-01-01") }]);
+    await actions.saveCapTable(COMPANY, { totalParts: 1000, associates: [{ name: "Camille", parts: 1000, self: true }] });
+    expect(h.associate.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: A1 }, data: expect.objectContaining({ linkAcceptedAt: new Date("2026-01-01") }) }),
+    );
   });
 
   it("settles the versions after a save: today's total, the leavers, the associates no version names", async () => {
