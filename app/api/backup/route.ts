@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
 import { decryptBackup, isEncryptedBackup } from "@/lib/domain/backup-encryption";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { gunzipSync } from "node:zlib";
+import { restrictedRestoreInput } from "@/lib/domain/restore-input";
 import { buildConnectionString, refuseBackupRequest } from "@/lib/services/database-backup";
 
 const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
@@ -77,7 +79,9 @@ export async function POST(req: NextRequest) {
         // eslint-disable-next-line sonarjs/no-os-command-from-path
         "psql",
         [connStr, "-v", "ON_ERROR_STOP=1", "--single-transaction"],
-        { env: { ...process.env, PGPASSWORD: password } }
+        // Only what psql needs, never the app's own secrets: whatever the
+        // input, nothing it could start inherits them.
+        { env: { PATH: process.env.PATH, NODE_ENV: process.env.NODE_ENV, PGPASSWORD: password } }
       );
 
       let stderr = "";
@@ -88,7 +92,9 @@ export async function POST(req: NextRequest) {
         else reject(new Error(stderr || `psql exited with code ${code}`));
       });
 
-      psql.stdin.write(buffer);
+      // Restricted mode: the file's backslash commands are refused (see
+      // lib/domain/restore-input.ts), under a key made for this restore only.
+      psql.stdin.write(restrictedRestoreInput(buffer, randomBytes(16).toString("hex")));
       psql.stdin.end();
     });
   } catch (err) {
