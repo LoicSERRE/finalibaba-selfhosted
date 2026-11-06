@@ -6,6 +6,7 @@
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE.md)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
+[![Finalibaba on StartupScores](https://startupscores.com/badge/finalibaba.svg?style=shield&v=combo&theme=dark)](https://startupscores.com/open-source/finalibaba)
 
 ---
 
