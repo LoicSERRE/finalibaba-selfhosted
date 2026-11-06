@@ -9,10 +9,24 @@ import { generateTotpSecret, generateBackupCodes, hashBackupCodes } from "@/lib/
 // hoisted above imports by vitest) - every pre-existing test in this file
 // gets the safe "2FA not enabled" default via the beforeEach reset below,
 // only the new describe block overrides it per-case.
-const { findUniqueMock, updateMock } = vi.hoisted(() => ({
+const { findUniqueMock, updateMock, updateManyMock, userState } = vi.hoisted(() => ({
   findUniqueMock: vi.fn(),
   updateMock: vi.fn(),
+  updateManyMock: vi.fn(),
+  // What the conditional writes that spend a code (lib/services/two-factor.ts)
+  // see and change - so a replay or a race meets the state the first use left.
+  userState: { totpLastStep: null as number | null, totpBackupCodes: [] as string[] },
 }));
+
+type SpendWhere = { OR?: [unknown, { totpLastStep: { lt: number } }]; totpBackupCodes?: { equals: string[] } };
+function spend({ where, data }: { where: SpendWhere; data: Partial<typeof userState> }) {
+  if (where.OR && userState.totpLastStep !== null && userState.totpLastStep >= where.OR[1].totpLastStep.lt) return { count: 0 };
+  if (where.totpBackupCodes && JSON.stringify(where.totpBackupCodes.equals) !== JSON.stringify(userState.totpBackupCodes)) {
+    return { count: 0 };
+  }
+  Object.assign(userState, data);
+  return { count: 1 };
+}
 
 // As of v2.0 authorize() resolves a real User row (TOTP moved there from the
 // old UserSettings singleton), so the mock stands in for prisma.user.
@@ -25,6 +39,7 @@ vi.mock("@/lib/db/prisma", () => ({
     user: {
       findUnique: findUniqueMock,
       update: updateMock,
+      updateMany: updateManyMock,
     },
     // The rate limiter counts in a table since v2.10.6 so its counters survive
     // a restart. Backed by a plain Map here: these tests are about authorize()
@@ -96,6 +111,9 @@ beforeEach(() => {
   process.env.TRUSTED_PROXY_COUNT = "1";
   findUniqueMock.mockReset().mockResolvedValue({ ...OWNER_ROW });
   updateMock.mockReset().mockResolvedValue({});
+  userState.totpLastStep = null;
+  userState.totpBackupCodes = [];
+  updateManyMock.mockReset().mockImplementation(async (args) => spend(args));
 });
 
 describe("getClientIp", () => {
@@ -277,6 +295,7 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
     const secret = generateTotpSecret();
     const backupCodes = generateBackupCodes();
     const hashed = await hashBackupCodes(backupCodes);
+    userState.totpBackupCodes = hashed;
     findUniqueMock.mockResolvedValueOnce({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: hashed });
 
     const result = await provider.authorize(
@@ -285,10 +304,7 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
     );
 
     expect(result).toEqual({ id: "user-owner", name: "owner", role: "ADMIN" });
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "user-owner" },
-      data: { totpBackupCodes: hashed.filter((_, i) => i !== 0) },
-    });
+    expect(userState.totpBackupCodes).toEqual(hashed.filter((_, i) => i !== 0));
   });
 
   it("rejects an already-consumed backup code (not present in the stored array)", async () => {
@@ -306,6 +322,43 @@ describe("authOptions credentials provider - authorize() with 2FA", () => {
 
     expect(result).toBeNull();
     expect(updateMock).not.toHaveBeenCalled();
+    expect(updateManyMock).not.toHaveBeenCalled();
+  });
+
+  // RFC 6238 §5.2: a code is accepted once.
+  it("refuses a TOTP code a second time, even within its validity window", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    const token = await generateTotpToken({ secret });
+    findUniqueMock.mockResolvedValue({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    await expect(provider.authorize({ password: "correct-horse", totpCode: token }, reqWithIp(nextIp()))).resolves.not.toBeNull();
+    await expect(provider.authorize({ password: "correct-horse", totpCode: token }, reqWithIp(nextIp()))).resolves.toBeNull();
+  });
+
+  it("refuses an older code once a newer one was accepted", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    const now = Math.floor(Date.now() / 1000);
+    const older = await generateTotpToken({ secret, epoch: now - 30 });
+    userState.totpLastStep = Math.floor(now / 30);
+    findUniqueMock.mockResolvedValue({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+    await expect(provider.authorize({ password: "correct-horse", totpCode: older }, reqWithIp(nextIp()))).resolves.toBeNull();
+  });
+
+  it("lets only one of two logins racing with the same backup code through", async () => {
+    vi.stubEnv("AUTH_PASSWORD", "correct-horse");
+    const secret = generateTotpSecret();
+    const backupCodes = generateBackupCodes();
+    const hashed = await hashBackupCodes(backupCodes);
+    userState.totpBackupCodes = hashed;
+    // Both read the row before either spends the code.
+    findUniqueMock.mockResolvedValue({ ...OWNER_ROW, totpEnabled: true, totpSecret: secret, totpBackupCodes: hashed });
+    const results = await Promise.all([
+      provider.authorize({ password: "correct-horse", totpCode: backupCodes[3] }, reqWithIp(nextIp())),
+      provider.authorize({ password: "correct-horse", totpCode: backupCodes[3] }, reqWithIp(nextIp())),
+    ]);
+    expect(results.filter((r) => r !== null)).toHaveLength(1);
+    expect(userState.totpBackupCodes).toHaveLength(hashed.length - 1);
   });
 });
 
