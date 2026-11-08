@@ -75,8 +75,12 @@ export async function updateFinancialProfile(formData: FormData) {
 }
 
 export async function updateTaxSettings(formData: FormData) {
-  const rate = (field: string, fallback: number) =>
-    Math.min(1, Math.max(0, Number.parseFloat((formData.get(field) as string) || String(fallback * 100)) / 100));
+  // A ratio in [0, 1]; anything unreadable is the default rather than NaN,
+  // which would turn every latent tax figure into NaN.
+  const rate = (field: string, fallback: number) => {
+    const pct = Number.parseFloat((formData.get(field) as string) || String(fallback * 100));
+    return Number.isFinite(pct) ? Math.min(1, Math.max(0, pct / 100)) : fallback;
+  };
 
   // Validated against the known set rather than trusted: this drives which
   // wrappers and rates the UI offers, and an unrecognised value would silently

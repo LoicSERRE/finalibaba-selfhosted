@@ -65,6 +65,15 @@ describe("updateTaxSettings", () => {
     expect(upsertMock.mock.calls[0][0].update.country).toBe("FR");
   });
 
+  it("keeps the default for an unreadable rate instead of storing NaN", async () => {
+    await updateTaxSettings(form({ country: "FR", taxRatePea: "abc", taxRateCto: "250", taxRateCrypto: "-5" }));
+    const written = upsertMock.mock.calls[0][0].update;
+    expect(Number.isFinite(written.taxRatePea)).toBe(true);
+    expect(written.taxRatePea).toBeGreaterThan(0);
+    expect(written.taxRateCto).toBe(1); // clamped, as before
+    expect(written.taxRateCrypto).toBe(0);
+  });
+
   it("stores a real country code, and null for an unrecognised or blank one", async () => {
     await updateTaxSettings(form({ country: "GB" }));
     expect(upsertMock.mock.calls[0][0].update.country).toBe("GB");
