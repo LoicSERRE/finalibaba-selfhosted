@@ -119,6 +119,25 @@ def _iter_accounts(w, backend_name: str) -> list:
     return accounts
 
 
+def _declare_transient(backend, key: str) -> None:
+    """Give a backend a transient config field its login reads but its module
+    never declared.
+
+    `caels` (Crédit Agricole - Épargne Longue des Salariés, issue #182) logs in
+    through Amundi's browser, which reads `request_information` and `resume`,
+    yet declares only `captcha_response`. Without them the phone approval can
+    never be resumed: every "I've approved it" restarts the login, which stops
+    on "interactive session required" and reads as still pending. The browser
+    looks both keys up in this same config object at login time, so declaring
+    them here is enough. Must run before the browser is first created, which
+    reads `request_information` once in its constructor.
+    """
+    if key not in backend.config:
+        from woob.tools.value import ValueTransient
+
+        backend.config[key] = ValueTransient(key)
+
+
 def _mark_interactive(backend) -> None:
     """Tell Woob this is an interactive session by giving `request_information`
     a non-None value.
@@ -127,12 +146,30 @@ def _mark_interactive(backend) -> None:
     do NOT trigger a 2FA challenge" and raises NeedInteractiveFor2FA instead of
     driving the real one. A dict (it may carry PSD2 headers, empty is fine) is
     what flips it to "interactive, go ahead". The reference CLI sets exactly
-    this before every attempt (ReplApplication._do_and_retry). No-op for a
-    module without the field.
+    this before every attempt (ReplApplication._do_and_retry). Declared first
+    when the module forgot it (see _declare_transient); a browser that never
+    reads it ignores it.
     """
     key = "request_information"
-    if key in backend.config and backend.config[key].get() is None:
+    _declare_transient(backend, key)
+    if backend.config[key].get() is None:
         backend.config[key].set({})
+
+
+def _resume_approval(backend) -> None:
+    """Ask Woob to continue a pending phone approval rather than log in again.
+
+    Woob resumes it ONLY when the `resume` config key carries a value: do_login
+    calls the polling handler when it does, and otherwise falls straight through
+    to init_login and restarts the whole flow from scratch - a fresh captcha and
+    a fresh approval. That is why the approval never completed and the
+    connection stuck in "pending" (issue #51), and again for a module that
+    inherits the polling without declaring the key (issue #182). Mirrors the
+    reference CLI's DecoupledValidation branch (ReplApplication._do_and_retry),
+    which hardcodes this same key.
+    """
+    _declare_transient(backend, "resume")
+    backend.config["resume"].set(True)
 
 
 def _try_connect(w, backend_name: str) -> dict:
@@ -314,17 +351,8 @@ def complete_setup(institution_id: str, code: str | None = None) -> dict:
             backend.config[field_id].set(code)
     else:
         # An empty field list means a decoupled app validation is pending - the
-        # phone approval Amundi asks for after the captcha. Woob resumes it
-        # ONLY when the `resume` config key carries a value: do_login calls the
-        # polling handler when it does, and otherwise falls straight through to
-        # init_login and restarts the whole flow from scratch - a fresh captcha
-        # and a fresh approval. That is exactly why the approval never
-        # completed and the connection stuck in "pending" (issue #51): every
-        # "I've approved it" click re-ran init_login instead of finishing.
-        # Mirrors the reference CLI's DecoupledValidation branch
-        # (ReplApplication._do_and_retry), which hardcodes this same key.
-        if "resume" in backend.config:
-            backend.config["resume"].set(True)
+        # phone approval Amundi asks for after the captcha.
+        _resume_approval(backend)
 
     from woob.exceptions import AppValidationExpired
 
