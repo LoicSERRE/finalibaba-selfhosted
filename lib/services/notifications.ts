@@ -5,6 +5,7 @@ import * as webPush from "web-push";
 import { renderAlertEmailHtml } from "@/lib/services/email-template";
 import { prisma } from "@/lib/db/prisma";
 import { smtpHostAllowedFor } from "@/lib/services/smtp-relay-policy";
+import { instanceMailTransport, type SmtpTransport } from "@/lib/services/instance-mail";
 
 type AlertChannelSettings = {
   ntfyTopicUrl: string | null;
@@ -17,6 +18,9 @@ type AlertChannelSettings = {
   smtpPassword: string | null;
   smtpFrom: string | null;
   emailAlertsEnabled: boolean;
+  /** Through the instance's server instead of the smtp* fields. Optional so
+   *  a caller that never offers it need not say so. */
+  useInstanceMail?: boolean;
   webPushEnabled: boolean;
   // Whose devices to push to - VAPID keys themselves are instance-level as
   // of v2.0 and resolved inside sendWebPush.
@@ -161,6 +165,22 @@ export async function sendWebPush(userId: string, title: string, body: string): 
 }
 
 /**
+ * The SMTP server this user's alert email goes through, or null for none: the
+ * instance's server when they chose it, else their own - which must be
+ * complete, and somewhere the relay policy lets them reach.
+ */
+async function emailTransportFor(settings: AlertChannelSettings): Promise<SmtpTransport | null> {
+  if (settings.useInstanceMail) return instanceMailTransport();
+  const { smtpHost: host, smtpPort: port, smtpFrom: from } = settings;
+  if (!host || !port || !from) return null;
+  if (!(await smtpHostAllowedFor(settings.userId, host))) {
+    console.warn("Alert email not sent: a personal SMTP host must be a public one");
+    return null;
+  }
+  return { host, port, from, user: settings.smtpUser, password: decryptSecret(settings.smtpPassword) };
+}
+
+/**
  * Fans out to every channel that is both configured (non-blank) and enabled -
  * two separate gates, so someone with ntfy and email set up can still receive
  * through one. The toggles default to true, so an existing install keeps
@@ -173,26 +193,10 @@ export async function dispatchAlert(settings: AlertChannelSettings, title: strin
     jobs.push(sendNtfyMessage(settings.ntfyTopicUrl, title, body, decryptSecret(settings.ntfyAuthToken)));
   }
 
-  if (settings.alertEmailTo && settings.smtpHost && settings.smtpPort && settings.smtpFrom && settings.emailAlertsEnabled) {
-    // The instance's own relay is the admin's (lib/services/smtp-relay-policy.ts).
-    if (await smtpHostAllowedFor(settings.userId, settings.smtpHost)) {
-      jobs.push(
-        sendEmail(
-          {
-            host: settings.smtpHost,
-            port: settings.smtpPort,
-            user: settings.smtpUser,
-            password: decryptSecret(settings.smtpPassword),
-            from: settings.smtpFrom,
-            to: settings.alertEmailTo,
-          },
-          title,
-          body,
-          renderAlertEmailHtml(title, body)
-        )
-      );
-    } else {
-      console.warn("Alert email not sent: this SMTP host is the instance's own network, reserved to the admin");
+  if (settings.alertEmailTo && settings.emailAlertsEnabled) {
+    const transport = await emailTransportFor(settings);
+    if (transport) {
+      jobs.push(sendEmail({ ...transport, to: settings.alertEmailTo }, title, body, renderAlertEmailHtml(title, body)));
     }
   }
 

@@ -195,7 +195,7 @@ Add these DNS records at your registrar (`yourdomain.com` is a placeholder throu
 | TXT | `mail._domainkey.yourdomain.com` | the `p=...` value from the command above |
 | TXT | `_dmarc.yourdomain.com` | `v=DMARC1; p=none; rua=mailto:you@yourdomain.com` (monitoring only to start - tighten to `p=quarantine`/`p=reject` once you've confirmed mail actually arrives) |
 
-In Settings → Alertes, choose **Serveur mail auto-hébergé** from the Fournisseur dropdown (fills in `mail`/port `25`) and leave **Utilisateur SMTP**/**Mot de passe SMTP** blank - the `app` container relays through `mail` via the trusted Docker network, not credentials (`PERMIT_DOCKER` in `docker-compose.yml`). Set **Adresse d'expédition** to the address you created above.
+As an admin, in Settings → Notifications → **Serveur mail de l'instance**, click **Service mail de ce projet** (fills in `mail`/port `25`) and leave **Utilisateur SMTP**/**Mot de passe SMTP** blank - the `app` container relays through `mail` via the trusted Docker network, not credentials (`PERMIT_DOCKER` in `docker-compose.yml`). Set **Adresse d'expédition** to the address you created above. Each user, you included, then picks **Serveur mail de l'instance** as their Fournisseur and only enters the address their alerts go to.
 
 **Before relying on this**: residential ISPs very commonly block outbound port 25 (anti-spambot policy), and even where it's open, residential IP ranges sit on Spamhaus's PBL - Gmail/Outlook may spam-bin or drop mail from them regardless of correct DNS. Test first:
 

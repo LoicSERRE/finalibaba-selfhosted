@@ -1083,7 +1083,6 @@
       "emailTo": "Adresse email de notification",
       "emailPreset": "Fournisseur",
       "emailPresetCustom": "Personnalisé",
-      "emailPresetSelfhosted": "Serveur mail auto-hébergé (ce projet)",
       "smtpHost": "Serveur SMTP",
       "smtpPort": "Port SMTP",
       "smtpUser": "Utilisateur SMTP",
@@ -1091,9 +1090,23 @@
       "smtpPasswordPlaceholder": "Laisser vide pour ne pas changer",
       "smtpPasswordHint": "Pour Gmail ou Outlook, utilise un mot de passe d'application (pas ton mot de passe principal) : ils l'exigent pour l'accès SMTP tiers.",
       "smtpFrom": "Adresse d'expédition",
-      "smtpFromHint": "Pour Gmail ou Outlook, doit être la même adresse que l'utilisateur SMTP, sinon le message est rejeté ou modifié. Pour le serveur mail auto-hébergé, laisse utilisateur et mot de passe vides : la confiance passe par le réseau Docker interne, pas par des identifiants.",
+      "smtpFromHint": "Pour Gmail ou Outlook, doit être la même adresse que l'utilisateur SMTP, sinon le message est rejeté ou modifié.",
       "emailHint": "Laisse l'adresse ou le serveur SMTP vide pour désactiver les alertes par email.",
-      "instanceRelayAdminOnly": "Le serveur mail de l'instance est réservé à l'administrateur : pour recevoir tes alertes par e-mail, utilise ton propre fournisseur (Gmail, Outlook…)."
+      "emailPresetInstance": "Serveur mail de l'instance",
+      "instanceMailHint": "Configuré par l'administrateur : tu choisis seulement si tu reçois les alertes par email, et à quelle adresse."
+    },
+    "instanceMail": {
+      "title": "Serveur mail de l'instance",
+      "subtitle": "Proposé à tous les utilisateurs pour recevoir leurs alertes par email : ils choisissent seulement leur adresse, jamais le serveur.",
+      "projectServiceHint": "Avec le service mail de ce projet (profil Compose « mail ») : serveur « mail », port 25, sans utilisateur ni mot de passe.",
+      "useProjectService": "Service mail de ce projet",
+      "removeHint": "Laisse le serveur vide pour ne plus proposer d'envoi par l'instance : les utilisateurs qui l'avaient choisi ne recevront plus d'email jusqu'à ce qu'ils choisissent un autre fournisseur.",
+      "saved": "Serveur mail enregistré : il est proposé à tous les utilisateurs.",
+      "removed": "Aucun serveur mail complet (serveur, port et adresse d'expédition) : l'instance n'en propose pas.",
+      "errors": {
+        "saveFailed": "Impossible d'enregistrer le serveur mail. Réessaie.",
+        "unexpected": "Une erreur inattendue s'est produite. Réessaie."
+      }
     },
     "webPush": {
       "title": "Notifications push",

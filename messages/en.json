@@ -1083,7 +1083,6 @@
       "emailTo": "Notification email address",
       "emailPreset": "Provider",
       "emailPresetCustom": "Custom",
-      "emailPresetSelfhosted": "Self-hosted mail server (this project)",
       "smtpHost": "SMTP host",
       "smtpPort": "SMTP port",
       "smtpUser": "SMTP user",
@@ -1091,9 +1090,23 @@
       "smtpPasswordPlaceholder": "Leave blank to keep unchanged",
       "smtpPasswordHint": "For Gmail or Outlook, use an app password (not your main account password) - they require one for third-party SMTP access.",
       "smtpFrom": "From address",
-      "smtpFromHint": "For Gmail or Outlook, must match the SMTP user address, or the message gets rejected or rewritten. For the self-hosted mail server, leave user and password blank - trust comes from the internal Docker network, not credentials.",
+      "smtpFromHint": "For Gmail or Outlook, must match the SMTP user address, or the message gets rejected or rewritten.",
       "emailHint": "Leave the address or SMTP host blank to disable email alerts.",
-      "instanceRelayAdminOnly": "The instance's mail server is reserved to the admin: to get your alerts by email, use a provider of your own (Gmail, Outlook…)."
+      "emailPresetInstance": "The instance's mail server",
+      "instanceMailHint": "Set up by the admin: you only choose whether you get alerts by email, and at which address."
+    },
+    "instanceMail": {
+      "title": "The instance's mail server",
+      "subtitle": "Offered to every user for their email alerts: they only choose their address, never the server.",
+      "projectServiceHint": "With this project's mail service (the “mail” Compose profile): server “mail”, port 25, no user or password.",
+      "useProjectService": "This project's mail service",
+      "removeHint": "Leave the server blank to stop offering the instance's server: users who chose it get no email until they pick another provider.",
+      "saved": "Mail server saved: it is offered to every user.",
+      "removed": "No complete mail server (server, port and sender address): the instance offers none.",
+      "errors": {
+        "saveFailed": "Could not save the mail server. Try again.",
+        "unexpected": "Something unexpected went wrong. Try again."
+      }
     },
     "webPush": {
       "title": "Push notifications",

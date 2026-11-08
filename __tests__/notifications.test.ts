@@ -27,6 +27,11 @@ const { findManyMock, deleteManyMock, sendNotificationMock, setVapidDetailsMock,
 // here it says yes unless a test says otherwise.
 const relay = vi.hoisted(() => ({ allowed: true }));
 vi.mock("@/lib/services/smtp-relay-policy", () => ({ smtpHostAllowedFor: async () => relay.allowed }));
+// The instance's server, as an admin set it up - or null when none is.
+const instanceServer = vi.hoisted(() => ({
+  transport: null as null | { host: string; port: number; user: string | null; password: string | null; from: string },
+}));
+vi.mock("@/lib/services/instance-mail", () => ({ instanceMailTransport: async () => instanceServer.transport }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
@@ -57,6 +62,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   sendMailMock.mockReset();
   relay.allowed = true;
+  instanceServer.transport = null;
   createTransportMock.mockClear();
   findManyMock.mockReset();
   deleteManyMock.mockReset();
@@ -298,6 +304,36 @@ describe("dispatchAlert", () => {
     );
     expect(createTransportMock).not.toHaveBeenCalled();
     expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  const throughInstance = {
+    ntfyTopicUrl: null,
+    ntfyAuthToken: null,
+    ntfyEnabled: true,
+    alertEmailTo: "member@example.com",
+    // What the user once typed for themselves: ignored once they chose the instance's server.
+    smtpHost: "10.0.0.5",
+    smtpPort: 2525,
+    smtpUser: null,
+    smtpPassword: null,
+    smtpFrom: "spoof@example.com",
+    emailAlertsEnabled: true,
+    useInstanceMail: true,
+    webPushEnabled: false,
+    userId: "user-member",
+  };
+
+  it("sends a user who chose the instance's server through the admin's settings, to the user's own address", async () => {
+    relay.allowed = false; // their own host would be refused: it is not the one used
+    instanceServer.transport = { host: "mail", port: 25, user: null, password: null, from: "alerts@instance.example" };
+    await dispatchAlert(throughInstance, "title", "body");
+    expect(createTransportMock.mock.calls[0][0]).toMatchObject({ host: "mail", port: 25 });
+    expect(sendMailMock.mock.calls[0][0]).toMatchObject({ from: "alerts@instance.example", to: "member@example.com" });
+  });
+
+  it("sends nothing through the instance once an admin removed its server", async () => {
+    await dispatchAlert(throughInstance, "title", "body");
+    expect(createTransportMock).not.toHaveBeenCalled();
   });
 
   it("skips ntfy when configured but disabled via ntfyEnabled: false", async () => {
