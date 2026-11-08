@@ -53,6 +53,10 @@ updates:
     # ranges, so leave it for a deliberate manual bump instead.
     ignore:
       - dependency-name: "pytr"
+      # pytest 9.2 needs packaging>=24, woob 3.7 pins packaging~=23. Drop once a
+      # woob release allows it (master already does: https://gitlab.com/woob/woob/-/blob/master/pyproject.toml).
+      - dependency-name: "pytest"
+        versions: [">=9.2"]
 
   # Both Dockerfiles - base image tags (node:22-alpine, python:3.12-slim)
   - package-ecosystem: "docker"
