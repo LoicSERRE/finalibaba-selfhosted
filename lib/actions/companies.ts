@@ -23,6 +23,7 @@ import {
   CAP_TABLE_ORIGIN,
 } from "@/lib/domain/company";
 import { parseChange, settleVersions, targetVersionId } from "@/lib/services/cap-table-versions";
+import { moveCompanyCategories } from "@/lib/services/company-handover";
 import { CompanyKind, CompanyTaxRegime } from "@/app/generated/prisma/enums";
 
 /**
@@ -468,7 +469,8 @@ export async function setInstitutionCompany(
  * bank connections move with it, in one transaction - the sync attributes
  * from the institution's owner, so it follows on its own. The previous
  * manager's alert rules and goals on those accounts go: they would keep
- * pointing at accounts that are no longer theirs.
+ * pointing at accounts that are no longer theirs. The categories the
+ * company's rows use become the new manager's (moveCompanyCategories).
  */
 export async function transferCompanyManagement(
   companyId: string,
@@ -490,13 +492,15 @@ export async function transferCompanyManagement(
   const accountIds = await companyAccountIds(companyId);
 
   try {
-    await prisma.$transaction([
-      prisma.company.update({ where: { id: companyId }, data: { managerUserId: nextUserId } }),
-      prisma.institution.updateMany({ where: { companyId }, data: { userId: nextUserId } }),
-      prisma.account.updateMany({ where: { companyId }, data: { userId: nextUserId } }),
-      prisma.alertRule.deleteMany({ where: { userId: viewer.id, accountId: { in: accountIds } } }),
-      prisma.goal.deleteMany({ where: { userId: viewer.id, accountId: { in: accountIds } } }),
-    ]);
+    await prisma.$transaction(async (tx) => {
+      await tx.company.update({ where: { id: companyId }, data: { managerUserId: nextUserId } });
+      await tx.institution.updateMany({ where: { companyId }, data: { userId: nextUserId } });
+      await tx.account.updateMany({ where: { companyId }, data: { userId: nextUserId } });
+      await tx.alertRule.deleteMany({ where: { userId: viewer.id, accountId: { in: accountIds } } });
+      await tx.goal.deleteMany({ where: { userId: viewer.id, accountId: { in: accountIds } } });
+      // Their transactions keep their categories, as the new manager's own.
+      await moveCompanyCategories(tx, accountIds, viewer.id, nextUserId);
+    });
   } catch (e) {
     // Institution names are unique per user: the new manager already has a
     // connection by the same name. Nothing moved (one transaction).
