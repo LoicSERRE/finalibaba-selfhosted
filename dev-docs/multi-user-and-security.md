@@ -155,6 +155,43 @@ Ran as its own phase after the multi-user build, per `ROADMAP.md`'s sequencing. 
 
 7. **Not verified under concurrency.** All isolation testing was sequential. Two simultaneous requests racing on co-ownership removal vs. an alert-rule write, or on invitation redemption, were not exercised. `acceptInvitation` consumes its token inside the same transaction as the user creation specifically to survive a double-open, which is the one race that was reasoned about.
 
+#### Systematic security audit (v2.23)
+
+`ROADMAP.md` scheduled it before companies, because companies add a read path between users. Three passes: the first before any company code (fixes in #163), the second on what companies would build on (#164), the third after all five company steps and before the tag (#175 to #178, then #179 to #181). Each finding was reproduced on a throwaway instance before it was fixed, and each fix has a regression test that fails when the fix is reverted.
+
+**Method.** An inventory of everything callable from outside, not a read of the code that looked risky: every exported Server Action (142 at the first pass, 158 at the tag) with the guard it calls, every `app/api/*` route (20) with how it authenticates, every page with how it scopes its reads. Then, for each, who may call it and on which rows, and a cross-user attempt: user B on user A's ids, a read-only grantee on the grantor's data, an anonymous caller through every auth-exempt route.
+
+**The two classes worth remembering**, because each was more than one bug:
+
+- **Server Action arguments are not their TypeScript types.** An id parameter could arrive as a Prisma filter object (`{ not: "x" }`), pass an ownership check written for a string, and widen the mutation that followed: one action deleted every co-ownership of the instance this way. Arguments are now checked at runtime before any query (`lib/domain/action-input.ts`), in the central guards and in each action that takes an id.
+- **Anything a page renders reaches the browser.** Full `Institution` and `UserSettings` rows were passed to client components, so their `enc:v1:` ciphertexts were in the HTML - for a read-only grantee, the grantor's. Combined with `encryptSecret` passing through a value that already looked encrypted, and an alert channel that decrypts its own token to send it, a grantee could have the server decrypt the grantor's bank password and post it to a URL of theirs. Closed at each link: rows are selected column by column before they cross the boundary, a ciphertext is refused as form input, and the encryption of channel secrets only ever runs on plaintext.
+
+**Fixed:**
+
+| Finding | Severity | Fix |
+|---|---|---|
+| Prisma filter objects through action arguments (the class above) | High | #163 |
+| Ciphertexts sent to the browser, and a replayed ciphertext adopted (the chain above) | High | #163 |
+| Demo mode's read-only rule not applied on auth-exempt routes | High | #163 |
+| Anonymous Server Actions through `/shared` (and `/invite` without auth): with `AUTH_ENABLED` off and only `/shared/` published, as the docs describe, anyone could run the owner's actions | High | #177: the public token pages take no POST |
+| An account attached to another user's institution; bootstrap claimable on an instance that already had data; an invitation redeemable twice concurrently; the realtime status readable without a session; a session without a user id resolved to the owner; 2FA re-armable without the current code; a co-owner able to delete the owner's account | Medium to low | #163 |
+| The sync container held the session-signing secret and ran unverified Woob modules; the sync API had no authentication | Medium | #163 (`gpgv`), #164 (HKDF-derived bearer on every route) |
+| Restoring a crafted backup could run shell commands through psql meta-commands | Medium (admin only) | #178: restricted mode, minimal environment |
+| Co-ownership and grants imposed without consent; a returning associate re-added without being asked again | Low | #164, #175 |
+| The 2FA policy enforced by the layout only, not by actions and API routes | Low | #164 |
+| A TOTP code accepted twice in its window, a backup code twice concurrently | Low to medium | #176: `User.totpLastStep`, conditional writes |
+| A member's alert email could go through the instance's `mail` relay, signed with its domain, or reach any host on its network | Low to medium | #181: the instance's server is an admin setting users opt into |
+| `.env` LCL credentials written in clear to the Woob config on the persistent volume | Low | #180 |
+| Unanchored auth-exempt prefixes, an audit-log IP taken from the first `X-Forwarded-For`, usernames without Unicode normalisation, no attempt limit on code-checking actions, non-`Secure` cookies behind an HTTPS proxy with an `http://` `NEXTAUTH_URL` (now a documented setting) | Low, hardening | #163 |
+| Transaction import and tax-rate inputs trusted from the form | Robustness, own data only | #179 |
+
+**Accepted, with reasons:**
+
+1. **A Web Push subscription is keyed by its endpoint**, so subscribing with someone else's endpoint moves it to you. The endpoint is a secret URL issued by the push service to that browser; anyone holding it can already send it pushes.
+2. **ntfy and SMTP destinations are user-chosen**, so the server sends requests where a user says. A member's own SMTP host must be public (`lib/services/smtp-relay-policy.ts`). An ntfy URL can be anything, internal included, but it only ever receives a JSON `POST /`: the HTTP services on the instance's network are the app and the sync service, which authenticate every route, and the instance's own ntfy, which is the intended target. What remains is a blind request whenever one of their alerts fires; closing it means an allow-list of providers, which self-hosted ntfy servers make impractical.
+3. **Login lockout without a declared proxy.** With `TRUSTED_PROXY_COUNT=0` behind a proxy, every client shares one address, so five wrong passwords from anyone lock that username for 15 minutes. Setting `TRUSTED_PROXY_COUNT` (documented in `.env.example`) keys the limit by the real client.
+4. **The GoCardless callback has no state nonce** - carried over from the post-v2.0 audit, same reasoning: attribution comes from the institution's owner, never the session.
+
 ### Encryption at rest, and what it does not cover (v2.10.6)
 
 Prompted by a direct question before inviting real people onto a real instance:

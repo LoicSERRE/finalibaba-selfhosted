@@ -1,6 +1,6 @@
 # Roadmap - Finalibaba Self-Hosted
 
-Current release: **v2.22.0**
+Current release: **v2.23.0**
 
 [SemVer](https://semver.org): `vX.Y` adds features, `vX.Y.Z` fixes. v2.0 was the one breaking change (multi-user).
 
@@ -14,9 +14,7 @@ Before tagging a `vX.Y`, run the release-boundary health audit in `CLAUDE.md`.
 
 Scheduled, in this order.
 
-1. **Defensive security audit, systematic.** Not an impression: an inventory of everything callable from outside (every Server Action, every `app/api/*` route, every page that reads data), with for each one who may call it and on which rows, the guard that enforces it, and a cross-user test (user B tries it on user A's data and must fail). Priority on the class of bug already met once, one user reaching another's data through an id or an invitation. Findings fixed in the same pass; the matrix and the result recorded in `dev-docs/multi-user-and-security.md`, so the next feature is checked against it rather than from scratch. Comes before companies because they add a read path between users.
-2. **Companies, SCI first** ([discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50)). Design in `dev-docs/companies.md`: a company is never a user, its accounts belong to its manager and carry a `companyId`, associates (users or bare names) hold parts, and everyone's net worth counts their share of its net asset value. Five steps, each shippable: (1) company, cap table and share in every net worth; (2) associates' current accounts; (3) démembrement by the art. 669 scale, and an optional discount; (4) IR/IS regime used for latent tax; (5) dated holdings for cessions and donations.
-3. **Later - Currencies, what step 2 left.** v2.18 and v2.19 shipped both steps of `dev-docs/currencies.md`: accounts in any of twelve currencies, and a per-instance base (EUR, USD, GBP or CHF) settled at the first boot. Left, each worth doing only when someone asks: Woob investment holdings in another currency (prices are stored as reported); splits and "mark as income" in a foreign account's own currency; number formatting that follows the UI language (`1,234.56 $` rather than `1 234,56 $US`); and converting an existing instance to another base, which means re-pricing every `*Cents` column of every model at historical rates.
+1. **Later - Currencies, what step 2 left.** v2.18 and v2.19 shipped both steps of `dev-docs/currencies.md`: accounts in any of twelve currencies, and a per-instance base (EUR, USD, GBP or CHF) settled at the first boot. Left, each worth doing only when someone asks: Woob investment holdings in another currency (prices are stored as reported); splits and "mark as income" in a foreign account's own currency; number formatting that follows the UI language (`1,234.56 $` rather than `1 234,56 $US`); and converting an existing instance to another base, which means re-pricing every `*Cents` column of every model at historical rates.
 
 ## Next
 
@@ -36,6 +34,16 @@ Demand-driven, not scheduled. Each needs a real user asking, or a materially big
 - **Study what the remaining deferred cleanups would actually buy.** Each was skipped for a stated reason, and the reasons are worth re-testing rather than inheriting: mocking Prisma across `lib/actions/*` (23 files) to lift coverage, driving the lizard warning count down, and testing the thin wrappers. The common objection is that each optimises a metric rather than the code. What is missing is a measurement of the other side: what maintainability, speed or clarity would genuinely improve if they were done. (The harness objection that covered two more of these was measured in v2.10.5 and did not survive.)
 
 ---
+
+## v2.23.0 - Companies, and a security audit before them
+
+- **Companies, SCI first** ([discussion #50](https://github.com/LoicSERRE/finalibaba-selfhosted/discussions/50)), all five steps of `dev-docs/companies.md`. A company has its own accounts, buildings and loans, a manager, and associates (users or plain names) who hold parts; everyone's net worth counts their share of its net asset value, never the company at 100 % and never twice. Associates' current accounts (an asset for them, a debt for the company), usufruct and bare ownership (art. 669) with an optional discount, the IS regime (latent corporate tax on the buildings' gain over their book value), dated cap tables (creation, sale, gift, capital change, correction, each from its date), the hand-over of management, and companies in the personal data export.
+- **Shares are invitations**: a co-ownership, a portfolio grant or a company link now waits for the invited user to accept it, and the dashboard says when some are waiting. Shares that already existed stay active.
+- **The instance's mail server** is set once by an admin (Settings → Notifications) and offered to every user, who only chooses their address. Everyone who used the `mail` preset is moved to it.
+- **Trade Republic**: the v2 web login, approved in the app or with an authenticator code; live prices through the real-time listener; pytr's shared subscription state fixed (a batch sync beside the listener could file one instrument's price under another). The sync image no longer carries Playwright or Chromium (2.72 GB to 1.05 GB).
+- A property or a vehicle counts in the history from the day it is created, so one bought with a loan no longer draws the curve below zero.
+- **Security audit**, three passes, recorded in `dev-docs/multi-user-and-security.md`: four high findings fixed (action arguments as Prisma filters, ciphertexts reaching the browser, demo mode's read-only rule, anonymous Server Actions through the public pages), the sync service authenticated, the 2FA policy enforced on the server, single-use TOTP codes, psql's restricted mode for restores; four low risks accepted with reasons.
+- **Pre-tag audit**: every scanner at zero, SonarQube 26.11 cleared (10 to 0, mostly new rules), lizard held at 23 / 57, JS coverage 84.96%, Python 72%. The recurring pattern is the auth-exempt routes, met a third time: an exemption is granted to a URL, and Server Actions are not addressed by one. Details in `dev-docs/release-audit.md`.
 
 ## v2.22.0 - Your accounts, the way you classify them
 
