@@ -121,6 +121,26 @@ _MODULE_GAVE_UP_MESSAGE = (
 )
 
 
+# The same thing, less politely: a module that reaches for a page it did not
+# land on. `self.page` is None when the bank redirected somewhere the module has
+# no URL for, so its next call fails with "'NoneType' object has no attribute"
+# (issue #183: CIC Épargne Salariale moved to another domain). Only when the
+# error is raised in a module's own code - the same exception from this
+# project's code is a bug of ours, and keeps its traceback.
+_MODULE_TRIPPED = (AttributeError, KeyError, IndexError, TypeError)
+
+
+def _raised_in_a_module(exc: BaseException) -> bool:
+    """Whether the innermost frame of the traceback is a Woob module's file
+    (downloaded under `woob_modules/`), not Woob's core or this project."""
+    tb = exc.__traceback__
+    innermost = None
+    while tb is not None:
+        innermost = tb.tb_frame.f_code.co_filename
+        tb = tb.tb_next
+    return innermost is not None and "/woob_modules/" in innermost.replace("\\", "/")
+
+
 def classify(exc: BaseException) -> tuple[str, str] | None:
     """Map a login failure onto (SyncLog status, user-facing message).
 
@@ -134,7 +154,7 @@ def classify(exc: BaseException) -> tuple[str, str] | None:
             # notice on your account"), so it is appended rather than replaced.
             return status, f"{message} {detail}" if detail else message
 
-    if isinstance(exc, _MODULE_GAVE_UP):
+    if isinstance(exc, _MODULE_GAVE_UP) or (isinstance(exc, _MODULE_TRIPPED) and _raised_in_a_module(exc)):
         detail = str(exc)[:200].strip()
         return "error", f"{_MODULE_GAVE_UP_MESSAGE} {detail}" if detail else _MODULE_GAVE_UP_MESSAGE
 
