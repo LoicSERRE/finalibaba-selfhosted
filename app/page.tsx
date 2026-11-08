@@ -17,6 +17,8 @@ import { FirstRunChecklist } from "@/components/dashboard/first-run-checklist";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { FIRST_RUN_COOKIE, checklistVariant, firstRunSteps } from "@/lib/domain/first-run";
 import { loadFirstRunFacts } from "@/lib/services/first-run";
+import { countPendingInvitations } from "@/lib/services/pending-invitations";
+import { PendingInvitationsBanner } from "@/components/dashboard/pending-invitations-banner";
 
 export default async function DashboardPage() {
   // Every query on this page is scoped to the accounts this viewer may see
@@ -81,6 +83,9 @@ export default async function DashboardPage() {
   const scopedCompany = companyId
     ? await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
     : null;
+  // The viewer's own invitations, on their own portfolio only - not over a
+  // company's or someone else's figures, which are not theirs to answer for.
+  const invitations = readOnly || companyId ? null : await countPendingInvitations(viewer.id);
 
   return (
     <>
@@ -88,6 +93,11 @@ export default async function DashboardPage() {
       {scopedCompany && (
         <div className="max-w-4xl mx-auto mb-6">
           <ViewingCompanyBanner name={scopedCompany.name} readOnly={readOnly} />
+        </div>
+      )}
+      {invitations && invitations.shares + invitations.companies > 0 && (
+        <div className="max-w-4xl mx-auto mb-6">
+          <PendingInvitationsBanner shares={invitations.shares} companies={invitations.companies} />
         </div>
       )}
       <DashboardView

@@ -171,6 +171,11 @@
           "description": "Un montant à atteindre, pour voir votre progression."
         }
       }
+    },
+    "pendingInvitations": {
+      "summary": "{count, plural, one {Une invitation t'attend} other {# invitations t'attendent}}",
+      "shares": "{count, plural, one {Voir le partage} other {Voir les # partages}}",
+      "companies": "{count, plural, one {Voir la société} other {Voir les # sociétés}}"
     }
   },
   "accounts": {
