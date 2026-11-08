@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { encryptSecret, isEncrypted } from "@/lib/domain/crypto-at-rest";
 import { prisma } from "@/lib/db/prisma";
-import { getViewer } from "@/lib/auth-context";
+import { getViewer, requireAdmin } from "@/lib/auth-context";
 import { parseCents } from "@/lib/utils/format";
+import { actionError, actionOk, type ActionResult } from "@/lib/domain/action-result";
+import { updateInstanceMail } from "@/lib/services/instance-mail";
 
 /**
  * A secret typed into a form, or null for "leave unchanged".
@@ -49,21 +51,22 @@ export async function updateAlertChannels(formData: FormData) {
   // syncFailureAlertsEnabled in updateAlertTriggers below.
   const ntfyEnabled = formData.get("ntfyEnabled") === "on";
   const emailAlertsEnabled = formData.get("emailAlertsEnabled") === "on";
+  // Through the instance's server, the form sends no SMTP fields: the user's
+  // own ones are kept as they were, for whenever they switch back.
+  const useInstanceMail = formData.get("useInstanceMail") === "on";
 
   // Both secrets: blank means "leave unchanged" (the field never pre-fills the
   // stored value), and only a genuine new plaintext is encrypted and written.
   const ntfyAuthToken = encryptSecret(secretFormInput(formData.get("ntfyAuthToken")));
-  const smtpPassword = encryptSecret(secretFormInput(formData.get("smtpPassword")));
+  const smtpPassword = useInstanceMail ? null : encryptSecret(secretFormInput(formData.get("smtpPassword")));
 
   const data = {
     ntfyTopicUrl,
     ntfyEnabled,
     alertEmailTo,
-    smtpHost,
-    smtpPort,
-    smtpUser,
-    smtpFrom,
     emailAlertsEnabled,
+    useInstanceMail,
+    ...(useInstanceMail ? {} : { smtpHost, smtpPort, smtpUser, smtpFrom }),
   };
 
   const viewer = await getViewer();
@@ -78,6 +81,33 @@ export async function updateAlertChannels(formData: FormData) {
   });
 
   revalidatePath("/settings");
+}
+
+/**
+ * The instance's mail server, which every user may then choose for their
+ * alert email (lib/services/instance-mail.ts). Admin only: it is the one way
+ * a member's mail reaches the instance's own network. A blank host removes it.
+ */
+export async function setInstanceMail(formData: FormData): Promise<ActionResult<{ configured: boolean }, "save_failed">> {
+  await requireAdmin();
+  const str = (name: string) => ((formData.get(name) as string) || "").trim() || null;
+  const host = str("smtpHost");
+  const parsedPort = Number.parseInt(str("smtpPort") ?? "", 10);
+  const port = parsedPort >= 1 && parsedPort <= 65535 ? parsedPort : null;
+  const from = str("smtpFrom");
+  try {
+    await updateInstanceMail({
+      host,
+      port,
+      user: str("smtpUser"),
+      password: encryptSecret(secretFormInput(formData.get("smtpPassword"))),
+      from,
+    });
+  } catch (error) {
+    console.error("Could not save the instance's mail server:", error);
+    return actionError("save_failed");
+  }
+  return actionOk({ configured: Boolean(host && port && from) });
 }
 
 export async function updateAlertTriggers(formData: FormData) {

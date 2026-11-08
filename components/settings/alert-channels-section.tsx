@@ -26,26 +26,22 @@ function generateNtfyTopic(): string {
 const EMAIL_PRESETS: Record<string, { host: string; port: string }> = {
   gmail: { host: "smtp.gmail.com", port: "587" },
   outlook: { host: "smtp.office365.com", port: "587" },
-  // Points at this project's own optional `mail` service (README's
-  // "Self-hosted alerts" section, docker-mailserver behind the `mail`
-  // Compose profile) - the Docker service name doubles as its hostname on
-  // the internal network, same as `sync:8000` for the sync service
-  // (docker-compose.yml's SYNC_SERVICE_URL). Port 25, not 587 - confirmed
-  // empirically that docker-mailserver's SMTP_ONLY mode disables SASL/
-  // Dovecot entirely, so authenticated submission on 587 doesn't work at
-  // all. Port 25 relies on trusted-network relay instead (PERMIT_DOCKER in
-  // docker-compose.yml, no smtpUser/smtpPassword needed) - same "same
-  // Docker network = trusted, no credentials" model this project already
-  // uses for app<->sync.
-  selfhosted: { host: "mail", port: "25" },
 };
+
+// Not a preset that fills the fields: the instance's server is the admin's
+// (components/settings/instance-mail-section.tsx), and choosing it sends no
+// SMTP fields at all.
+const INSTANCE = "instance";
 
 const inputClass =
   "w-full bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30";
 
 export function AlertChannelsSection({
   settings,
+  instanceMailAvailable,
 }: Readonly<{
+  /** Whether an admin set up the instance's mail server (lib/services/instance-mail.ts). */
+  instanceMailAvailable: boolean;
   settings: {
     ntfyTopicUrl: string | null;
     // Never the secret itself, only whether one is stored - the ciphertext must
@@ -58,6 +54,7 @@ export function AlertChannelsSection({
     smtpUser: string | null;
     smtpFrom: string | null;
     emailAlertsEnabled: boolean;
+    useInstanceMail: boolean;
   };
 }>) {
   const t = useTranslations("settings.alertChannels");
@@ -67,7 +64,8 @@ export function AlertChannelsSection({
   const [ntfyEnabled, setNtfyEnabled] = useState(settings.ntfyEnabled);
   const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(settings.emailAlertsEnabled);
 
-  const [emailPreset, setEmailPreset] = useState("custom");
+  const [emailPreset, setEmailPreset] = useState(settings.useInstanceMail && instanceMailAvailable ? INSTANCE : "custom");
+  const throughInstance = emailPreset === INSTANCE;
   const [smtpHost, setSmtpHost] = useState(settings.smtpHost ?? "");
   const [smtpPort, setSmtpPort] = useState(settings.smtpPort?.toString() ?? "");
 
@@ -207,13 +205,21 @@ export function AlertChannelsSection({
               onChange={(e) => handlePresetChange(e.target.value)}
               className={inputClass}
             >
+              {instanceMailAvailable && <option value={INSTANCE}>{t("emailPresetInstance")}</option>}
               <option value="custom">{t("emailPresetCustom")}</option>
               <option value="gmail">Gmail</option>
               <option value="outlook">Outlook / Office 365</option>
-              <option value="selfhosted">{t("emailPresetSelfhosted")}</option>
             </select>
+            {throughInstance && (
+              <>
+                <input type="hidden" name="useInstanceMail" value="on" />
+                <p className="text-xs text-[var(--muted)]">{t("instanceMailHint")}</p>
+              </>
+            )}
           </div>
 
+          {!throughInstance && (
+          <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label htmlFor="smtpHost" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
@@ -292,6 +298,8 @@ export function AlertChannelsSection({
               className={inputClass}
             />
           </div>
+          </>
+          )}
           <p className="text-xs text-[var(--muted)]">{t("emailHint")}</p>
           </div>
         </div>

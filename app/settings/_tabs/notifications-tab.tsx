@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/db/prisma";
 import { baseAccountIds } from "@/lib/auth-context";
 import { AlertChannelsSection } from "@/components/settings/alert-channels-section";
+import { InstanceMailSection } from "@/components/settings/instance-mail-section";
 import { WebPushSection } from "@/components/settings/web-push-section";
 import { AlertTriggersSection } from "@/components/settings/alert-triggers-section";
 import { AlertRulesSection } from "@/components/settings/alert-rules-section";
 import { getUserSettings } from "@/lib/actions/user-settings";
 import { getPushStatus } from "@/lib/actions/push";
 import { getAlertRules } from "@/lib/actions/alert-rules";
+import { instanceMailAvailable, instanceMailForm } from "@/lib/services/instance-mail";
 import type { SettingsTabProps } from "./context";
 
 /**
@@ -14,10 +16,10 @@ import type { SettingsTabProps } from "./context";
  * rules). Every section here is hidden in demo mode: a demo instance must
  * not send real notifications.
  */
-export async function NotificationsTab({ viewer }: SettingsTabProps) {
+export async function NotificationsTab({ viewer, isAdmin }: SettingsTabProps) {
   // The rule pickers feed per-user alert rules, so the viewer's OWN accounts.
   const accountIds = await baseAccountIds(viewer.id);
-  const [userSettings, pushStatus, alertRules, fiatAccounts, investmentAccounts, budgetCategories] = await Promise.all([
+  const [userSettings, pushStatus, alertRules, fiatAccounts, investmentAccounts, budgetCategories, mailAvailable, instanceMail] = await Promise.all([
     getUserSettings(),
     getPushStatus(),
     getAlertRules(),
@@ -46,6 +48,9 @@ export async function NotificationsTab({ viewer }: SettingsTabProps) {
       select: { id: true, name: true, budgetCents: true },
       orderBy: { name: "asc" },
     }),
+    instanceMailAvailable(),
+    // The server's settings themselves are only ever read for an admin.
+    isAdmin ? instanceMailForm() : null,
   ]);
 
   return (
@@ -56,9 +61,11 @@ export async function NotificationsTab({ viewer }: SettingsTabProps) {
           another device). Unkeyed, it would keep its first-mount values and a
           save from here could overwrite a newer value with a stale one. */}
       <AlertChannelsSection
-        key={`${userSettings.ntfyTopicUrl}-${userSettings.ntfyEnabled}-${userSettings.emailAlertsEnabled}-${userSettings.smtpHost}-${userSettings.smtpPort}`}
+        key={`${userSettings.ntfyTopicUrl}-${userSettings.ntfyEnabled}-${userSettings.emailAlertsEnabled}-${userSettings.smtpHost}-${userSettings.smtpPort}-${userSettings.useInstanceMail}-${mailAvailable}`}
         settings={userSettings}
+        instanceMailAvailable={mailAvailable}
       />
+      {instanceMail && <InstanceMailSection key={`${instanceMail.host}-${instanceMail.port}`} mail={instanceMail} />}
       {/* A third channel, but its own section: "configuring" it is a subscribe
           action on this browser, not a text field to type into and save. */}
       <WebPushSection enabled={pushStatus.enabled} publicKey={pushStatus.publicKey} subscriptions={pushStatus.subscriptions} />

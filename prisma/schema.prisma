@@ -151,6 +151,17 @@ model InstanceSettings {
   /// reason: a policy each person opts into individually is not a policy.
   /// Default false so no existing instance locks its own users out on upgrade.
   requireTwoFactor Boolean @default(false)
+
+  /// The instance's mail server, set by an admin, that any user may send their
+  /// alert email through (UserSettings.useInstanceMail) without ever seeing or
+  /// choosing the host. Usually the optional `mail` service (`mail`, port 25,
+  /// no credentials). Unset (no host) means there is none to offer.
+  /// smtpPassword is an `enc:v1:` value, like UserSettings.smtpPassword.
+  smtpHost     String?
+  smtpPort     Int?
+  smtpUser     String?
+  smtpPassword String?
+  smtpFrom     String?
 }
 
 /// Security-relevant actions, so an instance operator can SEE what happened
@@ -1048,6 +1059,11 @@ model UserSettings {
   smtpUser                    String?
   smtpPassword                String?
   smtpFrom                    String?
+  // Send through the instance's mail server (InstanceSettings.smtp*) rather
+  // than the smtp* columns above, which are then ignored. The only way a
+  // member reaches the instance's own network: a personal SMTP host must be
+  // a public one (lib/services/smtp-relay-policy.ts).
+  useInstanceMail             Boolean  @default(false)
   // Independent on/off per channel, layered on top of "is it configured"
   // above - a user with both ntfy and email filled in couldn't previously
   // choose to receive through only one of them (dispatchAlert fanned out to
