@@ -65,6 +65,10 @@ vi.mock("@/lib/auth-context", () => ({
   COMPANY_SCOPE_PREFIX: "company:",
 }));
 
+// Its own test (company-handover.test.ts); here, only that it is called.
+const handover = vi.hoisted(() => ({ move: vi.fn(async () => 0) }));
+vi.mock("@/lib/services/company-handover", () => ({ moveCompanyCategories: handover.move }));
+
 vi.mock("next/headers", () => ({
   cookies: async () => ({ set: h.cookieSet, delete: h.cookieDelete }),
 }));
@@ -83,6 +87,7 @@ beforeEach(() => {
   h.transaction.mockImplementation(async (arg: unknown) =>
     typeof arg === "function" ? (arg as (tx: unknown) => unknown)({
       company: h.company, companyAssociate: h.associate, companyHolding: h.holding, companyCapTableVersion: h.version,
+      institution: h.institution, account: h.account, alertRule: h.alertRule, goal: h.goal,
     }) : Promise.all(arg as unknown[]),
   );
   // One dated cap table, "v1", the one in force (step 5).
@@ -309,6 +314,8 @@ describe("transferCompanyManagement", () => {
     expect(h.institution.updateMany).toHaveBeenCalledWith({ where: { companyId: COMPANY }, data: { userId: "user-b" } });
     expect(h.account.updateMany).toHaveBeenCalledWith({ where: { companyId: COMPANY }, data: { userId: "user-b" } });
     expect(h.alertRule.deleteMany).toHaveBeenCalledWith({ where: { userId: MANAGER, accountId: { in: ["sci-bank"] } } });
+    // The company's categories become the new manager's, in the same transaction.
+    expect(handover.move).toHaveBeenCalledWith(expect.anything(), ["sci-bank"], MANAGER, "user-b");
   });
 
   it("reports an institution name clash instead of crashing", async () => {

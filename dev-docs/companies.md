@@ -117,7 +117,7 @@ Plus `Account.companyId String?` and `Institution.companyId String?` (the compan
 
 - An associate's read access comes from their `CompanyAssociate` row **named by the cap table in force today** (step 5), checked on every request like a `PortfolioGrant`. Removing them from the cap table, or a cession of everything they held, removes it from the day it takes effect.
 - Derived artifacts (share links, API keys, alert rules, exports) stay personal in step 1: they carry the viewer's own portfolio and their *share* of each company, never a company's accounts. Company-scoped artifacts, if ever, are manager-only and a later decision.
-- Handing over management: only to a linked associate, by the current manager; it moves `managerUserId`, the company's accounts' `userId` and its institutions' `userId` in one transaction (the sync then realigns ownership as it already does from the institution's owner).
+- Handing over management: only to a linked associate, by the current manager; it moves `managerUserId`, the company's accounts' `userId` and its institutions' `userId` in one transaction (the sync then realigns ownership as it already does from the institution's owner). The categories the company's transactions, splits and recurring series use move with it (`lib/services/company-handover.ts`): each is re-pointed to the new manager's category of the same name, created with its colour and kind but no budget when they have none - categories are per user, and the old ones would have stayed in the previous manager's budgets.
 - Mono-user mode (`AUTH_ENABLED` unset): everything resolves to the owner, who is the manager of every company; associates are names.
 
 ## Computations
