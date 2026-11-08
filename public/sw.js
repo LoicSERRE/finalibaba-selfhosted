@@ -113,7 +113,7 @@ async function cacheFirst(request) {
   const response = await fetch(request);
   if (response.ok) {
     const cache = await caches.open(cacheName);
-    cache.put(request, response.clone());
+    cache.put(request, response.clone()).catch(() => {});
   }
   return response;
 }
@@ -123,7 +123,7 @@ async function networkFirstWithFallback(request) {
     const response = await fetch(request);
     if (response.ok) {
       const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
+      cache.put(request, response.clone()).catch(() => {});
     }
     return response;
   } catch {

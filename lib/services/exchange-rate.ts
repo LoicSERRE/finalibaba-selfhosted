@@ -87,7 +87,7 @@ async function fetchDailyRates(currency: string, from: Date, to: Date): Promise<
  * own day, so the next ask is a hit.
  */
 export async function ratesToBaseForDays(currency: string, days: readonly string[]): Promise<Map<string, number | null>> {
-  const unique = [...new Set(days)].sort();
+  const unique = [...new Set(days)].sort((a, b) => a.localeCompare(b));
   if (isBaseCurrency(currency)) return new Map(unique.map((day) => [day, 1]));
   if (unique.length === 0) return new Map();
 

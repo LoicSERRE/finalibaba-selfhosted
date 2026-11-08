@@ -45,7 +45,7 @@ export function useWoobModuleFields(module: string | null): ModuleFields {
     if (active === null) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      getWoobModuleFields(active)
+      void getWoobModuleFields(active)
         .catch(() => null)
         .then((fields) => {
           if (!cancelled) setResult({ module: active, fields });
