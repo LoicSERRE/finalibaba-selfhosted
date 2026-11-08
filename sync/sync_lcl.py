@@ -9,7 +9,6 @@ import logging
 import os
 import sys
 from decimal import Decimal
-from pathlib import Path
 
 import psycopg2.extras
 
@@ -33,22 +32,21 @@ from db import (
 log = logging.getLogger(__name__)
 
 
-def _configure_woob():
-    config_dir = Path.home() / ".config" / "woob"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    backends_file = config_dir / "backends"
-    backends_file.write_text(
-        "[lcl]\n"
-        "_module = lcl\n"
-        f"login = {os.environ['LCL_LOGIN']}\n"
-        f"password = {os.environ['LCL_PASSWORD']}\n"
-    )
-    backends_file.chmod(0o600)
-
+def _update_woob_repositories():
     import subprocess
     result = subprocess.run(["woob", "config", "update"], capture_output=True, text=True, timeout=60, check=False)
     if result.returncode != 0:
         log.warning("woob config update a échoué (non-fatal) : %s", result.stderr[:200])
+
+
+def load_lcl_backend(w) -> None:
+    """The LCL backend, from LCL_LOGIN/LCL_PASSWORD, built in memory like
+    every other bank's (sync_woob.load_backend_or_explain). It used to be
+    written to Woob's backends file in clear, on the persistent woob_session
+    volume, at every run; purge_legacy_backends removes what is left there."""
+    from sync_woob import load_backend_or_explain
+
+    load_backend_or_explain(w, "lcl", "lcl", os.environ["LCL_LOGIN"], os.environ["LCL_PASSWORD"])
 
 
 def _sync_account_transactions(w, account, account_db_id, cur):
@@ -180,7 +178,7 @@ def _sync_account(cur, institution_id, account) -> dict | None:
 
 
 def run(interactive: bool = False) -> dict:
-    _configure_woob()
+    _update_woob_repositories()
 
     # Same persistent storage as the generic path: Woob() with none keeps no
     # browser state at all, so a bank whose 2FA must survive between runs is
@@ -190,7 +188,7 @@ def run(interactive: bool = False) -> dict:
 
     w = make_woob()
     try:
-        w.load_backends(modules=["lcl"])
+        load_lcl_backend(w)
     except Exception as e:
         raise RuntimeError(f"Impossible de charger le backend LCL : {e}") from e
 

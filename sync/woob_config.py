@@ -47,8 +47,9 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 # extra config.
 CREDENTIAL_IDS = ("login", "password")
 
-# The backend names this service gives institutions (see sync_woob.run).
-_INSTITUTION_SECTION = re.compile(r"^\[inst_[A-Za-z0-9_]*\]\s*$")
+# The backend names this service gives institutions (see sync_woob.run), and
+# the .env-configured LCL one (sync_lcl.py), which was the last to write there.
+_INSTITUTION_SECTION = re.compile(r"^\[(?:inst_[A-Za-z0-9_]*|lcl)\]\s*$")
 _BACKENDS_FILE = Path.home() / ".config" / "woob" / "backends"
 
 
@@ -201,10 +202,10 @@ def explain(config, field_ids) -> str:
 
 
 def purge_legacy_backends(path: Path = _BACKENDS_FILE) -> int:
-    """Remove the per-institution sections earlier versions wrote to Woob's
-    backends file, credentials in clear. Sections this service did not name
-    (`[lcl]`, written by the .env-configured LCL sync) are left alone. Returns
-    how many sections were removed, so the caller can log it."""
+    """Remove the sections earlier versions wrote to Woob's backends file,
+    credentials in clear: one per institution, and `[lcl]` from the
+    .env-configured LCL sync. Sections this service did not name are left
+    alone. Returns how many sections were removed, so the caller can log it."""
     if not path.exists():
         return 0
     kept, removed, skipping = [], 0, False
