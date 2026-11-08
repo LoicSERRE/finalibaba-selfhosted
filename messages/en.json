@@ -171,6 +171,11 @@
           "description": "An amount to reach, to see your progress."
         }
       }
+    },
+    "pendingInvitations": {
+      "summary": "{count, plural, one {An invitation is waiting for you} other {# invitations are waiting for you}}",
+      "shares": "{count, plural, one {See the share} other {See the # shares}}",
+      "companies": "{count, plural, one {See the company} other {See the # companies}}"
     }
   },
   "accounts": {
