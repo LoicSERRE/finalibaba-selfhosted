@@ -60,6 +60,11 @@ reference CLI hardcodes exactly that. Without it `do_login` falls through to
 `init_login` and restarts everything, so each "I've approved it" click began a
 fresh captcha and a fresh phone prompt. `request_information` was missing for
 the same reason: Woob treats `None` as "batch mode, do not trigger 2FA".
+A module can also inherit a browser that reads these keys without declaring
+them: `caels` (Crédit Agricole ELS) logs in through Amundi's browser and
+declares only `captcha_response` (#182). `setup_woob._declare_transient` adds
+whichever is missing before the browser is created, so the same fix reaches
+every module built on a parent's login.
 
 **3. A competing sync invalidated the approval.** A scheduled run firing while
 the user approved opened a second session and invalidated the `mfa_id` the setup

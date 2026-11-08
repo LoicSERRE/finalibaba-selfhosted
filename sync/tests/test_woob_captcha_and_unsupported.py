@@ -457,6 +457,51 @@ def test_setup_marks_the_session_interactive(monkeypatch):
     setup_woob._pending.pop(name, None)
 
 
+def test_a_module_that_inherits_the_approval_without_declaring_it_still_resumes():
+    """Issue #182: `caels` (Crédit Agricole - Épargne Longue des Salariés) logs in
+    through Amundi's browser but declares only `captcha_response`, not the
+    `request_information` and `resume` keys that browser reads.
+
+    Driven through Woob's real TwoFactorBrowser and BackendConfig, shaped like
+    Amundi's browser: credentials-only login, a phone approval raised from
+    init_login, and `resume` mapped to the polling handler. Without the two
+    keys, the "I've approved it" retry runs init_login again (a new approval,
+    forever pending) instead of polling the one the user just approved."""
+    from woob.browser.mfa import TwoFactorBrowser
+    from woob.exceptions import AppValidation
+    from woob.tools.backend import BackendConfig
+    from woob.tools.value import ValueTransient
+
+    class AmundiShaped(TwoFactorBrowser):
+        HAS_CREDENTIALS_ONLY = True
+
+        def __init__(self, config):
+            super().__init__(config, "login", "password")
+            self.AUTHENTICATION_METHODS = {"resume": self.handle_polling}
+            self.steps = []
+
+        def init_login(self):
+            self.steps.append("init_login")
+            raise AppValidation("approuve sur ton téléphone")
+
+        def handle_polling(self):
+            self.steps.append("polling")
+
+    class CaelsBackend:
+        config = BackendConfig(ValueTransient("captcha_response"))
+
+    backend = CaelsBackend()
+    setup_woob._mark_interactive(backend)  # start_setup, before the browser exists
+    browser = AmundiShaped(backend.config)
+
+    with pytest.raises(AppValidation):
+        browser.do_login()
+    setup_woob._resume_approval(backend)  # complete_setup, the "I've approved it" click
+    browser.do_login()
+
+    assert browser.steps == ["init_login", "polling"], "the approval must be polled, not a new login started"
+
+
 def test_action_needed_says_what_to_do_rather_than_declaring_defeat():
     """35 of the 95 CapBank modules can raise ActionNeeded, and for that whole
     family the bank is perfectly driveable - the user just has to accept a
