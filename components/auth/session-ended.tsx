@@ -28,7 +28,7 @@ export function SessionEnded({ reason = "deleted" }: Readonly<{ reason?: "delete
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const { signOut } = await import("next-auth/react");
         await signOut({ callbackUrl: "/login" });
