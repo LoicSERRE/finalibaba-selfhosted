@@ -6,6 +6,7 @@ import {
   SETTINGS_NOT_EXPORTED,
   USER_EXPORT_FORMAT,
   buildUserExport,
+  companyExports,
   parseUserExport,
   summariseImport,
   type UserExportInput,
@@ -44,6 +45,7 @@ describe("every column is either exported or explicitly not", () => {
       "name",
       "type",
       "currency",
+      "companyId",
       "manualValueCents",
       "liabilityCents",
       "purchasePriceCents",
@@ -245,5 +247,84 @@ describe("telling the user what an import is about to do", () => {
       holdings: 1,
       categories: 1,
     });
+  });
+});
+
+describe("companyExports", () => {
+  // Camille manages it; Marie held 400 of 1000 and ceded 100 in 2025, and
+  // holds the bare ownership of 100 more under her parent's usufruct.
+  const row = {
+    id: "co-1",
+    name: "SCI Famille",
+    kind: "SCI",
+    taxRegime: "IR",
+    discountPct: 0.1,
+    managerUserId: "camille",
+    associates: [
+      { id: "a-marie", userId: "marie", name: "Marie", birthDate: new Date("1990-04-02T00:00:00Z"), currentAccountCents: BigInt(5_000_00), linkAcceptedAt: new Date("2026-01-01T00:00:00Z") },
+    ],
+    versions: [
+      {
+        effectiveFrom: new Date("1900-01-01T00:00:00Z"),
+        kind: "CREATION",
+        totalParts: 1000,
+        holdings: [
+          { parts: 600, fullOwnerId: "a-camille", usufructuaryId: null, bareOwnerId: null },
+          { parts: 400, fullOwnerId: "a-marie", usufructuaryId: null, bareOwnerId: null },
+        ],
+      },
+      {
+        effectiveFrom: new Date("2025-03-01T00:00:00Z"),
+        kind: "CESSION",
+        totalParts: 1000,
+        holdings: [
+          { parts: 600, fullOwnerId: "a-camille", usufructuaryId: null, bareOwnerId: null },
+          { parts: 300, fullOwnerId: "a-marie", usufructuaryId: null, bareOwnerId: null },
+          { parts: 100, fullOwnerId: null, usufructuaryId: "a-parent", bareOwnerId: "a-marie" },
+        ],
+      },
+    ],
+  };
+
+  it("gives an associate their own row and their parts in every version", () => {
+    const [company] = companyExports([row], "marie");
+    expect(company.role).toBe("associate");
+    expect(company.you).toEqual({ name: "Marie", birthDate: "1990-04-02", currentAccountCents: "500000", linkAcceptedAt: "2026-01-01T00:00:00.000Z" });
+    expect(company.stakes).toEqual([
+      { effectiveFrom: "1900-01-01", kind: "CREATION", totalParts: 1000, fullParts: 400, usufructParts: 0, bareParts: 0 },
+      { effectiveFrom: "2025-03-01", kind: "CESSION", totalParts: 1000, fullParts: 300, usufructParts: 0, bareParts: 100 },
+    ]);
+  });
+
+  it("never carries the other associates, even handed their rows", () => {
+    const camille = { id: "a-camille", userId: "camille", name: "Camille", birthDate: null, currentAccountCents: BigInt(9_999_00), linkAcceptedAt: null };
+    const text = JSON.stringify(companyExports([{ ...row, associates: [camille, ...row.associates] }], "marie"));
+    expect(text).not.toContain("Camille");
+    expect(text).not.toContain("999900");
+    expect(text).not.toContain("a-camille");
+    expect(text).not.toContain("a-parent");
+  });
+
+  it("says manager, with no stake, for a manager who holds no parts", () => {
+    const [company] = companyExports([{ ...row, associates: [] }], "camille");
+    expect(company.role).toBe("manager");
+    expect(company.you).toBeNull();
+    expect(company.stakes.every((s) => s.fullParts + s.usufructParts + s.bareParts === 0)).toBe(true);
+  });
+
+  it("is in the file, and an account says which company it is in", () => {
+    const file = buildUserExport({
+      user: { username: "marie", displayName: null },
+      settings: null,
+      institutions: [],
+      categories: [],
+      accounts: [{ id: "acc", name: "Compte SCI", type: "CHECKING", companyId: "co-1", taxTreatment: "TAXABLE" }],
+      recurringTransactions: [],
+      goals: [],
+      alertRules: [],
+      companies: companyExports([row], "marie"),
+    });
+    expect(file.companies.map((c) => c.ref)).toEqual(["co-1"]);
+    expect(file.accounts[0].companyRef).toBe("co-1");
   });
 });
