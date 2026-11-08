@@ -228,6 +228,10 @@ Written as tests in the same PR as each step:
 - **Access** follows today's version: `companyRole`, `viewerCompanies` and the management hand-over only count associates it names.
 - The company page shows today's cap table and, once there is more than one version, their history newest first.
 
+## In the personal data export
+
+`/api/my-data` (`lib/domain/user-export.ts`): every account carries its `companyRef` (a manager's company accounts are theirs, so they are in the file), and `companies` lists each company the person manages or is named in, with their own row of its cap table (name, birth date, current account, link) and their parts in each dated version - never the other associates', which are other people's data. The builder picks the row linked to the person whatever the query hands it. The import reads none of it: companies are not recreated from a file.
+
 ## Open questions
 
 - Whether the discount should differ per associate (it sometimes does, for a minority stake).

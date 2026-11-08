@@ -103,6 +103,8 @@ export type AccountExport = {
   type: string;
   currency: string;
   institutionRef: string | null;
+  /** The company this account belongs to (see `companies`), null for a personal one. */
+  companyRef: string | null;
   manualValueCents: string | null;
   liabilityCents: string | null;
   purchasePriceCents: string | null;
@@ -146,6 +148,74 @@ export type AccountExport = {
   }[];
 };
 
+/**
+ * A company the person manages or is an associate of - what is theirs in it:
+ * their own row of its cap table and their parts in each dated version. Never
+ * the other associates': they are other people's data. Read-only on import,
+ * which does not recreate companies.
+ */
+export type CompanyExport = {
+  ref: string;
+  name: string;
+  kind: string;
+  taxRegime: string;
+  discountPct: number | null;
+  role: "manager" | "associate";
+  you: { name: string; birthDate: string | null; currentAccountCents: string; linkAcceptedAt: string | null } | null;
+  stakes: { effectiveFrom: string; kind: string; totalParts: number; fullParts: number; usufructParts: number; bareParts: number }[];
+};
+
+/** The company rows the route loads, shaped for companyExports. */
+export type CompanyExportRow = {
+  id: string;
+  name: string;
+  kind: string;
+  taxRegime: string;
+  discountPct: number | null;
+  managerUserId: string;
+  /** The route loads only the viewer's own row; whatever it loads, only
+   *  the one linked to the viewer is used. */
+  associates: { id: string; userId: string | null; name: string; birthDate: Date | null; currentAccountCents: bigint; linkAcceptedAt: Date | null }[];
+  versions: {
+    effectiveFrom: Date;
+    kind: string;
+    totalParts: number;
+    holdings: { parts: number; fullOwnerId: string | null; usufructuaryId: string | null; bareOwnerId: string | null }[];
+  }[];
+};
+
+export function companyExports(rows: readonly CompanyExportRow[], viewerId: string): CompanyExport[] {
+  return rows.map((c) => {
+    const own = c.associates.find((a) => a.userId === viewerId) ?? null;
+    const sum = (v: CompanyExportRow["versions"][number], side: "fullOwnerId" | "usufructuaryId" | "bareOwnerId") =>
+      own ? v.holdings.filter((h) => h[side] === own.id).reduce((s, h) => s + h.parts, 0) : 0;
+    return {
+      ref: c.id,
+      name: c.name,
+      kind: c.kind,
+      taxRegime: c.taxRegime,
+      discountPct: c.discountPct,
+      role: c.managerUserId === viewerId ? "manager" : "associate",
+      you: own
+        ? {
+            name: own.name,
+            birthDate: own.birthDate ? own.birthDate.toISOString().slice(0, 10) : null,
+            currentAccountCents: own.currentAccountCents.toString(),
+            linkAcceptedAt: iso(own.linkAcceptedAt),
+          }
+        : null,
+      stakes: c.versions.map((v) => ({
+        effectiveFrom: v.effectiveFrom.toISOString().slice(0, 10),
+        kind: v.kind,
+        totalParts: v.totalParts,
+        fullParts: sum(v, "fullOwnerId"),
+        usufructParts: sum(v, "usufructuaryId"),
+        bareParts: sum(v, "bareOwnerId"),
+      })),
+    };
+  });
+}
+
 export type UserExport = {
   format: typeof USER_EXPORT_FORMAT;
   version: number;
@@ -156,6 +226,7 @@ export type UserExport = {
   institutions: InstitutionExport[];
   categories: CategoryExport[];
   accounts: AccountExport[];
+  companies: CompanyExport[];
   recurringTransactions: {
     accountRef: string;
     categoryRef: string | null;
@@ -223,9 +294,6 @@ export const ACCOUNT_NOT_EXPORTED = [
   "id",
   "userId",
   "institutionId",
-  // An instance-local relation id, like institutionId. Companies themselves
-  // (their cap table) are not part of this export yet - dev-docs/companies.md.
-  "companyId",
   "createdAt",
   "updatedAt",
   // Instance-local sync plumbing, see the header.
@@ -266,6 +334,7 @@ export type UserExportInput = {
   recurringTransactions: Row[];
   goals: Row[];
   alertRules: Row[];
+  companies?: CompanyExport[];
   exportedAt?: Date;
 };
 
@@ -295,6 +364,7 @@ export function buildUserExport(input: UserExportInput): UserExport {
       type: a.type as string,
       currency: (a.currency as string) ?? "EUR",
       institutionRef: (a.institutionId as string) ?? null,
+      companyRef: (a.companyId as string) ?? null,
       manualValueCents: cents(a.manualValueCents as bigint),
       liabilityCents: cents(a.liabilityCents as bigint),
       purchasePriceCents: cents(a.purchasePriceCents as bigint),
@@ -385,6 +455,7 @@ export function buildUserExport(input: UserExportInput): UserExport {
       budgetRolloverEnabledAt: iso(c.budgetRolloverEnabledAt as Date),
     })),
     accounts,
+    companies: input.companies ?? [],
     recurringTransactions: input.recurringTransactions.map((r) => ({
       accountRef: r.accountId as string,
       categoryRef: (r.categoryId as string) ?? null,

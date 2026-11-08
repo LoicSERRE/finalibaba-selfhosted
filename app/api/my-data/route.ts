@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getViewer } from "@/lib/auth-context";
-import { buildUserExport } from "@/lib/domain/user-export";
+import { buildUserExport, companyExports } from "@/lib/domain/user-export";
 import { AUDIT, recordAuditEvent } from "@/lib/services/audit-log";
 
 /**
@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const viewer = await getViewer();
 
-  const [user, settings, institutions, categories, accounts, recurringTransactions, goals, alertRules] =
+  const [user, settings, institutions, categories, accounts, recurringTransactions, goals, alertRules, companies] =
     await Promise.all([
       prisma.user.findUnique({
         where: { id: viewer.id },
@@ -61,6 +61,32 @@ export async function GET() {
       }),
       prisma.goal.findMany({ where: { userId: viewer.id }, orderBy: { name: "asc" } }),
       prisma.alertRule.findMany({ where: { userId: viewer.id }, orderBy: { createdAt: "asc" } }),
+      // Companies they manage or are named in - with their own row only.
+      prisma.company.findMany({
+        where: { OR: [{ managerUserId: viewer.id }, { associates: { some: { userId: viewer.id } } }] },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          kind: true,
+          taxRegime: true,
+          discountPct: true,
+          managerUserId: true,
+          associates: {
+            where: { userId: viewer.id },
+            select: { id: true, userId: true, name: true, birthDate: true, currentAccountCents: true, linkAcceptedAt: true },
+          },
+          versions: {
+            orderBy: { effectiveFrom: "asc" },
+            select: {
+              effectiveFrom: true,
+              kind: true,
+              totalParts: true,
+              holdings: { select: { parts: true, fullOwnerId: true, usufructuaryId: true, bareOwnerId: true } },
+            },
+          },
+        },
+      }),
     ]);
 
   const payload = buildUserExport({
@@ -72,6 +98,7 @@ export async function GET() {
     recurringTransactions: recurringTransactions as unknown as Record<string, unknown>[],
     goals: goals as unknown as Record<string, unknown>[],
     alertRules: alertRules as unknown as Record<string, unknown>[],
+    companies: companyExports(companies, viewer.id),
   });
 
   await recordAuditEvent({
