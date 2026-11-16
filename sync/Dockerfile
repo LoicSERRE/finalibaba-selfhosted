@@ -42,6 +42,20 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     apt-get autoremove -y --purge && \
     rm -rf /var/lib/apt/lists/*
 
+# Trust Woob's module-signing keyring here, once, against a pinned checksum.
+# It lives in ~/.local/share/woob, outside the volumes, so every new container
+# started without it, and `woob config update` (no TTY) aborts at "The
+# repository isn't trusted yet. Are you sure?" without saving it: installing
+# any bank module then failed with "No keyring found, please update repos".
+# Woob() on a fresh HOME accepts the keyring non-interactively; the checksum
+# makes that a pin instead of trust-on-first-use. Later keyring rotations are
+# validated by this one (Repository.retrieve_keyring). If Woob rotates it and
+# this fails, check the new keyring's provenance before bumping the hash.
+ARG WOOB_KEYRING_SHA256=a1755b379793ff4922a7bfb5f566c019205f805b96f3420aee95938cd0d1634a
+RUN python -c "from woob.core import Woob; Woob()" && \
+    echo "${WOOB_KEYRING_SHA256}  /root/.local/share/woob/keyrings/https___updates_woob_tech_3_main_.gpg" \
+        | sha256sum -c -
+
 COPY . .
 
 # Persist woob session + pytr credentials across restarts
