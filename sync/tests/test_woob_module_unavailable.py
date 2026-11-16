@@ -57,12 +57,42 @@ class FakeModulesLoader:
         return _Loaded()
 
 
+class FakeModuleInfo:
+    def __init__(self, installed):
+        self.installed = installed
+
+    def is_installed(self):
+        return self.installed
+
+
+class FakeRepositories:
+    """Woob's repository index: which modules exist and which are on disk.
+    `events` is shared with the loader-facing log so the order install ->
+    patch -> load can be asserted."""
+
+    def __init__(self, events, *, installed=True, known=True, install_error=None):
+        self._events = events
+        self._info = FakeModuleInfo(installed) if known else None
+        self._install_error = install_error
+
+    def get_module_info(self, _name):
+        return self._info
+
+    def install(self, info):
+        if self._install_error:
+            raise self._install_error
+        self._events.append("install")
+        info.installed = True
+
+
 class FakeWoob:
     """Mimics what matters: the module loader that raises, and a backend
     registration that has to be checked rather than assumed."""
 
-    def __init__(self, *, load_error=None, registers=True):
+    def __init__(self, *, load_error=None, registers=True, installed=True, install_error=None):
+        self.events = []
         self.modules_loader = FakeModulesLoader(load_error)
+        self.repositories = FakeRepositories(self.events, installed=installed, install_error=install_error)
         self.backend_instances = {}
         self.storage = object()
         self._registers = registers
@@ -120,6 +150,64 @@ def test_the_ordinary_case_still_loads_and_registers():
     assert w.modules_loader.asked == ["lcl"]
     assert w.load_calls == [("lcl", "inst_abc")]
     assert "inst_abc" in w.backend_instances
+
+
+def test_a_module_missing_from_a_fresh_container_is_installed_then_patched_then_loaded(monkeypatch):
+    # Production after a redeploy: modules live outside every volume, nothing
+    # names them in Woob's backends file any more, so `woob config update`
+    # installed none, and get_or_load_module raised "Module lcl is not
+    # installed" for a perfectly configured bank. The patch must land before
+    # the import, or the LCL 410 fix never applies again.
+    import woob_patches
+
+    w = FakeWoob(installed=False)
+    monkeypatch.setattr(woob_patches, "apply", lambda m: w.events.append(f"patch {m}") or "ok")
+    original = w.modules_loader.get_or_load_module
+    w.modules_loader.get_or_load_module = lambda m: (w.events.append("load"), original(m))[1]
+
+    load_backend_or_explain(w, "lcl", "lcl", "x", "y")
+
+    assert w.events == ["install", "patch lcl", "load"]
+    assert "lcl" in w.backend_instances
+
+
+def test_an_installed_module_is_neither_downloaded_nor_repatched(monkeypatch):
+    import woob_patches
+
+    w = FakeWoob(installed=True)
+    monkeypatch.setattr(woob_patches, "apply", lambda m: w.events.append(f"patch {m}"))
+    load_backend_or_explain(w, "lcl", "lcl", "x", "y")
+    assert w.events == []
+
+
+def test_a_failed_download_is_explained_and_nothing_is_loaded():
+    from woob.exceptions import ModuleInstallError
+
+    w = FakeWoob(installed=False, install_error=ModuleInstallError("network unreachable"))
+    with pytest.raises(ModuleUnavailableError) as excinfo:
+        load_backend_or_explain(w, "lcl", "lcl", "x", "y")
+    assert "lcl" in str(excinfo.value) and "network unreachable" in str(excinfo.value)
+    assert w.modules_loader.asked == []
+    assert w.load_calls == []
+
+
+def test_the_lcl_patch_rewrites_the_bourse_call_once(tmp_path):
+    import woob_patches
+
+    browser = tmp_path / "3.7" / "woob_modules" / "lcl" / "browser.py"
+    browser.parent.mkdir(parents=True)
+    browser.write_text(
+        "class B:\n    def iter_accounts(self):\n"
+        "        if self.go_bourse_website() and self.connexion_bourse():\n            pass\n"
+    )
+    pattern = str(tmp_path / "*" / "woob_modules" / "lcl" / "browser.py")
+
+    assert "applied" in woob_patches.patch_lcl_bourse_410(pattern)
+    patched = browser.read_text()
+    assert "except Exception:" in patched and "if _bourse_ok and self.connexion_bourse():" in patched
+    compile(patched, str(browser), "exec")  # still valid Python
+    assert woob_patches.patch_lcl_bourse_410(pattern) == "already applied"
+    assert browser.read_text() == patched
 
 
 def test_an_unexpected_loader_error_is_still_explained_rather_than_raw():

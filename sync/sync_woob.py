@@ -83,6 +83,30 @@ class BackendConfigError(Exception):
     Settings. The message names the fields, never their values."""
 
 
+def ensure_module_installed(w, module: str) -> None:
+    """Install a module the container does not have yet, then patch it.
+
+    Modules live under ~/.local/share/woob, outside every volume, so a
+    recreated container has none. `woob config update` at start only installs
+    the modules named in Woob's backends file, and nothing is written there
+    any more (woob_config.py), so after a redeploy every bank failed with
+    "Module lcl is not installed" until this ran. `get_or_load_module` never
+    installs; Woob's own load_backends/build_backend did, and this is that
+    same step. Patching sits between install and import, which
+    `w.load_or_install_module` would not leave room for.
+    """
+    import woob_patches
+
+    info = w.repositories.get_module_info(module)
+    if info is None or info.is_installed():
+        return  # unknown: get_or_load_module says so in its own words
+    log.info("Installing Woob module %s", module)
+    w.repositories.install(info)
+    outcome = woob_patches.apply(module)
+    if outcome:
+        log.info("Woob module %s patch: %s", module, outcome)
+
+
 def load_backend_or_explain(w, module: str, backend_name: str, login, password, extra=None) -> None:
     """Load one backend, or say why it could not be loaded.
 
@@ -113,6 +137,7 @@ def load_backend_or_explain(w, module: str, backend_name: str, login, password, 
     from woob.tools.backend import Module
 
     try:
+        ensure_module_installed(w, module)
         loaded = w.modules_loader.get_or_load_module(module)
     except ModuleLoadError as e:
         raise ModuleUnavailableError(
