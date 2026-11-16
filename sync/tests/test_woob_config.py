@@ -195,12 +195,20 @@ class _Loader:
         return _Loaded(self._config)
 
 
+class _InstalledRepositories:
+    """Every module already installed: nothing to download here."""
+
+    def get_module_info(self, _name):
+        return type("Info", (), {"is_installed": lambda self: True})()
+
+
 class RecordingWoob:
     """load_backend validating like Woob does: the real BackendConfig.load,
     so a missing required field raises the real ConfigError."""
 
     def __init__(self, config):
         self.modules_loader = _Loader(config)
+        self.repositories = _InstalledRepositories()
         self.backend_instances = {}
         self.storage = object()
         self.requests = None  # what Value.load receives; unused by these fields
