@@ -5,7 +5,7 @@
 # data is owned by root at that path already - switching user here needs a
 # one-time ownership migration for already-running deployments, out of scope
 # for a lint-driven cleanup pass).
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # System deps for woob (lxml, etc.). gpgv stays in the final image (it is not
 # in the purge list below): `woob config update` fetches the bank modules at
