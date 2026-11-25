@@ -14,30 +14,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **All repo meta** (code comments, README, CLAUDE.md, commit messages, PR descriptions, issue templates) → **English**
 - **UI strings** → French by default. English is available via the language switcher (stored in `NEXT_LOCALE` cookie). Add new UI strings to both `messages/fr.json` and `messages/en.json`.
-- The private upstream repo (`Finalibaba/`) stays in French - it's personal.
+- The private deploy repo (`Finalibaba/`) stays in French - it's personal.
 
-## Relationship with the upstream private repo
+## Relationship with the private repo
 
-The private repo sits next to this one (`../Finalibaba`, the default of `scripts/sync-from-upstream.sh`; override with `./scripts/sync-from-upstream.sh <path>`). It now also carries the production deploy (`.github/workflows/deploy.yml`, triggered by `repository_dispatch` `image-published` from this repo's `docker.yml`).
+**This repo is the application source.** All features, fixes and migrations are written here - never in the private `Finalibaba` repo and synced over. The private repo only carries the production deploy (`.github/workflows/deploy.yml`, triggered by `repository_dispatch` `image-published` from this repo's `docker.yml`). Because this repo is public, real exports and personal data never land in tests, commits or PRs.
 
-**Porting rule:** app-layer changes (features, bug fixes, schema changes) made in `Finalibaba/` should be ported here via `scripts/sync-from-upstream.sh`. Infra-layer changes (deploy pipeline, VPS config, personal credentials) are **never** ported.
-
-The script's `rsync --exclude` list is the source of truth for what never gets synced - it covers infra files (`.github/`, all `docker-compose*.yml`, `env.server.example`, `.env*`), `.gitignore`, selfhosted-only docs (`CLAUDE.md`, `AGENTS.md`, `dev-docs/`, `README.md`, `ROADMAP.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE*`), demo/mock seed files (`prisma/seed-demo.ts`, `prisma/seed-tr-mock.ts`), and `scripts/`, `.claude/` themselves. The files below additionally need protection because they *do* exist upstream but must keep selfhosted-specific content:
-
-Files that must **never** be overwritten by the sync script:
-
-| File | Reason |
-|---|---|
-| `proxy.ts` | Selfhosted version has conditional auth - may diverge from upstream |
-| `components/layout/sidebar-wrapper.tsx` | Server component reading `AUTH_ENABLED` - selfhosted-specific |
-| `components/layout/sidebar-dynamic.tsx` | Selfhosted-only file, does not exist in upstream |
-| `app/api/gocardless/institutions/route.ts` | Selfhosted-only file (dynamic country/bank search backing `connect-open-banking-dialog.tsx`), does not exist in upstream - `--delete` would otherwise remove it since it has no upstream counterpart |
-| `docker-compose.yml` / `docker-compose.dev.yml` | Different from upstream (build from source, generic credentials) |
-| `.env.example` | Written from scratch for the selfhosted audience |
+`scripts/sync-from-upstream.sh` is a leftover from when the flow ran the other way (upstream → here, `rsync --delete`). Don't run it: it would overwrite this repo with an older copy. Its `--exclude` list (`proxy.ts`, `components/layout/sidebar-*.tsx`, `app/api/gocardless/institutions/`, compose files, `.env*.example`, docs, `scripts/`) still shows which files have always been selfhosted-specific.
 
 ## Tech stack
-
-Same as upstream.
 
 - **Framework:** Next.js 16+ (App Router, Server Actions for mutations), React 19+
 - **Styling & UI:** Tailwind CSS v4 with CSS custom properties (no config file - tokens in `globals.css`)
@@ -58,7 +43,7 @@ NODE_ENV=production pnpm run build         # Prod build = the type-check (NODE_E
 pnpm run lint                              # ESLint (includes eslint-plugin-sonarjs)
 pnpm test                                  # Vitest, everything under __tests__/
 pnpm test __tests__/alerts.test.ts         # Single file
-pnpm test -- -t "name substring"           # Filter by test name
+pnpm test -t "name substring"              # Filter by test name (no `--`: pnpm forwards it and vitest then ignores -t)
 pnpm run test:coverage                     # Coverage - trust the json-summary, not the terminal table
 pnpm run verify                            # lint + prod build + test:coverage (run before any commit)
 ```
@@ -72,7 +57,7 @@ pnpm run db:seed:demo                     # optional - WIPES data, seeds fiction
 SEED_MULTIUSER_PASSWORD=<8+ chars> pnpm run db:seed:multiuser   # optional, additive: a member + co-ownership + grant
 ```
 
-Prisma: `pnpm run db:migrate -- --name <name>` (create + apply), `pnpm exec prisma generate` (after schema edits; also runs on `postinstall`), `db:seed` (reference institutions), `db:push`, `db:studio`. Never squash migrations - it breaks every existing install with P3018 (see `dev-docs/platform.md`).
+Prisma: `pnpm run db:migrate --name <name>` (create + apply), `pnpm exec prisma generate` (after schema edits; also runs on `postinstall`), `db:seed` (reference institutions), `db:push`, `db:studio`. Never squash migrations - it breaks every existing install with P3018 (see `dev-docs/platform.md`).
 
 Production: `cp .env.example .env && docker compose up -d`. `pnpm run docker:dev` actually runs the default `docker-compose.yml`; `docker:prod`/`docker:prod:stop` are BROKEN (no `docker-compose.prod.yml` here). Isolated demo instance: `docker-compose.demo.yml` + `.env.demo.example` (usage in the file header).
 
@@ -83,7 +68,7 @@ cd sync && python -m pytest
 # Coverage for SonarQube - from the REPO ROOT, otherwise paths don't resolve:
 python -m pytest sync/tests -c sync/pytest.ini --cov=sync --cov-report=xml:sync/coverage.xml
 ```
-DB-backed Python tests (e.g. `test_db_ownership.py`) skip unless `DATABASE_URL` is set.
+DB-backed Python tests (e.g. `test_db_ownership.py`) skip unless `DATABASE_URL` is set; that DB needs `pnpm exec prisma migrate deploy` first (Prisma owns the schema - CI does the same).
 
 Component-rendering tests are opt-in per file with `// @vitest-environment happy-dom` on line 1. Mock `useTranslations` so it ECHOES interpolation values, never `(key) => key`. Testing detail and known coverage gaps: `dev-docs/testing.md`.
 
@@ -130,6 +115,7 @@ components/          Grouped by feature domain, mirroring the app/ route it belo
   budgets/           /budgets page (categories, uncategorized-spend grouping)
   transactions/      /transactions page (global cross-account ledger filters)
   settings/          /settings page (institutions, sync status, backup/restore, i18n)
+  companies/         /companies/[id] page + the Accounts page's companies section (cap table editor, create dialog)
   dashboard/         Dashboard-only pieces (/ page) - dashboard-loading.tsx is the one exception, reused by app/shared/[token]/loading.tsx since that route renders the same DashboardView shape
   layout/            App shell rendered on every page - sidebar, auto-sync bootstrap, command palette
   auth/              Login form (signIn/signOut are dynamically imported where needed, no SessionProvider)
@@ -170,13 +156,13 @@ public/               Static assets - sw.js (service worker, see `dev-docs/platf
 proxy.ts              Next.js middleware (root) - auth bypass + demo POST-blocking
 ```
 
-Also in `sync/`: `setup_woob.py` / `setup_tr_institution.py` (per-institution interactive setup), `woob_errors.py` (ordered Woob exception classification), `crypto_at_rest.py` (Python mirror of `lib/domain/crypto-at-rest.ts`), `fx.py` (daily exchange rates, mirror of `lib/services/exchange-rate.ts`, same `ExchangeRate` table), `setup_locks.py`, `realtime_supervisor.py`, `workers.py` (shared worker pool for every blocking job), `sync_activity.py` (in-process "sync running" tracking behind the badge), `sync_tr_timeline.py` / `tr_positions.py` (split out of `sync_tr.py`). `scripts/` holds operator tools (backup/restore, dry-run-by-default data fixes, `audit-bank-modules.py`, `sync-from-upstream.sh`).
+Also in `sync/`: `setup_woob.py` / `setup_tr_institution.py` (per-institution interactive setup), `woob_errors.py` (ordered Woob exception classification), `crypto_at_rest.py` (Python mirror of `lib/domain/crypto-at-rest.ts`), `fx.py` (daily exchange rates, mirror of `lib/services/exchange-rate.ts`, same `ExchangeRate` table), `setup_locks.py`, `realtime_supervisor.py`, `workers.py` (shared worker pool for every blocking job), `sync_activity.py` (in-process "sync running" tracking behind the badge), `sync_tr_timeline.py` / `tr_positions.py` (split out of `sync_tr.py`), `woob_patches.py` (local fixes to downloaded Woob modules, applied right after install), `woob_loans.py` (loan detection from Woob's own typing, never the label - shared by `sync_woob.py` and `sync_lcl.py`), `bank-capabilities.json` (committed baseline that `scripts/audit-bank-modules.py --check` diffs against in CI). `scripts/` holds operator tools (backup/restore, dry-run-by-default data fixes, `audit-bank-modules.py`, the obsolete `sync-from-upstream.sh`) and `scripts/ui-audit/run.sh [out-dir]`: a throwaway seeded instance plus Playwright in Docker, writing `report.json` (overflow, small touch targets, axe WCAG AA, console/hydration errors per page × viewport × theme) and screenshots - nothing is added as a project dependency.
 
 ### Rules that span many files
 
 Each of these was learned from a real incident; the linked doc has the story.
 
-- **Multi-user, one owner row** (`dev-docs/multi-user-and-security.md`). A fixed `OWNER_USER_ID` row always exists; with `AUTH_ENABLED` unset everything resolves to it, so there is no `userId | null` branching anywhere. `baseAccountIds(userId)` (own + co-owned) is the only set allowed to back derived artifacts (share links, API keys, alerts, exports, transfer detection); `viewAccountIds`/`getViewContext()` (`lib/auth-context.ts`) are for page **reads** only and include read-only portfolio grants. Mutations never use the view context.
+- **Multi-user, one owner row** (`dev-docs/multi-user-and-security.md`). A fixed `OWNER_USER_ID` row always exists; with `AUTH_ENABLED` unset everything resolves to it, so there is no `userId | null` branching anywhere. Account sets in `lib/auth-context.ts`: `baseAccountIds(userId)` (own + co-owned, company accounts excluded) is the only set allowed to back net worth and derived artifacts (share links, API keys, alerts, exports); `writableAccountIds` adds the accounts of companies the user manages, for batch mutations only (counting it in a figure would show a company at 100 % instead of the user's share); `accountPools` splits that by patrimony for passes that pair accounts (internal transfers, history-based categorization) - a person→company transfer is never internal. `viewAccountIds`/`getViewContext()` are for page **reads** only and include read-only portfolio grants. Mutations never use the view context. A company is never a `User` (`dev-docs/companies.md`).
 - **Server Actions are public endpoints.** Guard every mutation with `assertOwned`/`assertAccountWritable`/`assert*Eligible` even if the UI hides the button. Never export a `"use server"` function that takes a `userId` parameter - it is an impersonation primitive (move such logic to a plain `lib/services/` module). `assertOwned` throws the same "Not found." for missing and foreign rows.
 - **A failed identity lookup must deny or narrow, never widen** (e.g. `DeletedSessionUserError` instead of falling back to the owner). Never give a "can be asked about a user" function an owner-shaped default.
 - **Expected Server Action failures are returned, not thrown** - production replaces thrown messages with an opaque digest. Return `{ ok: false, error: "<stable_key>" }` and translate in the UI; authorization failures still throw.
@@ -190,7 +176,7 @@ Each of these was learned from a real incident; the linked doc has the story.
 - **Revalidation**: mutating actions must revalidate something; use the helpers in `lib/actions/revalidate.ts` (surface map in `lib/domain/revalidation-surfaces.ts`, pinned by its test).
 - **Middleware (`proxy.ts`, selfhosted-specific)**: auth exemptions live in the tested `isAuthGated`; anchor every alternative (`(?:\/.*)?$`) or a prefix like `/icon-512999` bypasses auth. Detect auth denials by response shape (`isAuthDenial`), never `instanceof NextResponse` - next-auth bundles its own copy, and that bug made every page public in v2.10.6-v2.11.0. `script-src` uses a per-request nonce.
 - **Encryption at rest**: credentials and bearer tokens are AES-256-GCM `enc:v1:` values, written identically by `lib/domain/crypto-at-rest.ts` and `sync/crypto_at_rest.py` (byte-compatible - change both and their cross-language tests together). Tokens are looked up via a `tokenHash` column. Key: `ENCRYPTION_KEY`, else HKDF of `NEXTAUTH_SECRET`.
-- **Sync service** (`dev-docs/sync-service.md`): an `Institution` has at most one per-user provider (Woob or Trade Republic credentials). `Account.syncId` is globally unique and its string shape (`woob:<inst>:<id>`, `tr:<inst>:<suffix>`, legacy `lcl:`/`tr:cash`) is owned by `lib/domain/sync-ids.ts` / `sync/db.py` - never match TR ids by prefix. `sync/db.py` writes `userId` explicitly from the institution's owner. App->sync is `SYNC_SERVICE_URL` (Docker-network only); both directions (sync->app: `/api/alerts/check`, `/api/transactions/auto-categorize`, `/api/investments/snapshot-balances`, `/api/realtime/notify`; app->sync: every endpoint but `/health`) carry a bearer token HKDF-derived from `NEXTAUTH_SECRET` (`lib/services/internal-auth.ts` / `sync/internal_auth.py`, pinned to the same value by both test suites) - never the secret itself.
+- **Sync service** (`dev-docs/sync-service.md`): an `Institution` has at most one per-user provider (Woob or Trade Republic credentials). `Account.syncId` is globally unique and its string shape (`woob:<inst>:<id>`, `tr:<inst>:<suffix>`, legacy `lcl:`/`tr:cash`) is owned by `lib/domain/sync-ids.ts` / `sync/db.py` - never match TR ids by prefix. `sync/db.py` writes `userId` explicitly from the institution's owner. App->sync is `SYNC_SERVICE_URL` (Docker-network only); both directions (sync->app: `/api/alerts/check`, `/api/transactions/auto-categorize`, `/api/investments/snapshot-balances`, `/api/realtime/notify`; app->sync: every endpoint but `/health`) carry a bearer token HKDF-derived from `NEXTAUTH_SECRET` (`lib/services/internal-auth.ts` / `sync/internal_auth.py`, pinned to the same value by both test suites) - never the secret itself. Woob's modules and keyrings live in `~/.local/share/woob`, outside every volume, and the container has no TTY: a recreated container starts with no module, so loading goes through `sync_woob.ensure_module_installed`, and the module-signing keyring is pinned into the image by `sync/Dockerfile` (v2.23.1/v2.23.2). Test sync-image changes against a persisted `~/.config/woob` and an empty `~/.local/share/woob`, not a fresh `HOME`.
 - **Verification habit**: a check that reports "clean" or a number must first be made to fail on purpose (break the property, assert a patch applied, compare against a known-bad input). Assert on structure, not on UI strings - `NextIntlClientProvider` inlines the whole messages JSON, so every label "appears" in every page's HTML; read the hydrated DOM.
 
 ### Net worth calculation
@@ -233,11 +219,11 @@ Defined in `globals.css`. Never use raw Tailwind colour classes for brand colour
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 
-(Next 16.4's `next dev` manages this kind of block in `AGENTS.md` only, never in this file - see `node_modules/next/dist/server/lib/generate-agent-files.js`. `AGENTS.md` is excluded from the upstream sync.)
+(Next 16.4's `next dev` manages this kind of block in `AGENTS.md` only, never in this file - see `node_modules/next/dist/server/lib/generate-agent-files.js`.)
 
 ## dev-docs/ index
 
-Selfhosted-only, excluded from `sync-from-upstream.sh`.
+Selfhosted-only.
 
 | File | Covers |
 |---|---|

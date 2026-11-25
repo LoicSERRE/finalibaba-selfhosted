@@ -12,7 +12,7 @@ NODE_ENV=production pnpm run build    # Prod build + type-check (NODE_ENV=produc
 pnpm run lint    # ESLint
 pnpm test        # Vitest - see __tests__/
 pnpm test __tests__/alerts.test.ts     # Single test file
-pnpm test -- -t "name substring"       # Filter by test name across the suite
+pnpm test -t "name substring"          # Filter by test name across the suite
 pnpm run test:coverage  # Vitest with coverage - see "Development commands" note below on the report
 ```
 
@@ -32,7 +32,7 @@ docker compose up -d   # builds and starts everything
 
 Prisma:
 ```bash
-pnpm run db:migrate -- --name <name>   # Create + apply migration
+pnpm run db:migrate --name <name>      # Create + apply migration
 pnpm exec prisma generate               # Regenerate client after schema changes (also runs automatically via postinstall on `pnpm install`)
 pnpm run db:seed                        # Seed common institutions (reference data, no accounts)
 pnpm run db:seed:demo                   # WIPES all data, then seeds realistic fictional accounts/balances/holdings/transactions - for local dev/debugging
