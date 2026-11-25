@@ -56,6 +56,13 @@ overrides:
   # confirmed empirically: `prisma generate` and `prisma migrate deploy`
   # both still succeed against this override, see the commit this landed in.
   deepmerge-ts: ">=8.0.0"
+  # GHSA-7589-6fvf-x4pw - ReDoS in Schema.TemplateLiteral's compiled regex.
+  # Exact-pinned at 3.20.0 by @prisma/config (still so in Prisma's latest),
+  # which loads prisma.config.ts on every `prisma generate`/`migrate deploy`,
+  # including the Dockerfile CMD. Its input is this repo's own config, never a
+  # request, but it is a --prod dependency, so it is in the high audit gate.
+  # Bounded to 3.x: effect 4 is a rewrite @prisma/config was not built for.
+  effect: ">=3.22.1 <4.0.0"
   # GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority introducer.
   # Same "reachable only through @prisma/dev's never-invoked embedded-Postgres
   # subcommand" story as find-my-way/valibot above: pulled in via
